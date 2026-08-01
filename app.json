@@ -48,7 +48,11 @@
           "locationWhenInUsePermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido."
         }
       ],
-      "./plugins/withAndroidManifest.js"
+      "./plugins/withAndroidManifest.js",
+      "@react-native-firebase/analytics",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/messaging"
     ],
     "extra": {
       "router": {
