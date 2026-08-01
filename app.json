@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "KrustyBurger",
+    "slug": "KrustyBurger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.agenciapowa.KrustyBurger",
+      "config": {
+        "googleMapsApiKey": "AIzaSyCiAUoNj0Pf_U9hZvctk2wCToe-AjJvC1I"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.agenciapowa.KrustyBurger",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCiAUoNj0Pf_U9hZvctk2wCToe-AjJvC1I"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-router",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido.",
+          "locationAlwaysPermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido.",
+          "locationWhenInUsePermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido."
+        }
+      ],
+      "./plugins/withAndroidManifest.js"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "709ab55b-7649-4a00-8a9c-a9dfd6aa2277"
+      }
+    }
+  }
+}

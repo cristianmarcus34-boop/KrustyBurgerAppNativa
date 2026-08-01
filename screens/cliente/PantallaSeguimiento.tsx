@@ -1,84 +1,175 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { supabase } from '../../lib/supabase';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
+import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
+import { obtenerRutaPedido } from '../../lib/directions';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-const UBICACION_KRUSTY = { latitude: -34.6037, longitude: -58.3816 };
+// ✅ COORDENADAS REALES DE KRUSTY BURGER
+const UBICACION_KRUSTY = { latitude: -34.776484410467525, longitude: -58.29220250409459 };
 
 export default function PantallaSeguimiento(props: any) {
+  const { perfil, esAdministrador } = tiendaAutenticacion();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [ubicacionRepartidor, setUbicacionRepartidor] = useState(UBICACION_KRUSTY);
+  const [ubicacionRepartidor, setUbicacionRepartidor] = useState<{ latitude: number; longitude: number } | null>(null);
   const [distancia, setDistancia] = useState(0);
   const [tiempoEstimado, setTiempoEstimado] = useState('--');
+  const [error, setError] = useState<string | null>(null);
+  const [rutaPuntos, setRutaPuntos] = useState<{ latitude: number; longitude: number }[]>([]);
+
   const mapRef = useRef<MapView>(null);
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     const pedidoId = props.route?.params?.pedidoId;
-    if (pedidoId) {
-      cargarPedido(pedidoId);
-      suscribirCambios(pedidoId);
-    } else {
+
+    if (!pedidoId) {
       setCargando(false);
+      setError('No se especificó un pedido');
+      return;
     }
+
+    cargarPedido(pedidoId);
+
+    if (!esAdministrador) {
+      suscribirCambios(pedidoId);
+    }
+
+    return () => {
+      limpiarSuscripcion();
+    };
   }, []);
 
-  // ✅ Centrar el mapa en la ubicación del repartidor
+  // ✅ Cargar ruta guardada cuando se carga el pedido
   useEffect(() => {
-    if (ubicacionRepartidor && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: ubicacionRepartidor.latitude,
-        longitude: ubicacionRepartidor.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      }, 1000);
+    if (pedido && pedido.id) {
+      const cargarRuta = async () => {
+        const ruta = await obtenerRutaPedido(pedido.id);
+        if (ruta && ruta.length > 0) {
+          setRutaPuntos(ruta);
+          console.log('✅ Ruta cargada desde Supabase');
+        }
+      };
+      cargarRuta();
     }
-  }, [ubicacionRepartidor]);
+  }, [pedido]);
+
+  useEffect(() => {
+    if (mapRef.current && ubicacionRepartidor && pedido) {
+      const destinoCliente = {
+        latitude: pedido.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
+        longitude: pedido.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
+      };
+
+      mapRef.current.fitToCoordinates([ubicacionRepartidor, destinoCliente], {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
+    }
+  }, [ubicacionRepartidor, pedido]);
+
+  const limpiarSuscripcion = () => {
+    if (channelRef.current) {
+      try {
+        supabase.removeChannel(channelRef.current);
+      } catch (e) {
+        console.log('Error removiendo canal:', e);
+      }
+      channelRef.current = null;
+    }
+    console.log('🧹 Canal Realtime liberado');
+  };
 
   const cargarPedido = async (id: number) => {
-    const { data } = await supabase.from('pedidos').select('*').eq('id', id).single();
-    if (data) {
-      setPedido(data as Pedido);
-      actualizarUbicacion(data as Pedido);
+    try {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('Error cargando pedido:', error);
+        setError('No se pudo cargar el pedido');
+        return;
+      }
+
+      if (data) {
+        setPedido(data as Pedido);
+        actualizarUbicacion(data as Pedido);
+      }
+    } catch (err) {
+      console.error('Error general cargando pedido:', err);
+      setError('Error al cargar el pedido');
+    } finally {
+      setCargando(false);
     }
-    setCargando(false);
   };
 
   const suscribirCambios = (id: number) => {
-    supabase
-      .channel(`pedido_${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pedidos', filter: `id=eq.${id}` }, (payload) => {
-        const p = payload.new as Pedido;
-        setPedido(p);
-        actualizarUbicacion(p);
-      })
-      .subscribe();
+    limpiarSuscripcion();
+
+    console.log(`📡 Suscribiendo a cambios en tiempo real del pedido #${id}...`);
+
+    const channel = supabase
+      .channel(`seguimiento_pedido_${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pedidos',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          console.log('⚡ Cambio en tiempo real detectado:', payload.new);
+          const nuevoPedido = payload.new as Pedido;
+          setPedido(nuevoPedido);
+          actualizarUbicacion(nuevoPedido);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`✅ Canal conectado para el pedido #${id}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`❌ Error al conectar canal del pedido #${id}`);
+        }
+      });
+
+    channelRef.current = channel;
   };
 
   const actualizarUbicacion = (p: Pedido) => {
     if (p.lat_repartidor && p.repartidor_de_lng) {
-      setUbicacionRepartidor({
-        latitude: p.lat_repartidor,
-        longitude: p.repartidor_de_lng
-      });
-      const destLat = p.lat_cliente || UBICACION_KRUSTY.latitude + 0.01;
-      const destLng = p.lng_cliente || UBICACION_KRUSTY.longitude + 0.01;
-      const dist = calcularDistancia(p.lat_repartidor, p.repartidor_de_lng, destLat, destLng);
+      const posRepartidor = {
+        latitude: Number(p.lat_repartidor),
+        longitude: Number(p.repartidor_de_lng),
+      };
+
+      setUbicacionRepartidor(posRepartidor);
+
+      const destLat = p.lat_cliente || UBICACION_KRUSTY.latitude;
+      const destLng = p.lng_cliente || UBICACION_KRUSTY.longitude;
+
+      const dist = calcularDistancia(posRepartidor.latitude, posRepartidor.longitude, destLat, destLng);
       setDistancia(dist);
-      setTiempoEstimado(Math.ceil(dist * 15) + ' min');
+      setTiempoEstimado(Math.ceil(dist * 12) + ' min');
     }
   };
 
   const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLng = (lng2 - lng1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLng / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
@@ -92,12 +183,32 @@ export default function PantallaSeguimiento(props: any) {
   ];
 
   const estadoActual = pedido?.estado || 'pendiente';
-  const indiceActual = estados.findIndex(e => e.key === estadoActual);
+  const indiceActual = estados.findIndex((e) => e.key === estadoActual);
 
   const estadoColor = (estado: string) => {
-    const c: any = { pendiente: Colores.pendiente, confirmado: Colores.confirmado, preparando: Colores.preparando, listo: Colores.listo, en_camino: Colores.enCamino, entregado: Colores.entregado, cancelado: Colores.cancelado };
+    const c: any = {
+      pendiente: Colores.pendiente,
+      confirmado: Colores.confirmado,
+      preparando: Colores.preparando,
+      listo: Colores.listo,
+      en_camino: Colores.enCamino,
+      entregado: Colores.entregado,
+      cancelado: Colores.cancelado,
+    };
     return c[estado] || Colores.textoGris;
   };
+
+  if (error) {
+    return (
+      <View style={estilos.centrado}>
+        <Ionicons name="alert-circle-outline" size={60} color={Colores.acento} />
+        <Text style={[estilos.errorTexto, { color: Colores.acento }]}>{error}</Text>
+        <TouchableOpacity style={estilos.botonVolver} onPress={() => props.navigation.goBack()}>
+          <Text style={estilos.botonVolverTexto}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (cargando) {
     return (
@@ -117,81 +228,67 @@ export default function PantallaSeguimiento(props: any) {
     );
   }
 
-  // ✅ Coordenadas para el mapa
   const destinoCliente = {
     latitude: pedido.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
     longitude: pedido.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
   };
 
+  const posRepartidor = ubicacionRepartidor || UBICACION_KRUSTY;
+
+  // ✅ Usar ruta guardada si existe, si no, línea recta
+  const coordenadasRuta = rutaPuntos.length > 0 ? rutaPuntos : [posRepartidor, destinoCliente];
+
   return (
     <ScrollView style={estilos.contenedor} contentContainerStyle={estilos.scroll}>
-      {/* ✅ MAPA REAL CON REACT-NATIVE-MAPS */}
       <View style={estilos.mapaContenedor}>
         <MapView
           ref={mapRef}
           style={estilos.mapa}
+          provider={PROVIDER_GOOGLE}
           initialRegion={{
-            latitude: UBICACION_KRUSTY.latitude,
-            longitude: UBICACION_KRUSTY.longitude,
+            latitude: posRepartidor.latitude,
+            longitude: posRepartidor.longitude,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
-          showsUserLocation={true}
-          showsMyLocationButton={true}
+          showsUserLocation={false}
         >
-          {/* 📍 Marcador - Krusty Burger */}
+          {/* ✅ Marcador del Local - Coordenadas Reales */}
           <Marker
             coordinate={UBICACION_KRUSTY}
             title="Krusty Burger"
             description="📍 Local"
             pinColor="#FF5722"
-          >
-            <View style={estilos.marcadorKrusty}>
-              <Ionicons name="restaurant" size={24} color="#FF5722" />
-            </View>
-          </Marker>
+          />
 
-          {/* 📍 Marcador - Repartidor */}
-          {estadoActual === 'en_camino' && ubicacionRepartidor && (
-            <Marker
-              coordinate={ubicacionRepartidor}
-              title="Repartidor"
-              description="🚲 En camino"
-              pinColor="#2196F3"
-            >
-              <View style={estilos.marcadorRepartidor}>
-                <Ionicons name="bicycle" size={24} color="#2196F3" />
-              </View>
-            </Marker>
-          )}
+          {/* ✅ Marcador del Repartidor (Dinámico) */}
+          <Marker
+            coordinate={posRepartidor}
+            title="Repartidor"
+            description="🚲 En camino"
+            pinColor="#2196F3"
+          />
 
-          {/* 📍 Marcador - Cliente (Destino) */}
+          {/* ✅ Marcador del Cliente */}
           <Marker
             coordinate={destinoCliente}
-            title="Tu destino"
-            description="📍 Aquí recibirás tu pedido"
+            title="Destino"
+            description="📍 Entrega de pedido"
             pinColor={Colores.primario}
-          >
-            <View style={estilos.marcadorCliente}>
-              <Ionicons name="home" size={24} color={Colores.primario} />
-            </View>
-          </Marker>
+          />
 
-          {/* 📍 Línea de ruta (si el repartidor está en camino) */}
-          {estadoActual === 'en_camino' && ubicacionRepartidor && (
-            <Polyline
-              coordinates={[
-                ubicacionRepartidor,
-                destinoCliente
-              ]}
-              strokeColor={Colores.primario}
-              strokeWidth={4}
-              lineDashPattern={[5, 5]}
-            />
-          )}
+          {/* ✅ RUTA REAL CON POLYLINE */}
+          <Polyline
+            coordinates={coordenadasRuta}
+            strokeColor={Colores.primario}
+            strokeWidth={rutaPuntos.length > 0 ? 5 : 4}
+            lineDashPattern={rutaPuntos.length > 0 ? [] : [5, 5]}
+            lineCap="round"
+            lineJoin="round"
+            strokeColors={[Colores.primario, Colores.secundario, Colores.primario]}
+          />
         </MapView>
 
-        {/* ✅ Info del mapa */}
         <View style={estilos.mapaInfo}>
           <View style={estilos.mapaInfoItem}>
             <Ionicons name="navigate" size={18} color={Colores.secundario} />
@@ -204,25 +301,24 @@ export default function PantallaSeguimiento(props: any) {
         </View>
       </View>
 
-      {/* Repartidor info */}
       {estadoActual === 'en_camino' && pedido.encabezado_repartidor && (
         <View style={estilos.repartidorInfo}>
           <Ionicons name="person-circle" size={30} color={Colores.enCamino} />
           <View style={{ flex: 1 }}>
             <Text style={estilos.repartidorNombre}>{pedido.encabezado_repartidor}</Text>
-            <Text style={estilos.repartidorEstado}>Tu pedido esta en camino!</Text>
+            <Text style={estilos.repartidorEstado}>¡Tu pedido está en camino!</Text>
           </View>
         </View>
       )}
 
-      {/* Estado actual */}
       <View style={[estilos.estadoActual, { backgroundColor: estadoColor(estadoActual) + '20' }]}>
-        <Ionicons name={estados[indiceActual]?.icono as any || 'help-circle'} size={50} color={estadoColor(estadoActual)} />
-        <Text style={[estilos.estadoActualTexto, { color: estadoColor(estadoActual) }]}>{estados[indiceActual]?.label || estadoActual}</Text>
+        <Ionicons name={(estados[indiceActual]?.icono as any) || 'help-circle'} size={50} color={estadoColor(estadoActual)} />
+        <Text style={[estilos.estadoActualTexto, { color: estadoColor(estadoActual) }]}>
+          {estados[indiceActual]?.label || estadoActual}
+        </Text>
         <Text style={estilos.pedidoId}>Pedido #{pedido.id}</Text>
       </View>
 
-      {/* Timeline */}
       <View style={estilos.timeline}>
         {estados.map((estado, index) => {
           const completado = index <= indiceActual;
@@ -230,13 +326,25 @@ export default function PantallaSeguimiento(props: any) {
           return (
             <View key={estado.key} style={estilos.timelineItem}>
               <View style={estilos.timelineLinea}>
-                <View style={[estilos.timelinePunto, completado && { backgroundColor: estadoColor(estado.key) }, actual && estilos.timelinePuntoActual]}>
+                <View style={[
+                  estilos.timelinePunto,
+                  completado && { backgroundColor: estadoColor(estado.key) },
+                  actual && estilos.timelinePuntoActual
+                ]}>
                   {completado && <Ionicons name="checkmark" size={14} color="white" />}
                 </View>
-                {index < estados.length - 1 && <View style={[estilos.timelineBarra, completado && { backgroundColor: estadoColor(estado.key) }]} />}
+                {index < estados.length - 1 && (
+                  <View style={[estilos.timelineBarra, completado && { backgroundColor: estadoColor(estado.key) }]} />
+                )}
               </View>
               <View style={estilos.timelineInfo}>
-                <Text style={[estilos.timelineLabel, completado && { color: Colores.textoClaro }, actual && { fontWeight: 'bold' }]}>{estado.label}</Text>
+                <Text style={[
+                  estilos.timelineLabel,
+                  completado && { color: Colores.textoClaro },
+                  actual && { fontWeight: 'bold' }
+                ]}>
+                  {estado.label}
+                </Text>
                 {actual && <Text style={estilos.timelineAhora}>Ahora</Text>}
               </View>
             </View>
@@ -244,7 +352,6 @@ export default function PantallaSeguimiento(props: any) {
         })}
       </View>
 
-      {/* Detalles */}
       <View style={estilos.infoPedido}>
         <Text style={estilos.infoTitulo}>Detalles del Pedido</Text>
         <View style={estilos.infoFila}>
@@ -252,7 +359,7 @@ export default function PantallaSeguimiento(props: any) {
           <Text style={estilos.infoValor}>${pedido.total?.toFixed(2)}</Text>
         </View>
         <View style={estilos.infoFila}>
-          <Text style={estilos.infoLabel}>Envio</Text>
+          <Text style={estilos.infoLabel}>Envío</Text>
           <Text style={estilos.infoValor}>${pedido.costo_envio?.toFixed(2) || '2.99'}</Text>
         </View>
         <View style={estilos.infoFila}>
@@ -266,11 +373,7 @@ export default function PantallaSeguimiento(props: any) {
             {(() => {
               let items = pedido.items_json;
               if (typeof items === 'string') {
-                try {
-                  items = JSON.parse(items);
-                } catch (e) {
-                  items = [];
-                }
+                try { items = JSON.parse(items); } catch (e) { items = []; }
               }
               if (Array.isArray(items) && items.length > 0) {
                 return items.map((item: any, index: number) => (
@@ -304,14 +407,17 @@ const estilos = StyleSheet.create({
   scroll: { paddingBottom: 40 },
   cargandoTexto: { color: Colores.textoGris, marginTop: 16, fontSize: 14 },
   errorTexto: { color: Colores.textoGris, fontSize: 20, textAlign: 'center', marginTop: 20 },
-  mapaContenedor: { margin: 16, backgroundColor: Colores.fondoTarjeta, borderRadius: 20, padding: 16 },
-  mapa: { height: 250, borderRadius: 14, width: width - 64 },
+  mapaContenedor: {
+    margin: 16,
+    backgroundColor: Colores.fondoTarjeta,
+    borderRadius: 20,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  mapa: { height: 250, width: '100%', borderRadius: 14 },
   mapaInfo: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12 },
   mapaInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mapaInfoTexto: { color: Colores.textoClaro, fontSize: 14, fontWeight: 'bold' },
-  marcadorKrusty: { alignItems: 'center', justifyContent: 'center' },
-  marcadorRepartidor: { alignItems: 'center', justifyContent: 'center' },
-  marcadorCliente: { alignItems: 'center', justifyContent: 'center' },
   repartidorInfo: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, backgroundColor: Colores.enCamino + '20', borderRadius: 16, padding: 14, gap: 12 },
   repartidorNombre: { fontSize: 16, fontWeight: 'bold', color: Colores.textoClaro },
   repartidorEstado: { fontSize: 13, color: Colores.enCamino, marginTop: 2 },
@@ -339,4 +445,6 @@ const estilos = StyleSheet.create({
   productoCantidad: { fontSize: 14, color: Colores.textoGris, marginHorizontal: 12 },
   productoPrecio: { fontSize: 14, fontWeight: 'bold', color: Colores.primario },
   productoError: { fontSize: 14, color: Colores.textoGris, textAlign: 'center', padding: 10 },
+  botonVolver: { marginTop: 20, backgroundColor: Colores.secundario, padding: 14, borderRadius: 12 },
+  botonVolverTexto: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });

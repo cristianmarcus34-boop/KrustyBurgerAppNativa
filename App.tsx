@@ -20,8 +20,10 @@ import React, { useEffect, useRef } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import { tiendaAutenticacion } from './stores/tiendaAutenticacion';
 import { tiendaCarrito } from './stores/tiendaCarrito';
 import { Colores } from './lib/colores';
@@ -51,6 +53,8 @@ const Tab = createBottomTabNavigator();
 
 function PestanasCliente() {
   const { cantidadTotal } = tiendaCarrito();
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }: any) => ({
@@ -65,7 +69,13 @@ function PestanasCliente() {
         },
         tabBarActiveTintColor: Colores.secundario,
         tabBarInactiveTintColor: Colores.textoGris,
-        tabBarStyle: { backgroundColor: Colores.fondoOscuro, borderTopColor: '#333', paddingBottom: 5, height: 60 },
+        tabBarStyle: {
+          backgroundColor: Colores.fondoOscuro,
+          borderTopColor: '#333',
+          // ✅ AGREGAR PADDING INFERIOR PARA LA BARRA DE NAVEGACIÓN DE ANDROID
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 5 : 5,
+          height: Platform.OS === 'android' ? 60 + insets.bottom : 60,
+        },
         headerShown: false,
       })}
     >
@@ -84,6 +94,22 @@ export default function App() {
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
   useEffect(() => {
+    // ✅ Configurar la barra de navegación en Android
+    const setupNavigationBar = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          // @ts-ignore - Ignorar error de TypeScript
+          await NavigationBar.setBackgroundColorAsync(Colores.fondoOscuro || '#1a1a1a');
+          // @ts-ignore - Ignorar error de TypeScript
+          await NavigationBar.setButtonStyleAsync('light');
+          console.log('✅ Barra de navegación configurada correctamente');
+        } catch (error) {
+          console.warn('⚠️ Error configurando barra de navegación:', error);
+        }
+      }
+    };
+
+    setupNavigationBar();
     inicializarSesion();
     cargarCarrito();
   }, []);

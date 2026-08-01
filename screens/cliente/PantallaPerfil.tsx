@@ -1,214 +1,196 @@
+// screens/cliente/PantallaPerfil.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 
-export default function PantallaTransmision(props: any) {
-  const { perfil, cerrarSesion } = tiendaAutenticacion(); // 👈 OBTENER cerrarSesion DEL STORE
-  const [pedidosActivos, setPedidosActivos] = useState<Pedido[]>([]);
-  const [pedidosEntregados, setPedidosEntregados] = useState<Pedido[]>([]);
-  const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
-  const [transmitiendo, setTransmitiendo] = useState(false);
-  const [ubicacionActual, setUbicacionActual] = useState({ lat: -34.6037, lng: -58.3816 });
-  const [cargando, setCargando] = useState(true);
-  const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
-  const [mostrarModalExito, setMostrarModalExito] = useState(false);
-  const [mensajeExito, setMensajeExito] = useState('');
-  const [pestana, setPestana] = useState<'activos' | 'historial'>('activos');
+export default function PantallaPerfil(props: any) {
+  const { perfil, sesion, cerrarSesion } = tiendaAutenticacion(); // ✅ Agregar sesion
+  const [totalPedidos, setTotalPedidos] = useState(0);
+  const [mostrarModal, setMostrarModal] = useState(false);
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => { cargarPedidos(); }, []);
+  const isTablet = width >= 768;
+  const isSmallPhone = width < 375;
+  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
+  const paddingBottom = insets.bottom + 20;
 
-  const cargarPedidos = async () => {
-    setCargando(true);
-    const { data: activos } = await supabase.from('pedidos').select('*').in('estado', ['listo', 'en_camino']).order('creado_en', { ascending: false });
-    const { data: entregados } = await supabase.from('pedidos').select('*').eq('estado', 'entregado').order('creado_en', { ascending: false }).limit(20);
-    setPedidosActivos(activos as Pedido[] || []);
-    setPedidosEntregados(entregados as Pedido[] || []);
-    setCargando(false);
-  };
-
-  const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  };
-
-  const mostrarExito = (mensaje: string) => {
-    setMensajeExito(mensaje);
-    setMostrarModalExito(true);
-    setTimeout(() => setMostrarModalExito(false), 2500);
-  };
-
-  const iniciarTransmision = async (pedido: Pedido) => {
-    setPedidoSeleccionado(pedido);
-    setTransmitiendo(true);
-    await supabase.from('pedidos').update({
-      estado: 'en_camino',
-      repartidor_id: perfil?.id,
-      encabezado_repartidor: perfil?.nombre_cliente || 'Repartidor Krusty'
-    }).eq('id', pedido.id);
-
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 10 },
-        async (loc) => {
-          const { latitude, longitude } = loc.coords;
-          setUbicacionActual({ lat: latitude, lng: longitude });
-          await supabase.from('pedidos').update({ lat_repartidor: latitude, repartidor_de_lng: longitude }).eq('id', pedido.id);
-          const distancia = calcularDistancia(latitude, longitude, pedido.lat_cliente || -34.6037, pedido.lng_cliente || -58.3816);
-          if (distancia < 0.1) {
-            await supabase.from('pedidos').update({ estado: 'entregado' }).eq('id', pedido.id);
-            mostrarExito('🎉 Llegaste al destino! Entrega completada');
-            setTransmitiendo(false);
-            setPedidoSeleccionado(null);
-            cargarPedidos();
-          }
-        }
-      );
-    } else {
-      simularMovimiento(pedido);
+  useEffect(() => {
+    if (perfil?.id) {
+      cargarTotalPedidos();
     }
+  }, [perfil]);
+
+  const cargarTotalPedidos = async () => {
+    const { count } = await supabase
+      .from('pedidos')
+      .select('*', { count: 'exact', head: true })
+      .eq('id_de_usuario', perfil?.id);
+    setTotalPedidos(count || 0);
   };
 
-  const simularMovimiento = (pedido: Pedido) => {
-    let paso = 0;
-    const intervalo = setInterval(async () => {
-      paso += 0.001;
-      const nuevaLat = (pedido.lat_cliente || -34.6037) + paso;
-      const nuevaLng = (pedido.lng_cliente || -58.3816) + paso;
-      setUbicacionActual({ lat: nuevaLat, lng: nuevaLng });
-      await supabase.from('pedidos').update({ lat_repartidor: nuevaLat, repartidor_de_lng: nuevaLng }).eq('id', pedido.id);
-      if (paso >= 0.01) {
-        clearInterval(intervalo);
-        await supabase.from('pedidos').update({ estado: 'entregado' }).eq('id', pedido.id);
-        mostrarExito('🎉 Entrega completada exitosamente!');
-        setTransmitiendo(false);
-        setPedidoSeleccionado(null);
-        cargarPedidos();
-      }
-    }, 2000);
-  };
-
-  // ✅ FUNCIÓN CORREGIDA - Usa cerrarSesion del store
   const confirmarCerrarSesion = async () => {
-    setMostrarModalCerrar(false);
+    setMostrarModal(false);
     try {
-      // ✅ Usar el método del store (limpia AsyncStorage y resetea estado)
       await cerrarSesion();
-      console.log('✅ Sesión cerrada correctamente desde el store');
-      // ✅ La navegación se maneja en App.tsx con useEffect
+      console.log('✅ Sesión cerrada correctamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
   };
 
-  const estadoColor = (estado: string) => {
-    const c: any = { listo: Colores.listo, en_camino: Colores.enCamino, entregado: Colores.entregado };
-    return c[estado] || Colores.textoGris;
+  // ✅ Función para navegar al login (invitados)
+  const navegarALogin = () => {
+    props.navigation.navigate('Login');
   };
 
-  const renderPedido = ({ item }: { item: Pedido }) => (
-    <View style={estilos.tarjeta}>
-      <View style={estilos.tarjetaHeader}>
-        <View>
-          <Text style={estilos.pedidoId}>Pedido #{item.id}</Text>
-          <Text style={estilos.clienteNombre}>{item.cliente_nombre || 'Cliente'}</Text>
-        </View>
-        <View style={[estilos.estadoBadge, { backgroundColor: estadoColor(item.estado) + '30' }]}>
-          <Text style={[estilos.estadoTexto, { color: estadoColor(item.estado) }]}>
-            {item.estado === 'listo' ? '📦 Listo' : item.estado === 'en_camino' ? '🚲 En camino' : '✅ Entregado'}
-          </Text>
-        </View>
-      </View>
-      <View style={estilos.tarjetaInfo}>
-        <Text style={estilos.tarjetaDireccion}>📍 {item.direccion || 'Retiro en local'}</Text>
-        <Text style={estilos.tarjetaTelefono}>📱 {item.telefono || 'Sin telefono'}</Text>
-        <Text style={estilos.tarjetaTotal}>💰 ${item.total?.toFixed(2)}</Text>
-      </View>
-      {item.estado !== 'entregado' && !transmitiendo && (
-        <TouchableOpacity style={estilos.botonIniciar} onPress={() => iniciarTransmision(item)}>
-          <Ionicons name="play-circle" size={20} color="white" />
-          <Text style={estilos.botonIniciarTexto}>Iniciar Entrega</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const nivelCliente = (puntos: number) => {
+    if (puntos >= 5000) return { icono: '💎', nombre: 'Platino', color: '#E5E4E2' };
+    if (puntos >= 1500) return { icono: '👑', nombre: 'Oro', color: '#FFD700' };
+    if (puntos >= 500) return { icono: '🥈', nombre: 'Plata', color: '#C0C0C0' };
+    return { icono: '🥉', nombre: 'Bronce', color: '#CD7F32' };
+  };
+
+  const nivel = nivelCliente(perfil?.puntos_acumulados || 0);
 
   return (
-    <View style={estilos.contenedor}>
-      <View style={estilos.encabezado}>
-        <View>
-          <Text style={estilos.titulo}>Reparto Krusty</Text>
-          <Text style={estilos.subtitulo}>{perfil?.nombre_cliente || 'Repartidor'}</Text>
-        </View>
-        <TouchableOpacity onPress={() => setMostrarModalCerrar(true)}>
-          <Ionicons name="log-out-outline" size={28} color={Colores.acento} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={estilos.stats}>
-        <View style={estilos.statItem}><Text style={estilos.statValor}>{pedidosActivos.length}</Text><Text style={estilos.statLabel}>Pendientes</Text></View>
-        <View style={estilos.statItem}><Text style={estilos.statValor}>{pedidosEntregados.length}</Text><Text style={estilos.statLabel}>Entregados</Text></View>
-        <View style={estilos.statItem}><Text style={estilos.statValor}>${pedidosEntregados.reduce((s, p) => s + (p.total || 0), 0).toFixed(0)}</Text><Text style={estilos.statLabel}>Total hoy</Text></View>
-      </View>
-
-      <View style={estilos.pestanas}>
-        <TouchableOpacity style={[estilos.pestana, pestana === 'activos' && estilos.pestanaActiva]} onPress={() => setPestana('activos')}>
-          <Text style={[estilos.pestanaTexto, pestana === 'activos' && estilos.pestanaTextoActiva]}>🚀 Activos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[estilos.pestana, pestana === 'historial' && estilos.pestanaActiva]} onPress={() => setPestana('historial')}>
-          <Text style={[estilos.pestanaTexto, pestana === 'historial' && estilos.pestanaTextoActiva]}>📋 Historial</Text>
-        </TouchableOpacity>
-      </View>
-
-      {transmitiendo && pedidoSeleccionado && (
-        <View style={[estilos.tarjetaTransmision, { backgroundColor: Colores.primario + '20' }]}>
-          <View style={estilos.transmisionHeader}>
-            <Ionicons name="radio" size={24} color={Colores.primario} />
-            <Text style={estilos.transmitiendoTexto}>Transmitiendo ubicacion</Text>
-            <View style={estilos.puntoVivo} />
+    <View style={[estilos.contenedor, { paddingBottom: paddingBottom }]}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={estilos.scrollContent}>
+        <View style={[estilos.encabezado, { paddingHorizontal: paddingHorizontal }]}>
+          <View style={estilos.avatar}>
+            <Text style={estilos.avatarEmoji}>🍔</Text>
           </View>
-          <Text style={estilos.pedidoTransmision}>Pedido #{pedidoSeleccionado.id}</Text>
-          <Text style={estilos.clienteTransmision}>{pedidoSeleccionado.cliente_nombre}</Text>
-          <Text style={estilos.direccionTransmision}>📍 {pedidoSeleccionado.direccion || 'Sin direccion'}</Text>
-          <View style={estilos.gpsInfo}><Text style={estilos.gpsTexto}>GPS: {ubicacionActual.lat.toFixed(6)}, {ubicacionActual.lng.toFixed(6)}</Text></View>
-          <TouchableOpacity style={estilos.botonDetener} onPress={() => { setTransmitiendo(false); setPedidoSeleccionado(null); }}>
-            <Ionicons name="stop-circle" size={20} color="white" />
-            <Text style={estilos.botonDetenerTexto}>Detener Transmision</Text>
+          <Text style={[estilos.nombre, { fontSize: isTablet ? 26 : 22 }]}>
+            {perfil?.nombre_cliente || 'Invitado'}
+          </Text>
+          <Text style={[estilos.correo, { fontSize: isTablet ? 16 : 14 }]}>
+            {perfil?.email || 'Inicia sesión para ver tus datos'}
+          </Text>
+
+          {perfil?.id ? (
+            // ✅ Usuario autenticado
+            <>
+              <View style={estilos.puntos}>
+                <Text style={estilos.puntosIcono}>⭐</Text>
+                <Text style={[estilos.puntosTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                  {perfil?.puntos_acumulados || 0} Krusty Points
+                </Text>
+              </View>
+
+              <View style={[estilos.nivel, { backgroundColor: nivel.color + '20' }]}>
+                <Text style={[estilos.nivelTexto, { color: nivel.color, fontSize: isTablet ? 16 : 14 }]}>
+                  {nivel.icono} Nivel {nivel.nombre}
+                </Text>
+              </View>
+
+              <View style={estilos.stats}>
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValor, { fontSize: isTablet ? 22 : 18 }]}>{totalPedidos}</Text>
+                  <Text style={[estilos.statLabel, { fontSize: isTablet ? 13 : 11 }]}>Pedidos</Text>
+                </View>
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValor, { fontSize: isTablet ? 22 : 18 }]}>{perfil?.puntos_acumulados || 0}</Text>
+                  <Text style={[estilos.statLabel, { fontSize: isTablet ? 13 : 11 }]}>Puntos</Text>
+                </View>
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValor, { fontSize: isTablet ? 22 : 18 }]}>
+                    {perfil?.ultimo_acceso
+                      ? new Date(perfil.ultimo_acceso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+                      : '---'}
+                  </Text>
+                  <Text style={[estilos.statLabel, { fontSize: isTablet ? 13 : 11 }]}>Ultimo acceso</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            // ✅ Usuario invitado
+            <View style={estilos.mensajeInvitado}>
+              <Ionicons name="person-outline" size={40} color={Colores.textoGris} />
+              <Text style={[estilos.textoInvitado, { fontSize: isTablet ? 18 : 16 }]}>
+                Estás viendo como invitado
+              </Text>
+              <Text style={[estilos.textoInvitadoSub, { fontSize: isTablet ? 14 : 12 }]}>
+                Inicia sesión para acceder a tus pedidos, puntos y recompensas
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[estilos.menu, { paddingHorizontal: paddingHorizontal }]}>
+          {/* ✅ BOTÓN DE LOGIN PARA INVITADOS (se muestra solo si no está autenticado) */}
+          {!perfil?.id && (
+            <TouchableOpacity style={[estilos.menuItem, estilos.menuLogin]} onPress={navegarALogin}>
+              <Ionicons name="log-in-outline" size={24} color={Colores.primario} />
+              <Text style={[estilos.menuTexto, { color: Colores.primario, fontWeight: 'bold', fontSize: isTablet ? 17 : 16 }]}>
+                Iniciar Sesión
+              </Text>
+              <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={estilos.menuItem} onPress={() => props.navigation.navigate('Pedidos')}>
+            <Ionicons name="receipt-outline" size={24} color={Colores.textoClaro} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Mis Pedidos</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
           </TouchableOpacity>
+
+          <TouchableOpacity style={estilos.menuItem} onPress={() => props.navigation.navigate('Recompensas')}>
+            <Ionicons name="star-outline" size={24} color={Colores.secundario} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Recompensas</Text>
+            <Text style={[estilos.menuValor, { fontSize: isTablet ? 13 : 12 }]}>Canjear puntos</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={estilos.menuItem}>
+            <Ionicons name="location-outline" size={24} color={Colores.textoClaro} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Direcciones</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={estilos.menuItem}>
+            <Ionicons name="card-outline" size={24} color={Colores.textoClaro} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Metodos de pago</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={estilos.menuItem}>
+            <Ionicons name="gift-outline" size={24} color={Colores.primario} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Ofertas para vos</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={estilos.menuItem}>
+            <Ionicons name="information-circle-outline" size={24} color={Colores.textoClaro} />
+            <Text style={[estilos.menuTexto, { fontSize: isTablet ? 17 : 16 }]}>Acerca de Krusty Burger</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colores.textoGris} />
+          </TouchableOpacity>
+
+          {/* ✅ BOTÓN DE CERRAR SESIÓN (solo visible para autenticados) */}
+          {perfil?.id && (
+            <TouchableOpacity style={[estilos.menuItem, estilos.menuCerrar]} onPress={() => setMostrarModal(true)}>
+              <Ionicons name="log-out-outline" size={24} color={Colores.acento} />
+              <Text style={[estilos.menuTexto, { color: Colores.acento, fontSize: isTablet ? 17 : 16 }]}>
+                Cerrar Sesión
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
-      )}
 
-      <FlatList
-        data={pestana === 'activos' ? pedidosActivos : pedidosEntregados}
-        keyExtractor={item => item.id?.toString() || Math.random().toString()}
-        refreshing={cargando}
-        onRefresh={cargarPedidos}
-        contentContainerStyle={estilos.lista}
-        renderItem={renderPedido}
-        ListEmptyComponent={
-          <View style={estilos.vacio}>
-            <Ionicons name={pestana === 'activos' ? 'bicycle-outline' : 'checkmark-done-outline'} size={60} color={Colores.textoGris} />
-            <Text style={estilos.vacioTexto}>{pestana === 'activos' ? 'No hay pedidos pendientes' : 'No hay entregas'}</Text>
-          </View>
-        }
-      />
+        <View style={{ height: 20 }} />
+      </ScrollView>
 
-      <Modal visible={mostrarModalCerrar} transparent animationType="fade">
+      <Modal visible={mostrarModal} transparent animationType="fade">
         <View style={estilos.modalFondo}>
           <View style={estilos.modal}>
             <Text style={estilos.modalIcono}>🍔</Text>
             <Text style={estilos.modalTitulo}>Cerrar Sesion</Text>
             <Text style={estilos.modalTexto}>Estas seguro de que queres salir?</Text>
             <View style={estilos.modalBotones}>
-              <TouchableOpacity style={[estilos.modalBoton, estilos.modalCancelar]} onPress={() => setMostrarModalCerrar(false)}>
+              <TouchableOpacity style={[estilos.modalBoton, estilos.modalCancelar]} onPress={() => setMostrarModal(false)}>
                 <Text style={estilos.modalCancelarTexto}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[estilos.modalBoton, estilos.modalConfirmar]} onPress={confirmarCerrarSesion}>
@@ -219,63 +201,38 @@ export default function PantallaTransmision(props: any) {
           </View>
         </View>
       </Modal>
-
-      <Modal visible={mostrarModalExito} transparent animationType="fade">
-        <View style={estilos.modalFondo}>
-          <View style={[estilos.modal, estilos.modalExito]}>
-            <Text style={estilos.modalIcono}>🎉</Text>
-            <Text style={[estilos.modalTitulo, { color: Colores.primario }]}>Exito!</Text>
-            <Text style={estilos.modalTexto}>{mensajeExito}</Text>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
   contenedor: { flex: 1, backgroundColor: Colores.fondoOscuro },
-  encabezado: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12 },
-  titulo: { fontSize: 26, fontWeight: 'bold', color: Colores.textoClaro },
-  subtitulo: { fontSize: 14, color: Colores.textoGris, marginTop: 2 },
-  stats: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#333' },
+  scrollContent: { flexGrow: 1 },
+  encabezado: { alignItems: 'center', paddingTop: 60, paddingBottom: 20 },
+  avatar: { width: 80, height: 80, backgroundColor: Colores.secundario + '30', borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  avatarEmoji: { fontSize: 40 },
+  nombre: { fontWeight: 'bold', color: Colores.textoClaro },
+  correo: { color: Colores.textoGris, marginTop: 4 },
+  puntos: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colores.secundario + '20', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 12 },
+  puntosIcono: { fontSize: 16, marginRight: 6 },
+  puntosTexto: { fontWeight: 'bold', color: Colores.secundario },
+  nivel: { marginTop: 10, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  nivelTexto: { fontWeight: 'bold' },
+  stats: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 20, paddingHorizontal: 20 },
   statItem: { alignItems: 'center' },
-  statValor: { fontSize: 22, fontWeight: 'bold', color: Colores.textoClaro },
-  statLabel: { fontSize: 11, color: Colores.textoGris, marginTop: 4 },
-  pestanas: { flexDirection: 'row', paddingHorizontal: 20, marginVertical: 12, gap: 8 },
-  pestana: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: Colores.fondoTarjeta, alignItems: 'center' },
-  pestanaActiva: { backgroundColor: Colores.secundario },
-  pestanaTexto: { color: Colores.textoGris, fontWeight: '600' },
-  pestanaTextoActiva: { color: Colores.fondoOscuro },
-  tarjetaTransmision: { margin: 16, borderRadius: 16, padding: 20, borderWidth: 2, borderColor: Colores.primario },
-  transmisionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  transmitiendoTexto: { fontSize: 16, fontWeight: 'bold', color: Colores.primario },
-  puntoVivo: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colores.primario },
-  pedidoTransmision: { fontSize: 20, fontWeight: 'bold', color: Colores.textoClaro },
-  clienteTransmision: { fontSize: 14, color: Colores.textoGris, marginTop: 4 },
-  direccionTransmision: { fontSize: 14, color: Colores.textoClaro, marginTop: 8 },
-  gpsInfo: { backgroundColor: Colores.fondoOscuro, borderRadius: 8, padding: 8, marginTop: 12 },
-  gpsTexto: { fontSize: 11, color: Colores.primario, fontFamily: 'monospace' },
-  botonDetener: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colores.acento, borderRadius: 12, padding: 14, marginTop: 16, gap: 8 },
-  botonDetenerTexto: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  lista: { paddingHorizontal: 16, paddingBottom: 20 },
-  tarjeta: { backgroundColor: Colores.fondoTarjeta, borderRadius: 16, padding: 16, marginBottom: 12 },
-  tarjetaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  pedidoId: { fontSize: 16, fontWeight: 'bold', color: Colores.textoClaro },
-  clienteNombre: { fontSize: 13, color: Colores.textoGris, marginTop: 2 },
-  estadoBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  estadoTexto: { fontSize: 12, fontWeight: 'bold' },
-  tarjetaInfo: { marginBottom: 12 },
-  tarjetaDireccion: { fontSize: 14, color: Colores.textoClaro, marginBottom: 4 },
-  tarjetaTelefono: { fontSize: 14, color: Colores.textoGris, marginBottom: 2 },
-  tarjetaTotal: { fontSize: 16, fontWeight: 'bold', color: Colores.primario },
-  botonIniciar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colores.primario, borderRadius: 12, padding: 14, gap: 8 },
-  botonIniciarTexto: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  vacio: { alignItems: 'center', marginTop: 60 },
-  vacioTexto: { color: Colores.textoGris, fontSize: 16, marginTop: 16 },
+  statValor: { fontWeight: 'bold', color: Colores.textoClaro },
+  statLabel: { color: Colores.textoGris, marginTop: 4 },
+  mensajeInvitado: { alignItems: 'center', marginTop: 20, paddingHorizontal: 20 },
+  textoInvitado: { color: Colores.textoClaro, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
+  textoInvitadoSub: { color: Colores.textoGris, textAlign: 'center', marginTop: 4 },
+  menu: { paddingHorizontal: 20 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colores.fondoTarjeta, borderRadius: 12, padding: 16, marginBottom: 8 },
+  menuTexto: { flex: 1, marginLeft: 12, color: Colores.textoClaro },
+  menuValor: { color: Colores.secundario, marginRight: 8 },
+  menuLogin: { borderWidth: 2, borderColor: Colores.primario },
+  menuCerrar: { marginTop: 20 },
   modalFondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   modal: { backgroundColor: Colores.fondoTarjeta, borderRadius: 24, padding: 30, width: '85%', alignItems: 'center', borderWidth: 2, borderColor: Colores.secundario + '40' },
-  modalExito: { borderColor: Colores.primario },
   modalIcono: { fontSize: 60, marginBottom: 12 },
   modalTitulo: { fontSize: 22, fontWeight: 'bold', color: Colores.textoClaro, marginBottom: 8 },
   modalTexto: { fontSize: 14, color: Colores.textoGris, textAlign: 'center', marginBottom: 24 },
