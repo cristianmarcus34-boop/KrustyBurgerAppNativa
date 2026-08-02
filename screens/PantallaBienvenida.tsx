@@ -1,316 +1,604 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Image } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Animated, Dimensions, Image, Linking } from 'react-native'; // ✅ IMPORTAR Linking
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// ✅ Paleta de colores Krusty
-const KrustyColors = {
+// ============================================================
+// 🎨 PALETA DE COLORES - MODIFICAR AQUÍ LOS COLORES
+// ============================================================
+const COLORS = {
+    // 🟡 AMARILLOS (Krusty Burger)
+    amarillo: '#F5C518',        // Amarillo principal
+    amarilloClaro: '#FFE066',   // Amarillo más claro
+    amarilloOscuro: '#D4A800',  // Amarillo más oscuro
+
+    // 🔴 ROJOS (Acentos)
     rojo: '#E53935',
-    rojoOscuro: '#C62828',
-    amarillo: '#FDD835',
-    amarilloClaro: '#FFF9C4',
-    naranja: '#FB8C00',
+    rojoOscuro: '#B71C1C',
+
+    // 🟢 VERDES - MODIFICAR AQUÍ PARA CAMBIAR EL FONDO
+    verde: '#43A047',           // ✅ NUEVO: Verde más brillante y clarito (antes era #2E7D32)
+    verdeClaro: '#66BB6A',      // Verde claro para detalles
+
+    // ⚪ BLANCOS Y GRISES
     blanco: '#FFFFFF',
-    negro: '#1A1A1A',
-    gris: '#9E9E9E',
-    grisClaro: '#F5F5F5',
+    negro: '#0A0A0A',
+    grisOscuro: '#1A1A1A',
+    gris: '#333333',
+    grisClaro: '#B0B0B0',
+
+    // ✨ EFECTOS ESPECIALES
+    neon: '#FF6B00',
+    glow: '#F5C51840',          // Resplandor amarillo (40% opacidad)
 };
 
+const { width, height } = Dimensions.get('window');
+const logoImage = require('../assets/logo-krusty.jpeg');
+
 export default function PantallaBienvenida({ navigation }: any) {
-    const { width, height } = useWindowDimensions();
+    const { width: winWidth, height: winHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
 
-    const isTablet = width >= 768;
-    const isSmallPhone = width < 375;
+    // ✅ Animaciones
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.9)).current;
+    const translateY = useRef(new Animated.Value(60)).current;
+    const glowAnim = useRef(new Animated.Value(0)).current;
+    const particulaAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        // Animación principal
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 1000,
+                useNativeDriver: true,
+            }),
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                friction: 10,
+                tension: 50,
+                useNativeDriver: true,
+            }),
+            Animated.timing(translateY, {
+                toValue: 0,
+                duration: 800,
+                useNativeDriver: true,
+            }),
+        ]).start();
+
+        // Animación de resplandor
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(glowAnim, {
+                    toValue: 1,
+                    duration: 2000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(glowAnim, {
+                    toValue: 0,
+                    duration: 2000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+
+        // Animación de partículas
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(particulaAnim, {
+                    toValue: 1,
+                    duration: 3000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(particulaAnim, {
+                    toValue: 0,
+                    duration: 3000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+    }, []);
+
+    const isTablet = winWidth >= 768;
+    const isSmallPhone = winWidth < 375;
 
     // ✅ Tamaños dinámicos
-    const emojiSize = isTablet ? 130 : isSmallPhone ? 80 : 110;
-    const tituloSize = isTablet ? 48 : isSmallPhone ? 30 : 40;
-    const subtituloSize = isTablet ? 22 : isSmallPhone ? 14 : 18;
-    const featureTextSize = isTablet ? 20 : isSmallPhone ? 14 : 17;
-    const buttonTextSize = isTablet ? 24 : isSmallPhone ? 16 : 20;
-    const buttonPadding = isTablet ? 24 : isSmallPhone ? 14 : 18;
-    const featureIconSize = isTablet ? 32 : isSmallPhone ? 22 : 26;
-    const logoMarginBottom = isTablet ? 50 : isSmallPhone ? 25 : 35;
-    const featuresMarginBottom = isTablet ? 35 : isSmallPhone ? 20 : 25;
-    const paddingHorizontal = isTablet ? 60 : isSmallPhone ? 20 : 30;
-    const paddingTop = isTablet ? 60 : isSmallPhone ? 40 : 50;
-    const paddingBottom = (isTablet ? 30 : isSmallPhone ? 20 : 25) + insets.bottom;
+    const logoSize = isTablet ? 200 : isSmallPhone ? 140 : 170;
+    const buttonTextSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
+    const buttonPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
+    const featureIconSize = isTablet ? 24 : isSmallPhone ? 20 : 22;
+    const logoMarginBottom = isTablet ? 30 : isSmallPhone ? 20 : 24;
+    const featuresMarginBottom = isTablet ? 24 : isSmallPhone ? 16 : 20;
+    const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 20 : 24;
+    const paddingTop = isTablet ? 40 : isSmallPhone ? 20 : 30;
+    const paddingBottom = (isTablet ? 30 : isSmallPhone ? 16 : 20) + insets.bottom;
+
+    const glowOpacity = glowAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.1, 0.3],
+    });
+
+    const particulaY = particulaAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-50, 50],
+    });
+
+    // ✅ FUNCIÓN PARA ABRIR EL NAVEGADOR
+    const abrirWebAgencia = async () => {
+        const url = 'https://agencia-powa.vercel.app';
+        try {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                console.log("No se puede abrir la URL: " + url);
+            }
+        } catch (error) {
+            console.error("Error al abrir el enlace:", error);
+        }
+    };
 
     return (
-        <ScrollView
-            contentContainerStyle={[
-                estilos.contenedor,
-                {
-                    paddingHorizontal: paddingHorizontal,
-                    paddingTop: paddingTop,
-                    paddingBottom: paddingBottom,
-                }
-            ]}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+
+        <LinearGradient
+            colors={[COLORS.verde, COLORS.negro]}  // ← MODIFICAR AQUÍ: Cambia COLORS.verde por otro color
+            style={estilos.contenedor}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
         >
-            {/* ✅ Logo con efecto de sombra y degradado */}
-            <View style={[estilos.logo, { marginBottom: logoMarginBottom }]}>
-                <View style={estilos.emojiContainer}>
-                    <LinearGradient
-                        colors={[KrustyColors.rojo, KrustyColors.rojoOscuro]}
-                        style={estilos.emojiBackground}
-                    >
-                        <Text style={[estilos.emoji, { fontSize: emojiSize }]}>🍔</Text>
-                    </LinearGradient>
-                </View>
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-                    Krusty Burger
-                </Text>
-                <View style={estilos.taglineContainer}>
-                    <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
-                        Las más crujientes de la ciudad
-                    </Text>
-                </View>
-            </View>
+            {/* ✅ PARTÍCULAS DE FONDO */}
+            <Animated.View
+                style={[
+                    estilos.particula,
+                    {
+                        transform: [{ translateY: particulaY }],
+                        opacity: glowOpacity,
+                        top: '10%',
+                        left: '10%',
+                    }
+                ]}
+            >
+                <Ionicons name="star" size={24} color={COLORS.amarillo + '20'} />
+            </Animated.View>
+            <Animated.View
+                style={[
+                    estilos.particula,
+                    {
+                        transform: [{ translateY: particulaY }],
+                        opacity: glowOpacity,
+                        bottom: '20%',
+                        right: '10%',
+                    }
+                ]}
+            >
+                <Ionicons name="restaurant" size={20} color={COLORS.amarillo + '15'} />
+            </Animated.View>
+            <Animated.View
+                style={[
+                    estilos.particula,
+                    {
+                        transform: [{ translateY: particulaY }],
+                        opacity: glowOpacity,
+                        top: '30%',
+                        right: '5%',
+                    }
+                ]}
+            >
+                <Ionicons name="bicycle" size={18} color={COLORS.amarillo + '15'} />
+            </Animated.View>
 
-            {/* ✅ Features con diseño moderno */}
-            <View style={[estilos.features, { marginBottom: featuresMarginBottom, gap: isTablet ? 20 : 14 }]}>
-                <View style={estilos.featureItem}>
-                    <View style={[estilos.featureIconWrapper, { backgroundColor: KrustyColors.rojo + '20' }]}>
-                        <Ionicons name="restaurant" size={featureIconSize} color={KrustyColors.rojo} />
-                    </View>
-                    <Text style={[estilos.featureTexto, { fontSize: featureTextSize }]}>
-                        Hamburguesas premium
-                    </Text>
-                </View>
-                <View style={estilos.featureItem}>
-                    <View style={[estilos.featureIconWrapper, { backgroundColor: KrustyColors.amarillo + '30' }]}>
-                        <Ionicons name="star" size={featureIconSize} color={KrustyColors.naranja} />
-                    </View>
-                    <Text style={[estilos.featureTexto, { fontSize: featureTextSize }]}>
-                        Ganá puntos Krusty
-                    </Text>
-                </View>
-                <View style={estilos.featureItem}>
-                    <View style={[estilos.featureIconWrapper, { backgroundColor: '#2196F3' + '20' }]}>
-                        <Ionicons name="bicycle" size={featureIconSize} color="#2196F3" />
-                    </View>
-                    <Text style={[estilos.featureTexto, { fontSize: featureTextSize }]}>
-                        Delivery en tiempo real
-                    </Text>
-                </View>
-            </View>
+            {/* ✅ SELECTOR DE IDIOMA */}
+            <TouchableOpacity style={estilos.idiomaSelector}>
+                <Ionicons name="language" size={20} color={COLORS.grisClaro} />
+                <Text style={estilos.idiomaTexto}>ES</Text>
+            </TouchableOpacity>
 
-            {/* ✅ Botones con diseño Krusty */}
-            <View style={[estilos.botones, { gap: isTablet ? 20 : 14, marginBottom: isTablet ? 40 : 30 }]}>
-                <TouchableOpacity
+            <ScrollView
+                contentContainerStyle={[
+                    estilos.scroll,
+                    {
+                        paddingHorizontal: paddingHorizontal,
+                        paddingTop: paddingTop,
+                        paddingBottom: paddingBottom,
+                    }
+                ]}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+            >
+                {/* ✅ LOGO */}
+                <Animated.View
                     style={[
-                        estilos.botonIngresar,
+                        estilos.logo,
                         {
-                            padding: buttonPadding,
-                            borderRadius: isTablet ? 20 : 16,
+                            marginBottom: logoMarginBottom,
+                            opacity: fadeAnim,
+                            transform: [{ scale: scaleAnim }],
                         }
                     ]}
-                    onPress={() => navigation.navigate('Login')}
-                    activeOpacity={0.8}
                 >
+                    <Image
+                        source={logoImage}
+                        style={[
+                            estilos.logoImage,
+                            {
+                                width: logoSize,
+                                height: logoSize,
+                            }
+                        ]}
+                        resizeMode="contain"
+                    />
+                </Animated.View>
+
+                {/* ✅ FEATURES */}
+                <View style={[estilos.features, { marginBottom: featuresMarginBottom, gap: isTablet ? 12 : 10 }]}>
+                    {[
+                        { icon: 'restaurant', text: 'Hamburguesas premium' },
+                        { icon: 'star', text: 'Ganá puntos Krusty' },
+                        { icon: 'bicycle', text: 'Delivery en tiempo real' },
+                    ].map((item, index) => {
+                        const itemTranslateY = translateY.interpolate({
+                            inputRange: [0, 60],
+                            outputRange: [0, 20 + index * 10],
+                        });
+
+                        return (
+                            <Animated.View
+                                key={index}
+                                style={[
+                                    estilos.featureItem,
+                                    {
+                                        opacity: fadeAnim,
+                                        transform: [{ translateY: itemTranslateY }],
+                                    }
+                                ]}
+                            >
+                                <View style={estilos.featureIconWrapper}>
+                                    <LinearGradient
+                                        colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                        style={estilos.featureIconGradient}
+                                    >
+                                        <Ionicons name={item.icon as any} size={featureIconSize} color={COLORS.negro} />
+                                    </LinearGradient>
+                                </View>
+                                <Text style={[estilos.featureTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                    {item.text}
+                                </Text>
+                                <View style={estilos.featureNeon} />
+                            </Animated.View>
+                        );
+                    })}
+                </View>
+
+                {/* ✅ BOTONES */}
+                <Animated.View
+                    style={[
+                        estilos.botones,
+                        {
+                            gap: isTablet ? 12 : 10,
+                            marginBottom: isTablet ? 30 : 20,
+                            opacity: fadeAnim,
+                        }
+                    ]}
+                >
+                    <TouchableOpacity
+                        style={[
+                            estilos.botonIngresar,
+                            {
+                                padding: 0,
+                                borderRadius: isTablet ? 14 : 12,
+                            }
+                        ]}
+                        onPress={() => navigation.navigate('Login')}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient
+                            colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                            style={[
+                                estilos.botonGradient,
+                                {
+                                    borderRadius: isTablet ? 14 : 12,
+                                    paddingVertical: buttonPadding,
+                                    paddingHorizontal: buttonPadding * 1.5,
+                                }
+                            ]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Ionicons name="log-in" size={buttonTextSize} color={COLORS.negro} />
+                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize, color: COLORS.negro }]}>
+                                Iniciar Sesión
+                            </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            estilos.botonRegistro,
+                            {
+                                padding: buttonPadding,
+                                borderRadius: isTablet ? 14 : 12,
+                                borderWidth: isTablet ? 2 : 1.5,
+                            }
+                        ]}
+                        onPress={() => navigation.navigate('Registro')}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="person-add" size={buttonTextSize + 2} color={COLORS.amarillo} />
+                        <Text style={[estilos.botonRegistroTexto, { fontSize: buttonTextSize }]}>
+                            Crear Cuenta
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[estilos.botonInvitado, { paddingVertical: isTablet ? 12 : 10 }]}
+                        onPress={() => navigation.navigate('Principal')}
+                        activeOpacity={0.6}
+                    >
+                        <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                            Ver menú como invitado
+                        </Text>
+                    </TouchableOpacity>
+                </Animated.View>
+
+                {/* ✅ FOOTER CON VERSIÓN Y AGENCIA */}
+                <Animated.View style={[estilos.footerContainer, { opacity: fadeAnim }]}>
                     <LinearGradient
-                        colors={[KrustyColors.rojo, KrustyColors.rojoOscuro]}
-                        style={[estilos.botonGradient, { borderRadius: isTablet ? 20 : 16 }]}
+                        colors={[COLORS.amarillo + '40', 'transparent']}
+                        style={estilos.footerDivider}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
-                    >
-                        <Ionicons name="log-in" size={buttonTextSize + 4} color={KrustyColors.blanco} />
-                        <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize }]}>
-                            Iniciar Sesión
-                        </Text>
-                    </LinearGradient>
-                </TouchableOpacity>
+                    />
 
-                <TouchableOpacity
-                    style={[
-                        estilos.botonRegistro,
-                        {
-                            padding: buttonPadding,
-                            borderRadius: isTablet ? 20 : 16,
-                            borderWidth: isTablet ? 3 : 2,
-                        }
-                    ]}
-                    onPress={() => navigation.navigate('Registro')}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="person-add" size={buttonTextSize + 4} color={KrustyColors.rojo} />
-                    <Text style={[estilos.botonRegistroTexto, { fontSize: buttonTextSize }]}>
-                        Crear Cuenta
+                    {/* © Krusty Burger */}
+                    <Text style={[estilos.footer, { fontSize: isTablet ? 12 : 10 }]}>
+                        © 2026 Krusty Burger
                     </Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[estilos.botonInvitado, { paddingVertical: isTablet ? 16 : 12 }]}
-                    onPress={() => navigation.navigate('Principal')}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 18 : 14 }]}>
-                        Ver menú como invitado
+                    {/* Versión */}
+                    <Text style={[estilos.version, { fontSize: isTablet ? 10 : 8 }]}>
+                        v1.0.0
                     </Text>
-                </TouchableOpacity>
-            </View>
 
-            {/* ✅ Footer con diseño minimalista */}
-            <View style={estilos.footerContainer}>
-                <View style={estilos.footerDivider} />
-                <Text style={[
-                    estilos.footer,
-                    {
-                        fontSize: isTablet ? 14 : 11,
-                    }
-                ]}>
-                    © 2026 Krusty Burger - Todos los derechos reservados
-                </Text>
-                <Text style={[estilos.footerSub, { fontSize: isTablet ? 12 : 10 }]}>
-                    🍔 Hecho con amor y crujiencia
-                </Text>
-            </View>
-        </ScrollView>
+                    {/* ✅ AGENCIA DIGITAL - PRESIONABLE */}
+                    <View style={estilos.agenciaContainer}>
+                        <View style={estilos.agenciaDivider} />
+
+                        {/* 🔽🔽🔽 TOUCHABLE OPACITY - AHORA ES PRESIONABLE 🔽🔽🔽 */}
+                        <TouchableOpacity
+                            style={estilos.agenciaContent}
+                            onPress={abrirWebAgencia}
+                            activeOpacity={0.7}
+                        >
+                            {/* LOGO DE TU AGENCIA */}
+                            <Image
+                                source={require('../assets/logo-agencia.png')} // ← RUTA DE TU IMAGEN
+                                style={{
+                                    width: isTablet ? 18 : 14,
+                                    height: isTablet ? 18 : 14,
+                                    resizeMode: 'contain',
+                                }}
+                            />
+
+                            <Text style={[estilos.agenciaTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                                Desarrollo Digital Powa
+                            </Text>
+
+                            {/* Icono de enlace externo */}
+                            <Ionicons
+                                name="open-outline"
+                                size={isTablet ? 14 : 10}
+                                color={COLORS.amarillo}
+                            />
+                        </TouchableOpacity>
+                        {/* 🔼🔼🔼 TOUCHABLE OPACITY - AHORA ES PRESIONABLE 🔼🔼🔼 */}
+                    </View>
+                </Animated.View>
+            </ScrollView>
+        </LinearGradient>
     );
 }
 
 const estilos = StyleSheet.create({
     contenedor: {
+        flex: 1,
+    },
+    scroll: {
         flexGrow: 1,
-        backgroundColor: KrustyColors.negro,
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100%',
     },
+    // ✅ SELECTOR DE IDIOMA
+    idiomaSelector: {
+        position: 'absolute',
+        top: 40,
+        right: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.negro + '50',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: COLORS.blanco + '10',
+        zIndex: 10,
+    },
+    idiomaTexto: {
+        color: COLORS.grisClaro,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    // ✅ PARTÍCULAS
+    particula: {
+        position: 'absolute',
+        zIndex: 0,
+    },
     logo: {
         alignItems: 'center',
+        justifyContent: 'center',
         width: '100%',
     },
-    emojiContainer: {
-        marginBottom: 12,
-    },
-    emojiBackground: {
+    logoImage: {
+        backgroundColor: 'transparent',
         borderRadius: 100,
-        padding: 20,
-        shadowColor: KrustyColors.rojo,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 8,
     },
-    emoji: {
-        color: KrustyColors.blanco,
-    },
-    titulo: {
-        fontWeight: 'bold',
-        color: KrustyColors.blanco,
-        marginTop: 16,
+    // ✅ SLOGAN
+    slogan: {
+        color: COLORS.blanco,
         textAlign: 'center',
-        letterSpacing: 2,
-    },
-    taglineContainer: {
-        backgroundColor: KrustyColors.rojo + '20',
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginTop: 8,
-    },
-    subtitulo: {
-        color: KrustyColors.amarillo,
-        textAlign: 'center',
-        fontWeight: '500',
+        fontWeight: '300',
+        fontStyle: 'italic',
+        letterSpacing: 1,
+        opacity: 0.8,
     },
     features: {
         width: '100%',
-        gap: 16,
+        gap: 10,
     },
     featureItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
+        gap: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: COLORS.negro + '50',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: COLORS.blanco + '10',
+        position: 'relative',
+        overflow: 'hidden',
     },
     featureIconWrapper: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        overflow: 'hidden',
+    },
+    featureIconGradient: {
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
     },
     featureTexto: {
-        color: KrustyColors.grisClaro,
+        color: COLORS.blanco,
         flex: 1,
-        fontWeight: '500',
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    featureNeon: {
+        position: 'absolute',
+        right: -10,
+        top: -10,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: COLORS.amarillo + '10',
+        borderWidth: 1,
+        borderColor: COLORS.amarillo + '20',
     },
     botones: {
         width: '100%',
-        gap: 14,
+        gap: 10,
     },
     botonIngresar: {
         overflow: 'hidden',
-        elevation: 4,
-        shadowColor: KrustyColors.rojo,
+        elevation: 8,
+        shadowColor: COLORS.amarillo,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowRadius: 12,
     },
     botonGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
-        padding: 18,
+        gap: 8,
         width: '100%',
     },
     botonIngresarTexto: {
-        color: KrustyColors.blanco,
-        fontWeight: 'bold',
+        fontWeight: '700',
         letterSpacing: 1,
     },
     botonRegistro: {
         flexDirection: 'row',
         backgroundColor: 'transparent',
-        borderRadius: 16,
-        padding: 18,
+        borderRadius: 12,
+        padding: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
-        borderWidth: 2,
-        borderColor: KrustyColors.rojo,
+        gap: 8,
+        borderWidth: 1.5,
+        borderColor: COLORS.amarillo,
     },
     botonRegistroTexto: {
-        color: KrustyColors.rojo,
-        fontWeight: 'bold',
+        color: COLORS.amarillo,
+        fontWeight: '600',
         letterSpacing: 1,
     },
     botonInvitado: {
         alignItems: 'center',
-        paddingVertical: 12,
+        paddingVertical: 10,
     },
     botonInvitadoTexto: {
-        color: KrustyColors.gris,
-        fontSize: 14,
+        color: COLORS.grisClaro,
+        fontSize: 12,
         textDecorationLine: 'underline',
     },
     footerContainer: {
         width: '100%',
         alignItems: 'center',
-        paddingTop: 10,
-        marginTop: 10,
+        paddingTop: 8,
+        marginTop: 8,
     },
     footerDivider: {
         width: '60%',
         height: 1,
-        backgroundColor: KrustyColors.gris + '30',
         marginBottom: 12,
     },
     footer: {
-        color: KrustyColors.gris,
+        color: COLORS.grisClaro,
         textAlign: 'center',
+        fontWeight: '500',
     },
-    footerSub: {
-        color: KrustyColors.gris + '80',
+    // ✅ VERSIÓN
+    version: {
+        color: COLORS.grisClaro + '60',
         textAlign: 'center',
         marginTop: 4,
+    },
+    // ============================================================
+    // 🏢 AGENCIA DIGITAL - ESTILOS
+    // ============================================================
+    agenciaContainer: {
+        marginTop: 12,
+        alignItems: 'center',
+        width: '100%',
+    },
+    agenciaDivider: {
+        width: '100%',
+        height: 1,
+        backgroundColor: COLORS.grisClaro + '20',
+        marginBottom: 8,
+    },
+    agenciaContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.negro + '30',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginTop: 20,
+        borderColor: COLORS.amarillo + '15',
+    },
+    agenciaTexto: {
+        color: COLORS.grisClaro,
+        fontWeight: '500',
+        letterSpacing: 0.5,
     },
 });
