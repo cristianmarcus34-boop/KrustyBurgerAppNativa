@@ -1,7 +1,10 @@
+// stores/tiendaAutenticacion.ts
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Perfil } from '../lib/tipos';
+import { Perfil, UbicacionGuardada } from '../lib/tipos'; // ✅ IMPORTAR DESDE TIPOS
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_UBICACION_KEY = '@ubicacion_seleccionada';
 
 interface EstadoAutenticacion {
   sesion: any | null;
@@ -9,18 +12,24 @@ interface EstadoAutenticacion {
   cargando: boolean;
   esAdministrador: boolean;
   esRepartidor: boolean;
+  ubicacionSeleccionada: UbicacionGuardada | null;
   inicializarSesion: () => Promise<void>;
   iniciarSesion: (correo: string, contrasena: string) => Promise<string | null>;
   registrarCliente: (datos: { correo: string; contrasena: string; nombre: string; telefono: string }) => Promise<string | null>;
   cerrarSesion: () => Promise<void>;
+  actualizarPerfil: (datos: Partial<Perfil>) => Promise<void>;
+  guardarUbicacionTemporal: (ubicacion: UbicacionGuardada) => Promise<void>;
+  cargarUbicacionTemporal: () => Promise<UbicacionGuardada | null>;
+  limpiarUbicacionTemporal: () => Promise<void>;
 }
 
-export const tiendaAutenticacion = create<EstadoAutenticacion>((set) => ({
+export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   sesion: null,
   perfil: null,
   cargando: true,
   esAdministrador: false,
   esRepartidor: false,
+  ubicacionSeleccionada: null,
 
   inicializarSesion: async () => {
     try {
@@ -99,6 +108,15 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set) => ({
         rol: 'cliente',
         puntos_acumulados: 100,
         ultimo_acceso: new Date().toISOString(),
+        direccion_calle: null,
+        direccion_numero: null,
+        direccion_piso: null,
+        direccion_departamento: null,
+        direccion_barrio: null,
+        direccion_ciudad: null,
+        direccion_codigo_postal: null,
+        preferencias_comida: null,
+        metodo_pago: null,
       });
 
       if (errorPerfil) return errorPerfil.message;
@@ -111,35 +129,103 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set) => ({
 
   cerrarSesion: async () => {
     try {
-      // ✅ Cerrar sesión en Supabase
       await supabase.auth.signOut();
 
-      // ✅ Limpiar AsyncStorage (funciona en todas las plataformas)
       try {
         await AsyncStorage.clear();
       } catch (e) {
         console.warn('Error al limpiar AsyncStorage:', e);
       }
 
-      // ✅ Resetear el estado
       set({
         sesion: null,
         perfil: null,
         esAdministrador: false,
         esRepartidor: false,
-        cargando: false
+        cargando: false,
+        ubicacionSeleccionada: null,
       });
 
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
-      // Aún así reseteamos el estado
       set({
         sesion: null,
         perfil: null,
         esAdministrador: false,
         esRepartidor: false,
-        cargando: false
+        cargando: false,
+        ubicacionSeleccionada: null,
       });
+    }
+  },
+
+  actualizarPerfil: async (datos: Partial<Perfil>) => {
+    const { perfil, sesion } = get();
+
+    if (!perfil || !sesion) {
+      console.error('❌ No hay sesión activa para actualizar perfil');
+      throw new Error('No hay sesión activa');
+    }
+
+    try {
+      console.log('📝 Actualizando perfil:', datos);
+
+      const { error } = await supabase
+        .from('perfiles')
+        .update(datos)
+        .eq('id', perfil.id);
+
+      if (error) {
+        console.error('❌ Error actualizando perfil:', error);
+        throw error;
+      }
+
+      const perfilActualizado = { ...perfil, ...datos };
+      set({ perfil: perfilActualizado });
+
+      console.log('✅ Perfil actualizado correctamente');
+    } catch (error) {
+      console.error('❌ Error en actualizarPerfil:', error);
+      throw error;
+    }
+  },
+
+  guardarUbicacionTemporal: async (ubicacion: UbicacionGuardada) => {
+    try {
+      set({ ubicacionSeleccionada: ubicacion });
+      const json = JSON.stringify(ubicacion);
+      await AsyncStorage.setItem(STORAGE_UBICACION_KEY, json);
+      console.log('✅ Ubicación guardada en store y AsyncStorage:', ubicacion);
+    } catch (error) {
+      console.error('❌ Error guardando ubicación:', error);
+    }
+  },
+
+  cargarUbicacionTemporal: async (): Promise<UbicacionGuardada | null> => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_UBICACION_KEY);
+      if (data) {
+        const ubicacion = JSON.parse(data) as UbicacionGuardada;
+        set({ ubicacionSeleccionada: ubicacion });
+        console.log('✅ Ubicación cargada al store:', ubicacion);
+        return ubicacion;
+      } else {
+        console.log('ℹ️ No hay ubicación guardada en AsyncStorage');
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error cargando ubicación:', error);
+      return null;
+    }
+  },
+
+  limpiarUbicacionTemporal: async () => {
+    try {
+      set({ ubicacionSeleccionada: null });
+      await AsyncStorage.removeItem(STORAGE_UBICACION_KEY);
+      console.log('✅ Ubicación limpiada de store y AsyncStorage');
+    } catch (error) {
+      console.error('❌ Error limpiando ubicación:', error);
     }
   },
 }));

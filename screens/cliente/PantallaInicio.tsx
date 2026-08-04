@@ -1,14 +1,30 @@
-﻿import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, Image } from 'react-native';
+﻿// screens/cliente/PantallaInicio.tsx
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  useWindowDimensions,
+  Image,
+  Animated,
+  RefreshControl,
+  FlatList,
+  ActivityIndicator,
+  Alert
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
+import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
+import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
 
 // ============================================================
-// 🎨 PALETA DE COLORES (consistente con PantallaBienvenida)
+// 🎨 PALETA DE COLORES
 // ============================================================
 const COLORS = {
   amarillo: '#F5C518',
@@ -27,52 +43,138 @@ const COLORS = {
 
 export default function PantallaInicio(props: any) {
   const { perfil } = tiendaAutenticacion();
-  const { cantidadTotal } = tiendaCarrito();
+  const { cantidadTotal, agregarProducto } = tiendaCarrito();
+  const { favoritos, favoritosData, cargando: cargandoFavoritos, cargarFavoritos, limpiarFavoritos } = tiendaFavoritos();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // ✅ Breakpoints para responsive
+  const [ofertas, setOfertas] = useState<any[]>([]);
+  const [cargandoOfertas, setCargandoOfertas] = useState(true);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(30)).current;
+  const arrowOpacity = useRef(new Animated.Value(0)).current;
+  const arrowTranslate = useRef(new Animated.Value(10)).current;
+
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
-  const isMediumPhone = width >= 375 && width < 768;
 
-  // ✅ TAMAÑOS RESPONSIVE - Ajustados para que todo entre bien
+  const cargarOfertas = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ofertas')
+        .select('*')
+        .eq('activa', true);
+
+      if (error) {
+        console.error('Error cargando ofertas:', error);
+        setOfertas([]);
+      } else {
+        console.log(`📦 Ofertas cargadas en Inicio: ${data?.length || 0}`);
+        setOfertas(data || []);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setOfertas([]);
+    } finally {
+      setCargandoOfertas(false);
+    }
+  }, []);
+
+  const cargarFavoritosUsuario = useCallback(async () => {
+    if (perfil?.id) {
+      await cargarFavoritos(perfil.id);
+    } else {
+      limpiarFavoritos();
+    }
+  }, [perfil?.id, cargarFavoritos, limpiarFavoritos]);
+
+  useEffect(() => {
+    cargarOfertas();
+    cargarFavoritosUsuario();
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUpAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const timeout1 = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(arrowOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowTranslate, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 1000);
+
+    const timeout2 = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(arrowOpacity, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(arrowTranslate, {
+          toValue: 10,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 4000);
+
+    return () => {
+      clearTimeout(timeout1);
+      clearTimeout(timeout2);
+    };
+  }, [cargarOfertas, cargarFavoritosUsuario]);
+
   const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
   const gapCategorias = isTablet ? 16 : isSmallPhone ? 10 : 12;
   const paddingTop = insets.top + (isTablet ? 20 : 10);
   const paddingBottom = insets.bottom + 20;
 
-  // 📱 SALUDO Y PUNTOS
   const saludoSize = isTablet ? 26 : isSmallPhone ? 16 : 20;
   const puntosSize = isTablet ? 15 : isSmallPhone ? 10 : 12;
   const puntosPadding = isTablet ? 12 : isSmallPhone ? 8 : 10;
 
-  // 🛒 CARRITO - RESPONSIVE (AHORA ENTRA BIEN)
-  const carritoSize = isTablet ? 48 : isSmallPhone ? 38 : 44;
+  const carritoSize = isTablet ? 52 : isSmallPhone ? 42 : 48;
   const carritoPadding = isTablet ? 10 : isSmallPhone ? 8 : 9;
   const carritoIconSize = isTablet ? 26 : isSmallPhone ? 20 : 24;
-  const contadorSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
-  const contadorTextSize = isTablet ? 11 : isSmallPhone ? 9 : 10;
 
-  // 📝 SECCIONES
+  const contadorSize = isTablet ? 30 : isSmallPhone ? 24 : 26;
+  const contadorTextSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
+  const contadorTop = isTablet ? -6 : isSmallPhone ? -4 : -5;
+  const contadorRight = isTablet ? -6 : isSmallPhone ? -4 : -5;
+  const contadorBorderWidth = isTablet ? 2.5 : isSmallPhone ? 2 : 2;
+
   const seccionTituloSize = isTablet ? 22 : isSmallPhone ? 15 : 18;
   const seccionMarginTop = isTablet ? 24 : isSmallPhone ? 16 : 20;
 
-  // 🎴 OFERTAS
-  const cardWidth = isTablet ? width * 0.45 : isSmallPhone ? width * 0.75 : width * 0.7;
   const cardPadding = isTablet ? 20 : isSmallPhone ? 14 : 18;
   const ofertaDescuentoSize = isTablet ? 32 : isSmallPhone ? 22 : 28;
   const ofertaTituloSize = isTablet ? 18 : isSmallPhone ? 13 : 16;
   const ofertaPrecioSize = isTablet ? 26 : isSmallPhone ? 18 : 22;
-  const cardMinHeight = isTablet ? 140 : isSmallPhone ? 110 : 130;
+  const cardMinHeight = isTablet ? 190 : isSmallPhone ? 160 : 180;
 
-  // 📂 CATEGORÍAS
   const categoriaPadding = isTablet ? 20 : isSmallPhone ? 14 : 18;
   const categoriaIconSize = isTablet ? 44 : isSmallPhone ? 32 : 38;
   const categoriaTextSize = isTablet ? 16 : isSmallPhone ? 12 : 14;
   const categoriaBorderRadius = isTablet ? 20 : isSmallPhone ? 14 : 16;
 
-  // ⭐ FAVORITOS
   const favoritoPadding = isTablet ? 18 : isSmallPhone ? 12 : 16;
   const favoritoEmojiSize = isTablet ? 50 : isSmallPhone ? 38 : 44;
   const favoritoEmojiContainer = isTablet ? 54 : isSmallPhone ? 44 : 50;
@@ -82,12 +184,18 @@ export default function PantallaInicio(props: any) {
   const botonAgregarPaddingV = isTablet ? 9 : isSmallPhone ? 6 : 8;
   const botonAgregarTextSize = isTablet ? 15 : isSmallPhone ? 11 : 13;
 
-  // ✅ Datos de ofertas
-  const ofertas = [
-    { id: 1, titulo: 'Krusty Burger Doble', precio: '8.99', descuento: '20% OFF', color: '#FF5722' },
-    { id: 2, titulo: 'Combo Krusty + Papas', precio: '12.99', descuento: '15% OFF', color: '#4CAF50' },
-    { id: 3, titulo: 'Malteada Gratis', precio: '0.00', descuento: 'GRATIS', color: '#FFC107' },
-  ];
+  const getCardWidth = () => {
+    const availableWidth = width - paddingHorizontal * 2;
+    if (isTablet) {
+      return availableWidth * 0.45;
+    } else if (isSmallPhone) {
+      return availableWidth * 0.75;
+    } else {
+      return availableWidth * 0.7;
+    }
+  };
+
+  const cardWidth = getCardWidth();
 
   const categorias = [
     { nombre: 'Hamburguesas', icono: '🍔', color: '#FF5722' },
@@ -95,6 +203,257 @@ export default function PantallaInicio(props: any) {
     { nombre: 'Bebidas', icono: '🥤', color: '#2196F3' },
     { nombre: 'Postres', icono: '🍦', color: '#E91E63' },
   ];
+
+  const getColorPorId = useCallback((id: number) => {
+    const colores = [
+      '#FF5722', '#4CAF50', '#2196F3', '#9C27B0',
+      '#FF9800', '#E91E63', '#00BCD4', '#8BC34A'
+    ];
+    return colores[id % colores.length];
+  }, []);
+
+  const renderOferta = useCallback(({ item, index }: { item: any; index: number }) => {
+    const colorOferta = getColorPorId(item.id);
+    const itemFade = fadeAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.2, 1],
+    });
+
+    // ✅ Verificar si la oferta tiene envío gratis (por descuento o tipo)
+    const tieneEnvioGratis = item.descuento?.toLowerCase().includes('envío gratis') ||
+      item.descuento?.toLowerCase().includes('envio gratis');
+
+    return (
+      <Animated.View
+        key={item.id}
+        style={[
+          {
+            opacity: itemFade,
+            width: cardWidth,
+            marginRight: isTablet ? 16 : isSmallPhone ? 10 : 12,
+          }
+        ]}
+      >
+        <TouchableOpacity
+          style={[
+            estilos.tarjetaOferta,
+            {
+              backgroundColor: colorOferta + '15',
+              padding: cardPadding,
+              borderColor: colorOferta,
+              minHeight: cardMinHeight,
+            }
+          ]}
+          activeOpacity={0.8}
+          onPress={() => {
+            props.navigation.navigate('DetalleOferta', { oferta: item });
+          }}
+        >
+          {/* ✅ BADGE DE ENVÍO GRATIS */}
+          {tieneEnvioGratis && (
+            <View style={[estilos.badgeEnvioGratis, {
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              zIndex: 10,
+              backgroundColor: COLORS.verdeClaro,
+              paddingHorizontal: isTablet ? 12 : 8,
+              paddingVertical: isTablet ? 6 : 4,
+              borderRadius: isTablet ? 10 : 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+            }]}>
+              <Ionicons name="rocket" size={isTablet ? 16 : 12} color={COLORS.blanco} />
+              <Text style={[estilos.badgeEnvioGratisTexto, {
+                fontSize: isTablet ? 11 : 9,
+                color: COLORS.blanco,
+                fontWeight: 'bold',
+              }]}>
+                🚚 Envío gratis
+              </Text>
+            </View>
+          )}
+
+          {item.imagen ? (
+            <Image
+              source={{ uri: item.imagen }}
+              style={[
+                estilos.ofertaImagen,
+                {
+                  width: '100%',
+                  height: isTablet ? 120 : isSmallPhone ? 80 : 100,
+                  borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                  marginBottom: 10,
+                }
+              ]}
+              resizeMode="cover"
+              onError={(e) => {
+                console.log('❌ Error cargando imagen en oferta:', e.nativeEvent.error);
+                console.log('URL que falló:', item.imagen);
+              }}
+              onLoad={() => console.log('✅ Imagen de oferta cargada:', item.imagen)}
+            />
+          ) : (
+            <View style={[
+              estilos.ofertaSinImagen,
+              {
+                height: isTablet ? 120 : isSmallPhone ? 80 : 100,
+                borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                marginBottom: 10,
+                backgroundColor: colorOferta + '20',
+              }
+            ]}>
+              <Ionicons name="image-outline" size={isTablet ? 40 : isSmallPhone ? 28 : 32} color={COLORS.grisClaro + '40'} />
+              <Text style={[estilos.ofertaSinImagenTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11 }]}>
+                Sin imagen
+              </Text>
+            </View>
+          )}
+
+          <Text style={[estilos.ofertaDescuento, {
+            fontSize: ofertaDescuentoSize,
+            color: colorOferta
+          }]}>
+            🔥 {item.descuento}
+          </Text>
+          <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize }]}>
+            {item.titulo}
+          </Text>
+          <Text style={[estilos.ofertaPrecio, { fontSize: ofertaPrecioSize }]}>
+            ${item.precio_oferta?.toFixed(2)}
+          </Text>
+          <Text style={[estilos.ofertaPrecioOriginal, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+            Antes: ${item.precio_original?.toFixed(2)}
+          </Text>
+          <TouchableOpacity
+            style={[estilos.botonVerOferta, {
+              backgroundColor: colorOferta,
+              paddingVertical: isTablet ? 6 : isSmallPhone ? 4 : 5,
+              paddingHorizontal: isTablet ? 14 : isSmallPhone ? 10 : 12,
+            }]}
+            activeOpacity={0.7}
+            onPress={() => {
+              props.navigation.navigate('DetalleOferta', { oferta: item });
+            }}
+          >
+            <Text style={[estilos.botonVerOfertaTexto, {
+              fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11
+            }]}>
+              Ver Oferta
+            </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }, [cardWidth, isTablet, cardPadding, cardMinHeight, ofertaDescuentoSize, ofertaTituloSize, ofertaPrecioSize, fadeAnim, props.navigation, getColorPorId]);
+
+  const renderFavorito = useCallback(({ item, index }: { item: any; index: number }) => {
+    const contador = favoritosData.find((f) => f.producto_id === item.id)?.contador || 1;
+    const itemFade = fadeAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.2, 1],
+    });
+
+    const favoritoWidth = isTablet ? width * 0.4 : width * 0.7;
+
+    return (
+      <Animated.View
+        key={item.id}
+        style={[
+          {
+            opacity: itemFade,
+            width: favoritoWidth,
+            marginRight: isTablet ? 16 : isSmallPhone ? 10 : 12,
+          }
+        ]}
+      >
+        <TouchableOpacity
+          style={[
+            estilos.tarjetaFavorito,
+            {
+              padding: favoritoPadding,
+              borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
+              borderColor: COLORS.amarillo + '20',
+            }
+          ]}
+          onPress={() => props.navigation.navigate('DetalleProducto', { producto: item })}
+          activeOpacity={0.7}
+        >
+          {item.imagen ? (
+            <Image
+              source={{ uri: item.imagen }}
+              style={[
+                estilos.favoritoImagen,
+                {
+                  width: favoritoEmojiContainer,
+                  height: favoritoEmojiContainer,
+                  borderRadius: favoritoEmojiContainer / 2,
+                }
+              ]}
+            />
+          ) : (
+            <View style={[
+              estilos.favoritoEmojiContainer,
+              {
+                width: favoritoEmojiContainer,
+                height: favoritoEmojiContainer,
+                borderRadius: favoritoEmojiContainer / 2,
+              }
+            ]}>
+              <Text style={[estilos.emojiGrande, { fontSize: favoritoEmojiSize }]}>🍔</Text>
+            </View>
+          )}
+
+          <View style={estilos.favoritoInfo}>
+            <View style={estilos.favoritoHeader}>
+              <Text style={[estilos.favoritoTitulo, { fontSize: favoritoTituloSize }]} numberOfLines={1}>
+                {item.nombre}
+              </Text>
+              {contador > 1 && (
+                <View style={estilos.favoritoContadorBadge}>
+                  <Text style={estilos.favoritoContadorTexto}>×{contador}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={[estilos.favoritoPrecio, { fontSize: favoritoPrecioSize }]}>
+              ${item.precio?.toFixed(2)}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              estilos.botonAgregar,
+              {
+                paddingHorizontal: botonAgregarPaddingH,
+                paddingVertical: botonAgregarPaddingV,
+              }
+            ]}
+            activeOpacity={0.7}
+            onPress={() => {
+              agregarProducto(item);
+              Alert.alert('🎉', `${item.nombre} agregado al carrito`);
+            }}
+          >
+            <LinearGradient
+              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+              style={estilos.botonAgregarGradient}
+            >
+              <Text style={[estilos.botonAgregarTexto, { fontSize: botonAgregarTextSize }]}>
+                + Agregar
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }, [favoritosData, fadeAnim, isTablet, width, favoritoPadding, favoritoEmojiContainer, favoritoEmojiSize, favoritoTituloSize, favoritoPrecioSize, botonAgregarPaddingH, botonAgregarPaddingV, botonAgregarTextSize, agregarProducto, props.navigation]);
+
+  const onRefresh = useCallback(() => {
+    setCargandoOfertas(true);
+    cargarOfertas();
+    cargarFavoritosUsuario();
+  }, [cargarOfertas, cargarFavoritosUsuario]);
 
   return (
     <View style={estilos.contenedor}>
@@ -114,11 +473,21 @@ export default function PantallaInicio(props: any) {
             paddingTop: paddingTop,
           }
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={cargandoOfertas}
+            onRefresh={onRefresh}
+            tintColor={COLORS.amarillo}
+            colors={[COLORS.amarillo]}
+          />
+        }
       >
-        {/* ✅ BOTÓN ADMIN (solo visible para admin) */}
         {perfil?.rol === 'admin' && (
           <TouchableOpacity
-            style={[estilos.botonAdmin, { paddingHorizontal: paddingHorizontal }]}
+            style={[estilos.botonAdmin, {
+              paddingHorizontal: paddingHorizontal,
+              marginBottom: 8,
+            }]}
             onPress={() => props.navigation.navigate('PanelAdmin')}
             activeOpacity={0.8}
           >
@@ -129,10 +498,10 @@ export default function PantallaInicio(props: any) {
           </TouchableOpacity>
         )}
 
-        {/* ✅ ENCABEZADO */}
         <View style={[estilos.encabezado, {
           paddingHorizontal: paddingHorizontal,
           paddingTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
+          marginBottom: 16,
         }]}>
           <View style={estilos.encabezadoIzquierdo}>
             <Text style={[estilos.saludo, { fontSize: saludoSize }]}>
@@ -176,10 +545,30 @@ export default function PantallaInicio(props: any) {
                     width: contadorSize,
                     height: contadorSize,
                     borderRadius: contadorSize / 2,
+                    top: contadorTop,
+                    right: contadorRight,
+                    borderWidth: contadorBorderWidth,
+                    borderColor: COLORS.negro,
+                    backgroundColor: COLORS.rojo,
+                    shadowColor: COLORS.negro,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 4,
+                    elevation: 5,
                   }
                 ]}>
-                  <Text style={[estilos.contadorTexto, { fontSize: contadorTextSize }]}>
-                    {cantidadTotal()}
+                  <Text style={[
+                    estilos.contadorTexto,
+                    {
+                      fontSize: contadorTextSize,
+                      fontWeight: '900',
+                      color: COLORS.blanco,
+                      textShadowColor: COLORS.negro,
+                      textShadowOffset: { width: 0, height: 1 },
+                      textShadowRadius: 2,
+                    }
+                  ]}>
+                    {cantidadTotal() > 99 ? '99+' : cantidadTotal()}
                   </Text>
                 </View>
               )}
@@ -187,172 +576,193 @@ export default function PantallaInicio(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ OFERTAS DEL DÍA */}
-        <Text style={[estilos.seccionTitulo, {
-          fontSize: seccionTituloSize,
-          marginLeft: paddingHorizontal,
-          marginTop: seccionMarginTop,
-        }]}>
-          🔥 Ofertas del Día
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[estilos.carrusel, { paddingLeft: paddingHorizontal }]}
-          contentContainerStyle={{
-            paddingRight: paddingHorizontal,
-            gap: isTablet ? 16 : isSmallPhone ? 10 : 12
-          }}
-        >
-          {ofertas.map(oferta => (
-            <TouchableOpacity
-              key={oferta.id}
-              style={[
-                estilos.tarjetaOferta,
+        <View style={[estilos.seccionWrapper, { marginBottom: isTablet ? 20 : isSmallPhone ? 12 : 16 }]}>
+          <View style={estilos.seccionHeader}>
+            <Text style={[estilos.seccionTitulo, {
+              fontSize: seccionTituloSize,
+              marginLeft: paddingHorizontal,
+            }]}>
+              🔥 Ofertas del Día
+            </Text>
+            {ofertas.length > 0 && (
+              <Animated.View style={[
+                estilos.scrollIndicator,
                 {
-                  backgroundColor: oferta.color + '20',
-                  width: cardWidth,
-                  padding: cardPadding,
-                  borderColor: oferta.color,
-                  minHeight: cardMinHeight,
+                  opacity: arrowOpacity,
+                  transform: [{ translateX: arrowTranslate }],
+                  marginRight: paddingHorizontal,
                 }
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text style={[estilos.ofertaDescuento, {
-                fontSize: ofertaDescuentoSize,
-                color: oferta.color
-              }]}>
-                {oferta.descuento}
-              </Text>
-              <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize }]}>
-                {oferta.titulo}
-              </Text>
-              <Text style={[estilos.ofertaPrecio, { fontSize: ofertaPrecioSize }]}>
-                ${oferta.precio}
-              </Text>
-              <TouchableOpacity
-                style={[estilos.botonVerOferta, {
-                  backgroundColor: oferta.color,
-                  paddingVertical: isTablet ? 6 : isSmallPhone ? 4 : 5,
-                  paddingHorizontal: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                }]}
-                activeOpacity={0.7}
-              >
-                <Text style={[estilos.botonVerOfertaTexto, {
-                  fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11
-                }]}>
-                  Ver Oferta
-                </Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              ]}>
+                <View style={estilos.scrollIndicatorContent}>
+                  <Text style={estilos.scrollIndicatorTexto}>Desliza</Text>
+                  <Ionicons name="chevron-forward-circle" size={20} color={COLORS.amarillo} />
+                </View>
+              </Animated.View>
+            )}
+          </View>
 
-        {/* ✅ CATEGORÍAS */}
-        <Text style={[estilos.seccionTitulo, {
-          fontSize: seccionTituloSize,
-          marginLeft: paddingHorizontal,
-          marginTop: seccionMarginTop,
-        }]}>
-          🍔 Nuestro Menú
-        </Text>
-        <View style={[estilos.categorias, {
-          paddingHorizontal: paddingHorizontal,
-          gap: gapCategorias
-        }]}>
-          {categorias.map((cat, index) => {
-            const itemWidth = (width - (paddingHorizontal * 2) - gapCategorias) / 2;
-            return (
-              <TouchableOpacity
-                key={cat.nombre}
-                style={[
-                  estilos.categoriaItem,
-                  {
-                    width: itemWidth,
-                    backgroundColor: cat.color + '15',
-                    padding: categoriaPadding,
-                    borderRadius: categoriaBorderRadius,
-                    borderColor: cat.color + '30',
-                  }
-                ]}
-                onPress={() => props.navigation.navigate('Menu')}
-                activeOpacity={0.7}
-              >
-                <Text style={[estilos.categoriaIcono, { fontSize: categoriaIconSize }]}>
-                  {cat.icono}
-                </Text>
-                <Text style={[estilos.categoriaTexto, {
-                  fontSize: categoriaTextSize,
-                  color: cat.color
-                }]}>
-                  {cat.nombre}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {ofertas.length === 0 ? (
+            <View style={[estilos.tarjetaOferta, {
+              backgroundColor: COLORS.grisClaro + '15',
+              width: cardWidth,
+              padding: cardPadding,
+              borderColor: COLORS.grisClaro + '20',
+              minHeight: cardMinHeight,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginLeft: paddingHorizontal,
+            }]}>
+              <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize, color: COLORS.grisClaro }]}>
+                No hay ofertas
+              </Text>
+              <Text style={[estilos.ofertaDescuento, {
+                fontSize: ofertaDescuentoSize - 10,
+                color: COLORS.grisClaro
+              }]}>
+                Vuelve pronto 🚀
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              horizontal
+              data={ofertas}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderOferta}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: paddingHorizontal,
+                paddingVertical: 8,
+              }}
+              snapToInterval={cardWidth + (isTablet ? 16 : isSmallPhone ? 10 : 12)}
+              decelerationRate="fast"
+              snapToAlignment="start"
+            />
+          )}
         </View>
 
-        {/* ✅ TUS FAVORITOS */}
-        <Text style={[estilos.seccionTitulo, {
-          fontSize: seccionTituloSize,
-          marginLeft: paddingHorizontal,
-          marginTop: seccionMarginTop,
-        }]}>
-          ⭐ Tus Favoritos
-        </Text>
-        <TouchableOpacity
-          style={[
-            estilos.tarjetaFavorito,
-            {
-              marginHorizontal: paddingHorizontal,
-              padding: favoritoPadding,
-              borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
-            }
-          ]}
-          onPress={() => props.navigation.navigate('Menu')}
-          activeOpacity={0.7}
-        >
-          <View style={[
-            estilos.favoritoEmojiContainer,
-            {
-              width: favoritoEmojiContainer,
-              height: favoritoEmojiContainer,
-              borderRadius: favoritoEmojiContainer / 2,
-            }
-          ]}>
-            <Text style={[estilos.emojiGrande, { fontSize: favoritoEmojiSize }]}>🍔</Text>
-          </View>
-          <View style={estilos.favoritoInfo}>
-            <Text style={[estilos.favoritoTitulo, { fontSize: favoritoTituloSize }]}>
-              Krusty Burger Clásica
-            </Text>
-            <Text style={[estilos.favoritoPrecio, { fontSize: favoritoPrecioSize }]}>
-              $7.99
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              estilos.botonAgregar,
-              {
-                paddingHorizontal: botonAgregarPaddingH,
-                paddingVertical: botonAgregarPaddingV,
-              }
-            ]}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-              style={estilos.botonAgregarGradient}
-            >
-              <Text style={[estilos.botonAgregarTexto, { fontSize: botonAgregarTextSize }]}>
-                + Agregar
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </TouchableOpacity>
+        <View style={estilos.separador} />
 
-        {/* ✅ ESPACIO EXTRA PARA LA BARRA DE NAVEGACIÓN */}
+        <View style={estilos.seccionWrapper}>
+          <Text style={[estilos.seccionTitulo, {
+            fontSize: seccionTituloSize,
+            marginLeft: paddingHorizontal,
+            marginTop: 0,
+            marginBottom: 10,
+          }]}>
+            🍔 Nuestro Menú
+          </Text>
+          <View style={[estilos.categorias, {
+            paddingHorizontal: paddingHorizontal,
+            gap: gapCategorias
+          }]}>
+            {categorias.map((cat, index) => {
+              const itemWidth = (width - (paddingHorizontal * 2) - gapCategorias) / 2;
+              return (
+                <TouchableOpacity
+                  key={cat.nombre}
+                  style={[
+                    estilos.categoriaItem,
+                    {
+                      width: itemWidth,
+                      backgroundColor: cat.color + '15',
+                      padding: categoriaPadding,
+                      borderRadius: categoriaBorderRadius,
+                      borderColor: cat.color + '30',
+                    }
+                  ]}
+                  onPress={() => props.navigation.navigate('Menu')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[estilos.categoriaIcono, { fontSize: categoriaIconSize }]}>
+                    {cat.icono}
+                  </Text>
+                  <Text style={[estilos.categoriaTexto, {
+                    fontSize: categoriaTextSize,
+                    color: cat.color
+                  }]}>
+                    {cat.nombre}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={estilos.separador} />
+
+        <View style={estilos.seccionWrapper}>
+          <View style={estilos.seccionHeader}>
+            <Text style={[estilos.seccionTitulo, {
+              fontSize: seccionTituloSize,
+              marginLeft: paddingHorizontal,
+            }]}>
+              ⭐ Tus Favoritos
+            </Text>
+            {favoritos.length > 0 && (
+              <Text style={[estilos.verTodos, {
+                fontSize: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                marginRight: paddingHorizontal,
+              }]}>
+                Ver todos →
+              </Text>
+            )}
+          </View>
+
+          {cargandoFavoritos ? (
+            <View style={[estilos.favoritoLoading, {
+              marginHorizontal: paddingHorizontal,
+              padding: isTablet ? 24 : isSmallPhone ? 14 : 18,
+              borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 14,
+              minHeight: isTablet ? 120 : isSmallPhone ? 80 : 100,
+            }]}>
+              <ActivityIndicator size={isTablet ? 'large' : 'small'} color={COLORS.amarillo} />
+              <Text style={[estilos.favoritoLoadingTexto, {
+                fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                marginTop: isTablet ? 12 : 8,
+              }]}>
+                Cargando tus favoritos...
+              </Text>
+            </View>
+          ) : favoritos.length > 0 ? (
+            <FlatList
+              horizontal
+              data={favoritos}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderFavorito}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: paddingHorizontal,
+                paddingVertical: isTablet ? 8 : isSmallPhone ? 4 : 6,
+                gap: isTablet ? 16 : isSmallPhone ? 8 : 12,
+              }}
+              snapToInterval={(isTablet ? width * 0.35 : isSmallPhone ? width * 0.7 : width * 0.6) + (isTablet ? 16 : isSmallPhone ? 8 : 12)}
+              decelerationRate="fast"
+              snapToAlignment="start"
+            />
+          ) : (
+            <View style={[estilos.favoritoVacio, {
+              marginHorizontal: paddingHorizontal,
+              padding: isTablet ? 32 : isSmallPhone ? 18 : 24,
+              borderRadius: isTablet ? 20 : isSmallPhone ? 14 : 16,
+              minHeight: isTablet ? 140 : isSmallPhone ? 90 : 110,
+            }]}>
+              <Ionicons name="heart-outline" size={isTablet ? 56 : isSmallPhone ? 32 : 44} color={COLORS.grisClaro + '40'} />
+              <Text style={[estilos.favoritoVacioTitulo, {
+                fontSize: isTablet ? 20 : isSmallPhone ? 14 : 17,
+                marginTop: isTablet ? 12 : 8,
+              }]}>
+                No tienes favoritos aún
+              </Text>
+              <Text style={[estilos.favoritoVacioSubtexto, {
+                fontSize: isTablet ? 15 : isSmallPhone ? 11 : 13,
+                marginTop: isTablet ? 6 : 4,
+              }]}>
+                Los productos que más pidas aparecerán aquí 🍔
+              </Text>
+            </View>
+          )}
+        </View>
+
         <View style={{ height: paddingBottom + 20 }} />
       </ScrollView>
     </View>
@@ -374,7 +784,6 @@ const estilos = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  // ✅ BOTÓN ADMIN
   botonAdmin: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,12 +794,10 @@ const estilos = StyleSheet.create({
     color: COLORS.amarillo,
     fontWeight: '600',
   },
-  // ✅ ENCABEZADO
   encabezado: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
   encabezadoIzquierdo: {
     flex: 1,
@@ -413,7 +820,6 @@ const estilos = StyleSheet.create({
     color: COLORS.amarillo,
     fontWeight: '600',
   },
-  // ✅ CARRITO - RESPONSIVE
   botonCarrito: {
     position: 'relative',
     flexShrink: 0,
@@ -425,27 +831,57 @@ const estilos = StyleSheet.create({
   },
   contadorCarrito: {
     position: 'absolute',
-    top: -3,
-    right: -3,
-    backgroundColor: COLORS.rojo,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.negro,
+    paddingBottom: 0,
+    paddingTop: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
   },
   contadorTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
-  // ✅ SECCIONES
+  seccionWrapper: {
+    marginVertical: 4,
+  },
+  seccionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
   seccionTitulo: {
     fontWeight: 'bold',
     color: COLORS.blanco,
-    marginBottom: 10,
+    flex: 1,
   },
-  // ✅ OFERTAS
-  carrusel: {
+  verTodos: {
+    color: COLORS.amarillo,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  separador: {
+    height: 8,
+  },
+  scrollIndicator: {
+    marginTop: 8,
+  },
+  scrollIndicatorContent: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.amarillo + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.amarillo + '30',
+  },
+  scrollIndicatorTexto: {
+    color: COLORS.amarillo,
+    fontSize: 11,
+    fontWeight: '600',
   },
   tarjetaOferta: {
     borderRadius: 16,
@@ -465,6 +901,12 @@ const estilos = StyleSheet.create({
     color: COLORS.blanco,
     marginTop: 4,
   },
+  ofertaPrecioOriginal: {
+    color: COLORS.grisClaro,
+    textDecorationLine: 'line-through',
+    marginTop: 2,
+    opacity: 0.6,
+  },
   botonVerOferta: {
     marginTop: 10,
     borderRadius: 20,
@@ -474,7 +916,6 @@ const estilos = StyleSheet.create({
     color: COLORS.blanco,
     fontWeight: '600',
   },
-  // ✅ CATEGORÍAS
   categorias: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -491,20 +932,54 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  // ✅ FAVORITOS
+  favoritoLoading: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.negro + '40',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '5',
+  },
+  favoritoLoadingTexto: {
+    color: COLORS.grisClaro,
+    fontWeight: '400',
+    opacity: 0.7,
+  },
+  favoritoVacio: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.negro + '40',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '5',
+  },
+  favoritoVacioTitulo: {
+    fontWeight: 'bold',
+    color: COLORS.grisClaro,
+    textAlign: 'center',
+  },
+  favoritoVacioSubtexto: {
+    color: COLORS.grisClaro,
+    textAlign: 'center',
+    opacity: 0.6,
+  },
   tarjetaFavorito: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.negro + '60',
-    marginBottom: 6,
     borderWidth: 1,
-    borderColor: COLORS.amarillo + '20',
+    borderColor: COLORS.amarillo + '15',
+  },
+  favoritoImagen: {
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: COLORS.amarillo + '30',
   },
   favoritoEmojiContainer: {
     backgroundColor: COLORS.amarillo + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    borderWidth: 2,
+    borderColor: COLORS.amarillo + '30',
   },
   emojiGrande: {
     marginRight: 0,
@@ -512,6 +987,25 @@ const estilos = StyleSheet.create({
   favoritoInfo: {
     flex: 1,
     marginRight: 8,
+    justifyContent: 'center',
+  },
+  favoritoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  favoritoContadorBadge: {
+    backgroundColor: COLORS.amarillo + '20',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.amarillo + '30',
+  },
+  favoritoContadorTexto: {
+    color: COLORS.amarillo,
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   favoritoTitulo: {
     fontWeight: 'bold',
@@ -521,6 +1015,12 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.amarillo,
     marginTop: 2,
+  },
+  favoritoSubtexto: {
+    color: COLORS.grisClaro,
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.6,
   },
   botonAgregar: {
     borderRadius: 20,
@@ -535,6 +1035,37 @@ const estilos = StyleSheet.create({
   },
   botonAgregarTexto: {
     color: COLORS.negro,
+    fontWeight: 'bold',
+  },
+  ofertaImagen: {
+    width: '100%',
+    backgroundColor: COLORS.negro + '20',
+  },
+  ofertaSinImagen: {
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.negro + '30',
+    borderWidth: 1,
+    borderColor: COLORS.grisClaro + '20',
+    borderStyle: 'dashed',
+  },
+  ofertaSinImagenTexto: {
+    color: COLORS.grisClaro,
+    opacity: 0.5,
+    marginTop: 6,
+  },
+  // ✅ NUEVO: Badge de envío gratis
+  badgeEnvioGratis: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  badgeEnvioGratisTexto: {
+    color: COLORS.blanco,
     fontWeight: 'bold',
   },
 });

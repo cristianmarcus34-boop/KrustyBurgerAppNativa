@@ -1,13 +1,49 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Image, Modal, TextInput, ScrollView } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  Alert, Image, Modal, TextInput, ScrollView,
+  Dimensions, Animated, RefreshControl
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { Producto } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 
+// ============================================================
+// 🎨 PALETA DE COLORES (CONSISTENTE CON EL RESTO DE LA APP)
+// ============================================================
+const COLORS = {
+  amarillo: '#F5C518',
+  amarilloClaro: '#FFE066',
+  amarilloOscuro: '#D4A800',
+  rojo: '#E53935',
+  rojoOscuro: '#B71C1C',
+  verde: '#43A047',
+  verdeClaro: '#66BB6A',
+  blanco: '#FFFFFF',
+  negro: '#0A0A0A',
+  grisOscuro: '#1A1A1A',
+  gris: '#333333',
+  grisClaro: '#B0B0B0',
+};
+
+const { width, height } = Dimensions.get('window');
+
+// ✅ Etiquetas de categorías
+const ETIQUETAS_CATEGORIA: Record<string, string> = {
+  burgers: '🍔 Hamburguesas',
+  combos: '🍟 Combos',
+  bebidas: '🥤 Bebidas',
+  postres: '🍦 Postres',
+  acompanantes: '🍿 Acompañantes',
+};
+
 export default function PantallaGestionMenu(props: any) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
@@ -18,13 +54,43 @@ export default function PantallaGestionMenu(props: any) {
   const [categoria, setCategoria] = useState('burgers');
   const [imagen, setImagen] = useState('');
 
-  useEffect(() => { cargarProductos(); }, []);
+  const insets = useSafeAreaInsets();
+
+  // ✅ Animaciones
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideUpAnim = useRef(new Animated.Value(30)).current;
+  const [modalKey, setModalKey] = useState(0);
+
+  useEffect(() => {
+    cargarProductos();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUpAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const cargarProductos = async () => {
-    const { data } = await supabase.from('productos').select('*').order('nombre');
+    const { data } = await supabase
+      .from('productos')
+      .select('*')
+      .order('nombre');
     setProductos(data as Producto[] || []);
     setCargando(false);
+    setRefrescando(false);
   };
+
+  const manejarRefresh = useCallback(() => {
+    setRefrescando(true);
+    cargarProductos();
+  }, []);
 
   const seleccionarImagen = () => {
     const input = document.createElement('input');
@@ -35,9 +101,17 @@ export default function PantallaGestionMenu(props: any) {
       if (!file) return;
       setSubiendoImagen(true);
       const nombreArchivo = Date.now() + '_' + file.name.replace(/\s/g, '_');
-      const { error } = await supabase.storage.from('productos_imagenes').upload(nombreArchivo, file);
-      if (error) { Alert.alert('Error', 'No se pudo subir la imagen'); setSubiendoImagen(false); return; }
-      const { data: urlData } = supabase.storage.from('productos_imagenes').getPublicUrl(nombreArchivo);
+      const { error } = await supabase.storage
+        .from('productos_imagenes')
+        .upload(nombreArchivo, file);
+      if (error) {
+        Alert.alert('Error', 'No se pudo subir la imagen');
+        setSubiendoImagen(false);
+        return;
+      }
+      const { data: urlData } = supabase.storage
+        .from('productos_imagenes')
+        .getPublicUrl(nombreArchivo);
       setImagen(urlData.publicUrl);
       setSubiendoImagen(false);
     };
@@ -45,23 +119,44 @@ export default function PantallaGestionMenu(props: any) {
   };
 
   const abrirFormulario = (producto?: Producto) => {
+    setNombre('');
+    setDescripcion('');
+    setPrecio('');
+    setCategoria('burgers');
+    setImagen('');
+
     if (producto) {
       setProductoEditando(producto);
-      setNombre(producto.nombre);
-      setDescripcion(producto.descripcion || '');
-      setPrecio(String(producto.precio));
-      setCategoria(producto.categoria);
-      setImagen(producto.imagen || '');
+      setTimeout(() => {
+        setNombre(producto.nombre);
+        setDescripcion(producto.descripcion || '');
+        setPrecio(String(producto.precio));
+        setCategoria(producto.categoria);
+        setImagen(producto.imagen || '');
+        setModalKey(prev => prev + 1);
+        setModalVisible(true);
+      }, 50);
     } else {
       setProductoEditando(null);
-      setNombre(''); setDescripcion(''); setPrecio(''); setCategoria('burgers'); setImagen('');
+      setModalKey(prev => prev + 1);
+      setModalVisible(true);
     }
-    setModalVisible(true);
   };
 
   const guardarProducto = async () => {
-    if (!nombre || !precio || !categoria) { Alert.alert('Error', 'Completa nombre, precio y categoria'); return; }
-    const datos = { nombre, descripcion, precio: Number(precio), categoria, imagen: imagen || null };
+    if (!nombre || !precio || !categoria) {
+      Alert.alert('Error', 'Completa nombre, precio y categoría');
+      return;
+    }
+
+    const datos = {
+      nombre,
+      descripcion,
+      precio: Number(precio),
+      categoria,
+      imagen: imagen || null,
+    };
+
     if (productoEditando) {
       await supabase.from('productos').update(datos).eq('id', productoEditando.id);
     } else {
@@ -69,89 +164,407 @@ export default function PantallaGestionMenu(props: any) {
     }
     setModalVisible(false);
     cargarProductos();
-    Alert.alert('Exito', productoEditando ? 'Producto actualizado' : 'Producto creado');
+    Alert.alert('Éxito', productoEditando ? 'Producto actualizado' : 'Producto creado');
   };
 
   const eliminarProducto = (id: number, nombre: string) => {
-    Alert.alert('Eliminar producto', `Estas seguro de eliminar "${nombre}"?`, [
-      { text: 'Cancelar' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => { await supabase.from('productos').delete().eq('id', id); cargarProductos(); } }
-    ]);
+    Alert.alert(
+      'Eliminar producto',
+      `¿Estás seguro de eliminar "${nombre}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.from('productos').delete().eq('id', id);
+            cargarProductos();
+          }
+        }
+      ]
+    );
+  };
+
+  const cerrarModal = () => {
+    setModalVisible(false);
+    setTimeout(() => {
+      setNombre('');
+      setDescripcion('');
+      setPrecio('');
+      setCategoria('burgers');
+      setImagen('');
+      setProductoEditando(null);
+    }, 300);
   };
 
   const categorias = ['burgers', 'combos', 'bebidas', 'postres', 'acompanantes'];
 
+  const isTablet = width >= 768;
+  const isSmallPhone = width < 375;
+
+  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
+  const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
+  const tarjetaPadding = isTablet ? 16 : isSmallPhone ? 10 : 12;
+  const imagenSize = isTablet ? 100 : isSmallPhone ? 70 : 90;
+  const nombreSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
+  const precioSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
+
+  const renderProducto = ({ item, index }: { item: Producto; index: number }) => {
+    const delay = index * 100;
+    const itemFade = fadeAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.2, 1],
+    });
+    const itemSlide = slideUpAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [20 * (index + 1), 0],
+    });
+
+    return (
+      <Animated.View
+        style={{
+          opacity: itemFade,
+          transform: [{ translateY: itemSlide }],
+        }}
+      >
+        <View style={[
+          estilos.tarjeta,
+          {
+            padding: tarjetaPadding,
+            borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
+          }
+        ]}>
+          {item.imagen ? (
+            <Image
+              source={{ uri: item.imagen }}
+              style={[estilos.imagen, { width: imagenSize, height: imagenSize, borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12 }]}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[estilos.imagenPlaceholder, { width: imagenSize, height: imagenSize, borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12 }]}>
+              <Text style={[estilos.emoji, { fontSize: isTablet ? 40 : isSmallPhone ? 28 : 36 }]}>🍔</Text>
+            </View>
+          )}
+
+          <View style={estilos.info}>
+            <View style={estilos.categoriaBadge}>
+              <Text style={[estilos.categoriaTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
+                {ETIQUETAS_CATEGORIA[item.categoria] || item.categoria}
+              </Text>
+            </View>
+            <Text style={[estilos.nombre, { fontSize: nombreSize }]} numberOfLines={1}>
+              {item.nombre}
+            </Text>
+            <Text style={[estilos.descripcion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]} numberOfLines={2}>
+              {item.descripcion || 'Sin descripción'}
+            </Text>
+            <Text style={[estilos.precio, { fontSize: precioSize }]}>
+              ${typeof item.precio === 'number' ? item.precio.toFixed(2) : item.precio}
+            </Text>
+          </View>
+
+          <View style={estilos.acciones}>
+            <TouchableOpacity
+              style={[estilos.botonAccion, { width: isTablet ? 42 : isSmallPhone ? 32 : 38, height: isTablet ? 42 : isSmallPhone ? 32 : 38, borderRadius: isTablet ? 21 : isSmallPhone ? 16 : 19 }]}
+              onPress={() => abrirFormulario(item)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.amarillo} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[estilos.botonAccion, estilos.botonEliminar, { width: isTablet ? 42 : isSmallPhone ? 32 : 38, height: isTablet ? 42 : isSmallPhone ? 32 : 38, borderRadius: isTablet ? 21 : isSmallPhone ? 16 : 19 }]}
+              onPress={() => eliminarProducto(item.id, item.nombre)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.rojo} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  };
+
   return (
     <View style={estilos.contenedor}>
-      <TouchableOpacity style={estilos.botonVolver} onPress={() => props.navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={Colores.textoClaro} />
-        <Text style={estilos.textoVolver}>Volver</Text>
-      </TouchableOpacity>
+      <LinearGradient
+        colors={[COLORS.verde, COLORS.negro]}
+        style={estilos.fondoGradiente}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
 
-      <View style={estilos.encabezado}>
-        <View><Text style={estilos.titulo}>Gestion de Menu</Text><Text style={estilos.contador}>{productos.length} productos</Text></View>
-        <TouchableOpacity style={estilos.botonAgregar} onPress={() => abrirFormulario()}>
-          <Ionicons name="add" size={24} color="white" /><Text style={estilos.textoAgregar}>Nuevo</Text>
+      <View style={[
+        estilos.header,
+        {
+          paddingTop: insets.top + (isTablet ? 20 : 10),
+          paddingHorizontal: paddingHorizontal,
+          paddingBottom: isTablet ? 16 : 12,
+        }
+      ]}>
+        <TouchableOpacity
+          style={estilos.botonVolver}
+          onPress={() => props.navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+        </TouchableOpacity>
+        <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+          📋 Gestión de Menú
+        </Text>
+        <TouchableOpacity
+          style={[estilos.botonAgregar, { paddingHorizontal: isTablet ? 18 : isSmallPhone ? 12 : 16, paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10 }]}
+          onPress={() => abrirFormulario()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={COLORS.negro} />
         </TouchableOpacity>
       </View>
 
-      <FlatList data={productos} keyExtractor={item => item.id.toString()} contentContainerStyle={estilos.lista}
-        renderItem={({ item }) => (
-          <View style={estilos.tarjeta}>
-            {item.imagen ? <Image source={{ uri: item.imagen }} style={estilos.imagen} resizeMode="cover" /> : <View style={estilos.imagenPlaceholder}><Text style={estilos.emoji}>🍔</Text></View>}
-            <View style={estilos.info}>
-              <View style={estilos.categoriaBadge}><Text style={estilos.categoriaTexto}>{item.categoria}</Text></View>
-              <Text style={estilos.nombre}>{item.nombre}</Text>
-              <Text style={estilos.descripcion} numberOfLines={2}>{item.descripcion || 'Sin descripcion'}</Text>
-              <Text style={estilos.precio}>${typeof item.precio === 'number' ? item.precio.toFixed(2) : item.precio}</Text>
-            </View>
-            <View style={estilos.acciones}>
-              <TouchableOpacity style={estilos.botonAccion} onPress={() => abrirFormulario(item)}><Ionicons name="create" size={20} color={Colores.secundario} /></TouchableOpacity>
-              <TouchableOpacity style={[estilos.botonAccion, estilos.botonEliminar]} onPress={() => eliminarProducto(item.id, item.nombre)}><Ionicons name="trash" size={20} color={Colores.acento} /></TouchableOpacity>
-            </View>
+      <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal }]}>
+        <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+          {productos.length} {productos.length === 1 ? 'producto' : 'productos'}
+        </Text>
+      </View>
+
+      <FlatList
+        data={productos}
+        keyExtractor={item => item.id.toString()}
+        renderItem={renderProducto}
+        contentContainerStyle={[
+          estilos.lista,
+          {
+            paddingHorizontal: paddingHorizontal,
+            paddingBottom: insets.bottom + 40,
+            paddingTop: isTablet ? 8 : 4,
+          }
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={estilos.vacioContenedor}>
+            <Ionicons name="restaurant-outline" size={isTablet ? 80 : 60} color={COLORS.grisClaro + '30'} />
+            <Text style={[estilos.vacio, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
+              No hay productos
+            </Text>
+            <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+              Agrega tu primer producto presionando el botón +
+            </Text>
           </View>
-        )}
-        ListEmptyComponent={<View style={estilos.vacioContenedor}><Ionicons name="restaurant-outline" size={60} color={Colores.textoGris} /><Text style={estilos.vacio}>No hay productos</Text></View>}
-        refreshing={cargando} onRefresh={cargarProductos}
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refrescando}
+            onRefresh={manejarRefresh}
+            tintColor={COLORS.amarillo}
+            colors={[COLORS.amarillo]}
+          />
+        }
       />
 
-      <Modal visible={modalVisible} transparent animationType="slide">
+      {/* ✅ MODAL REDISEÑADO - CON ESTILO CONSISTENTE */}
+      <Modal
+        key={modalKey}
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={cerrarModal}
+      >
         <View style={estilos.modalFondo}>
-          <View style={estilos.modal}>
-            <Text style={estilos.modalTitulo}>{productoEditando ? 'Editar Producto' : 'Nuevo Producto'}</Text>
-            <ScrollView style={estilos.modalScroll} showsVerticalScrollIndicator={false}>
-              <Text style={estilos.label}>Nombre *</Text>
-              <TextInput style={estilos.input} value={nombre} onChangeText={setNombre} placeholder="Ej: Krusty Burger" placeholderTextColor="#666" />
-              <Text style={estilos.label}>Descripcion</Text>
-              <TextInput style={[estilos.input, estilos.textArea]} value={descripcion} onChangeText={setDescripcion} placeholder="Descripcion del producto" placeholderTextColor="#666" multiline numberOfLines={3} />
-              <Text style={estilos.label}>Precio *</Text>
-              <TextInput style={estilos.input} value={precio} onChangeText={setPrecio} placeholder="9500" placeholderTextColor="#666" keyboardType="numeric" />
-              <Text style={estilos.label}>Categoria *</Text>
-              <View style={estilos.categoriasGrid}>
+          <LinearGradient
+            colors={[COLORS.verde, COLORS.negro]}
+            style={estilos.modalGradiente}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+
+          <View style={[
+            estilos.modal,
+            {
+              padding: isTablet ? 32 : isSmallPhone ? 20 : 24,
+              borderRadius: isTablet ? 28 : 24,
+              width: isTablet ? '70%' : '92%',
+              maxHeight: isTablet ? '80%' : '85%',
+              borderColor: COLORS.amarillo + '30',
+            }
+          ]}>
+            {/* ✅ Header del modal con gradiente */}
+            <View style={estilos.modalHeader}>
+              <LinearGradient
+                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                style={estilos.modalHeaderGradiente}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Ionicons
+                  name={productoEditando ? 'create' : 'add-circle'}
+                  size={isTablet ? 32 : isSmallPhone ? 24 : 28}
+                  color={COLORS.negro}
+                />
+                <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
+                  {productoEditando ? 'Editar Producto' : 'Nuevo Producto'}
+                </Text>
+              </LinearGradient>
+            </View>
+
+            <ScrollView
+              style={estilos.modalScroll}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 10 }}
+            >
+              {/* Nombre */}
+              <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                <Ionicons name="restaurant-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Nombre *
+              </Text>
+              <TextInput
+                key={`nombre-${modalKey}`}
+                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                value={nombre}
+                onChangeText={setNombre}
+                placeholder="Ej: Krusty Burger"
+                placeholderTextColor={COLORS.grisClaro + '60'}
+                selectionColor={COLORS.amarillo}
+              />
+
+              {/* Descripción */}
+              <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Descripción
+              </Text>
+              <TextInput
+                key={`descripcion-${modalKey}`}
+                style={[estilos.input, estilos.textArea, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                value={descripcion}
+                onChangeText={setDescripcion}
+                placeholder="Descripción del producto"
+                placeholderTextColor={COLORS.grisClaro + '60'}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                selectionColor={COLORS.amarillo}
+              />
+
+              {/* Precio */}
+              <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                <Ionicons name="cash-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Precio *
+              </Text>
+              <TextInput
+                key={`precio-${modalKey}`}
+                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                value={precio}
+                onChangeText={setPrecio}
+                placeholder="Ej: 9500"
+                placeholderTextColor={COLORS.grisClaro + '60'}
+                keyboardType="numeric"
+                selectionColor={COLORS.amarillo}
+              />
+
+              {/* Categoría */}
+              <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                <Ionicons name="grid-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Categoría *
+              </Text>
+              <View style={[estilos.categoriasGrid, { gap: isTablet ? 10 : isSmallPhone ? 6 : 8 }]}>
                 {categorias.map(cat => (
-                  <TouchableOpacity key={cat} style={[estilos.categoriaOpcion, categoria === cat && estilos.categoriaOpcionActiva]} onPress={() => setCategoria(cat)}>
-                    <Text style={[estilos.categoriaOpcionTexto, categoria === cat && estilos.categoriaOpcionTextoActiva]}>{cat}</Text>
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      estilos.categoriaOpcion,
+                      {
+                        paddingHorizontal: isTablet ? 18 : isSmallPhone ? 10 : 14,
+                        paddingVertical: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                        borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
+                        backgroundColor: categoria === cat ? COLORS.amarillo : COLORS.negro + '50',
+                        borderColor: categoria === cat ? COLORS.amarillo : COLORS.blanco + '10',
+                      }
+                    ]}
+                    onPress={() => setCategoria(cat)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      estilos.categoriaOpcionTexto,
+                      {
+                        fontSize: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                        color: categoria === cat ? COLORS.negro : COLORS.grisClaro,
+                        fontWeight: categoria === cat ? '700' : '500',
+                      }
+                    ]}>
+                      {ETIQUETAS_CATEGORIA[cat] || cat}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={estilos.label}>Imagen</Text>
-              <TouchableOpacity style={estilos.botonImagen} onPress={seleccionarImagen}>
-                <Ionicons name="cloud-upload" size={24} color={Colores.secundario} />
-                <Text style={estilos.botonImagenTexto}>{subiendoImagen ? 'Subiendo...' : imagen ? 'Imagen seleccionada' : 'Seleccionar imagen'}</Text>
+
+              {/* Imagen */}
+              <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                <Ionicons name="image-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Imagen
+              </Text>
+              <TouchableOpacity
+                style={[estilos.botonImagen, { padding: isTablet ? 18 : isSmallPhone ? 12 : 16 }]}
+                onPress={seleccionarImagen}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="cloud-upload" size={isTablet ? 28 : isSmallPhone ? 20 : 24} color={COLORS.amarillo} />
+                <Text style={[estilos.botonImagenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                  {subiendoImagen ? '⏳ Subiendo...' : imagen ? '✅ Imagen seleccionada' : '📷 Seleccionar imagen'}
+                </Text>
               </TouchableOpacity>
+
               {imagen ? (
                 <View style={estilos.previaImagen}>
-                  <Image source={{ uri: imagen }} style={estilos.previaFoto} resizeMode="contain" />
-                  <TouchableOpacity style={estilos.botonQuitarImagen} onPress={() => setImagen('')}>
-                    <Ionicons name="close" size={18} color="white" />
+                  <Image
+                    source={{ uri: imagen }}
+                    style={[estilos.previaFoto, { height: isTablet ? 200 : isSmallPhone ? 140 : 180 }]}
+                    resizeMode="contain"
+                  />
+                  <TouchableOpacity
+                    style={[estilos.botonQuitarImagen, { width: isTablet ? 34 : isSmallPhone ? 24 : 30, height: isTablet ? 34 : isSmallPhone ? 24 : 30, borderRadius: isTablet ? 17 : isSmallPhone ? 12 : 15 }]}
+                    onPress={() => setImagen('')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={isTablet ? 20 : isSmallPhone ? 14 : 18} color={COLORS.blanco} />
                   </TouchableOpacity>
                 </View>
               ) : null}
-              <TextInput style={[estilos.input, { marginTop: 8 }]} value={imagen} onChangeText={setImagen} placeholder="O pega la URL manualmente" placeholderTextColor="#666" autoCapitalize="none" />
+
+              <TextInput
+                key={`url-${modalKey}`}
+                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, marginTop: 10 }]}
+                value={imagen}
+                onChangeText={setImagen}
+                placeholder="🔗 O pega la URL manualmente"
+                placeholderTextColor={COLORS.grisClaro + '60'}
+                autoCapitalize="none"
+                selectionColor={COLORS.amarillo}
+              />
             </ScrollView>
-            <View style={estilos.modalBotones}>
-              <TouchableOpacity style={[estilos.modalBoton, estilos.modalCancelar]} onPress={() => setModalVisible(false)}><Text style={estilos.modalCancelarTexto}>Cancelar</Text></TouchableOpacity>
-              <TouchableOpacity style={[estilos.modalBoton, estilos.modalGuardar]} onPress={guardarProducto}><Ionicons name="save" size={18} color="white" /><Text style={estilos.modalGuardarTexto}>{productoEditando ? 'Actualizar' : 'Crear'}</Text></TouchableOpacity>
+
+            {/* ✅ Botones con gradiente consistente */}
+            <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
+              <TouchableOpacity
+                style={[estilos.modalBoton, estilos.modalCancelar, { paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14 }]}
+                onPress={cerrarModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.blanco} />
+                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[estilos.modalBoton, estilos.modalGuardar, { paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14 }]}
+                onPress={guardarProducto}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                  style={estilos.modalGuardarGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="save" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.negro} />
+                  <Text style={[estilos.modalGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                    {productoEditando ? 'Actualizar' : 'Crear'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -161,51 +574,289 @@ export default function PantallaGestionMenu(props: any) {
 }
 
 const estilos = StyleSheet.create({
-  contenedor: { flex: 1, backgroundColor: Colores.fondoOscuro, paddingTop: 60 },
-  botonVolver: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10, gap: 6 },
-  textoVolver: { color: Colores.textoClaro, fontSize: 16 },
-  encabezado: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
-  titulo: { fontSize: 28, fontWeight: 'bold', color: Colores.textoClaro },
-  contador: { fontSize: 13, color: Colores.textoGris, marginTop: 2 },
-  botonAgregar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colores.primario, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
-  textoAgregar: { color: 'white', fontWeight: 'bold' },
-  lista: { paddingHorizontal: 16, paddingBottom: 20 },
-  tarjeta: { flexDirection: 'row', backgroundColor: Colores.fondoTarjeta, borderRadius: 16, padding: 12, marginBottom: 12, alignItems: 'center' },
-  imagen: { width: 90, height: 90, borderRadius: 12, marginRight: 12 },
-  imagenPlaceholder: { width: 90, height: 90, backgroundColor: Colores.secundario + '20', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  emoji: { fontSize: 36 },
-  info: { flex: 1 },
-  categoriaBadge: { backgroundColor: Colores.secundario + '30', paddingHorizontal: 10, paddingVertical: 2, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 6 },
-  categoriaTexto: { color: Colores.secundario, fontSize: 11, fontWeight: 'bold', textTransform: 'capitalize' },
-  nombre: { fontSize: 16, fontWeight: 'bold', color: Colores.textoClaro },
-  descripcion: { fontSize: 12, color: Colores.textoGris, marginTop: 4, lineHeight: 16 },
-  precio: { fontSize: 18, fontWeight: 'bold', color: Colores.primario, marginTop: 6 },
-  acciones: { gap: 10, marginLeft: 8 },
-  botonAccion: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colores.fondoOscuro, justifyContent: 'center', alignItems: 'center' },
-  botonEliminar: { backgroundColor: Colores.acento + '20' },
-  vacioContenedor: { alignItems: 'center', marginTop: 80 },
-  vacio: { color: Colores.textoGris, fontSize: 16, marginTop: 16 },
-  modalFondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
-  modal: { backgroundColor: Colores.fondoTarjeta, borderRadius: 24, padding: 24, width: '92%', maxHeight: '85%' },
-  modalTitulo: { fontSize: 22, fontWeight: 'bold', color: Colores.textoClaro, marginBottom: 20, textAlign: 'center' },
-  modalScroll: { maxHeight: '70%' },
-  label: { fontSize: 14, fontWeight: '600', color: Colores.textoClaro, marginBottom: 6, marginTop: 14 },
-  input: { backgroundColor: Colores.fondoOscuro, borderRadius: 12, padding: 14, fontSize: 15, borderWidth: 1, borderColor: '#444', color: Colores.textoClaro },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  categoriasGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoriaOpcion: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colores.fondoOscuro, borderWidth: 1, borderColor: '#444' },
-  categoriaOpcionActiva: { backgroundColor: Colores.secundario, borderColor: Colores.secundario },
-  categoriaOpcionTexto: { color: Colores.textoGris, fontSize: 12, fontWeight: '600' },
-  categoriaOpcionTextoActiva: { color: Colores.fondoOscuro },
-  botonImagen: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colores.primario + '20', borderRadius: 12, padding: 16, gap: 10, borderWidth: 1, borderColor: Colores.primario + '40', borderStyle: 'dashed' },
-  botonImagenTexto: { color: Colores.textoClaro, fontSize: 14, fontWeight: '600' },
-  previaImagen: { marginTop: 10, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  previaFoto: { width: '100%', height: 180, borderRadius: 12 },
-  botonQuitarImagen: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 15, width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
-  modalBotones: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  modalBoton: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
-  modalCancelar: { backgroundColor: Colores.fondoOscuro, borderWidth: 1, borderColor: '#444' },
-  modalCancelarTexto: { color: Colores.textoClaro, fontWeight: 'bold' },
-  modalGuardar: { backgroundColor: Colores.primario },
-  modalGuardarTexto: { color: 'white', fontWeight: 'bold' },
+  contenedor: {
+    flex: 1,
+    backgroundColor: COLORS.negro,
+  },
+  fondoGradiente: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  // ✅ HEADER
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.blanco + '10',
+  },
+  botonVolver: {
+    padding: 4,
+  },
+  titulo: {
+    fontWeight: 'bold',
+    color: COLORS.blanco,
+    letterSpacing: 1,
+    flex: 1,
+    textAlign: 'center',
+  },
+  botonAgregar: {
+    backgroundColor: COLORS.amarillo,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: COLORS.amarillo,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  contadorContainer: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.blanco + '5',
+  },
+  contador: {
+    color: COLORS.grisClaro,
+    fontWeight: '500',
+    opacity: 0.7,
+  },
+  lista: {
+    flexGrow: 1,
+  },
+  tarjeta: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.negro + '60',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '8',
+    alignItems: 'center',
+  },
+  imagen: {
+    marginRight: 12,
+  },
+  imagenPlaceholder: {
+    backgroundColor: COLORS.amarillo + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  emoji: {},
+  info: {
+    flex: 1,
+  },
+  categoriaBadge: {
+    backgroundColor: COLORS.amarillo + '20',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: COLORS.amarillo + '15',
+  },
+  categoriaTexto: {
+    color: COLORS.amarillo,
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
+  },
+  nombre: {
+    fontWeight: 'bold',
+    color: COLORS.blanco,
+  },
+  descripcion: {
+    color: COLORS.grisClaro,
+    marginTop: 2,
+    lineHeight: 16,
+    opacity: 0.7,
+  },
+  precio: {
+    fontWeight: 'bold',
+    color: COLORS.amarillo,
+    marginTop: 4,
+  },
+  acciones: {
+    gap: 8,
+    marginLeft: 8,
+  },
+  botonAccion: {
+    backgroundColor: COLORS.negro + '40',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '8',
+  },
+  botonEliminar: {
+    backgroundColor: COLORS.rojo + '15',
+    borderColor: COLORS.rojo + '20',
+  },
+  vacioContenedor: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+  },
+  vacio: {
+    color: COLORS.blanco,
+    fontWeight: 'bold',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  vacioSubtexto: {
+    color: COLORS.grisClaro,
+    textAlign: 'center',
+    marginTop: 4,
+    opacity: 0.6,
+  },
+  // ✅ MODAL REDISEÑADO - ESTILO CONSISTENTE
+  modalFondo: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalGradiente: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+  },
+  modal: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    marginBottom: 16,
+  },
+  modalHeaderGradiente: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  modalTitulo: {
+    fontWeight: 'bold',
+    color: COLORS.negro,
+  },
+  modalScroll: {
+    maxHeight: '70%',
+    paddingHorizontal: 4,
+  },
+  label: {
+    fontWeight: '600',
+    color: COLORS.blanco,
+    marginBottom: 6,
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    backgroundColor: COLORS.negro + '40',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '10',
+    color: COLORS.blanco,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  categoriasGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  categoriaOpcion: {
+    borderWidth: 1,
+  },
+  categoriaOpcionTexto: {
+    fontWeight: '600',
+  },
+  botonImagen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.amarillo + '10',
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: COLORS.amarillo + '20',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+  },
+  botonImagenTexto: {
+    color: COLORS.blanco,
+    fontWeight: '600',
+  },
+  previaImagen: {
+    marginTop: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    backgroundColor: COLORS.negro + '40',
+  },
+  previaFoto: {
+    width: '100%',
+    borderRadius: 12,
+  },
+  botonQuitarImagen: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: COLORS.negro + '75',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '15',
+  },
+  modalBotones: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  modalBoton: {
+    flex: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    overflow: 'hidden',
+  },
+  modalCancelar: {
+    backgroundColor: COLORS.negro + '50',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '10',
+  },
+  modalCancelarTexto: {
+    color: COLORS.blanco,
+    fontWeight: '600',
+  },
+  modalGuardar: {
+    overflow: 'hidden',
+  },
+  modalGuardarGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    width: '100%',
+    height: '100%',
+  },
+  modalGuardarTexto: {
+    color: COLORS.negro,
+    fontWeight: 'bold',
+  },
 });

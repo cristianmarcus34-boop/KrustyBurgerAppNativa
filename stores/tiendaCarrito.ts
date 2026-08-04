@@ -1,6 +1,8 @@
 ﻿import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Producto, ElementoCarrito } from '../lib/tipos';
+import { tiendaFavoritos } from './tiendaFavoritos';
+import { tiendaAutenticacion } from './tiendaAutenticacion';
 
 interface EstadoCarrito {
   elementos: ElementoCarrito[];
@@ -50,6 +52,19 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
 
       set({ elementos });
       await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
+
+      // ✅ REGISTRAR FAVORITO (si el usuario está autenticado)
+      try {
+        const { perfil } = tiendaAutenticacion.getState();
+        if (perfil?.id) {
+          // Esperar a que se registre el favorito
+          await tiendaFavoritos.getState().agregarFavorito(perfil.id, producto);
+        }
+      } catch (favError) {
+        console.log('⚠️ Error registrando favorito:', favError);
+        // No interrumpir el flujo del carrito
+      }
+
     } catch (error) {
       console.error('Error agregando producto:', error);
     }
@@ -79,6 +94,25 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
       });
       set({ elementos });
       await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
+
+      // ✅ AL AUMENTAR CANTIDAD, TAMBIÉN INCREMENTAR FAVORITO
+      try {
+        const { perfil } = tiendaAutenticacion.getState();
+        if (perfil?.id) {
+          // Buscar el producto para obtener sus datos
+          const producto = get().elementos.find(e => {
+            const id = e.producto.id || (e.producto as any).identificacion;
+            return id === idProducto;
+          })?.producto;
+
+          if (producto) {
+            await tiendaFavoritos.getState().agregarFavorito(perfil.id, producto);
+          }
+        }
+      } catch (favError) {
+        console.log('⚠️ Error incrementando favorito:', favError);
+      }
+
     } catch (error) {
       console.error('Error aumentando cantidad:', error);
     }

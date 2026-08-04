@@ -135,8 +135,6 @@ export default function PantallaLogin(props: any) {
                 resizeMode="contain"
               />
             </View>
-
-
           </Animated.View>
 
           {/* ✅ FORMULARIO CON ANIMACIÓN */}
@@ -156,7 +154,14 @@ export default function PantallaLogin(props: any) {
             <View style={estilos.inputContainer}>
               <Ionicons name="mail-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
               <TextInput
-                style={[estilos.input, { fontSize: inputSize }]}
+                style={[
+                  estilos.input,
+                  {
+                    fontSize: inputSize,
+                    flex: 1, // ✅ Asegura que ocupe todo el espacio disponible
+                    paddingRight: 12, // ✅ Más espacio a la derecha
+                  }
+                ]}
                 value={correo}
                 onChangeText={setCorreo}
                 placeholder="tucorreo@ejemplo.com"
@@ -164,6 +169,8 @@ export default function PantallaLogin(props: any) {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 selectionColor={COLORS.amarillo}
+                numberOfLines={1} // ✅ Mantiene el texto en una línea
+
               />
             </View>
 
@@ -174,13 +181,21 @@ export default function PantallaLogin(props: any) {
             <View style={estilos.inputContainer}>
               <Ionicons name="lock-closed-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
               <TextInput
-                style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
+                style={[
+                  estilos.input,
+                  {
+                    fontSize: inputSize,
+                    flex: 1,
+                    paddingRight: 12,
+                  }
+                ]}
                 value={contrasena}
                 onChangeText={setContrasena}
                 placeholder="Tu contraseña"
                 placeholderTextColor={COLORS.grisClaro + '60'}
                 secureTextEntry={!mostrarContrasena}
                 selectionColor={COLORS.amarillo}
+                numberOfLines={1}
               />
               <TouchableOpacity
                 onPress={() => setMostrarContrasena(!mostrarContrasena)}
@@ -331,14 +346,18 @@ const estilos = StyleSheet.create({
   },
   inputIcon: {
     marginRight: 12,
+    flexShrink: 0, // ✅ Evita que el ícono se encoja
   },
   input: {
     color: COLORS.blanco,
     paddingVertical: 12,
-    paddingRight: 8,
+    paddingTop: 14,
+    // ✅ flex: 1 se aplica dinámicamente
+    // ✅ paddingRight se aplica dinámicamente
   },
   eyeButton: {
     padding: 4,
+    flexShrink: 0, // ✅ Evita que el botón del ojo se encoja
   },
   // ✅ BOTÓN LOGIN
   boton: {
