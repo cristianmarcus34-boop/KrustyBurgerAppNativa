@@ -1,3 +1,4 @@
+// screens/admin/PantallaGestionClientes.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
@@ -7,12 +8,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../../lib/supabase';
+import { supabase, supabaseAdmin } from '../../lib/supabase'; // ✅ IMPORTAR supabaseAdmin
 import { Perfil } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 
 // ============================================================
-// 🎨 PALETA DE COLORES (CONSISTENTE CON EL RESTO DE LA APP)
+// 🎨 PALETA DE COLORES
 // ============================================================
 const COLORS = {
     amarillo: '#F5C518',
@@ -31,7 +32,7 @@ const COLORS = {
 
 const { width, height } = Dimensions.get('window');
 
-// ✅ Configuración de roles con tipado correcto
+// ✅ Configuración de roles
 type RolKey = 'admin' | 'cliente' | 'repartidor';
 
 interface RolConfig {
@@ -46,7 +47,6 @@ const ROLES: Record<RolKey, RolConfig> = {
     repartidor: { label: 'Repartidor', color: '#2196F3', icono: 'bicycle' },
 };
 
-// ✅ Función helper para obtener rol de forma segura
 const getRol = (rol: string): RolConfig => {
     return ROLES[rol as RolKey] || ROLES.cliente;
 };
@@ -65,7 +65,6 @@ export default function PantallaGestionClientes(props: any) {
 
     const insets = useSafeAreaInsets();
 
-    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
 
@@ -100,6 +99,7 @@ export default function PantallaGestionClientes(props: any) {
         cargarClientes();
     }, []);
 
+    // ✅ FUNCIÓN CREAR CLIENTE - CORREGIDA CON supabaseAdmin
     const crearCliente = async () => {
         if (!nombre || !email || !password) {
             Alert.alert('Error', 'Completa nombre, email y contraseña');
@@ -111,32 +111,60 @@ export default function PantallaGestionClientes(props: any) {
             return;
         }
 
-        const { data, error } = await supabase.auth.signUp({ email, password });
-
-        if (error) {
-            Alert.alert('Error', error.message);
-            return;
-        }
-
-        if (data.user) {
-            await supabase.from('perfiles').insert({
-                id: data.user.id,
-                nombre_cliente: nombre,
-                email,
-                telefono: telefono || null,
-                rol: 'cliente',
-                puntos_acumulados: 100,
-                ultimo_acceso: new Date().toISOString(),
+        try {
+            // ✅ USAR supabaseAdmin.auth.admin.createUser (tiene permisos de admin)
+            const { data, error } = await supabaseAdmin.auth.admin.createUser({
+                email: email,
+                password: password,
+                email_confirm: true, // ✅ NO ENVÍA CORREO DE CONFIRMACIÓN
+                user_metadata: {
+                    nombre_cliente: nombre,
+                    telefono: telefono || '',
+                },
             });
-        }
 
-        setModalVisible(false);
-        setNombre('');
-        setEmail('');
-        setTelefono('');
-        setPassword('');
-        cargarClientes();
-        Alert.alert('Éxito', 'Cliente creado correctamente');
+            if (error) {
+                // ✅ MANEJO DE RATE LIMIT
+                if (error.message && error.message.includes('rate limit')) {
+                    Alert.alert(
+                        '⏳ Límite de intentos',
+                        'Has excedido el límite de envío de emails. Espera 1 hora para continuar.'
+                    );
+                    return;
+                }
+                Alert.alert('Error', error.message);
+                return;
+            }
+
+            if (data?.user) {
+                const { error: errorPerfil } = await supabase.from('perfiles').insert({
+                    id: data.user.id,
+                    nombre_cliente: nombre,
+                    email: email,
+                    telefono: telefono || null,
+                    rol: 'cliente',
+                    puntos_acumulados: 100,
+                    ultimo_acceso: new Date().toISOString(),
+                });
+
+                if (errorPerfil) {
+                    console.error('Error creando perfil:', errorPerfil);
+                    Alert.alert('Error', 'El usuario se creó pero hubo un problema con el perfil.');
+                    return;
+                }
+            }
+
+            setModalVisible(false);
+            setNombre('');
+            setEmail('');
+            setTelefono('');
+            setPassword('');
+            cargarClientes();
+            Alert.alert('✅ Éxito', 'Cliente creado correctamente');
+
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Ocurrió un error al crear el cliente');
+        }
     };
 
     const cambiarRol = async (id: string, nuevoRol: string) => {
@@ -187,17 +215,9 @@ export default function PantallaGestionClientes(props: any) {
         }, 300);
     };
 
-    const rolColor = (rol: string) => {
-        return getRol(rol).color;
-    };
-
-    const rolLabel = (rol: string) => {
-        return getRol(rol).label;
-    };
-
-    const rolIcono = (rol: string) => {
-        return getRol(rol).icono;
-    };
+    const rolColor = (rol: string) => getRol(rol).color;
+    const rolLabel = (rol: string) => getRol(rol).label;
+    const rolIcono = (rol: string) => getRol(rol).icono;
 
     const nivelCliente = (puntos: number) => {
         if (puntos >= 5000) return { label: '💎 Platino', color: '#9C27B0' };
@@ -209,7 +229,6 @@ export default function PantallaGestionClientes(props: any) {
     const isTablet = width >= 768;
     const isSmallPhone = width < 375;
 
-    // ✅ Tamaños responsive
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
     const tarjetaPadding = isTablet ? 18 : isSmallPhone ? 12 : 14;
@@ -244,7 +263,6 @@ export default function PantallaGestionClientes(props: any) {
                         borderColor: rolInfo.color + '40',
                     }
                 ]}>
-                    {/* ✅ Fila principal */}
                     <View style={estilos.fila}>
                         <View style={[
                             estilos.avatar,
@@ -281,7 +299,6 @@ export default function PantallaGestionClientes(props: any) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* ✅ Detalles */}
                     <View style={estilos.detalles}>
                         <View style={estilos.detalleItem}>
                             <Text style={[estilos.detalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
@@ -323,7 +340,6 @@ export default function PantallaGestionClientes(props: any) {
                         </View>
                     </View>
 
-                    {/* ✅ Botones de roles */}
                     <View style={[estilos.acciones, { gap: isTablet ? 10 : isSmallPhone ? 6 : 8 }]}>
                         {Object.entries(ROLES).map(([key, value]) => (
                             <TouchableOpacity
@@ -361,7 +377,6 @@ export default function PantallaGestionClientes(props: any) {
                 end={{ x: 1, y: 1 }}
             />
 
-            {/* ✅ HEADER */}
             <View style={[
                 estilos.header,
                 {
@@ -389,14 +404,12 @@ export default function PantallaGestionClientes(props: any) {
                 </TouchableOpacity>
             </View>
 
-            {/* ✅ Contador */}
             <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal }]}>
                 <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                     {clientes.length} {clientes.length === 1 ? 'cliente registrado' : 'clientes registrados'}
                 </Text>
             </View>
 
-            {/* ✅ LISTA */}
             <FlatList
                 data={clientes}
                 keyExtractor={item => item.id}
@@ -457,7 +470,6 @@ export default function PantallaGestionClientes(props: any) {
                             borderColor: COLORS.amarillo + '30',
                         }
                     ]}>
-                        {/* ✅ Header del modal */}
                         <View style={estilos.modalHeader}>
                             <LinearGradient
                                 colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
@@ -530,7 +542,6 @@ export default function PantallaGestionClientes(props: any) {
                             />
                         </ScrollView>
 
-                        {/* ✅ Botones */}
                         <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
                             <TouchableOpacity
                                 style={[estilos.modalBoton, estilos.modalCancelar, { paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14 }]}
@@ -580,7 +591,6 @@ const estilos = StyleSheet.create({
         right: 0,
         bottom: 0,
     },
-    // ✅ HEADER
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -622,7 +632,6 @@ const estilos = StyleSheet.create({
     lista: {
         flexGrow: 1,
     },
-    // ✅ TARJETA
     tarjeta: {
         backgroundColor: COLORS.negro + '60',
         marginBottom: 10,
@@ -664,7 +673,6 @@ const estilos = StyleSheet.create({
     botonEliminar: {
         padding: 4,
     },
-    // ✅ DETALLES
     detalles: {
         flexDirection: 'row',
         justifyContent: 'space-around',
@@ -698,7 +706,6 @@ const estilos = StyleSheet.create({
         fontWeight: 'bold',
         textTransform: 'capitalize',
     },
-    // ✅ ACCIONES
     acciones: {
         flexDirection: 'row',
     },
@@ -712,7 +719,6 @@ const estilos = StyleSheet.create({
         fontWeight: 'bold',
         textTransform: 'capitalize',
     },
-    // ✅ VACÍO
     vacioContenedor: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -730,7 +736,6 @@ const estilos = StyleSheet.create({
         marginTop: 4,
         opacity: 0.6,
     },
-    // ✅ MODAL
     modalFondo: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.85)',

@@ -13,7 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
-import { obtenerRuta, guardarRutaPedido, obtenerRutaPedido } from '../../lib/directions';
+import { obtenerRuta, guardarRutaPedido, obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 
 const { width, height } = Dimensions.get('window');
 
@@ -84,13 +84,15 @@ export default function PantallaTransmision(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
+  // ✅ Animación de pulso para la moto
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
   // ============================================================
   // 📱 RESPONSIVE - TAMAÑOS DINÁMICOS
   // ============================================================
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
-  // ✅ TAMAÑOS RESPONSIVE - COMPACTOS PARA SAMSUNG A20
   const paddingHorizontal = isTablet ? 32 : isSmallPhone ? 8 : 12;
   const paddingVertical = isTablet ? 14 : isSmallPhone ? 6 : 8;
   const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
@@ -113,6 +115,42 @@ export default function PantallaTransmision(props: any) {
   const statsGap = isTablet ? 12 : isSmallPhone ? 5 : 6;
   const headerPaddingTop = isTablet ? 18 : isSmallPhone ? 8 : 10;
 
+  // ✅ Preparar coordenadas para el Polyline con validación
+  const obtenerCoordenadasPolyline = () => {
+    if (rutaPuntos.length > 1) return rutaPuntos;
+    if (pedidoSeleccionado) {
+      return [
+        { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
+        {
+          latitude: pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
+          longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
+        }
+      ];
+    }
+    return [
+      { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
+      { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude }
+    ];
+  };
+
+  const coordenadasPolyline = obtenerCoordenadasPolyline();
+  const puntosValidos = validarCoordenadas(coordenadasPolyline);
+
+  // ✅ LOGS DE DEPURACIÓN PARA POLYLINE (fuera del JSX)
+  useEffect(() => {
+    if (transmitiendo && pedidoSeleccionado) {
+      console.log('🔍 ========== DEPURACIÓN POLYLINE ==========');
+      console.log('  - puntosValidos:', puntosValidos);
+      console.log('  - pedidoSeleccionado:', pedidoSeleccionado?.id);
+      console.log('  - rutaPuntos.length:', rutaPuntos.length);
+      console.log('  - rutaPuntos (primeros 3):', JSON.stringify(rutaPuntos.slice(0, 3), null, 2));
+      console.log('  - coordenadasPolyline length:', coordenadasPolyline.length);
+      console.log('  - coordenadasPolyline (primeros 3):', JSON.stringify(coordenadasPolyline.slice(0, 3), null, 2));
+      console.log('  - ¿Se debe renderizar?', puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1);
+      console.log('🔍 ==========================================');
+    }
+  }, [transmitiendo, pedidoSeleccionado, rutaPuntos, puntosValidos, coordenadasPolyline]);
+
   useEffect(() => {
     cargarPedidos();
     Animated.parallel([
@@ -129,46 +167,111 @@ export default function PantallaTransmision(props: any) {
     ]).start();
   }, []);
 
-  // ✅ Obtener ruta real
+  // ✅ Animación de pulso para la moto cuando está transmitiendo
+  useEffect(() => {
+    if (transmitiendo) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.15,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [transmitiendo]);
+
+  // ✅ Obtener ruta real - MEJORADO
   useEffect(() => {
     if (transmitiendo && pedidoSeleccionado && ubicacionActual) {
       const obtenerRutaReal = async () => {
         const origenLat = ubicacionActual.lat;
         const origenLng = ubicacionActual.lng;
-        const destinoLat = pedidoSeleccionado?.lat_cliente || -34.776484410467525;
-        const destinoLng = pedidoSeleccionado?.lng_cliente || -58.29220250409459;
+        const destinoLat = pedidoSeleccionado?.lat_cliente || UBICACION_KRUSTY.latitude;
+        const destinoLng = pedidoSeleccionado?.lng_cliente || UBICACION_KRUSTY.longitude;
 
-        const distanciaActual = calcularDistancia(origenLat, origenLng, destinoLat, destinoLng);
-        if (distanciaActual * 1000 > 100 || rutaPuntos.length === 0) {
-          const rutaGuardada = await obtenerRutaPedido(pedidoSeleccionado.id);
-          if (rutaGuardada && rutaGuardada.length > 0) {
-            setRutaPuntos(rutaGuardada);
-            return;
-          }
+        // ✅ Intentar cargar ruta guardada en la DB
+        const rutaGuardada = await obtenerRutaPedido(pedidoSeleccionado.id);
+        if (rutaGuardada && rutaGuardada.length > 1) {
+          console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
+          setRutaPuntos(rutaGuardada);
 
-          const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
-          if (ruta && ruta.points.length > 0) {
-            setRutaPuntos(ruta.points);
-            setDistanciaReal(ruta.distance);
-            setTiempoReal(ruta.duration);
-            await guardarRutaPedido(pedidoSeleccionado.id, ruta.points);
+          // ✅ Cargar distancia y tiempo desde la DB
+          const infoRuta = await obtenerInfoRutaPedido(pedidoSeleccionado.id);
+          if (infoRuta) {
+            setDistanciaReal(infoRuta.distancia);
+            setTiempoReal(infoRuta.duracion);
           }
+          return;
+        }
+
+        // ✅ Si no hay ruta guardada, obtener nueva de Google Maps
+        console.log('🔄 Obteniendo nueva ruta de Google Maps...');
+        const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
+
+        if (ruta && ruta.points.length > 1) {
+          console.log('✅ Ruta obtenida:', ruta.points.length, 'puntos');
+          setRutaPuntos(ruta.points);
+          setDistanciaReal(ruta.distance);
+          setTiempoReal(ruta.duration);
+
+          // ✅ Guardar en la DB
+          await guardarRutaPedido(pedidoSeleccionado.id, ruta.points, ruta.distance, ruta.duration);
+          console.log('💾 Ruta guardada en la DB');
+        } else {
+          // ✅ Fallback: línea recta
+          console.warn('⚠️ Usando línea recta como fallback');
+          setRutaPuntos([
+            { latitude: origenLat, longitude: origenLng },
+            { latitude: destinoLat, longitude: destinoLng }
+          ]);
         }
       };
       obtenerRutaReal();
     }
   }, [transmitiendo, pedidoSeleccionado, ubicacionActual]);
 
+  // ✅ ZOOM MEJORADO - Mostrar toda la ruta
   useEffect(() => {
     if (transmitiendo && ubicacionActual && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: ubicacionActual.lat,
-        longitude: ubicacionActual.lng,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 1000);
+      // ✅ Calcular el zoom para mostrar toda la ruta
+      if (rutaPuntos.length > 1) {
+        // Encontrar los límites de la ruta
+        const lats = rutaPuntos.map(p => p.latitude);
+        const lngs = rutaPuntos.map(p => p.longitude);
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+
+        const latDelta = (maxLat - minLat) * 1.5 + 0.005;
+        const lngDelta = (maxLng - minLng) * 1.5 + 0.005;
+
+        mapRef.current.animateToRegion({
+          latitude: (minLat + maxLat) / 2,
+          longitude: (minLng + maxLng) / 2,
+          latitudeDelta: Math.max(latDelta, 0.02),
+          longitudeDelta: Math.max(lngDelta, 0.02),
+        }, 1000);
+      } else {
+        // Fallback: centrar en el repartidor con zoom más amplio
+        mapRef.current.animateToRegion({
+          latitude: ubicacionActual.lat,
+          longitude: ubicacionActual.lng,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }, 1000);
+      }
     }
-  }, [ubicacionActual, transmitiendo]);
+  }, [ubicacionActual, transmitiendo, rutaPuntos]);
 
   const cargarPedidos = async () => {
     setCargando(true);
@@ -242,10 +345,53 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
+  // ✅ INICIAR TRANSMISIÓN - MEJORADO CON RUTA
   const iniciarTransmision = async (pedido: Pedido) => {
     setPedidoSeleccionado(pedido);
     setTransmitiendo(true);
 
+    // ✅ OBTENER RUTA AL INICIAR
+    const origenLat = ubicacionActual.lat;
+    const origenLng = ubicacionActual.lng;
+    const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
+    const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
+
+    // ✅ 1. Intentar cargar ruta guardada en la DB
+    const rutaGuardada = await obtenerRutaPedido(pedido.id);
+    if (rutaGuardada && rutaGuardada.length > 1) {
+      console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
+      setRutaPuntos(rutaGuardada);
+
+      // Cargar distancia y tiempo desde la DB
+      const infoRuta = await obtenerInfoRutaPedido(pedido.id);
+      if (infoRuta) {
+        setDistanciaReal(infoRuta.distancia);
+        setTiempoReal(infoRuta.duracion);
+      }
+    } else {
+      // ✅ 2. Obtener nueva ruta de Google Maps
+      console.log('🔄 Obteniendo nueva ruta...');
+      const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
+
+      if (ruta && ruta.points.length > 1) {
+        setRutaPuntos(ruta.points);
+        setDistanciaReal(ruta.distance);
+        setTiempoReal(ruta.duration);
+
+        // ✅ Guardar en la DB
+        await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
+        console.log('💾 Ruta guardada en la DB');
+      } else {
+        // ✅ 3. Fallback: línea recta
+        console.warn('⚠️ Usando línea recta como fallback');
+        setRutaPuntos([
+          { latitude: origenLat, longitude: origenLng },
+          { latitude: destinoLat, longitude: destinoLng }
+        ]);
+      }
+    }
+
+    // ✅ ACTUALIZAR ESTADO DEL PEDIDO
     try {
       const { error } = await supabase
         .from('pedidos')
@@ -263,6 +409,7 @@ export default function PantallaTransmision(props: any) {
       console.error('❌ Error en actualización de estado:', error);
     }
 
+    // ✅ INICIAR SEGUIMIENTO DE UBICACIÓN
     const { status } = await Location.requestForegroundPermissionsAsync();
 
     if (status === 'granted') {
@@ -280,8 +427,8 @@ export default function PantallaTransmision(props: any) {
           const distancia = calcularDistancia(
             latitude,
             longitude,
-            pedido.lat_cliente || -34.776484410467525,
-            pedido.lng_cliente || -58.29220250409459
+            pedido.lat_cliente || UBICACION_KRUSTY.latitude,
+            pedido.lng_cliente || UBICACION_KRUSTY.longitude
           );
 
           if (distancia < 0.1) {
@@ -312,8 +459,8 @@ export default function PantallaTransmision(props: any) {
     let paso = 0;
     const intervalo = setInterval(async () => {
       paso += 0.001;
-      const nuevaLat = (pedido.lat_cliente || -34.776484410467525) + paso;
-      const nuevaLng = (pedido.lng_cliente || -58.29220250409459) + paso;
+      const nuevaLat = (pedido.lat_cliente || UBICACION_KRUSTY.latitude) + paso;
+      const nuevaLng = (pedido.lng_cliente || UBICACION_KRUSTY.longitude) + paso;
 
       setUbicacionActual({ lat: nuevaLat, lng: nuevaLng });
       await actualizarUbicacionEnSupabase(nuevaLat, nuevaLng, pedido.id);
@@ -355,27 +502,6 @@ export default function PantallaTransmision(props: any) {
     };
     return c[estado] || COLORS.grisClaro;
   };
-
-  // ✅ Preparar coordenadas para el Polyline con validación
-  const obtenerCoordenadasPolyline = () => {
-    if (rutaPuntos.length > 1) return rutaPuntos;
-    if (pedidoSeleccionado) {
-      return [
-        { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
-        {
-          latitude: pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-          longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-        }
-      ];
-    }
-    return [
-      { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
-      { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude }
-    ];
-  };
-
-  const coordenadasPolyline = obtenerCoordenadasPolyline();
-  const puntosValidos = validarCoordenadas(coordenadasPolyline);
 
   // ✅ Render de pedido con información de envío
   const renderPedido = ({ item }: { item: Pedido }) => (
@@ -425,7 +551,7 @@ export default function PantallaTransmision(props: any) {
         </View>
       </View>
 
-      {/* ✅ INFORMACIÓN DE ENVÍO (NUEVO) */}
+      {/* ✅ INFORMACIÓN DE ENVÍO */}
       <View style={[
         estilos.infoEnvioContainer,
         {
@@ -567,7 +693,6 @@ export default function PantallaTransmision(props: any) {
         end={{ x: 1, y: 1 }}
       />
 
-      {/* ✅ SCROLLVIEW PRINCIPAL */}
       <ScrollView
         style={estilos.scrollView}
         contentContainerStyle={[
@@ -708,7 +833,7 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ MAPA EN TRANSMISIÓN */}
+        {/* ✅ MAPA EN TRANSMISIÓN - VERSIÓN MEJORADA TIPO UBER */}
         {transmitiendo && pedidoSeleccionado && (
           <Animated.View style={[
             estilos.mapaContenedor,
@@ -728,39 +853,65 @@ export default function PantallaTransmision(props: any) {
               initialRegion={{
                 latitude: ubicacionActual.lat,
                 longitude: ubicacionActual.lng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
               }}
               showsUserLocation={true}
               showsMyLocationButton={true}
             >
-              <Marker
-                coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}
-                title="Tu ubicación"
-                description="🚲 Repartidor"
-                pinColor="#2196F3"
-              />
+              {/* 🛵 REPARTIDOR CON MOTO ANIMADA */}
+              <Marker coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}>
+                <Animated.View style={[estilos.motoMarker, { transform: [{ scale: pulseAnim }] }]}>
+                  <View style={estilos.motoCircle}>
+                    <Ionicons name="bicycle" size={isTablet ? 32 : 24} color="#000000" />
+                  </View>
+                  <View style={estilos.motoPulseOuter} />
+                  <View style={estilos.motoPulseInner} />
+                </Animated.View>
+              </Marker>
+
+              {/* 📍 DESTINO CLIENTE CON BANDERA */}
               {pedidoSeleccionado && (
                 <Marker
                   coordinate={{
                     latitude: pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
                     longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
                   }}
-                  title="Destino"
-                  description="📍 Cliente"
-                  pinColor={COLORS.amarillo}
-                />
+                >
+                  <View style={estilos.destinoMarker}>
+                    <Ionicons name="flag" size={isTablet ? 28 : 22} color="#FFFFFF" />
+                  </View>
+                </Marker>
               )}
 
-              {puntosValidos && pedidoSeleccionado && (
-                <Polyline
-                  coordinates={coordenadasPolyline}
-                  strokeColor={COLORS.amarillo}
-                  strokeWidth={rutaPuntos.length > 1 ? 4 : 3}
-                  lineDashPattern={rutaPuntos.length > 1 ? [] : [5, 5]}
-                  lineCap="round"
-                  lineJoin="round"
-                />
+              {/* 🗺️ RUTA TIPO UBER - CON SOMBRA Y DEGRADADO */}
+              {puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1 && (
+                <>
+                  {/* Sombra de la ruta */}
+                  <Polyline
+                    coordinates={rutaPuntos}
+                    strokeColor="rgba(0,0,0,0.3)"
+                    strokeWidth={10}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                  {/* Línea principal - ROJA PARA DEPURAR */}
+                  <Polyline
+                    coordinates={rutaPuntos}
+                    strokeColor="red"
+                    strokeWidth={5}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                  {/* Línea interior (brillo) */}
+                  <Polyline
+                    coordinates={rutaPuntos}
+                    strokeColor={COLORS.amarilloClaro}
+                    strokeWidth={2}
+                    lineCap="round"
+                    lineJoin="round"
+                  />
+                </>
               )}
             </MapView>
 
@@ -1301,7 +1452,6 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
     textTransform: 'capitalize',
   },
-  // ✅ NUEVOS ESTILOS PARA INFO DE ENVÍO
   infoEnvioContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -1435,5 +1585,58 @@ const estilos = StyleSheet.create({
   modalConfirmarTexto: {
     color: COLORS.blanco,
     fontWeight: 'bold',
+  },
+  // ✅ ESTILOS PARA MARCADORES MEJORADOS
+  motoMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  motoCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F5C518',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 2,
+  },
+  motoPulseOuter: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(245, 197, 24, 0.2)',
+    zIndex: 1,
+  },
+  motoPulseInner: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
+    zIndex: 0,
+  },
+  destinoMarker: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.rojo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });

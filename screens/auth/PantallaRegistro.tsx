@@ -8,27 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-
-// ============================================================
-// 🎨 PALETA DE COLORES (consistente con las demás pantallas)
-// ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-};
+import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
-const logoImage = require('../../assets/logo-krusty.jpeg');
+const logoImage = require('../../assets/logo-krusty.png'); // Asegúrate de que la ruta sea correcta y que el archivo exista
 
 export default function PantallaRegistro(props: any) {
   const [nombre, setNombre] = useState('');
@@ -40,7 +23,6 @@ export default function PantallaRegistro(props: any) {
   const { registrarCliente } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -72,20 +54,17 @@ export default function PantallaRegistro(props: any) {
       return;
     }
 
-    // ✅ Validación de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(correo)) {
       Alert.alert('Error', 'Ingresa un correo electrónico válido');
       return;
     }
 
-    // ✅ Validación de contraseña
     if (contrasena.length < 6) {
       Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
       return;
     }
 
-    // ✅ Validación de teléfono
     if (telefono.length < 8) {
       Alert.alert('Error', 'Ingresa un número de teléfono válido');
       return;
@@ -114,7 +93,6 @@ export default function PantallaRegistro(props: any) {
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
-  // ✅ Tamaños dinámicos
   const logoSize = isTablet ? 100 : isSmallPhone ? 70 : 85;
   const tituloSize = isTablet ? 36 : isSmallPhone ? 26 : 30;
   const subtituloSize = isTablet ? 16 : isSmallPhone ? 12 : 14;
@@ -126,7 +104,7 @@ export default function PantallaRegistro(props: any) {
 
   return (
     <LinearGradient
-      colors={[COLORS.verde, COLORS.negro]}
+      colors={[Colores.frinkBlanco, Colores.frinkGris]}
       style={estilos.contenedor}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -147,7 +125,6 @@ export default function PantallaRegistro(props: any) {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* ✅ LOGO Y TÍTULO CON ANIMACIÓN */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -172,14 +149,13 @@ export default function PantallaRegistro(props: any) {
             </View>
 
             <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-              Crear Cuenta
+              ¡Crear Cuenta!
             </Text>
             <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
-              Unite a Krusty Burger 🍔
+              "Glaaaven! Un nuevo usuario!" 🧪
             </Text>
           </Animated.View>
 
-          {/* ✅ FORMULARIO CON ANIMACIÓN */}
           <Animated.View
             style={[
               estilos.formulario,
@@ -189,71 +165,67 @@ export default function PantallaRegistro(props: any) {
               }
             ]}
           >
-            {/* Nombre */}
             <Text style={[estilos.label, { fontSize: labelSize }]}>
               Nombre completo
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="person-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="person-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
               <TextInput
                 style={[estilos.input, { fontSize: inputSize }]}
                 value={nombre}
                 onChangeText={setNombre}
                 placeholder="Tu nombre completo"
-                placeholderTextColor={COLORS.grisClaro + '60'}
-                selectionColor={COLORS.amarillo}
+                placeholderTextColor={Colores.frinkGris + '60'}
+                selectionColor={Colores.frinkAzul}
               />
             </View>
 
-            {/* Correo */}
             <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
               Correo electrónico
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="mail-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="mail-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
               <TextInput
                 style={[estilos.input, { fontSize: inputSize }]}
                 value={correo}
                 onChangeText={setCorreo}
                 placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={COLORS.grisClaro + '60'}
+                placeholderTextColor={Colores.frinkGris + '60'}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                selectionColor={COLORS.amarillo}
+                selectionColor={Colores.frinkAzul}
               />
             </View>
 
-            {/* Teléfono */}
             <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
               Teléfono
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="call-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="call-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
               <TextInput
                 style={[estilos.input, { fontSize: inputSize }]}
                 value={telefono}
                 onChangeText={setTelefono}
                 placeholder="Tu número de teléfono"
-                placeholderTextColor={COLORS.grisClaro + '60'}
+                placeholderTextColor={Colores.frinkGris + '60'}
                 keyboardType="phone-pad"
-                selectionColor={COLORS.amarillo}
+                selectionColor={Colores.frinkAzul}
               />
             </View>
 
-            {/* Contraseña */}
             <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
               Contraseña
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
               <TextInput
                 style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
                 value={contrasena}
                 onChangeText={setContrasena}
                 placeholder="Mínimo 6 caracteres"
-                placeholderTextColor={COLORS.grisClaro + '60'}
+                placeholderTextColor={Colores.frinkGris + '60'}
                 secureTextEntry={!mostrarContrasena}
-                selectionColor={COLORS.amarillo}
+                selectionColor={Colores.frinkAzul}
               />
               <TouchableOpacity
                 onPress={() => setMostrarContrasena(!mostrarContrasena)}
@@ -262,12 +234,11 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                   size={22}
-                  color={COLORS.grisClaro}
+                  color={Colores.frinkGris}
                 />
               </TouchableOpacity>
             </View>
 
-            {/* ✅ BOTÓN DE REGISTRO */}
             <TouchableOpacity
               style={estilos.boton}
               onPress={manejarRegistro}
@@ -275,16 +246,16 @@ export default function PantallaRegistro(props: any) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
                 style={estilos.botonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {cargando ? (
-                  <ActivityIndicator color={COLORS.negro} size="small" />
+                  <ActivityIndicator color={Colores.frinkBlanco} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="person-add" size={buttonTextSize + 4} color={COLORS.negro} />
+                    <Ionicons name="person-add" size={buttonTextSize + 4} color={Colores.frinkBlanco} />
                     <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
                       Crear Cuenta
                     </Text>
@@ -293,7 +264,6 @@ export default function PantallaRegistro(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* ✅ ENLACES */}
             <View style={estilos.enlacesContainer}>
               <TouchableOpacity
                 onPress={() => props.navigation.goBack()}
@@ -305,26 +275,24 @@ export default function PantallaRegistro(props: any) {
               </TouchableOpacity>
             </View>
 
-            {/* ✅ SEPARADOR */}
             <View style={estilos.separadorContainer}>
               <View style={estilos.separador} />
               <Text style={estilos.separadorTexto}>o</Text>
               <View style={estilos.separador} />
             </View>
 
-            {/* ✅ BOTÓN DE INVITADO */}
             <TouchableOpacity
               style={estilos.botonInvitado}
               onPress={() => props.navigation.navigate('Principal')}
               activeOpacity={0.6}
             >
-              <Ionicons name="person-outline" size={20} color={COLORS.grisClaro} />
+              <Ionicons name="person-outline" size={20} color={Colores.frinkGris} />
               <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
                 Continuar como invitado
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ TÉRMINOS Y CONDICIONES */}
+            {/* ✅ TÉRMINOS Y CONDICIONES - CORREGIDO */}
             <TouchableOpacity
               style={estilos.terminosContainer}
               onPress={() => Alert.alert('Términos y Condiciones', 'Función en desarrollo')}
@@ -353,7 +321,6 @@ const estilos = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
   },
-  // ✅ LOGO
   logoContainer: {
     alignItems: 'center',
     marginBottom: 30,
@@ -361,47 +328,46 @@ const estilos = StyleSheet.create({
   },
   logoWrapper: {
     marginBottom: 12,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.frinkAzul,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 12,
+
   },
   logoImage: {
     backgroundColor: 'transparent',
     borderRadius: 100,
+
   },
   titulo: {
     fontWeight: '900',
-    color: COLORS.blanco,
+    color: Colores.frinkAzul,
     letterSpacing: 2,
-    textShadowColor: COLORS.negro,
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
   subtitulo: {
-    color: COLORS.grisClaro,
+    color: Colores.frinkAzul + '80',
     marginTop: 4,
     fontWeight: '300',
     letterSpacing: 0.5,
+    fontStyle: 'italic',
   },
-  // ✅ FORMULARIO
   formulario: {
     width: '100%',
   },
   label: {
     fontWeight: '600',
-    color: COLORS.blanco,
+    color: Colores.frinkAzul,
     marginBottom: 6,
     letterSpacing: 0.5,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '50',
+    backgroundColor: Colores.textoClaro,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
+    borderColor: Colores.frinkGris + '30',
     paddingHorizontal: 14,
     height: 54,
   },
@@ -409,20 +375,19 @@ const estilos = StyleSheet.create({
     marginRight: 12,
   },
   input: {
-    color: COLORS.blanco,
+    color: Colores.frinkAzul,
     paddingVertical: 12,
     paddingRight: 8,
   },
   eyeButton: {
     padding: 4,
   },
-  // ✅ BOTÓN REGISTRO
   boton: {
     marginTop: 24,
     borderRadius: 14,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.frinkAmarillo,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
@@ -437,23 +402,21 @@ const estilos = StyleSheet.create({
   },
   textoBoton: {
     fontWeight: '800',
-    color: COLORS.negro,
+    color: Colores.frinkBlanco,
     letterSpacing: 1.5,
   },
-  // ✅ ENLACES
   enlacesContainer: {
     marginTop: 18,
     alignItems: 'center',
   },
   enlace: {
-    color: COLORS.grisClaro,
+    color: Colores.frinkGris,
     fontWeight: '500',
   },
   enlaceDestacado: {
-    color: COLORS.amarillo,
+    color: Colores.frinkAzul,
     fontWeight: '700',
   },
-  // ✅ SEPARADOR
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -463,15 +426,14 @@ const estilos = StyleSheet.create({
   separador: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.blanco + '15',
+    backgroundColor: Colores.frinkGris + '30',
   },
   separadorTexto: {
-    color: COLORS.grisClaro + '60',
+    color: Colores.frinkGris + '60',
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
   },
-  // ✅ BOTÓN INVITADO
   botonInvitado: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -480,26 +442,25 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-    backgroundColor: COLORS.negro + '30',
+    borderColor: Colores.frinkGris + '20',
+    backgroundColor: Colores.textoClaro + '80',
   },
   botonInvitadoTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.frinkGris,
     fontWeight: '500',
     letterSpacing: 0.5,
   },
-  // ✅ TÉRMINOS
   terminosContainer: {
     marginTop: 16,
     alignItems: 'center',
   },
   terminosTexto: {
-    color: COLORS.grisClaro + '60',
+    color: Colores.frinkAzul + '70', // ✅ Más oscuro que antes
     textAlign: 'center',
     fontWeight: '400',
   },
   terminosDestacado: {
-    color: COLORS.amarillo + '80',
+    color: Colores.frinkAzul, // ✅ Azul fuerte
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

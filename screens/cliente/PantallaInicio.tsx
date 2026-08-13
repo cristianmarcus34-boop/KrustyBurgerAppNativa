@@ -1,5 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+﻿import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,24 +21,6 @@ import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
-
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-};
 
 export default function PantallaInicio(props: any) {
   const { perfil } = tiendaAutenticacion();
@@ -198,16 +179,16 @@ export default function PantallaInicio(props: any) {
   const cardWidth = getCardWidth();
 
   const categorias = [
-    { nombre: 'Hamburguesas', icono: '🍔', color: '#FF5722' },
-    { nombre: 'Combos', icono: '🍟', color: '#FFC107' },
-    { nombre: 'Bebidas', icono: '🥤', color: '#2196F3' },
-    { nombre: 'Postres', icono: '🍦', color: '#E91E63' },
+    { nombre: 'Hamburguesas', icono: '🍔', color: Colores.acento },
+    { nombre: 'Combos', icono: '🍟', color: Colores.primario },
+    { nombre: 'Bebidas', icono: '🥤', color: Colores.azulHomero },
+    { nombre: 'Postres', icono: '🍦', color: Colores.rosaMaggie },
   ];
 
   const getColorPorId = useCallback((id: number) => {
     const colores = [
-      '#FF5722', '#4CAF50', '#2196F3', '#9C27B0',
-      '#FF9800', '#E91E63', '#00BCD4', '#8BC34A'
+      Colores.acento, Colores.verdeKrusty, Colores.azulHomero, Colores.moradoLisa,
+      Colores.primario, Colores.rosaMaggie, Colores.verdeClaro, Colores.secundario
     ];
     return colores[id % colores.length];
   }, []);
@@ -219,7 +200,6 @@ export default function PantallaInicio(props: any) {
       outputRange: [0.2, 1],
     });
 
-    // ✅ Verificar si la oferta tiene envío gratis (por descuento o tipo)
     const tieneEnvioGratis = item.descuento?.toLowerCase().includes('envío gratis') ||
       item.descuento?.toLowerCase().includes('envio gratis');
 
@@ -249,27 +229,28 @@ export default function PantallaInicio(props: any) {
             props.navigation.navigate('DetalleOferta', { oferta: item });
           }}
         >
-          {/* ✅ BADGE DE ENVÍO GRATIS */}
           {tieneEnvioGratis && (
-            <View style={[estilos.badgeEnvioGratis, {
-              position: 'absolute',
-              top: 8,
-              left: 8,
-              zIndex: 10,
-              backgroundColor: COLORS.verdeClaro,
-              paddingHorizontal: isTablet ? 12 : 8,
-              paddingVertical: isTablet ? 6 : 4,
-              borderRadius: isTablet ? 10 : 8,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-            }]}>
-              <Ionicons name="rocket" size={isTablet ? 16 : 12} color={COLORS.blanco} />
-              <Text style={[estilos.badgeEnvioGratisTexto, {
-                fontSize: isTablet ? 11 : 9,
-                color: COLORS.blanco,
-                fontWeight: 'bold',
-              }]}>
+            <View style={[
+              estilos.badgeEnvioGratis,
+              {
+                backgroundColor: Colores.verdeKrusty,
+                paddingHorizontal: isTablet ? 12 : 8,
+                paddingVertical: isTablet ? 6 : 4,
+                borderRadius: isTablet ? 10 : 8,
+                gap: 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }
+            ]}>
+              <Ionicons name="rocket" size={isTablet ? 16 : 12} color={Colores.textoClaro} />
+              <Text style={[
+                estilos.badgeEnvioGratisTexto,
+                {
+                  fontSize: isTablet ? 11 : 9,
+                  color: Colores.textoClaro,
+                  fontWeight: 'bold',
+                }
+              ]}>
                 🚚 Envío gratis
               </Text>
             </View>
@@ -288,11 +269,6 @@ export default function PantallaInicio(props: any) {
                 }
               ]}
               resizeMode="cover"
-              onError={(e) => {
-                console.log('❌ Error cargando imagen en oferta:', e.nativeEvent.error);
-                console.log('URL que falló:', item.imagen);
-              }}
-              onLoad={() => console.log('✅ Imagen de oferta cargada:', item.imagen)}
             />
           ) : (
             <View style={[
@@ -304,7 +280,7 @@ export default function PantallaInicio(props: any) {
                 backgroundColor: colorOferta + '20',
               }
             ]}>
-              <Ionicons name="image-outline" size={isTablet ? 40 : isSmallPhone ? 28 : 32} color={COLORS.grisClaro + '40'} />
+              <Ionicons name="image-outline" size={isTablet ? 40 : isSmallPhone ? 28 : 32} color={Colores.textoGris + '40'} />
               <Text style={[estilos.ofertaSinImagenTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11 }]}>
                 Sin imagen
               </Text>
@@ -317,7 +293,7 @@ export default function PantallaInicio(props: any) {
           }]}>
             🔥 {item.descuento}
           </Text>
-          <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize }]}>
+          <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize }]} numberOfLines={1}>
             {item.titulo}
           </Text>
           <Text style={[estilos.ofertaPrecio, { fontSize: ofertaPrecioSize }]}>
@@ -355,7 +331,7 @@ export default function PantallaInicio(props: any) {
       outputRange: [0.2, 1],
     });
 
-    const favoritoWidth = isTablet ? width * 0.4 : width * 0.7;
+    const favoritoWidth = isTablet ? width * 0.35 : isSmallPhone ? width * 0.75 : width * 0.6;
 
     return (
       <Animated.View
@@ -374,7 +350,11 @@ export default function PantallaInicio(props: any) {
             {
               padding: favoritoPadding,
               borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
-              borderColor: COLORS.amarillo + '20',
+              borderColor: Colores.primario + '20',
+              flexDirection: 'column',
+              alignItems: 'center',
+              backgroundColor: Colores.fondoOscuro + '60',
+              borderWidth: 1,
             }
           ]}
           onPress={() => props.navigation.navigate('DetalleProducto', { producto: item })}
@@ -389,8 +369,10 @@ export default function PantallaInicio(props: any) {
                   width: favoritoEmojiContainer,
                   height: favoritoEmojiContainer,
                   borderRadius: favoritoEmojiContainer / 2,
+                  marginBottom: 10,
                 }
               ]}
+              resizeMode="cover"
             />
           ) : (
             <View style={[
@@ -399,24 +381,64 @@ export default function PantallaInicio(props: any) {
                 width: favoritoEmojiContainer,
                 height: favoritoEmojiContainer,
                 borderRadius: favoritoEmojiContainer / 2,
+                marginBottom: 10,
+                backgroundColor: Colores.primario + '15',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 2,
+                borderColor: Colores.primario + '30',
               }
             ]}>
               <Text style={[estilos.emojiGrande, { fontSize: favoritoEmojiSize }]}>🍔</Text>
             </View>
           )}
 
-          <View style={estilos.favoritoInfo}>
-            <View style={estilos.favoritoHeader}>
+          <View style={[
+            estilos.favoritoInfo,
+            {
+              width: '100%',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }
+          ]}>
+            <View style={[
+              estilos.favoritoHeader,
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }
+            ]}>
               <Text style={[estilos.favoritoTitulo, { fontSize: favoritoTituloSize }]} numberOfLines={1}>
                 {item.nombre}
               </Text>
               {contador > 1 && (
-                <View style={estilos.favoritoContadorBadge}>
-                  <Text style={estilos.favoritoContadorTexto}>×{contador}</Text>
+                <View style={[
+                  estilos.favoritoContadorBadge,
+                  {
+                    backgroundColor: Colores.primario + '20',
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: Colores.primario + '30',
+                  }
+                ]}>
+                  <Text style={[
+                    estilos.favoritoContadorTexto,
+                    {
+                      color: Colores.primario,
+                      fontSize: 9,
+                      fontWeight: 'bold',
+                    }
+                  ]}>
+                    ×{contador}
+                  </Text>
                 </View>
               )}
             </View>
-            <Text style={[estilos.favoritoPrecio, { fontSize: favoritoPrecioSize }]}>
+            <Text style={[estilos.favoritoPrecio, { fontSize: favoritoPrecioSize }]} numberOfLines={1}>
               ${item.precio?.toFixed(2)}
             </Text>
           </View>
@@ -425,8 +447,12 @@ export default function PantallaInicio(props: any) {
             style={[
               estilos.botonAgregar,
               {
+                marginTop: 8,
                 paddingHorizontal: botonAgregarPaddingH,
                 paddingVertical: botonAgregarPaddingV,
+                borderRadius: 20,
+                overflow: 'hidden',
+                width: '100%',
               }
             ]}
             activeOpacity={0.7}
@@ -436,8 +462,17 @@ export default function PantallaInicio(props: any) {
             }}
           >
             <LinearGradient
-              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-              style={estilos.botonAgregarGradient}
+              colors={[Colores.primario, Colores.primarioOscuro]}
+              style={[
+                estilos.botonAgregarGradient,
+                {
+                  paddingHorizontal: 14,
+                  paddingVertical: 7,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: '100%',
+                }
+              ]}
             >
               <Text style={[estilos.botonAgregarTexto, { fontSize: botonAgregarTextSize }]}>
                 + Agregar
@@ -458,7 +493,7 @@ export default function PantallaInicio(props: any) {
   return (
     <View style={estilos.contenedor}>
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
+        colors={[Colores.verdeKrusty, Colores.fondoOscuro]}
         style={estilos.fondoGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -477,8 +512,8 @@ export default function PantallaInicio(props: any) {
           <RefreshControl
             refreshing={cargandoOfertas}
             onRefresh={onRefresh}
-            tintColor={COLORS.amarillo}
-            colors={[COLORS.amarillo]}
+            tintColor={Colores.primario}
+            colors={[Colores.primario]}
           />
         }
       >
@@ -491,7 +526,7 @@ export default function PantallaInicio(props: any) {
             onPress={() => props.navigation.navigate('PanelAdmin')}
             activeOpacity={0.8}
           >
-            <Ionicons name="arrow-back" size={isTablet ? 20 : 16} color={COLORS.amarillo} />
+            <Ionicons name="arrow-back" size={isTablet ? 20 : 16} color={Colores.primario} />
             <Text style={[estilos.botonAdminTexto, { fontSize: isTablet ? 16 : 13 }]}>
               Volver al Panel
             </Text>
@@ -512,9 +547,16 @@ export default function PantallaInicio(props: any) {
               {
                 paddingHorizontal: puntosPadding,
                 paddingVertical: isTablet ? 5 : isSmallPhone ? 3 : 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                marginTop: 4,
+                backgroundColor: Colores.fondoOscuro + '40',
+                borderRadius: 20,
+                alignSelf: 'flex-start',
               }
             ]}>
-              <Ionicons name="star" size={puntosSize + 2} color={COLORS.amarillo} />
+              <Ionicons name="star" size={puntosSize + 2} color={Colores.primario} />
               <Text style={[estilos.puntos, { fontSize: puntosSize }]}>
                 {perfil?.puntos_acumulados || 0} Krusty Points
               </Text>
@@ -527,17 +569,20 @@ export default function PantallaInicio(props: any) {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+              colors={[Colores.primario, Colores.primarioOscuro]}
               style={[
                 estilos.carritoGradient,
                 {
                   width: carritoSize,
                   height: carritoSize,
                   padding: carritoPadding,
+                  borderRadius: 30,
+                  justifyContent: 'center',
+                  alignItems: 'center',
                 }
               ]}
             >
-              <Ionicons name="cart" size={carritoIconSize} color={COLORS.negro} />
+              <Ionicons name="cart" size={carritoIconSize} color={Colores.textoOscuro} />
               {cantidadTotal() > 0 && (
                 <View style={[
                   estilos.contadorCarrito,
@@ -548,13 +593,16 @@ export default function PantallaInicio(props: any) {
                     top: contadorTop,
                     right: contadorRight,
                     borderWidth: contadorBorderWidth,
-                    borderColor: COLORS.negro,
-                    backgroundColor: COLORS.rojo,
-                    shadowColor: COLORS.negro,
+                    borderColor: Colores.textoOscuro,
+                    backgroundColor: Colores.secundario,
+                    shadowColor: Colores.textoOscuro,
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.4,
                     shadowRadius: 4,
                     elevation: 5,
+                    position: 'absolute',
+                    justifyContent: 'center',
+                    alignItems: 'center',
                   }
                 ]}>
                   <Text style={[
@@ -562,10 +610,12 @@ export default function PantallaInicio(props: any) {
                     {
                       fontSize: contadorTextSize,
                       fontWeight: '900',
-                      color: COLORS.blanco,
-                      textShadowColor: COLORS.negro,
+                      color: Colores.textoClaro,
+                      textShadowColor: Colores.textoOscuro,
                       textShadowOffset: { width: 0, height: 1 },
                       textShadowRadius: 2,
+                      textAlign: 'center',
+                      includeFontPadding: false,
                     }
                   ]}>
                     {cantidadTotal() > 99 ? '99+' : cantidadTotal()}
@@ -576,11 +626,15 @@ export default function PantallaInicio(props: any) {
           </TouchableOpacity>
         </View>
 
+        {/* ✅ OFERTAS */}
         <View style={[estilos.seccionWrapper, { marginBottom: isTablet ? 20 : isSmallPhone ? 12 : 16 }]}>
           <View style={estilos.seccionHeader}>
             <Text style={[estilos.seccionTitulo, {
               fontSize: seccionTituloSize,
               marginLeft: paddingHorizontal,
+              fontWeight: 'bold',
+              color: Colores.textoClaro,
+              flex: 1,
             }]}>
               🔥 Ofertas del Día
             </Text>
@@ -593,9 +647,29 @@ export default function PantallaInicio(props: any) {
                   marginRight: paddingHorizontal,
                 }
               ]}>
-                <View style={estilos.scrollIndicatorContent}>
-                  <Text style={estilos.scrollIndicatorTexto}>Desliza</Text>
-                  <Ionicons name="chevron-forward-circle" size={20} color={COLORS.amarillo} />
+                <View style={[
+                  estilos.scrollIndicatorContent,
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: Colores.primario + '15',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: Colores.primario + '30',
+                  }
+                ]}>
+                  <Text style={[
+                    estilos.scrollIndicatorTexto,
+                    {
+                      color: Colores.primario,
+                      fontSize: 11,
+                      fontWeight: '600',
+                    }
+                  ]}>Desliza</Text>
+                  <Ionicons name="chevron-forward-circle" size={20} color={Colores.primario} />
                 </View>
               </Animated.View>
             )}
@@ -603,21 +677,23 @@ export default function PantallaInicio(props: any) {
 
           {ofertas.length === 0 ? (
             <View style={[estilos.tarjetaOferta, {
-              backgroundColor: COLORS.grisClaro + '15',
+              backgroundColor: Colores.textoGris + '15',
               width: cardWidth,
               padding: cardPadding,
-              borderColor: COLORS.grisClaro + '20',
+              borderColor: Colores.textoGris + '20',
               minHeight: cardMinHeight,
               justifyContent: 'center',
               alignItems: 'center',
               marginLeft: paddingHorizontal,
+              borderRadius: 16,
+              borderWidth: 2,
             }]}>
-              <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize, color: COLORS.grisClaro }]}>
+              <Text style={[estilos.ofertaTitulo, { fontSize: ofertaTituloSize, color: Colores.textoGris }]}>
                 No hay ofertas
               </Text>
               <Text style={[estilos.ofertaDescuento, {
                 fontSize: ofertaDescuentoSize - 10,
-                color: COLORS.grisClaro
+                color: Colores.textoGris
               }]}>
                 Vuelve pronto 🚀
               </Text>
@@ -642,18 +718,23 @@ export default function PantallaInicio(props: any) {
 
         <View style={estilos.separador} />
 
+        {/* ✅ CATEGORÍAS */}
         <View style={estilos.seccionWrapper}>
           <Text style={[estilos.seccionTitulo, {
             fontSize: seccionTituloSize,
             marginLeft: paddingHorizontal,
             marginTop: 0,
             marginBottom: 10,
+            fontWeight: 'bold',
+            color: Colores.textoClaro,
           }]}>
             🍔 Nuestro Menú
           </Text>
           <View style={[estilos.categorias, {
             paddingHorizontal: paddingHorizontal,
-            gap: gapCategorias
+            gap: gapCategorias,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
           }]}>
             {categorias.map((cat, index) => {
               const itemWidth = (width - (paddingHorizontal * 2) - gapCategorias) / 2;
@@ -668,6 +749,9 @@ export default function PantallaInicio(props: any) {
                       padding: categoriaPadding,
                       borderRadius: categoriaBorderRadius,
                       borderColor: cat.color + '30',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                      borderWidth: 1,
                     }
                   ]}
                   onPress={() => props.navigation.navigate('Menu')}
@@ -678,7 +762,9 @@ export default function PantallaInicio(props: any) {
                   </Text>
                   <Text style={[estilos.categoriaTexto, {
                     fontSize: categoriaTextSize,
-                    color: cat.color
+                    color: cat.color,
+                    fontWeight: 'bold',
+                    textAlign: 'center',
                   }]}>
                     {cat.nombre}
                   </Text>
@@ -690,11 +776,15 @@ export default function PantallaInicio(props: any) {
 
         <View style={estilos.separador} />
 
+        {/* ✅ FAVORITOS */}
         <View style={estilos.seccionWrapper}>
           <View style={estilos.seccionHeader}>
             <Text style={[estilos.seccionTitulo, {
               fontSize: seccionTituloSize,
               marginLeft: paddingHorizontal,
+              fontWeight: 'bold',
+              color: Colores.textoClaro,
+              flex: 1,
             }]}>
               ⭐ Tus Favoritos
             </Text>
@@ -702,6 +792,9 @@ export default function PantallaInicio(props: any) {
               <Text style={[estilos.verTodos, {
                 fontSize: isTablet ? 14 : isSmallPhone ? 10 : 12,
                 marginRight: paddingHorizontal,
+                color: Colores.primario,
+                fontWeight: '600',
+                opacity: 0.7,
               }]}>
                 Ver todos →
               </Text>
@@ -714,11 +807,19 @@ export default function PantallaInicio(props: any) {
               padding: isTablet ? 24 : isSmallPhone ? 14 : 18,
               borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 14,
               minHeight: isTablet ? 120 : isSmallPhone ? 80 : 100,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: Colores.fondoOscuro + '40',
+              borderWidth: 1,
+              borderColor: Colores.textoClaro + '5',
             }]}>
-              <ActivityIndicator size={isTablet ? 'large' : 'small'} color={COLORS.amarillo} />
+              <ActivityIndicator size={isTablet ? 'large' : 'small'} color={Colores.primario} />
               <Text style={[estilos.favoritoLoadingTexto, {
                 fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
                 marginTop: isTablet ? 12 : 8,
+                color: Colores.textoGris,
+                fontWeight: '400',
+                opacity: 0.7,
               }]}>
                 Cargando tus favoritos...
               </Text>
@@ -733,9 +834,8 @@ export default function PantallaInicio(props: any) {
               contentContainerStyle={{
                 paddingHorizontal: paddingHorizontal,
                 paddingVertical: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                gap: isTablet ? 16 : isSmallPhone ? 8 : 12,
               }}
-              snapToInterval={(isTablet ? width * 0.35 : isSmallPhone ? width * 0.7 : width * 0.6) + (isTablet ? 16 : isSmallPhone ? 8 : 12)}
+              snapToInterval={(isTablet ? width * 0.33 : isSmallPhone ? width * 0.75 : width * 0.6) + (isTablet ? 16 : isSmallPhone ? 8 : 12)}
               decelerationRate="fast"
               snapToAlignment="start"
             />
@@ -745,17 +845,28 @@ export default function PantallaInicio(props: any) {
               padding: isTablet ? 32 : isSmallPhone ? 18 : 24,
               borderRadius: isTablet ? 20 : isSmallPhone ? 14 : 16,
               minHeight: isTablet ? 140 : isSmallPhone ? 90 : 110,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: Colores.fondoOscuro + '40',
+              borderWidth: 1,
+              borderColor: Colores.textoClaro + '5',
             }]}>
-              <Ionicons name="heart-outline" size={isTablet ? 56 : isSmallPhone ? 32 : 44} color={COLORS.grisClaro + '40'} />
+              <Ionicons name="heart-outline" size={isTablet ? 56 : isSmallPhone ? 32 : 44} color={Colores.textoGris + '40'} />
               <Text style={[estilos.favoritoVacioTitulo, {
                 fontSize: isTablet ? 20 : isSmallPhone ? 14 : 17,
                 marginTop: isTablet ? 12 : 8,
+                fontWeight: 'bold',
+                color: Colores.textoGris,
+                textAlign: 'center',
               }]}>
                 No tienes favoritos aún
               </Text>
               <Text style={[estilos.favoritoVacioSubtexto, {
                 fontSize: isTablet ? 15 : isSmallPhone ? 11 : 13,
                 marginTop: isTablet ? 6 : 4,
+                color: Colores.textoGris,
+                textAlign: 'center',
+                opacity: 0.6,
               }]}>
                 Los productos que más pidas aparecerán aquí 🍔
               </Text>
@@ -772,7 +883,7 @@ export default function PantallaInicio(props: any) {
 const estilos = StyleSheet.create({
   contenedor: {
     flex: 1,
-    backgroundColor: COLORS.negro,
+    backgroundColor: Colores.fondoOscuro,
   },
   fondoGradiente: {
     position: 'absolute',
@@ -791,7 +902,7 @@ const estilos = StyleSheet.create({
     paddingVertical: 6,
   },
   botonAdminTexto: {
-    color: COLORS.amarillo,
+    color: Colores.primario,
     fontWeight: '600',
   },
   encabezado: {
@@ -805,19 +916,19 @@ const estilos = StyleSheet.create({
   },
   saludo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
   },
   puntosContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
-    backgroundColor: COLORS.negro + '40',
+    backgroundColor: Colores.fondoOscuro + '40',
     borderRadius: 20,
     alignSelf: 'flex-start',
   },
   puntos: {
-    color: COLORS.amarillo,
+    color: Colores.primario,
     fontWeight: '600',
   },
   botonCarrito: {
@@ -833,10 +944,6 @@ const estilos = StyleSheet.create({
     position: 'absolute',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 0,
-    paddingTop: 0,
-    paddingLeft: 0,
-    paddingRight: 0,
   },
   contadorTexto: {
     textAlign: 'center',
@@ -853,11 +960,11 @@ const estilos = StyleSheet.create({
   },
   seccionTitulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     flex: 1,
   },
   verTodos: {
-    color: COLORS.amarillo,
+    color: Colores.primario,
     fontWeight: '600',
     opacity: 0.7,
   },
@@ -871,15 +978,15 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.amarillo + '15',
+    backgroundColor: Colores.primario + '15',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.amarillo + '30',
+    borderColor: Colores.primario + '30',
   },
   scrollIndicatorTexto: {
-    color: COLORS.amarillo,
+    color: Colores.primario,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -892,17 +999,17 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
   },
   ofertaTitulo: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     marginTop: 6,
     fontWeight: '600',
   },
   ofertaPrecio: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     marginTop: 4,
   },
   ofertaPrecioOriginal: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     textDecorationLine: 'line-through',
     marginTop: 2,
     opacity: 0.6,
@@ -913,7 +1020,7 @@ const estilos = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   botonVerOfertaTexto: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     fontWeight: '600',
   },
   categorias: {
@@ -935,127 +1042,117 @@ const estilos = StyleSheet.create({
   favoritoLoading: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '40',
+    backgroundColor: Colores.fondoOscuro + '40',
     borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
+    borderColor: Colores.textoClaro + '5',
   },
   favoritoLoadingTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     fontWeight: '400',
     opacity: 0.7,
   },
   favoritoVacio: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '40',
+    backgroundColor: Colores.fondoOscuro + '40',
     borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
+    borderColor: Colores.textoClaro + '5',
   },
   favoritoVacioTitulo: {
     fontWeight: 'bold',
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     textAlign: 'center',
   },
   favoritoVacioSubtexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     textAlign: 'center',
     opacity: 0.6,
   },
   tarjetaFavorito: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.negro + '60',
+    backgroundColor: Colores.fondoOscuro + '60',
     borderWidth: 1,
-    borderColor: COLORS.amarillo + '15',
+    borderColor: Colores.primario + '15',
   },
   favoritoImagen: {
-    marginRight: 10,
     borderWidth: 2,
-    borderColor: COLORS.amarillo + '30',
+    borderColor: Colores.primario + '30',
   },
   favoritoEmojiContainer: {
-    backgroundColor: COLORS.amarillo + '15',
+    backgroundColor: Colores.primario + '15',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
     borderWidth: 2,
-    borderColor: COLORS.amarillo + '30',
+    borderColor: Colores.primario + '30',
   },
   emojiGrande: {
     marginRight: 0,
   },
   favoritoInfo: {
-    flex: 1,
-    marginRight: 8,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   favoritoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
   favoritoContadorBadge: {
-    backgroundColor: COLORS.amarillo + '20',
+    backgroundColor: Colores.primario + '20',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.amarillo + '30',
+    borderColor: Colores.primario + '30',
   },
   favoritoContadorTexto: {
-    color: COLORS.amarillo,
+    color: Colores.primario,
     fontSize: 9,
     fontWeight: 'bold',
   },
   favoritoTitulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
   },
   favoritoPrecio: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
+    color: Colores.primario,
     marginTop: 2,
-  },
-  favoritoSubtexto: {
-    color: COLORS.grisClaro,
-    textAlign: 'center',
-    marginTop: 4,
-    opacity: 0.6,
   },
   botonAgregar: {
     borderRadius: 20,
     overflow: 'hidden',
-    flexShrink: 0,
+    width: '100%',
   },
   botonAgregarGradient: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
   },
   botonAgregarTexto: {
-    color: COLORS.negro,
+    color: Colores.textoOscuro,
     fontWeight: 'bold',
   },
   ofertaImagen: {
     width: '100%',
-    backgroundColor: COLORS.negro + '20',
+    backgroundColor: Colores.fondoOscuro + '20',
   },
   ofertaSinImagen: {
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '30',
+    backgroundColor: Colores.fondoOscuro + '30',
     borderWidth: 1,
-    borderColor: COLORS.grisClaro + '20',
+    borderColor: Colores.textoGris + '20',
     borderStyle: 'dashed',
   },
   ofertaSinImagenTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     opacity: 0.5,
     marginTop: 6,
   },
-  // ✅ NUEVO: Badge de envío gratis
   badgeEnvioGratis: {
     position: 'absolute',
     top: 8,
@@ -1065,7 +1162,7 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
   },
   badgeEnvioGratisTexto: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     fontWeight: 'bold',
   },
 });

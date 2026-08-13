@@ -398,7 +398,7 @@ export default function PantallaSeguimiento(props: any) {
           <View style={{ width: isTablet ? 28 : 24 }} />
         </Animated.View>
 
-        {/* ✅ MAPA */}
+        {/* ✅ MAPA CON MOTO DEL REPARTIDOR */}
         <Animated.View style={[
           estilos.mapaContenedor,
           {
@@ -421,18 +421,27 @@ export default function PantallaSeguimiento(props: any) {
             }}
             showsUserLocation={false}
           >
+            {/* 📍 Krusty Burger */}
             <Marker
               coordinate={UBICACION_KRUSTY}
               title="Krusty Burger"
               description="📍 Local"
               pinColor="#FF5722"
             />
-            <Marker
-              coordinate={posRepartidor}
-              title="Repartidor"
-              description="🚲 En camino"
-              pinColor="#2196F3"
-            />
+
+            {/* 🛵 REPARTIDOR CON MOTO */}
+            {/* 🛵 REPARTIDOR CON MOTO - VERSIÓN MEJORADA */}
+            <Marker coordinate={posRepartidor}>
+              <View style={estilos.motoWrapper}>
+                <View style={estilos.motoCircle}>
+                  <Ionicons name="bicycle" size={isTablet ? 30 : 24} color="#000000" />
+                </View>
+                <View style={estilos.motoPulseOuter} />
+                <View style={estilos.motoPulseInner} />
+              </View>
+            </Marker>
+
+            {/* 📍 DESTINO CLIENTE */}
             <Marker
               coordinate={destinoCliente}
               title="Destino"
@@ -440,6 +449,7 @@ export default function PantallaSeguimiento(props: any) {
               pinColor={COLORS.amarillo}
             />
 
+            {/* 🗺️ RUTA */}
             {puntosValidos && (
               <Polyline
                 coordinates={coordenadasRuta}
@@ -591,7 +601,7 @@ export default function PantallaSeguimiento(props: any) {
           })}
         </Animated.View>
 
-        {/* ✅ INFO PEDIDO - ACTUALIZADO CON ENVÍO */}
+        {/* ✅ INFO PEDIDO */}
         <Animated.View style={[
           estilos.infoPedido,
           {
@@ -698,7 +708,6 @@ export default function PantallaSeguimiento(props: any) {
 }
 
 const estilos = StyleSheet.create({
-  // ... (estilos iguales a los que ya tenías)
   contenedor: {
     flex: 1,
     backgroundColor: COLORS.negro,
@@ -932,5 +941,79 @@ const estilos = StyleSheet.create({
     color: COLORS.negro,
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  // ✅ ESTILOS PARA EL MARCADOR DE MOTO
+  motoMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  motoGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  motoGlow: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(245, 197, 24, 0.15)',
+    zIndex: -1,
+  },
+  motoPulse: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
+    zIndex: -2,
+  },
+  // ✅ ESTILOS PARA EL MARCADOR DE MOTO (VERSIÓN MEJORADA)
+  motoWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  motoCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F5C518',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+    zIndex: 2,
+  },
+  motoPulseOuter: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(245, 197, 24, 0.15)',
+    zIndex: 1,
+  },
+  motoPulseInner: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
+    zIndex: 0,
   },
 });

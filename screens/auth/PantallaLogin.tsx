@@ -8,27 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-
-// ============================================================
-// 🎨 PALETA DE COLORES (consistente con las demás pantallas)
-// ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-};
+import { notificacionService } from '../../services/notificacionService';
+import { supabase } from '../../lib/supabase';
+import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
-const logoImage = require('../../assets/logo-krusty.jpeg');
+const logoImage = require('../../assets/logo-krusty.png');
 
 export default function PantallaLogin(props: any) {
   const [correo, setCorreo] = useState('');
@@ -38,7 +23,6 @@ export default function PantallaLogin(props: any) {
   const { iniciarSesion } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
@@ -64,21 +48,70 @@ export default function PantallaLogin(props: any) {
     ]).start();
   }, []);
 
+  const registrarNotificaciones = async (usuarioId: string) => {
+    try {
+      const permisos = await notificacionService.solicitarPermisos();
+      if (permisos) {
+        const registrado = await notificacionService.registrarToken(usuarioId);
+        if (registrado) {
+          console.log('✅ Notificaciones configuradas correctamente');
+        } else {
+          console.log('⚠️ No se pudo registrar el token FCM');
+        }
+      } else {
+        console.log('⚠️ Permisos de notificación no concedidos');
+      }
+    } catch (error) {
+      console.error('❌ Error configurando notificaciones:', error);
+    }
+  };
+
   const manejarLogin = async () => {
     if (!correo || !contrasena) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
     }
+
     setCargando(true);
-    const error = await iniciarSesion(correo, contrasena);
-    setCargando(false);
-    if (error) Alert.alert('Error', error);
+
+    try {
+      const error = await iniciarSesion(correo, contrasena);
+
+      if (error) {
+        Alert.alert('Error', error);
+        setCargando(false);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session?.user?.id) {
+        await registrarNotificaciones(session.user.id);
+      }
+
+    } catch (error) {
+      console.error('Error en login:', error);
+      Alert.alert('Error', 'Ocurrió un error inesperado');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const manejarInvitado = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await registrarNotificaciones(session.user.id);
+      }
+    } catch (error) {
+      console.error('Error en invitado:', error);
+    }
+    props.navigation.navigate('Principal');
   };
 
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
-  // ✅ Tamaños dinámicos
   const logoSize = isTablet ? 120 : isSmallPhone ? 80 : 100;
   const tituloSize = isTablet ? 40 : isSmallPhone ? 28 : 34;
   const subtituloSize = isTablet ? 18 : isSmallPhone ? 13 : 15;
@@ -89,8 +122,9 @@ export default function PantallaLogin(props: any) {
   const paddingTop = insets.top + (isTablet ? 40 : 20);
 
   return (
+    // 🦈 GRADIENTE GORGORY: Azul marino → Gris
     <LinearGradient
-      colors={[COLORS.verde, COLORS.negro]}
+      colors={[Colores.gorgoryAzul, Colores.gorgoryGris]}
       style={estilos.contenedor}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -111,7 +145,6 @@ export default function PantallaLogin(props: any) {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* ✅ LOGO Y TÍTULO CON ANIMACIÓN */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -135,9 +168,15 @@ export default function PantallaLogin(props: any) {
                 resizeMode="contain"
               />
             </View>
+            {/* 🦈 Título en Blanco Gorgory */}
+            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+              Krusty Burger
+            </Text>
+            <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
+              "El Jefe tiene la última palabra" 🦈
+            </Text>
           </Animated.View>
 
-          {/* ✅ FORMULARIO CON ANIMACIÓN */}
           <Animated.View
             style={[
               estilos.formulario,
@@ -147,54 +186,37 @@ export default function PantallaLogin(props: any) {
               }
             ]}
           >
-            {/* Email */}
             <Text style={[estilos.label, { fontSize: labelSize }]}>
               Correo electrónico
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="mail-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="mail-outline" size={22} color={Colores.gorgoryGris} style={estilos.inputIcon} />
               <TextInput
-                style={[
-                  estilos.input,
-                  {
-                    fontSize: inputSize,
-                    flex: 1, // ✅ Asegura que ocupe todo el espacio disponible
-                    paddingRight: 12, // ✅ Más espacio a la derecha
-                  }
-                ]}
+                style={[estilos.input, { fontSize: inputSize, flex: 1, paddingRight: 12 }]}
                 value={correo}
                 onChangeText={setCorreo}
                 placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={COLORS.grisClaro + '60'}
+                placeholderTextColor={Colores.gorgoryGris + '60'}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                selectionColor={COLORS.amarillo}
-                numberOfLines={1} // ✅ Mantiene el texto en una línea
-
+                selectionColor={Colores.gorgoryRojo}
+                numberOfLines={1}
               />
             </View>
 
-            {/* Contraseña */}
             <Text style={[estilos.label, { fontSize: labelSize, marginTop: 20 }]}>
               Contraseña
             </Text>
             <View style={estilos.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={22} color={Colores.gorgoryGris} style={estilos.inputIcon} />
               <TextInput
-                style={[
-                  estilos.input,
-                  {
-                    fontSize: inputSize,
-                    flex: 1,
-                    paddingRight: 12,
-                  }
-                ]}
+                style={[estilos.input, { fontSize: inputSize, flex: 1, paddingRight: 12 }]}
                 value={contrasena}
                 onChangeText={setContrasena}
                 placeholder="Tu contraseña"
-                placeholderTextColor={COLORS.grisClaro + '60'}
+                placeholderTextColor={Colores.gorgoryGris + '60'}
                 secureTextEntry={!mostrarContrasena}
-                selectionColor={COLORS.amarillo}
+                selectionColor={Colores.gorgoryRojo}
                 numberOfLines={1}
               />
               <TouchableOpacity
@@ -204,12 +226,12 @@ export default function PantallaLogin(props: any) {
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                   size={22}
-                  color={COLORS.grisClaro}
+                  color={Colores.gorgoryGris}
                 />
               </TouchableOpacity>
             </View>
 
-            {/* ✅ BOTÓN DE LOGIN */}
+            {/* 🦈 Botón Rojo Gorgory */}
             <TouchableOpacity
               style={estilos.boton}
               onPress={manejarLogin}
@@ -217,16 +239,16 @@ export default function PantallaLogin(props: any) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                colors={[Colores.gorgoryRojo, Colores.gorgoryAzul]}
                 style={estilos.botonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {cargando ? (
-                  <ActivityIndicator color={COLORS.negro} size="small" />
+                  <ActivityIndicator color={Colores.gorgoryBlanco} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="log-in" size={buttonTextSize + 4} color={COLORS.negro} />
+                    <Ionicons name="log-in" size={buttonTextSize + 4} color={Colores.gorgoryBlanco} />
                     <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
                       Iniciar Sesión
                     </Text>
@@ -235,7 +257,6 @@ export default function PantallaLogin(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* ✅ ENLACES */}
             <View style={estilos.enlacesContainer}>
               <TouchableOpacity
                 onPress={() => props.navigation.navigate('Registro')}
@@ -247,7 +268,7 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => Alert.alert('Recuperar contraseña', 'Función en desarrollo')}
+                onPress={() => props.navigation.navigate('ResetPassword')}
                 activeOpacity={0.6}
                 style={estilos.olvidoContainer}
               >
@@ -257,20 +278,18 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
             </View>
 
-            {/* ✅ SEPARADOR */}
             <View style={estilos.separadorContainer}>
               <View style={estilos.separador} />
               <Text style={estilos.separadorTexto}>o</Text>
               <View style={estilos.separador} />
             </View>
 
-            {/* ✅ BOTÓN DE INVITADO */}
             <TouchableOpacity
               style={estilos.botonInvitado}
-              onPress={() => props.navigation.navigate('Principal')}
+              onPress={manejarInvitado}
               activeOpacity={0.6}
             >
-              <Ionicons name="person-outline" size={20} color={COLORS.grisClaro} />
+              <Ionicons name="person-outline" size={20} color={Colores.gorgoryGris} />
               <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
                 Continuar como invitado
               </Text>
@@ -293,14 +312,13 @@ const estilos = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
   },
-  // ✅ LOGO
   logoContainer: {
     alignItems: 'center',
     marginBottom: 40,
   },
   logoWrapper: {
     marginBottom: 16,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.gorgoryRojo,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -312,60 +330,57 @@ const estilos = StyleSheet.create({
   },
   titulo: {
     fontWeight: '900',
-    color: COLORS.blanco,
+    color: Colores.gorgoryBlanco,
     letterSpacing: 3,
-    textShadowColor: COLORS.negro,
+    textShadowColor: Colores.gorgoryOscuro,
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   subtitulo: {
-    color: COLORS.grisClaro,
-    marginTop: 4,
+    color: Colores.gorgoryBlanco + '80',
+    marginTop: 5,
     fontWeight: '300',
     letterSpacing: 1,
+    fontStyle: 'italic',
   },
-  // ✅ FORMULARIO
   formulario: {
     width: '100%',
   },
   label: {
     fontWeight: '600',
-    color: COLORS.blanco,
-    marginBottom: 6,
+    color: Colores.gorgoryBlanco,
+    marginBottom: 5,
     letterSpacing: 0.5,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '50',
+    backgroundColor: Colores.gorgoryBlanco,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
+    borderColor: Colores.gorgoryGris + '30',
     paddingHorizontal: 14,
     height: 56,
   },
   inputIcon: {
     marginRight: 12,
-    flexShrink: 0, // ✅ Evita que el ícono se encoja
+    flexShrink: 0,
   },
   input: {
-    color: COLORS.blanco,
+    color: Colores.gorgoryAzul,
     paddingVertical: 12,
     paddingTop: 14,
-    // ✅ flex: 1 se aplica dinámicamente
-    // ✅ paddingRight se aplica dinámicamente
   },
   eyeButton: {
     padding: 4,
-    flexShrink: 0, // ✅ Evita que el botón del ojo se encoja
+    flexShrink: 0,
   },
-  // ✅ BOTÓN LOGIN
   boton: {
     marginTop: 28,
     borderRadius: 14,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.gorgoryRojo,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
@@ -380,32 +395,30 @@ const estilos = StyleSheet.create({
   },
   textoBoton: {
     fontWeight: '800',
-    color: COLORS.negro,
+    color: Colores.gorgoryBlanco,
     letterSpacing: 1.5,
   },
-  // ✅ ENLACES
   enlacesContainer: {
     marginTop: 20,
     alignItems: 'center',
     gap: 12,
   },
   enlace: {
-    color: COLORS.grisClaro,
+    color: Colores.gorgoryBlanco + '70',
     fontWeight: '500',
   },
   enlaceDestacado: {
-    color: COLORS.amarillo,
+    color: Colores.gorgoryRojo,
     fontWeight: '700',
   },
   olvidoContainer: {
     paddingVertical: 4,
   },
   olvidoTexto: {
-    color: COLORS.grisClaro + '80',
+    color: Colores.gorgoryBlanco + '50',
     textDecorationLine: 'underline',
     fontWeight: '400',
   },
-  // ✅ SEPARADOR
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -415,15 +428,14 @@ const estilos = StyleSheet.create({
   separador: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.blanco + '15',
+    backgroundColor: Colores.gorgoryBlanco + '20',
   },
   separadorTexto: {
-    color: COLORS.grisClaro + '60',
+    color: Colores.gorgoryBlanco + '40',
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
   },
-  // ✅ BOTÓN INVITADO
   botonInvitado: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -432,11 +444,11 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-    backgroundColor: COLORS.negro + '30',
+    borderColor: Colores.gorgoryBlanco + '20',
+    backgroundColor: Colores.gorgoryBlanco + '15',
   },
   botonInvitadoTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.gorgoryBlanco + '70',
     fontWeight: '500',
     letterSpacing: 0.5,
   },

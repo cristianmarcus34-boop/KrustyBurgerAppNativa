@@ -3,14 +3,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, useWindowDimensions, Animated, RefreshControl,
-  Dimensions, TextInput, Alert, ActivityIndicator
+  Dimensions, TextInput, Alert, ActivityIndicator, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Colores } from '../../lib/colores';
+import { notificacionService } from '../../services/notificacionService';
 
 // ============================================================
 // 🎨 PALETA DE COLORES
@@ -39,6 +41,9 @@ export default function PantallaPerfil(props: any) {
   const [refrescando, setRefrescando] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [cargandoActualizacion, setCargandoActualizacion] = useState(false);
+  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
+  const [imagenPerfil, setImagenPerfil] = useState<string | null>(null);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
 
   // ✅ Estados del formulario de edición
   const [telefono, setTelefono] = useState('');
@@ -59,10 +64,25 @@ export default function PantallaPerfil(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
+  // ✅ CONTAR NOTIFICACIONES NO LEÍDAS CADA VEZ QUE LA PANTALLA OBTIENE FOCO
+  useFocusEffect(
+    React.useCallback(() => {
+      const contarNotificaciones = async () => {
+        if (!perfil?.id) return;
+        const data = await notificacionService.obtenerNotificaciones(perfil.id, true);
+        setNotificacionesNoLeidas(data.length);
+      };
+      contarNotificaciones();
+    }, [perfil?.id])
+  );
+
   useEffect(() => {
     if (perfil?.id) {
       cargarTotalPedidos();
       cargarDatosPerfil();
+      if (perfil.avatar_url) {
+        setImagenPerfil(perfil.avatar_url);
+      }
     }
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -137,7 +157,6 @@ export default function PantallaPerfil(props: any) {
         return;
       }
 
-      // ✅ Actualizar el store
       await actualizarPerfil({ ...perfil, ...datosActualizados });
 
       Alert.alert('✅ Éxito', 'Perfil actualizado correctamente');
@@ -147,6 +166,159 @@ export default function PantallaPerfil(props: any) {
     } finally {
       setCargandoActualizacion(false);
     }
+  };
+
+  // ✅ SELECCIONAR IMAGEN DE PERFIL
+  const seleccionarImagen = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permiso denegado', 'Necesitamos acceso a tus fotos para cambiar la foto de perfil');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        setImagenPerfil(uri);
+        await subirImagenPerfil(uri);
+      }
+    } catch (error) {
+      console.error('Error seleccionando imagen:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la imagen');
+    }
+  };
+
+  const tomarFoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara para tomar una foto');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        setImagenPerfil(uri);
+        await subirImagenPerfil(uri);
+      }
+    } catch (error) {
+      console.error('Error tomando foto:', error);
+      Alert.alert('Error', 'No se pudo tomar la foto');
+    }
+  };
+
+  const subirImagenPerfil = async (uri: string) => {
+    if (!perfil?.id) {
+      console.log('❌ No hay usuario logueado');
+      Alert.alert('Error', 'Debes iniciar sesión para cambiar la foto');
+      return;
+    }
+
+    setSubiendoImagen(true);
+    console.log('📷 Iniciando subida de imagen para usuario:', perfil.id);
+
+    try {
+      // 1. Obtener el blob de la imagen
+      console.log('📷 Obteniendo blob de la imagen...');
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      console.log('📷 Blob obtenido, tamaño:', blob.size, 'bytes');
+
+      // 2. Generar nombre único
+      const fileExt = uri.split('.').pop() || 'jpg';
+      const fileName = `${perfil.id}.${fileExt}`; // 👈 SIN timestamp
+      console.log('📷 Nombre de archivo:', fileName);
+
+      // 3. USAR EL ENDPOINT DE SUBIDA CON LA RUTA CORRECTA
+      console.log('📷 Subiendo a Supabase Storage...');
+
+      // ✅ PRIMERO: Verificar si ya existe una imagen y eliminarla (opcional)
+      // const { data: listData } = await supabase.storage
+      //   .from('perfiles')
+      //   .list('', { limit: 10 });
+
+      // // Si existe una imagen con el mismo nombre, eliminarla
+      // if (listData?.some(f => f.name === fileName)) {
+      //   await supabase.storage.from('perfiles').remove([fileName]);
+      // }
+
+      // ✅ SEGUNDO: Subir la nueva imagen
+      const { data, error: uploadError } = await supabase.storage
+        .from('perfiles')
+        .upload(fileName, blob, {
+          contentType: `image/${fileExt}`,
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('❌ Error en upload:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('✅ Imagen subida exitosamente:', data);
+
+      // 4. Obtener URL pública
+      console.log('📷 Obteniendo URL pública...');
+      const { data: urlData } = supabase.storage
+        .from('perfiles')
+        .getPublicUrl(fileName);
+
+      const publicUrl = urlData.publicUrl;
+      console.log('📷 URL pública:', publicUrl);
+
+      // 5. Guardar URL en perfil
+      console.log('📷 Guardando URL en perfil...');
+      const { error: updateError } = await supabase
+        .from('perfiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', perfil.id);
+
+      if (updateError) {
+        console.error('❌ Error actualizando perfil:', updateError);
+        throw updateError;
+      }
+
+      // 6. Actualizar el store
+      await actualizarPerfil({ ...perfil, avatar_url: publicUrl });
+      setImagenPerfil(publicUrl);
+
+      console.log('✅ Foto de perfil actualizada correctamente');
+      Alert.alert('✅ Éxito', 'Foto de perfil actualizada correctamente');
+    } catch (error: any) {
+      console.error('❌ Error subiendo imagen:', error);
+      Alert.alert('Error', `No se pudo subir la imagen: ${error.message || 'Error desconocido'}`);
+    } finally {
+      setSubiendoImagen(false);
+    }
+  };
+
+  const mostrarOpcionesFoto = () => {
+    Alert.alert(
+      'Cambiar foto de perfil',
+      'Selecciona una opción',
+      [
+        { text: '📷 Tomar foto', onPress: tomarFoto },
+        { text: '🖼️ Elegir de galería', onPress: seleccionarImagen },
+        { text: 'Cancelar', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
   };
 
   const confirmarCerrarSesion = async () => {
@@ -162,7 +334,6 @@ export default function PantallaPerfil(props: any) {
     props.navigation.navigate('Login');
   };
 
-  // ✅ Obtener dirección completa formateada
   const obtenerDireccionCompleta = () => {
     const partes = [];
     if (direccionCalle) partes.push(direccionCalle);
@@ -198,7 +369,6 @@ export default function PantallaPerfil(props: any) {
   const labelSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
   const inputSize = isTablet ? 16 : isSmallPhone ? 14 : 15;
 
-  // ✅ Opciones del menú
   const menuItems = [
     {
       id: 'pedidos',
@@ -273,7 +443,7 @@ export default function PantallaPerfil(props: any) {
           />
         }
       >
-        {/* ✅ ENCABEZADO CON AVATAR */}
+        {/* ✅ ENCABEZADO CON AVATAR - CON FOTO DE PERFIL */}
         <Animated.View style={[
           estilos.encabezado,
           {
@@ -284,20 +454,49 @@ export default function PantallaPerfil(props: any) {
             transform: [{ translateY: slideUpAnim }],
           }
         ]}>
-          <View style={[
-            estilos.avatar,
-            {
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius: avatarSize / 2,
-              backgroundColor: COLORS.amarillo + '20',
-              borderColor: COLORS.amarillo + '40',
-            }
-          ]}>
-            <Text style={[estilos.avatarEmoji, { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 }]}>
-              {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
-            </Text>
-          </View>
+          <TouchableOpacity
+            onPress={perfil?.id ? mostrarOpcionesFoto : undefined}
+            activeOpacity={0.8}
+            disabled={!perfil?.id}
+          >
+            <View style={[
+              estilos.avatarContainer,
+              {
+                width: avatarSize,
+                height: avatarSize,
+                borderRadius: avatarSize / 2,
+                backgroundColor: COLORS.amarillo + '20',
+                borderColor: COLORS.amarillo + '40',
+              }
+            ]}>
+              {imagenPerfil ? (
+                <Image
+                  source={{ uri: imagenPerfil }}
+                  style={{
+                    width: avatarSize,
+                    height: avatarSize,
+                    borderRadius: avatarSize / 2,
+                  }}
+                />
+              ) : (
+                <Text style={[estilos.avatarEmoji, { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 }]}>
+                  {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
+                </Text>
+              )}
+              {perfil?.id && (
+                <View style={estilos.camaraIcon}>
+                  <Ionicons name="camera" size={isTablet ? 18 : 14} color={COLORS.blanco} />
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {subiendoImagen && (
+            <View style={estilos.subiendoImagen}>
+              <ActivityIndicator size="small" color={COLORS.amarillo} />
+              <Text style={estilos.subiendoImagenTexto}>Subiendo imagen...</Text>
+            </View>
+          )}
 
           <Text style={[estilos.nombre, { fontSize: nombreSize }]}>
             {perfil?.nombre_cliente || 'Invitado'}
@@ -340,7 +539,6 @@ export default function PantallaPerfil(props: any) {
                 </Text>
               </View>
 
-              {/* ✅ ESTADÍSTICAS */}
               <View style={estilos.stats}>
                 <View style={estilos.statItem}>
                   <Text style={[estilos.statValor, { fontSize: statValorSize }]}>{totalPedidos}</Text>
@@ -386,7 +584,6 @@ export default function PantallaPerfil(props: any) {
               transform: [{ translateY: slideUpAnim }],
             }
           ]}>
-            {/* ✅ BOTÓN DE EDICIÓN */}
             <TouchableOpacity
               style={[
                 estilos.botonEditar,
@@ -416,7 +613,6 @@ export default function PantallaPerfil(props: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ FORMULARIO DE EDICIÓN O VISTA */}
             <View style={[
               estilos.cardInfo,
               {
@@ -574,7 +770,6 @@ export default function PantallaPerfil(props: any) {
                 )}
               </View>
 
-              {/* ✅ BOTÓN DE GUARDAR (solo en modo edición) */}
               {modoEdicion && (
                 <TouchableOpacity
                   style={[
@@ -616,7 +811,6 @@ export default function PantallaPerfil(props: any) {
             marginTop: isTablet ? 8 : 4,
           }
         ]}>
-          {/* ✅ BOTÓN DE LOGIN PARA INVITADOS */}
           {!perfil?.id && (
             <TouchableOpacity
               style={[estilos.menuItem, estilos.menuLogin, {
@@ -634,6 +828,7 @@ export default function PantallaPerfil(props: any) {
                 fontWeight: 'bold',
                 fontSize: menuTextSize,
                 marginLeft: 12,
+                flex: 1,
               }]}>
                 Iniciar Sesión
               </Text>
@@ -641,7 +836,37 @@ export default function PantallaPerfil(props: any) {
             </TouchableOpacity>
           )}
 
-          {/* ✅ ITEMS DEL MENÚ */}
+          {perfil?.id && (
+            <TouchableOpacity
+              style={[estilos.menuItem, {
+                borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                backgroundColor: COLORS.negro + '40',
+                borderColor: COLORS.blanco + '5',
+                marginBottom: 8,
+              }]}
+              onPress={() => props.navigation.navigate('NotificacionesUsuario')}
+              activeOpacity={0.7}
+            >
+              <View style={estilos.menuItemLeft}>
+                <Ionicons name="notifications-outline" size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={COLORS.blanco} />
+                <Text style={[estilos.menuTexto, { fontSize: menuTextSize, marginLeft: 12 }]}>
+                  Notificaciones
+                </Text>
+              </View>
+              <View style={estilos.menuItemRight}>
+                {notificacionesNoLeidas > 0 && (
+                  <View style={estilos.badgeNotificaciones}>
+                    <Text style={[estilos.badgeNotificacionesTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
+                      {notificacionesNoLeidas > 99 ? '99+' : notificacionesNoLeidas}
+                    </Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-forward" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={COLORS.grisClaro} />
+              </View>
+            </TouchableOpacity>
+          )}
+
           {menuItems.map((item, index) => {
             if (!item.show) return null;
             return (
@@ -652,6 +877,7 @@ export default function PantallaPerfil(props: any) {
                   padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
                   backgroundColor: COLORS.negro + '40',
                   borderColor: COLORS.blanco + '5',
+                  marginBottom: 8,
                 }]}
                 onPress={() => props.navigation.navigate(item.navigate)}
                 activeOpacity={0.7}
@@ -677,13 +903,12 @@ export default function PantallaPerfil(props: any) {
             );
           })}
 
-          {/* ✅ BOTÓN DE CERRAR SESIÓN */}
           {perfil?.id && (
             <TouchableOpacity
               style={[estilos.menuItem, estilos.menuCerrar, {
                 borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
                 padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                marginTop: 16,
+                marginTop: 8,
                 backgroundColor: COLORS.rojo + '10',
                 borderColor: COLORS.rojo + '20',
               }]}
@@ -781,24 +1006,50 @@ const estilos = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  // ✅ ENCABEZADO
   encabezado: {
     alignItems: 'center',
   },
-  avatar: {
+  avatarContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
+    borderColor: COLORS.amarillo + '40',
     marginBottom: 12,
     shadowColor: COLORS.amarillo,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
+    position: 'relative',
+    overflow: 'hidden',
   },
   avatarEmoji: {
     fontWeight: 'bold',
     color: COLORS.amarillo,
+  },
+  camaraIcon: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.amarillo,
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: COLORS.negro,
+  },
+  subiendoImagen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    backgroundColor: COLORS.negro + '60',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  subiendoImagenTexto: {
+    color: COLORS.amarillo,
+    fontSize: 12,
   },
   nombre: {
     fontWeight: 'bold',
@@ -888,7 +1139,6 @@ const estilos = StyleSheet.create({
     marginTop: 4,
     opacity: 0.6,
   },
-  // ✅ SECCIÓN DE INFORMACIÓN
   seccionInfo: {
     marginBottom: 8,
   },
@@ -948,7 +1198,6 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.negro,
   },
-  // ✅ MENÚ
   menu: {
     marginTop: 8,
   },
@@ -957,6 +1206,16 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     marginBottom: 8,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   menuTexto: {
     color: COLORS.blanco,
@@ -972,7 +1231,19 @@ const estilos = StyleSheet.create({
   menuCerrar: {
     borderWidth: 1,
   },
-  // ✅ MODAL
+  badgeNotificaciones: {
+    backgroundColor: COLORS.rojo,
+    borderRadius: 12,
+    minWidth: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeNotificacionesTexto: {
+    color: COLORS.blanco,
+    fontWeight: 'bold',
+  },
   modalFondo: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.85)',

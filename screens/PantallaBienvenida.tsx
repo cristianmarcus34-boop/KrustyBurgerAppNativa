@@ -1,46 +1,17 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Animated, Dimensions, Image, Linking } from 'react-native'; // ✅ IMPORTAR Linking
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Animated, Dimensions, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-
-// ============================================================
-// 🎨 PALETA DE COLORES - MODIFICAR AQUÍ LOS COLORES
-// ============================================================
-const COLORS = {
-    // 🟡 AMARILLOS (Krusty Burger)
-    amarillo: '#F5C518',        // Amarillo principal
-    amarilloClaro: '#FFE066',   // Amarillo más claro
-    amarilloOscuro: '#D4A800',  // Amarillo más oscuro
-
-    // 🔴 ROJOS (Acentos)
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-
-    // 🟢 VERDES - MODIFICAR AQUÍ PARA CAMBIAR EL FONDO
-    verde: '#43A047',           // ✅ NUEVO: Verde más brillante y clarito (antes era #2E7D32)
-    verdeClaro: '#66BB6A',      // Verde claro para detalles
-
-    // ⚪ BLANCOS Y GRISES
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
-
-    // ✨ EFECTOS ESPECIALES
-    neon: '#FF6B00',
-    glow: '#F5C51840',          // Resplandor amarillo (40% opacidad)
-};
+import { Colores } from '../lib/colores';
 
 const { width, height } = Dimensions.get('window');
-const logoImage = require('../assets/logo-krusty.jpeg');
+const logoImage = require('../assets/logo-krusty.png');
 
 export default function PantallaBienvenida({ navigation }: any) {
     const { width: winWidth, height: winHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
 
-    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.9)).current;
     const translateY = useRef(new Animated.Value(60)).current;
@@ -48,7 +19,6 @@ export default function PantallaBienvenida({ navigation }: any) {
     const particulaAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Animación principal
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 1,
@@ -68,7 +38,6 @@ export default function PantallaBienvenida({ navigation }: any) {
             }),
         ]).start();
 
-        // Animación de resplandor
         Animated.loop(
             Animated.sequence([
                 Animated.timing(glowAnim, {
@@ -84,7 +53,6 @@ export default function PantallaBienvenida({ navigation }: any) {
             ])
         ).start();
 
-        // Animación de partículas
         Animated.loop(
             Animated.sequence([
                 Animated.timing(particulaAnim, {
@@ -104,7 +72,6 @@ export default function PantallaBienvenida({ navigation }: any) {
     const isTablet = winWidth >= 768;
     const isSmallPhone = winWidth < 375;
 
-    // ✅ Tamaños dinámicos
     const logoSize = isTablet ? 200 : isSmallPhone ? 140 : 170;
     const buttonTextSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
     const buttonPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
@@ -125,7 +92,6 @@ export default function PantallaBienvenida({ navigation }: any) {
         outputRange: [-50, 50],
     });
 
-    // ✅ FUNCIÓN PARA ABRIR EL NAVEGADOR
     const abrirWebAgencia = async () => {
         const url = 'https://agencia-powa.vercel.app';
         try {
@@ -141,9 +107,9 @@ export default function PantallaBienvenida({ navigation }: any) {
     };
 
     return (
-
+        // 🤡 GRADIENTE KRUSTY: Rojo → Amarillo
         <LinearGradient
-            colors={[COLORS.verde, COLORS.negro]}  // ← MODIFICAR AQUÍ: Cambia COLORS.verde por otro color
+            colors={Colores.gradientKrusty}
             style={estilos.contenedor}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -160,7 +126,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                     }
                 ]}
             >
-                <Ionicons name="star" size={24} color={COLORS.amarillo + '20'} />
+                <Ionicons name="star" size={24} color={Colores.textoClaro + '20'} />
             </Animated.View>
             <Animated.View
                 style={[
@@ -173,7 +139,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                     }
                 ]}
             >
-                <Ionicons name="restaurant" size={20} color={COLORS.amarillo + '15'} />
+                <Ionicons name="restaurant" size={20} color={Colores.textoClaro + '15'} />
             </Animated.View>
             <Animated.View
                 style={[
@@ -186,12 +152,12 @@ export default function PantallaBienvenida({ navigation }: any) {
                     }
                 ]}
             >
-                <Ionicons name="bicycle" size={18} color={COLORS.amarillo + '15'} />
+                <Ionicons name="bicycle" size={18} color={Colores.textoClaro + '15'} />
             </Animated.View>
 
             {/* ✅ SELECTOR DE IDIOMA */}
             <TouchableOpacity style={estilos.idiomaSelector}>
-                <Ionicons name="language" size={20} color={COLORS.grisClaro} />
+                <Ionicons name="language" size={20} color={Colores.textoClaro} />
                 <Text style={estilos.idiomaTexto}>ES</Text>
             </TouchableOpacity>
 
@@ -256,10 +222,10 @@ export default function PantallaBienvenida({ navigation }: any) {
                             >
                                 <View style={estilos.featureIconWrapper}>
                                     <LinearGradient
-                                        colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                        colors={[Colores.primario, Colores.primarioOscuro]}
                                         style={estilos.featureIconGradient}
                                     >
-                                        <Ionicons name={item.icon as any} size={featureIconSize} color={COLORS.negro} />
+                                        <Ionicons name={item.icon as any} size={featureIconSize} color={Colores.textoOscuro} />
                                     </LinearGradient>
                                 </View>
                                 <Text style={[estilos.featureTexto, { fontSize: isTablet ? 16 : 14 }]}>
@@ -282,6 +248,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                         }
                     ]}
                 >
+                    {/* 🤡 Botón Iniciar Sesión - Rojo Krusty */}
                     <TouchableOpacity
                         style={[
                             estilos.botonIngresar,
@@ -294,7 +261,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                            colors={[Colores.secundario, Colores.secundarioOscuro]}
                             style={[
                                 estilos.botonGradient,
                                 {
@@ -306,13 +273,14 @@ export default function PantallaBienvenida({ navigation }: any) {
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
-                            <Ionicons name="log-in" size={buttonTextSize} color={COLORS.negro} />
-                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize, color: COLORS.negro }]}>
+                            <Ionicons name="log-in" size={buttonTextSize} color={Colores.textoClaro} />
+                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize, color: Colores.textoClaro }]}>
                                 Iniciar Sesión
                             </Text>
                         </LinearGradient>
                     </TouchableOpacity>
 
+                    {/* 🤡 Botón Crear Cuenta - Borde Amarillo */}
                     <TouchableOpacity
                         style={[
                             estilos.botonRegistro,
@@ -325,12 +293,13 @@ export default function PantallaBienvenida({ navigation }: any) {
                         onPress={() => navigation.navigate('Registro')}
                         activeOpacity={0.8}
                     >
-                        <Ionicons name="person-add" size={buttonTextSize + 2} color={COLORS.amarillo} />
+                        <Ionicons name="person-add" size={buttonTextSize + 2} color={Colores.primario} />
                         <Text style={[estilos.botonRegistroTexto, { fontSize: buttonTextSize }]}>
                             Crear Cuenta
                         </Text>
                     </TouchableOpacity>
 
+                    {/* 🤡 Ver menú como invitado */}
                     <TouchableOpacity
                         style={[estilos.botonInvitado, { paddingVertical: isTablet ? 12 : 10 }]}
                         onPress={() => navigation.navigate('Principal')}
@@ -342,57 +311,47 @@ export default function PantallaBienvenida({ navigation }: any) {
                     </TouchableOpacity>
                 </Animated.View>
 
-                {/* ✅ FOOTER CON VERSIÓN Y AGENCIA */}
+                {/* ✅ FOOTER */}
                 <Animated.View style={[estilos.footerContainer, { opacity: fadeAnim }]}>
                     <LinearGradient
-                        colors={[COLORS.amarillo + '40', 'transparent']}
+                        colors={[Colores.textoClaro + '30', 'transparent']}
                         style={estilos.footerDivider}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                     />
 
-                    {/* © Krusty Burger */}
                     <Text style={[estilos.footer, { fontSize: isTablet ? 12 : 10 }]}>
                         © 2026 Krusty Burger
                     </Text>
 
-                    {/* Versión */}
                     <Text style={[estilos.version, { fontSize: isTablet ? 10 : 8 }]}>
                         v1.0.0
                     </Text>
 
-                    {/* ✅ AGENCIA DIGITAL - PRESIONABLE */}
                     <View style={estilos.agenciaContainer}>
                         <View style={estilos.agenciaDivider} />
-
-                        {/* 🔽🔽🔽 TOUCHABLE OPACITY - AHORA ES PRESIONABLE 🔽🔽🔽 */}
                         <TouchableOpacity
                             style={estilos.agenciaContent}
                             onPress={abrirWebAgencia}
                             activeOpacity={0.7}
                         >
-                            {/* LOGO DE TU AGENCIA */}
                             <Image
-                                source={require('../assets/logo-agencia.png')} // ← RUTA DE TU IMAGEN
+                                source={require('../assets/logo-agencia.png')}
                                 style={{
                                     width: isTablet ? 18 : 14,
                                     height: isTablet ? 18 : 14,
                                     resizeMode: 'contain',
                                 }}
                             />
-
                             <Text style={[estilos.agenciaTexto, { fontSize: isTablet ? 12 : 10 }]}>
                                 Desarrollo Digital Powa
                             </Text>
-
-                            {/* Icono de enlace externo */}
                             <Ionicons
                                 name="open-outline"
                                 size={isTablet ? 14 : 10}
-                                color={COLORS.amarillo}
+                                color={Colores.primario}
                             />
                         </TouchableOpacity>
-                        {/* 🔼🔼🔼 TOUCHABLE OPACITY - AHORA ES PRESIONABLE 🔼🔼🔼 */}
                     </View>
                 </Animated.View>
             </ScrollView>
@@ -410,7 +369,6 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         minHeight: '100%',
     },
-    // ✅ SELECTOR DE IDIOMA
     idiomaSelector: {
         position: 'absolute',
         top: 40,
@@ -418,20 +376,19 @@ const estilos = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: COLORS.negro + '50',
+        backgroundColor: Colores.textoOscuro + '50',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.textoClaro + '20',
         zIndex: 10,
     },
     idiomaTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoClaro,
         fontSize: 12,
         fontWeight: '600',
     },
-    // ✅ PARTÍCULAS
     particula: {
         position: 'absolute',
         zIndex: 0,
@@ -445,15 +402,6 @@ const estilos = StyleSheet.create({
         backgroundColor: 'transparent',
         borderRadius: 100,
     },
-    // ✅ SLOGAN
-    slogan: {
-        color: COLORS.blanco,
-        textAlign: 'center',
-        fontWeight: '300',
-        fontStyle: 'italic',
-        letterSpacing: 1,
-        opacity: 0.8,
-    },
     features: {
         width: '100%',
         gap: 10,
@@ -464,10 +412,10 @@ const estilos = StyleSheet.create({
         gap: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
-        backgroundColor: COLORS.negro + '50',
+        backgroundColor: Colores.textoOscuro + '50',
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.textoClaro + '15',
         position: 'relative',
         overflow: 'hidden',
     },
@@ -484,7 +432,7 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
     },
     featureTexto: {
-        color: COLORS.blanco,
+        color: Colores.textoClaro,
         flex: 1,
         fontWeight: '600',
         letterSpacing: 0.3,
@@ -496,9 +444,9 @@ const estilos = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: COLORS.amarillo + '10',
+        backgroundColor: Colores.primario + '10',
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '20',
+        borderColor: Colores.primario + '20',
     },
     botones: {
         width: '100%',
@@ -507,7 +455,7 @@ const estilos = StyleSheet.create({
     botonIngresar: {
         overflow: 'hidden',
         elevation: 8,
-        shadowColor: COLORS.amarillo,
+        shadowColor: Colores.secundario,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -532,10 +480,10 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         borderWidth: 1.5,
-        borderColor: COLORS.amarillo,
+        borderColor: Colores.primario,
     },
     botonRegistroTexto: {
-        color: COLORS.amarillo,
+        color: Colores.primario,
         fontWeight: '600',
         letterSpacing: 1,
     },
@@ -544,7 +492,7 @@ const estilos = StyleSheet.create({
         paddingVertical: 10,
     },
     botonInvitadoTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoClaro + '60',
         fontSize: 12,
         textDecorationLine: 'underline',
     },
@@ -560,19 +508,15 @@ const estilos = StyleSheet.create({
         marginBottom: 12,
     },
     footer: {
-        color: COLORS.grisClaro,
+        color: Colores.textoClaro + '50',
         textAlign: 'center',
         fontWeight: '500',
     },
-    // ✅ VERSIÓN
     version: {
-        color: COLORS.grisClaro + '60',
+        color: Colores.textoClaro + '30',
         textAlign: 'center',
         marginTop: 4,
     },
-    // ============================================================
-    // 🏢 AGENCIA DIGITAL - ESTILOS
-    // ============================================================
     agenciaContainer: {
         marginTop: 12,
         alignItems: 'center',
@@ -581,23 +525,23 @@ const estilos = StyleSheet.create({
     agenciaDivider: {
         width: '100%',
         height: 1,
-        backgroundColor: COLORS.grisClaro + '20',
+        backgroundColor: Colores.textoClaro + '15',
         marginBottom: 8,
     },
     agenciaContent: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: COLORS.negro + '30',
+        backgroundColor: Colores.textoOscuro + '50',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 12,
         borderWidth: 1,
         marginTop: 20,
-        borderColor: COLORS.amarillo + '15',
+        borderColor: Colores.primario + '20',
     },
     agenciaTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoClaro + '70',
         fontWeight: '500',
         letterSpacing: 0.5,
     },

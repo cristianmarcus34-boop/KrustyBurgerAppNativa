@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "732503368689",
+    "project_id": "krusty-burger-2026",
+    "storage_bucket": "krusty-burger-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:732503368689:android:5f7ce93cb81565c53a1a50",
+        "android_client_info": {
+          "package_name": "com.agenciapowa.KrustyBurger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBezmnXKbQq23_qT_3W3XvjHBm0hy79cPs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

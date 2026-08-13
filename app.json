@@ -3,6 +3,7 @@
     "name": "KrustyBurger",
     "slug": "KrustyBurger",
     "version": "1.0.0",
+    "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,6 +12,20 @@
       "bundleIdentifier": "com.agenciapowa.KrustyBurger",
       "config": {
         "googleMapsApiKey": "AIzaSyCiAUoNj0Pf_U9hZvctk2wCToe-AjJvC1I"
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "KrustyBurger necesita acceso a la cámara para escanear códigos QR y cupones.",
+        "NSPhotoLibraryUsageDescription": "KrustyBurger necesita acceso a tus fotos para subir imágenes.",
+        "NSLocationWhenInUseUsageDescription": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
+        "NSLocationAlwaysUsageDescription": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification",
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -21,10 +36,35 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
       "package": "com.agenciapowa.KrustyBurger",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "config": {
         "googleMaps": {
@@ -40,16 +80,70 @@
       "expo-router",
       "expo-status-bar",
       "expo-font",
+      "expo-updates",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#E6F4FE"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "KrustyBurger necesita acceso a la cámara para escanear códigos QR y cupones."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "KrustyBurger necesita acceso a tus fotos para subir imágenes.",
+          "cameraPermission": "KrustyBurger necesita acceso a la cámara para tomar fotos."
+        }
+      ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido.",
-          "locationAlwaysPermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido.",
-          "locationWhenInUsePermission": "KrustyBurger necesita tu ubicación para mostrarte el seguimiento de tu pedido."
+          "locationAlwaysAndWhenInUsePermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
+          "locationAlwaysPermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
+          "locationWhenInUsePermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#F5C518",
+          "sounds": [
+            "./assets/sounds/krustyyotequieromucho.wav",
+            "./assets/sounds/saxolisa.wav",
+            "./assets/sounds/circopararapapa.wav"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
         }
       ],
       "./plugins/withAndroidManifest.js"
     ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/709ab55b-7649-4a00-8a9c-a9dfd6aa2277"
+    },
     "extra": {
       "router": {
         "origin": false
@@ -57,6 +151,9 @@
       "eas": {
         "projectId": "709ab55b-7649-4a00-8a9c-a9dfd6aa2277"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

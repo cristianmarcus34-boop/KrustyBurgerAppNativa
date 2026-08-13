@@ -1,15 +1,24 @@
+// App.tsx
 import './setup.js';
 
-// ✅ FILTRO DE ERRORES DE TEXTO
+// ✅ FILTRO DE ERRORES DE TEXTO - MEJORADO CON FILTRO DE RATE LIMIT
 const originalConsoleError = console.error;
 console.error = (...args: any[]) => {
   const message = args[0] || '';
   if (typeof message === 'string') {
-    if (message.includes('Text strings') ||
-      message.includes('Text string') ||
-      message.includes('react-native-paper') ||
-      message.includes('Paper') ||
-      message.includes('LogBox')) {
+    const ignorar = [
+      'rate limit',
+      'email rate limit',
+      'too many requests',
+      'try again later',
+      'Text strings',
+      'Text string',
+      'react-native-paper',
+      'Paper',
+      'LogBox'
+    ];
+
+    if (ignorar.some(texto => message.toLowerCase().includes(texto.toLowerCase()))) {
       return;
     }
   }
@@ -25,14 +34,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Linking from 'expo-linking';
 import { tiendaAutenticacion } from './stores/tiendaAutenticacion';
 import { tiendaCarrito } from './stores/tiendaCarrito';
 import { Colores } from './lib/colores';
-import CarritoFlotante from './components/CarritoFlotante';
 
+// ✅ IMPORTACIONES DE PANTALLAS
 import PantallaBienvenida from './screens/PantallaBienvenida';
 import PantallaLogin from './screens/auth/PantallaLogin';
 import PantallaRegistro from './screens/auth/PantallaRegistro';
+import PantallaResetPassword from './screens/auth/PantallaResetPassword';
+import PantallaNuevaContrasena from './screens/auth/PantallaNuevaContrasena';
 import PantallaInicio from './screens/cliente/PantallaInicio';
 import PantallaMenu from './screens/cliente/PantallaMenu';
 import PantallaOfertas from './screens/cliente/PantallaOfertas';
@@ -43,6 +55,7 @@ import PantallaPerfil from './screens/cliente/PantallaPerfil';
 import PantallaDetalleProducto from './screens/cliente/PantallaDetalleProducto';
 import PantallaRecompensas from './screens/cliente/PantallaRecompensas';
 import PantallaCheckout from './screens/cliente/PantallaCheckout';
+import PantallaNotificacionesUsuario from './screens/cliente/PantallaNotificacionesUsuario';
 import PantallaPanelAdmin from './screens/admin/PantallaPanelAdmin';
 import PantallaGestionPedidos from './screens/admin/PantallaGestionPedidos';
 import PantallaGestionMenu from './screens/admin/PantallaGestionMenu';
@@ -50,14 +63,40 @@ import PantallaGestionClientes from './screens/admin/PantallaGestionClientes';
 import PantallaEstadisticas from './screens/admin/PantallaEstadisticas';
 import PantallaTransmision from './screens/repartidor/PantallaTransmision';
 import PantallaGestionOfertas from './screens/admin/PantallaGestionOfertas';
-// ✅ NUEVA IMPORTACIÓN - Detalle de Oferta
 import PantallaDetalleOferta from './screens/cliente/PantallaDetalleOferta';
 import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEnvios';
+import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
+import PantallaDashboardAdmin from './screens/admin/PantallaDashboardAdmin';
+import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
+import { notificacionService } from './services/notificacionService';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ✅ HEADER CONFIGURACIÓN CONSISTENTE
+// ✅ CONFIGURACIÓN DE DEEP LINKING
+const linking = {
+  prefixes: ['krustyburger://', 'https://krustyburger.com'],
+  config: {
+    screens: {
+      ResetPassword: 'reset-password',
+      NuevaContrasena: 'nueva-contrasena',
+      Login: 'login',
+      Registro: 'registro',
+      Bienvenida: 'bienvenida',
+      Principal: {
+        screens: {
+          Inicio: 'inicio',
+          Menu: 'menu',
+          Ofertas: 'ofertas',
+          Pedidos: 'pedidos',
+          Perfil: 'perfil',
+        }
+      }
+    }
+  }
+};
+
+// ✅ HEADER CONFIGURACIÓN CONSISTENTE (AHORA CON COLORES SIMPSONS)
 const HEADER_OPTIONS = {
   headerStyle: {
     backgroundColor: Colores.fondoOscuro,
@@ -66,22 +105,10 @@ const HEADER_OPTIONS = {
   headerTitleStyle: {
     fontWeight: 'bold' as const,
     fontSize: 18,
+    color: Colores.primario, // ✅ Títulos en amarillo Simpsons
   },
   headerBackTitle: '',
   headerShadowVisible: false,
-};
-
-// ============================================================
-// 🎨 PALETA DE COLORES PARA LA BARRA
-// ============================================================
-const TAB_COLORS = {
-  amarillo: '#F5C518',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisClaro: '#B0B0B0',
-  fondoOscuro: '#1A1A1A',
 };
 
 // ✅ ICONO CON BADGE PARA LA BARRA INFERIOR
@@ -92,12 +119,12 @@ const TabIcon = ({ focused, color, size, routeName, badge }: any) => {
   else if (routeName === 'Menu') iconName = focused ? 'restaurant' : 'restaurant-outline';
   else if (routeName === 'Ofertas') iconName = focused ? 'pricetag' : 'pricetag-outline';
   else if (routeName === 'Pedidos') iconName = focused ? 'receipt' : 'receipt-outline';
-  else if (routeName === 'Mas') iconName = focused ? 'person' : 'person-outline';
+  else if (routeName === 'Perfil') iconName = focused ? 'person' : 'person-outline';
 
   return (
     <View style={estilos.iconoContainer}>
       <Ionicons name={iconName} size={size} color={color} />
-      {badge && badge > 0 && routeName === 'Mas' && (
+      {badge && badge > 0 && routeName === 'Perfil' && (
         <View style={estilos.badgeContainer}>
           <Text style={estilos.badgeTexto}>{badge > 99 ? '99+' : badge}</Text>
         </View>
@@ -125,7 +152,7 @@ const TabBarButton = (props: any) => {
         {isFocused && (
           <View style={estilos.tabIndicator}>
             <LinearGradient
-              colors={[TAB_COLORS.amarillo, TAB_COLORS.amarilloOscuro]}
+              colors={Colores.gradientKrusty} // ✅ Gradiente Krusty (Rojo a Amarillo)
               style={estilos.tabIndicatorLine}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -138,108 +165,121 @@ const TabBarButton = (props: any) => {
 };
 
 function PestanasCliente() {
-  const { cantidadTotal, calcularTotal } = tiendaCarrito();
+  const { cantidadTotal } = tiendaCarrito();
   const insets = useSafeAreaInsets();
-  const navigationRef = useRef<any>(null);
 
   const cantidad = cantidadTotal();
-  const total = calcularTotal();
 
   return (
-    <>
-      <Tab.Navigator
-        screenOptions={({ route }: any) => ({
-          tabBarIcon: ({ focused, color, size }: any) => {
-            return (
-              <TabIcon
-                focused={focused}
-                color={color}
-                size={size}
-                routeName={route.name}
-                badge={cantidad}
-              />
-            );
-          },
-          tabBarActiveTintColor: TAB_COLORS.amarillo,
-          tabBarInactiveTintColor: TAB_COLORS.grisClaro,
-          tabBarShowLabel: true,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '600',
-            marginTop: 2,
-            letterSpacing: 0.3,
-          },
-          tabBarStyle: {
-            backgroundColor: TAB_COLORS.fondoOscuro,
-            borderTopWidth: 0,
-            height: Platform.OS === 'android' ? 60 + insets.bottom : 60 + insets.bottom,
-            paddingBottom: Platform.OS === 'android' ? insets.bottom + 6 : insets.bottom + 6,
-            paddingTop: 6,
-            elevation: 20,
-            shadowColor: TAB_COLORS.amarillo,
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 12,
-          },
-          headerShown: false,
-          tabBarButton: (props: any) => <TabBarButton {...props} />,
-        })}
-      >
-        <Tab.Screen name="Inicio" component={PantallaInicio} />
-        <Tab.Screen name="Menu" component={PantallaMenu} />
-        <Tab.Screen name="Ofertas" component={PantallaOfertas} />
-        <Tab.Screen name="Pedidos" component={PantallaPedidos} />
-        <Tab.Screen name="Mas" component={PantallaPerfil} />
-      </Tab.Navigator>
-
-
-
-    </>
+    <Tab.Navigator
+      screenOptions={({ route }: any) => ({
+        tabBarIcon: ({ focused, color, size }: any) => {
+          return (
+            <TabIcon
+              focused={focused}
+              color={color}
+              size={size}
+              routeName={route.name}
+              badge={cantidad}
+            />
+          );
+        },
+        tabBarActiveTintColor: Colores.primario, // ✅ Amarillo Simpsons
+        tabBarInactiveTintColor: Colores.textoGris,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: 2,
+          letterSpacing: 0.3,
+        },
+        tabBarStyle: {
+          backgroundColor: Colores.fondoOscuro,
+          borderTopWidth: 0,
+          height: Platform.OS === 'android' ? 60 + insets.bottom : 60 + insets.bottom,
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 6 : insets.bottom + 6,
+          paddingTop: 6,
+          elevation: 20,
+          shadowColor: Colores.primario,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+        },
+        headerShown: false,
+        tabBarButton: (props: any) => <TabBarButton {...props} />,
+      })}
+    >
+      <Tab.Screen name="Inicio" component={PantallaInicio} />
+      <Tab.Screen name="Menu" component={PantallaMenu} />
+      <Tab.Screen name="Ofertas" component={PantallaOfertas} />
+      <Tab.Screen name="Pedidos" component={PantallaPedidos} />
+      <Tab.Screen name="Perfil" component={PantallaPerfil} />
+    </Tab.Navigator>
   );
 }
 
 export default function App() {
-  const { sesion, cargando, esAdministrador, esRepartidor, inicializarSesion } = tiendaAutenticacion();
+  const { sesion, cargando, esAdministrador, esRepartidor, inicializarSesion, perfil } = tiendaAutenticacion();
   const { cargarCarrito } = tiendaCarrito();
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
+  // ✅ CONFIGURACIÓN DE NOTIFICACIONES
+  useEffect(() => {
+    const configurarNotificaciones = async () => {
+      try {
+        await notificacionService.solicitarPermisos();
+
+        if (sesion && perfil?.id) {
+          await notificacionService.registrarToken(perfil.id);
+          console.log('✅ Token FCM registrado para usuario:', perfil.nombre_cliente);
+        } else {
+          console.log('ℹ️ Usuario no logueado, no se registra token');
+        }
+
+        console.log('✅ Notificaciones configuradas correctamente');
+      } catch (error) {
+        console.warn('⚠️ Error configurando notificaciones:', error);
+      }
+    };
+
+    configurarNotificaciones();
+  }, [sesion, perfil]);
+
+  // ✅ NAVIGATIONBAR - CORREGIDO PARA VERSIÓN ACTUAL
   useEffect(() => {
     const setupNavigationBar = async () => {
       if (Platform.OS === 'android') {
         try {
-          // @ts-ignore
-          if (NavigationBar.setBackgroundColorAsync) {
-            // @ts-ignore
-            await NavigationBar.setBackgroundColorAsync(Colores.fondoOscuro || '#1a1a1a');
-            // @ts-ignore
-            await NavigationBar.setButtonStyleAsync('light');
-          }
-          // @ts-ignore
-          else if (NavigationBar.setBackgroundColor) {
-            // @ts-ignore
-            await NavigationBar.setBackgroundColor(Colores.fondoOscuro || '#1a1a1a');
-            // @ts-ignore
-            await NavigationBar.setButtonStyle('light');
-          }
-          // @ts-ignore
-          else if (NavigationBar.setNavigationBarColors) {
-            // @ts-ignore
-            await NavigationBar.setNavigationBarColors({
-              backgroundColor: Colores.fondoOscuro || '#1a1a1a',
+          console.log('📋 Métodos disponibles en NavigationBar:', Object.keys(NavigationBar));
+
+          const navBar = NavigationBar as any;
+
+          // ✅ NUEVA VERSIÓN - Usar setStyle
+          if (typeof navBar.setStyle === 'function') {
+            await navBar.setStyle('dark');
+            console.log('✅ NavigationBar configurada con setStyle');
+          } else if (typeof navBar.setBackgroundColorAsync === 'function') {
+            await navBar.setBackgroundColorAsync(Colores.fondoOscuro);
+            await navBar.setButtonStyleAsync('light');
+            console.log('✅ NavigationBar configurada (versión Async)');
+          } else if (typeof navBar.setBackgroundColor === 'function') {
+            await navBar.setBackgroundColor(Colores.fondoOscuro);
+            if (typeof navBar.setButtonStyle === 'function') {
+              await navBar.setButtonStyle('light');
+            } else if (typeof navBar.setBarStyle === 'function') {
+              await navBar.setBarStyle('light');
+            }
+            console.log('✅ NavigationBar configurada (versión estándar)');
+          } else if (typeof navBar.setNavigationBarColors === 'function') {
+            await navBar.setNavigationBarColors({
+              backgroundColor: Colores.fondoOscuro,
               buttonStyle: 'light',
             });
+            console.log('✅ NavigationBar configurada (versión antigua)');
+          } else {
+            console.warn('⚠️ No se encontró ningún método compatible para NavigationBar');
+            console.log('📋 Métodos disponibles:', Object.keys(navBar));
           }
-          // @ts-ignore
-          else if (NavigationBar.setBarStyle) {
-            // @ts-ignore
-            await NavigationBar.setBarStyle('dark-content');
-          }
-          else {
-            console.log('⚠️ API de NavigationBar no detectada');
-            const methods = Object.keys(NavigationBar);
-            console.log('📋 Métodos disponibles:', methods);
-          }
-          console.log('✅ Barra de navegación configurada correctamente');
         } catch (error) {
           console.warn('⚠️ Error configurando barra de navegación:', error);
         }
@@ -249,6 +289,36 @@ export default function App() {
     setupNavigationBar();
     inicializarSesion();
     cargarCarrito();
+  }, []);
+
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+      console.log('🔗 Deep Link recibido:', url);
+
+      if (url.includes('reset-password')) {
+        setTimeout(() => {
+          navigationRef.current?.navigate('NuevaContrasena');
+        }, 500);
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('🔗 App abierta con deep link:', url);
+        if (url.includes('reset-password')) {
+          setTimeout(() => {
+            navigationRef.current?.navigate('NuevaContrasena');
+          }, 800);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -264,111 +334,74 @@ export default function App() {
   if (cargando) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colores.fondoOscuro }}>
-        <ActivityIndicator size="large" color={Colores.secundario} />
+        <ActivityIndicator size="large" color={Colores.primario} /> {/* ✅ Ahora amarillo */}
       </View>
     );
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!sesion ? (
+          // ============================================================
+          // 🔹 SECCIÓN: PANTALLAS PÚBLICAS (SIN SESIÓN)
+          // ============================================================
           <>
             <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
             <Stack.Screen name="Login" component={PantallaLogin} />
             <Stack.Screen name="Registro" component={PantallaRegistro} />
+            <Stack.Screen name="ResetPassword" component={PantallaResetPassword} options={{ headerShown: false }} />
+            <Stack.Screen name="NuevaContrasena" component={PantallaNuevaContrasena} options={{ headerShown: false }} />
             <Stack.Screen name="Principal" component={PestanasCliente} />
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-            {/* ✅ NUEVA RUTA - Detalle de Oferta */}
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
           </>
         ) : esAdministrador ? (
+          // ============================================================
+          // 🔹 SECCIÓN: PANTALLAS DE ADMINISTRADOR
+          // ============================================================
           <>
             <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
+            <Stack.Screen name="DashboardAdmin" component={PantallaDashboardAdmin} options={{ headerShown: false }} />
             <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
             <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
             <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
             <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
             <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
+            <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
+            <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
+            <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
             <Stack.Screen name="Principal" component={PestanasCliente} />
-
-            <Stack.Screen
-              name="ConfiguracionEnvios"
-              component={PantallaConfiguracionEnvios}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-            {/* ✅ NUEVA RUTA - Detalle de Oferta */}
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
           </>
         ) : esRepartidor ? (
+          // ============================================================
+          // 🔹 SECCIÓN: PANTALLAS DE REPARTIDOR
+          // ============================================================
           <Stack.Screen name="Transmision" component={PantallaTransmision} />
         ) : (
+          // ============================================================
+          // 🔹 SECCIÓN: PANTALLAS DE CLIENTE (CON SESIÓN)
+          // ============================================================
           <>
             <Stack.Screen name="Principal" component={PestanasCliente} />
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-            {/* ✅ NUEVA RUTA - Detalle de Oferta */}
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+            <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>
@@ -389,7 +422,7 @@ const estilos = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -10,
-    backgroundColor: TAB_COLORS.rojo,
+    backgroundColor: Colores.secundario, // ✅ Rojo Krusty
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -397,15 +430,15 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: TAB_COLORS.negro,
+    borderColor: Colores.textoOscuro,
     elevation: 3,
-    shadowColor: TAB_COLORS.negro,
+    shadowColor: Colores.textoOscuro,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
   badgeTexto: {
-    color: TAB_COLORS.blanco,
+    color: Colores.textoClaro,
     fontSize: 9,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -417,9 +450,7 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  tabButtonActivo: {
-    // Sin fondo adicional
-  },
+  tabButtonActivo: {},
   tabButtonContent: {
     justifyContent: 'center',
     alignItems: 'center',
