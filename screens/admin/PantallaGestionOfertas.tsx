@@ -757,7 +757,7 @@ export default function PantallaGestionOfertas(props: any) {
                     estilos.lista,
                     {
                         paddingHorizontal: paddingHorizontal,
-                        paddingBottom: insets.bottom + 40,
+                        paddingBottom: insets.bottom + 150,
                         paddingTop: isTablet ? 8 : 4,
                     }
                 ]}

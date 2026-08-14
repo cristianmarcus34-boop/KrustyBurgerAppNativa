@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Animated, Dimensions, Image, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,11 +12,33 @@ export default function PantallaBienvenida({ navigation }: any) {
     const { width: winWidth, height: winHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
 
+    // ✅ ESTADO PARA CONTROLAR QUÉ FEATURE ESTÁ EXPANDIDO
+    const [featureExpandido, setFeatureExpandido] = useState<number | null>(null);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.9)).current;
     const translateY = useRef(new Animated.Value(60)).current;
     const glowAnim = useRef(new Animated.Value(0)).current;
     const particulaAnim = useRef(new Animated.Value(0)).current;
+
+    // ✅ DATOS DE FEATURES CON DESCRIPCIONES
+    const featuresData = [
+        {
+            icon: 'restaurant',
+            text: 'Hamburguesas premium',
+            desc: 'Nuestras hamburguesas están hechas con carne 100% de primera calidad y los mejores ingredientes de Springfield. ¡La receta secreta de Krusty te va a encantar! 🍔'
+        },
+        {
+            icon: 'star',
+            text: 'Ganá puntos Krusty',
+            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos, productos gratis y envíos sin costo. ⭐'
+        },
+        {
+            icon: 'bicycle',
+            text: 'Delivery en tiempo real',
+            desc: 'Seguí tu pedido en vivo desde que sale del local hasta que llega a tu puerta. ¡Nunca más esperar sin saber! 🚲'
+        },
+    ];
 
     useEffect(() => {
         Animated.parallel([
@@ -107,7 +129,6 @@ export default function PantallaBienvenida({ navigation }: any) {
     };
 
     return (
-        // 🤡 GRADIENTE KRUSTY: Rojo → Amarillo
         <LinearGradient
             colors={Colores.gradientKrusty}
             style={estilos.contenedor}
@@ -197,42 +218,74 @@ export default function PantallaBienvenida({ navigation }: any) {
                     />
                 </Animated.View>
 
-                {/* ✅ FEATURES */}
+                {/* ✅ FEATURES EXPANDIBLES */}
                 <View style={[estilos.features, { marginBottom: featuresMarginBottom, gap: isTablet ? 12 : 10 }]}>
-                    {[
-                        { icon: 'restaurant', text: 'Hamburguesas premium' },
-                        { icon: 'star', text: 'Ganá puntos Krusty' },
-                        { icon: 'bicycle', text: 'Delivery en tiempo real' },
-                    ].map((item, index) => {
+                    {featuresData.map((item, index) => {
                         const itemTranslateY = translateY.interpolate({
                             inputRange: [0, 60],
                             outputRange: [0, 20 + index * 10],
                         });
+                        const expandido = featureExpandido === index;
 
                         return (
-                            <Animated.View
+                            <TouchableOpacity
                                 key={index}
-                                style={[
-                                    estilos.featureItem,
-                                    {
-                                        opacity: fadeAnim,
-                                        transform: [{ translateY: itemTranslateY }],
-                                    }
-                                ]}
+                                activeOpacity={0.9}
+                                onPress={() => setFeatureExpandido(expandido ? null : index)}
                             >
-                                <View style={estilos.featureIconWrapper}>
-                                    <LinearGradient
-                                        colors={[Colores.primario, Colores.primarioOscuro]}
-                                        style={estilos.featureIconGradient}
-                                    >
-                                        <Ionicons name={item.icon as any} size={featureIconSize} color={Colores.textoOscuro} />
-                                    </LinearGradient>
-                                </View>
-                                <Text style={[estilos.featureTexto, { fontSize: isTablet ? 16 : 14 }]}>
-                                    {item.text}
-                                </Text>
-                                <View style={estilos.featureNeon} />
-                            </Animated.View>
+                                <Animated.View
+                                    style={[
+                                        estilos.featureItem,
+                                        {
+                                            opacity: fadeAnim,
+                                            transform: [{ translateY: itemTranslateY }],
+                                            backgroundColor: expandido
+                                                ? Colores.secundario + '15'
+                                                : Colores.textoOscuro + '50',
+                                            borderColor: expandido
+                                                ? Colores.secundario
+                                                : Colores.textoClaro + '15',
+                                            paddingVertical: expandido ? 14 : 10,
+                                        }
+                                    ]}
+                                >
+                                    <View style={estilos.featureHeader}>
+                                        <View style={estilos.featureIconWrapper}>
+                                            <LinearGradient
+                                                colors={expandido ? [Colores.secundario, Colores.secundarioOscuro] : [Colores.primario, Colores.primarioOscuro]}
+                                                style={estilos.featureIconGradient}
+                                            >
+                                                <Ionicons name={item.icon as any} size={featureIconSize} color={expandido ? Colores.textoClaro : Colores.textoOscuro} />
+                                            </LinearGradient>
+                                        </View>
+                                        <Text style={[estilos.featureTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                            {item.text}
+                                        </Text>
+                                        <Ionicons
+                                            name={expandido ? "chevron-up" : "chevron-down"}
+                                            size={20}
+                                            color={expandido ? Colores.secundario : Colores.textoGris}
+                                        />
+                                    </View>
+
+                                    {/* ✅ DESCRIPCIÓN EXPANDIDA */}
+                                    {expandido && (
+                                        <Animated.View style={estilos.featureDescContainer}>
+                                            <Text style={[estilos.featureDesc, { fontSize: isTablet ? 14 : 12 }]}>
+                                                {item.desc}
+                                            </Text>
+                                            <TouchableOpacity
+                                                style={[estilos.featureDescBoton, { paddingHorizontal: isTablet ? 20 : 14, paddingVertical: isTablet ? 8 : 6 }]}
+                                                onPress={() => setFeatureExpandido(null)}
+                                            >
+                                                <Text style={[estilos.featureDescBotonTexto, { fontSize: isTablet ? 13 : 11 }]}>
+                                                    Entendido
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </Animated.View>
+                                    )}
+                                </Animated.View>
+                            </TouchableOpacity>
                         );
                     })}
                 </View>
@@ -248,7 +301,6 @@ export default function PantallaBienvenida({ navigation }: any) {
                         }
                     ]}
                 >
-                    {/* 🤡 Botón Iniciar Sesión - Rojo Krusty */}
                     <TouchableOpacity
                         style={[
                             estilos.botonIngresar,
@@ -280,7 +332,6 @@ export default function PantallaBienvenida({ navigation }: any) {
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* 🤡 Botón Crear Cuenta - Borde Amarillo */}
                     <TouchableOpacity
                         style={[
                             estilos.botonRegistro,
@@ -299,7 +350,6 @@ export default function PantallaBienvenida({ navigation }: any) {
                         </Text>
                     </TouchableOpacity>
 
-                    {/* 🤡 Ver menú como invitado */}
                     <TouchableOpacity
                         style={[estilos.botonInvitado, { paddingVertical: isTablet ? 12 : 10 }]}
                         onPress={() => navigation.navigate('Principal')}
@@ -407,23 +457,23 @@ const estilos = StyleSheet.create({
         gap: 10,
     },
     featureItem: {
+        borderRadius: 12,
+        borderWidth: 1,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    featureHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
         paddingHorizontal: 14,
-        paddingVertical: 10,
-        backgroundColor: Colores.textoOscuro + '50',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: Colores.textoClaro + '15',
-        position: 'relative',
-        overflow: 'hidden',
     },
     featureIconWrapper: {
         width: 36,
         height: 36,
         borderRadius: 18,
         overflow: 'hidden',
+        flexShrink: 0,
     },
     featureIconGradient: {
         width: '100%',
@@ -432,7 +482,6 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
     },
     featureTexto: {
-        color: Colores.textoClaro,
         flex: 1,
         fontWeight: '600',
         letterSpacing: 0.3,
@@ -447,6 +496,30 @@ const estilos = StyleSheet.create({
         backgroundColor: Colores.primario + '10',
         borderWidth: 1,
         borderColor: Colores.primario + '20',
+    },
+    featureDescContainer: {
+        marginTop: 10,
+        paddingTop: 10,
+        paddingHorizontal: 14,
+        paddingBottom: 4,
+        borderTopWidth: 1,
+        borderTopColor: Colores.textoClaro + '15',
+    },
+    featureDesc: {
+        color: Colores.textoClaro,
+        lineHeight: 22,
+        opacity: 0.9,
+    },
+    featureDescBoton: {
+        alignSelf: 'flex-end',
+        marginTop: 10,
+        marginBottom: 4,
+        backgroundColor: Colores.secundario,
+        borderRadius: 20,
+    },
+    featureDescBotonTexto: {
+        color: Colores.textoClaro,
+        fontWeight: 'bold',
     },
     botones: {
         width: '100%',

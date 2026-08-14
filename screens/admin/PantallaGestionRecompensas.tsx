@@ -11,24 +11,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
 
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-    amarillo: '#F5C518',
-    amarilloClaro: '#FFE066',
-    amarilloOscuro: '#D4A800',
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
-};
-
 const { width, height } = Dimensions.get('window');
 
 interface Recompensa {
@@ -92,7 +74,7 @@ export default function PantallaGestionRecompensas(props: any) {
     const isSmallPhone = width < 375;
 
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
-    const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
+    const tituloSize = isTablet ? 28 : isSmallPhone ? 20 : 22;
     const tarjetaPadding = isTablet ? 16 : isSmallPhone ? 10 : 12;
     const modalWidth = isTablet ? '70%' : '92%';
     const labelSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
@@ -197,7 +179,6 @@ export default function PantallaGestionRecompensas(props: any) {
         }
     };
 
-    // ✅ FUNCIÓN SIMPLIFICADA - SOLO DESACTIVAR
     const eliminarRecompensa = (id: number, nombre: string) => {
         Alert.alert(
             'Desactivar recompensa',
@@ -273,10 +254,10 @@ export default function PantallaGestionRecompensas(props: any) {
 
     const getTipoColor = (tipo: string) => {
         switch (tipo) {
-            case 'DESCUENTO': return '#FF6F00';
-            case 'PRODUCTO_GRATIS': return '#2E7D32';
-            case 'ENVIO_GRATIS': return '#00695C';
-            default: return COLORS.grisClaro;
+            case 'DESCUENTO': return Colores.burnsDorado;
+            case 'PRODUCTO_GRATIS': return Colores.burnsVerde;
+            case 'ENVIO_GRATIS': return Colores.burnsBlanco;
+            default: return Colores.burnsBlanco + '60';
         }
     };
 
@@ -304,14 +285,14 @@ export default function PantallaGestionRecompensas(props: any) {
                     {
                         padding: tarjetaPadding,
                         borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
-                        borderColor: item.activa ? COLORS.verdeClaro + '40' : COLORS.grisClaro + '30',
-                        backgroundColor: item.activa ? COLORS.negro + '60' : COLORS.negro + '40',
+                        borderColor: item.activa ? Colores.burnsDorado + '40' : Colores.burnsBlanco + '20',
+                        backgroundColor: item.activa ? Colores.burnsNegro + '60' : Colores.burnsNegro + '40',
                     }
                 ]}>
                     <View style={estilos.tarjetaHeader}>
                         <View style={estilos.tarjetaInfo}>
                             <View style={estilos.tarjetaTituloContainer}>
-                                <Text style={[estilos.tarjetaTitulo, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
+                                <Text style={[estilos.tarjetaTitulo, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16, color: Colores.burnsBlanco }]}>
                                     {item.nombre}
                                 </Text>
                                 <View style={[
@@ -321,6 +302,7 @@ export default function PantallaGestionRecompensas(props: any) {
                                         paddingHorizontal: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                         paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
                                         borderRadius: isTablet ? 12 : isSmallPhone ? 6 : 8,
+                                        borderColor: tipoColor + '30',
                                     }
                                 ]}>
                                     <Text style={[
@@ -334,15 +316,15 @@ export default function PantallaGestionRecompensas(props: any) {
                                     </Text>
                                 </View>
                             </View>
-                            <Text style={[estilos.tarjetaDesc, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                            <Text style={[estilos.tarjetaDesc, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '60' }]}>
                                 {item.descripcion || 'Sin descripción'}
                             </Text>
                             <View style={estilos.tarjetaPuntosContainer}>
-                                <Text style={[estilos.tarjetaPuntos, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                                <Text style={[estilos.tarjetaPuntos, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.burnsDorado }]}>
                                     ⭐ {item.puntos_necesarios} pts
                                 </Text>
                                 {item.valor_descuento > 0 && (
-                                    <Text style={[estilos.tarjetaValor, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                                    <Text style={[estilos.tarjetaValor, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsVerde }]}>
                                         {item.tipo === 'DESCUENTO' ? `-${item.valor_descuento}%` : `$${item.valor_descuento}`}
                                     </Text>
                                 )}
@@ -352,30 +334,34 @@ export default function PantallaGestionRecompensas(props: any) {
                             <Switch
                                 value={item.activa}
                                 onValueChange={() => manejarToggleActiva(item.id, item.activa)}
-                                trackColor={{ false: COLORS.gris, true: COLORS.verdeClaro }}
-                                thumbColor={item.activa ? COLORS.blanco : COLORS.blanco}
+                                trackColor={{ false: Colores.burnsBlanco + '30', true: Colores.burnsDorado }}
+                                thumbColor={item.activa ? Colores.burnsBlanco : Colores.burnsBlanco}
                             />
                             <TouchableOpacity
                                 style={[estilos.botonAccion, {
-                                    backgroundColor: COLORS.amarillo + '20',
+                                    backgroundColor: Colores.burnsDorado + '20',
                                     padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                     borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                                    borderWidth: 1,
+                                    borderColor: Colores.burnsDorado + '30',
                                 }]}
                                 onPress={() => abrirFormulario(item)}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="create" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.amarillo} />
+                                <Ionicons name="create" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.burnsDorado} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[estilos.botonAccion, {
-                                    backgroundColor: COLORS.rojo + '20',
+                                    backgroundColor: Colores.burnsRojo + '20',
                                     padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                     borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                                    borderWidth: 1,
+                                    borderColor: Colores.burnsRojo + '30',
                                 }]}
                                 onPress={() => eliminarRecompensa(item.id, item.nombre)}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="trash" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.rojo} />
+                                <Ionicons name="trash" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.burnsRojo} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -387,8 +373,8 @@ export default function PantallaGestionRecompensas(props: any) {
     if (cargando && !refrescando) {
         return (
             <View style={estilos.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.amarillo} />
-                <Text style={[estilos.loadingTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                <ActivityIndicator size="large" color={Colores.burnsDorado} />
+                <Text style={[estilos.loadingTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.burnsBlanco + '60' }]}>
                     Cargando recompensas...
                 </Text>
             </View>
@@ -397,8 +383,9 @@ export default function PantallaGestionRecompensas(props: any) {
 
     return (
         <View style={estilos.contenedor}>
+            {/* 👔 GRADIENTE BURNS: Verde lima → Negro */}
             <LinearGradient
-                colors={[COLORS.verde, COLORS.negro]}
+                colors={[Colores.burnsVerde, Colores.burnsNegro]}
                 style={estilos.fondoGradiente}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -417,25 +404,26 @@ export default function PantallaGestionRecompensas(props: any) {
                     onPress={() => props.navigation.goBack()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.burnsBlanco} />
                 </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.burnsDorado }]}>
                     🎁 Gestionar Recompensas
                 </Text>
                 <TouchableOpacity
                     style={[estilos.botonAgregar, {
                         paddingHorizontal: isTablet ? 18 : isSmallPhone ? 12 : 16,
                         paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                        backgroundColor: Colores.burnsDorado,
                     }]}
                     onPress={() => abrirFormulario()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={COLORS.negro} />
+                    <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={Colores.burnsNegro} />
                 </TouchableOpacity>
             </View>
 
             <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal }]}>
-                <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '50' }]}>
                     {recompensas.length} {recompensas.length === 1 ? 'recompensa' : 'recompensas'}
                 </Text>
             </View>
@@ -448,7 +436,7 @@ export default function PantallaGestionRecompensas(props: any) {
                     estilos.lista,
                     {
                         paddingHorizontal: paddingHorizontal,
-                        paddingBottom: insets.bottom + 40,
+                        paddingBottom: insets.bottom + 150,
                         paddingTop: isTablet ? 8 : 4,
                     }
                 ]}
@@ -457,17 +445,17 @@ export default function PantallaGestionRecompensas(props: any) {
                     <RefreshControl
                         refreshing={refrescando}
                         onRefresh={onRefresh}
-                        tintColor={COLORS.amarillo}
-                        colors={[COLORS.amarillo]}
+                        tintColor={Colores.burnsDorado}
+                        colors={[Colores.burnsDorado]}
                     />
                 }
                 ListEmptyComponent={
                     <View style={estilos.vacioContenedor}>
-                        <Ionicons name="gift-outline" size={isTablet ? 80 : 60} color={COLORS.grisClaro + '30'} />
-                        <Text style={[estilos.vacio, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
+                        <Ionicons name="gift-outline" size={isTablet ? 80 : 60} color={Colores.burnsBlanco + '20'} />
+                        <Text style={[estilos.vacio, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16, color: Colores.burnsBlanco }]}>
                             No hay recompensas
                         </Text>
-                        <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                        <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '40' }]}>
                             Crea tu primera recompensa presionando el botón +
                         </Text>
                     </View>
@@ -484,7 +472,7 @@ export default function PantallaGestionRecompensas(props: any) {
             >
                 <View style={estilos.modalFondo}>
                     <LinearGradient
-                        colors={[COLORS.verde, COLORS.negro]}
+                        colors={[Colores.burnsVerde, Colores.burnsNegro]}
                         style={estilos.modalGradiente}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
@@ -497,18 +485,18 @@ export default function PantallaGestionRecompensas(props: any) {
                             borderRadius: isTablet ? 28 : 24,
                             width: modalWidth,
                             maxHeight: isTablet ? '80%' : '85%',
-                            borderColor: COLORS.amarillo + '30',
+                            borderColor: Colores.burnsDorado + '30',
                         }
                     ]}>
                         <View style={estilos.modalHeader}>
                             <LinearGradient
-                                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                colors={[Colores.burnsDorado, Colores.burnsRojo]}
                                 style={estilos.modalHeaderGradiente}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                             >
-                                <Ionicons name="gift" size={isTablet ? 32 : isSmallPhone ? 24 : 28} color={COLORS.negro} />
-                                <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
+                                <Ionicons name="gift" size={isTablet ? 32 : isSmallPhone ? 24 : 28} color={Colores.burnsNegro} />
+                                <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: Colores.burnsNegro }]}>
                                     {editando ? '✏️ Editar Recompensa' : '➕ Nueva Recompensa'}
                                 </Text>
                             </LinearGradient>
@@ -519,48 +507,48 @@ export default function PantallaGestionRecompensas(props: any) {
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 10 }}
                         >
-                            <Text style={[estilos.label, { fontSize: labelSize }]}>
-                                <Ionicons name="gift-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Nombre *
+                            <Text style={[estilos.label, { fontSize: labelSize, color: Colores.burnsBlanco }]}>
+                                <Ionicons name="gift-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Nombre *
                             </Text>
                             <TextInput
-                                style={[estilos.input, { fontSize: inputSize }]}
+                                style={[estilos.input, { fontSize: inputSize, color: Colores.burnsBlanco }]}
                                 value={nombre}
                                 onChangeText={setNombre}
                                 placeholder="Ej: 20% de descuento"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                selectionColor={COLORS.amarillo}
+                                placeholderTextColor={Colores.burnsBlanco + '40'}
+                                selectionColor={Colores.burnsDorado}
                             />
 
-                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14 }]}>
-                                <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Descripción
+                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14, color: Colores.burnsBlanco }]}>
+                                <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Descripción
                             </Text>
                             <TextInput
-                                style={[estilos.input, estilos.textArea, { fontSize: inputSize }]}
+                                style={[estilos.input, estilos.textArea, { fontSize: inputSize, color: Colores.burnsBlanco }]}
                                 value={descripcion}
                                 onChangeText={setDescripcion}
                                 placeholder="Descripción de la recompensa"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
+                                placeholderTextColor={Colores.burnsBlanco + '40'}
                                 multiline
                                 numberOfLines={3}
                                 textAlignVertical="top"
-                                selectionColor={COLORS.amarillo}
+                                selectionColor={Colores.burnsDorado}
                             />
 
-                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14 }]}>
-                                <Ionicons name="star" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Puntos necesarios *
+                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14, color: Colores.burnsBlanco }]}>
+                                <Ionicons name="star" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Puntos necesarios *
                             </Text>
                             <TextInput
-                                style={[estilos.input, { fontSize: inputSize }]}
+                                style={[estilos.input, { fontSize: inputSize, color: Colores.burnsBlanco }]}
                                 value={puntosNecesarios}
                                 onChangeText={setPuntosNecesarios}
                                 placeholder="Ej: 500"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
+                                placeholderTextColor={Colores.burnsBlanco + '40'}
                                 keyboardType="numeric"
-                                selectionColor={COLORS.amarillo}
+                                selectionColor={Colores.burnsDorado}
                             />
 
-                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14 }]}>
-                                <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Tipo de recompensa *
+                            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14, color: Colores.burnsBlanco }]}>
+                                <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Tipo de recompensa *
                             </Text>
                             <View style={[estilos.tiposContainer, { gap: isTablet ? 8 : 6 }]}>
                                 {TIPOS_RECOMPENSA.map(t => (
@@ -572,19 +560,19 @@ export default function PantallaGestionRecompensas(props: any) {
                                                 paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10,
                                                 paddingHorizontal: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                                 borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                                backgroundColor: tipo === t.id ? COLORS.amarillo : COLORS.negro + '40',
-                                                borderColor: tipo === t.id ? COLORS.amarillo : COLORS.blanco + '10',
+                                                backgroundColor: tipo === t.id ? Colores.burnsDorado : Colores.burnsNegro + '40',
+                                                borderColor: tipo === t.id ? Colores.burnsDorado : Colores.burnsBlanco + '10',
                                             }
                                         ]}
                                         onPress={() => setTipo(t.id as any)}
                                         activeOpacity={0.7}
                                     >
-                                        <Ionicons name={t.icon as any} size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={tipo === t.id ? COLORS.negro : COLORS.grisClaro} />
+                                        <Ionicons name={t.icon as any} size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={tipo === t.id ? Colores.burnsNegro : Colores.burnsBlanco + '50'} />
                                         <Text style={[
                                             estilos.tipoOpcionTexto,
                                             {
                                                 fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                                color: tipo === t.id ? COLORS.negro : COLORS.grisClaro,
+                                                color: tipo === t.id ? Colores.burnsNegro : Colores.burnsBlanco + '50',
                                                 fontWeight: tipo === t.id ? '700' : '500',
                                             }
                                         ]}>
@@ -596,30 +584,30 @@ export default function PantallaGestionRecompensas(props: any) {
 
                             {tipo === 'DESCUENTO' && (
                                 <>
-                                    <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14 }]}>
-                                        <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Porcentaje de descuento
+                                    <Text style={[estilos.label, { fontSize: labelSize, marginTop: 14, color: Colores.burnsBlanco }]}>
+                                        <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Porcentaje de descuento
                                     </Text>
                                     <TextInput
-                                        style={[estilos.input, { fontSize: inputSize }]}
+                                        style={[estilos.input, { fontSize: inputSize, color: Colores.burnsBlanco }]}
                                         value={valorDescuento}
                                         onChangeText={setValorDescuento}
                                         placeholder="Ej: 20"
-                                        placeholderTextColor={COLORS.grisClaro + '60'}
+                                        placeholderTextColor={Colores.burnsBlanco + '40'}
                                         keyboardType="numeric"
-                                        selectionColor={COLORS.amarillo}
+                                        selectionColor={Colores.burnsDorado}
                                     />
                                 </>
                             )}
 
                             <View style={estilos.switchContainer}>
-                                <Text style={[estilos.label, { fontSize: labelSize, marginBottom: 0 }]}>
-                                    <Ionicons name="checkmark-circle-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Activa
+                                <Text style={[estilos.label, { fontSize: labelSize, marginBottom: 0, color: Colores.burnsBlanco }]}>
+                                    <Ionicons name="checkmark-circle-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Activa
                                 </Text>
                                 <Switch
                                     value={activa}
                                     onValueChange={setActiva}
-                                    trackColor={{ false: COLORS.gris, true: COLORS.verdeClaro }}
-                                    thumbColor={activa ? COLORS.blanco : COLORS.blanco}
+                                    trackColor={{ false: Colores.burnsBlanco + '30', true: Colores.burnsDorado }}
+                                    thumbColor={activa ? Colores.burnsBlanco : Colores.burnsBlanco}
                                 />
                             </View>
                         </ScrollView>
@@ -630,8 +618,8 @@ export default function PantallaGestionRecompensas(props: any) {
                                 onPress={cerrarModal}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.blanco} />
-                                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                                <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.burnsBlanco} />
+                                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.burnsBlanco }]}>
                                     Cancelar
                                 </Text>
                             </TouchableOpacity>
@@ -643,17 +631,17 @@ export default function PantallaGestionRecompensas(props: any) {
                                 activeOpacity={0.7}
                             >
                                 <LinearGradient
-                                    colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                    colors={[Colores.burnsDorado, Colores.burnsRojo]}
                                     style={estilos.modalGuardarGradient}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 0 }}
                                 >
                                     {guardando ? (
-                                        <ActivityIndicator size="small" color={COLORS.negro} />
+                                        <ActivityIndicator size="small" color={Colores.burnsNegro} />
                                     ) : (
                                         <>
-                                            <Ionicons name="save" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.negro} />
-                                            <Text style={[estilos.modalGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                                            <Ionicons name="save" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.burnsNegro} />
+                                            <Text style={[estilos.modalGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.burnsNegro }]}>
                                                 {editando ? 'Actualizar' : 'Crear'}
                                             </Text>
                                         </>
@@ -671,7 +659,7 @@ export default function PantallaGestionRecompensas(props: any) {
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
-        backgroundColor: COLORS.negro,
+        backgroundColor: Colores.burnsNegro,
     },
     fondoGradiente: {
         position: 'absolute',
@@ -685,25 +673,24 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '10',
+        borderBottomColor: Colores.burnsBlanco + '10',
     },
     botonVolver: {
         padding: 4,
     },
     titulo: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
         letterSpacing: 1,
         flex: 1,
         textAlign: 'center',
+
     },
     botonAgregar: {
-        backgroundColor: COLORS.amarillo,
         borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 4,
-        shadowColor: COLORS.amarillo,
+        shadowColor: Colores.burnsDorado,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -711,10 +698,9 @@ const estilos = StyleSheet.create({
     contadorContainer: {
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '5',
+        borderBottomColor: Colores.burnsBlanco + '5',
     },
     contador: {
-        color: COLORS.grisClaro,
         fontWeight: '500',
         opacity: 0.6,
     },
@@ -726,10 +712,9 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         gap: 16,
-        backgroundColor: COLORS.negro,
+        backgroundColor: Colores.burnsNegro,
     },
     loadingTexto: {
-        color: COLORS.grisClaro,
         fontWeight: '400',
         opacity: 0.7,
     },
@@ -755,17 +740,16 @@ const estilos = StyleSheet.create({
     },
     tarjetaTitulo: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
+        fontSize: 12,
     },
     tipoBadge: {
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
     },
     tipoBadgeTexto: {
         fontWeight: '600',
+        fontSize: 14,
     },
     tarjetaDesc: {
-        color: COLORS.grisClaro,
         opacity: 0.7,
         marginBottom: 4,
     },
@@ -777,11 +761,11 @@ const estilos = StyleSheet.create({
     },
     tarjetaPuntos: {
         fontWeight: 'bold',
-        color: COLORS.amarillo,
+        fontSize: 16,
     },
     tarjetaValor: {
-        color: COLORS.verdeClaro,
         fontWeight: '600',
+        fontSize: 14,
     },
     tarjetaAcciones: {
         flexDirection: 'row',
@@ -798,13 +782,11 @@ const estilos = StyleSheet.create({
         paddingVertical: 80,
     },
     vacio: {
-        color: COLORS.blanco,
         fontWeight: 'bold',
         marginTop: 16,
         textAlign: 'center',
     },
     vacioSubtexto: {
-        color: COLORS.grisClaro,
         textAlign: 'center',
         marginTop: 4,
         opacity: 0.6,
@@ -843,7 +825,6 @@ const estilos = StyleSheet.create({
     },
     modalTitulo: {
         fontWeight: 'bold',
-        color: COLORS.negro,
     },
     modalScroll: {
         maxHeight: '70%',
@@ -851,18 +832,16 @@ const estilos = StyleSheet.create({
     },
     label: {
         fontWeight: '600',
-        color: COLORS.blanco,
         marginBottom: 6,
         marginTop: 14,
     },
     input: {
-        backgroundColor: COLORS.negro + '40',
+        backgroundColor: Colores.burnsNegro + '40',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
-        color: COLORS.blanco,
+        borderColor: Colores.burnsBlanco + '10',
     },
     textArea: {
         minHeight: 80,
@@ -904,12 +883,11 @@ const estilos = StyleSheet.create({
         overflow: 'hidden',
     },
     modalCancelar: {
-        backgroundColor: COLORS.negro + '50',
+        backgroundColor: Colores.burnsNegro + '50',
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.burnsBlanco + '10',
     },
     modalCancelarTexto: {
-        color: COLORS.blanco,
         fontWeight: '600',
     },
     modalGuardar: {
@@ -926,7 +904,6 @@ const estilos = StyleSheet.create({
         height: '100%',
     },
     modalGuardarTexto: {
-        color: COLORS.negro,
         fontWeight: 'bold',
     },
 });

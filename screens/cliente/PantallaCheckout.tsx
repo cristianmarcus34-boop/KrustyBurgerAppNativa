@@ -16,27 +16,8 @@ import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-    amarillo: '#F5C518',
-    amarilloClaro: '#FFE066',
-    amarilloOscuro: '#D4A800',
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
-};
-
 const { width, height } = Dimensions.get('window');
 
-// ✅ COORDENADAS POR DEFECTO
 const UBICACION_DEFAULT = {
     latitude: -34.776484410467525,
     longitude: -58.29220250409459,
@@ -61,7 +42,6 @@ export default function PantallaCheckout(props: any) {
     const descuento = props.route?.params?.descuento || 0;
     const [totalFinal, setTotalFinal] = useState(total);
 
-    // ✅ ESTADOS DE DIRECCIÓN
     const [direccion, setDireccion] = useState('');
     const [direccionCompleta, setDireccionCompleta] = useState('');
     const [telefono, setTelefono] = useState('');
@@ -74,7 +54,6 @@ export default function PantallaCheckout(props: any) {
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
     const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
 
-    // ✅ ESTADOS DEL MAPA Y BÚSQUEDA
     const [mostrarMapa, setMostrarMapa] = useState(false);
     const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<{
         latitude: number;
@@ -86,7 +65,6 @@ export default function PantallaCheckout(props: any) {
 
     const [direccionDelPerfil, setDireccionDelPerfil] = useState(false);
 
-    // ✅ ESTADOS PARA ENVÍO DINÁMICO
     const [costoEnvioCalculado, setCostoEnvioCalculado] = useState(0);
     const [distanciaCliente, setDistanciaCliente] = useState<number | null>(null);
     const [distanciaFormateada, setDistanciaFormateada] = useState('');
@@ -97,14 +75,12 @@ export default function PantallaCheckout(props: any) {
 
     const mapRef = useRef<MapView>(null);
 
-    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
     const dot1Anim = useRef(new Animated.Value(0)).current;
     const dot2Anim = useRef(new Animated.Value(0)).current;
     const dot3Anim = useRef(new Animated.Value(0)).current;
 
-    // ✅ CARGAR DATOS DEL PERFIL Y UBICACIÓN GUARDADA AL MONTAR
     useEffect(() => {
         cargarDatosPerfil();
         servicioEnvios.inicializar();
@@ -122,17 +98,14 @@ export default function PantallaCheckout(props: any) {
             }),
         ]).start();
 
-        // ✅ CARGAR UBICACIÓN GUARDADA
         cargarUbicacionDesdeStore();
     }, []);
 
-    // ✅ Función para cargar ubicación desde el store
     const cargarUbicacionDesdeStore = async () => {
         console.log('📍 Cargando ubicación desde store...');
         setCargandoUbicacion(true);
 
         try {
-            // Primero intentar cargar desde AsyncStorage al store
             const ubicacionCargada = await cargarUbicacionTemporal();
 
             if (ubicacionCargada) {
@@ -149,7 +122,6 @@ export default function PantallaCheckout(props: any) {
                 return;
             }
 
-            // Si no hay ubicación en AsyncStorage, verificar el store
             if (ubicacionStore) {
                 console.log('📍 Usando ubicación del store:', ubicacionStore);
                 setUbicacionSeleccionada({
@@ -164,7 +136,6 @@ export default function PantallaCheckout(props: any) {
                 return;
             }
 
-            // Si no hay ubicación guardada, usar GPS
             console.log('📍 No hay ubicación guardada, usando GPS');
             await obtenerUbicacionActual();
 
@@ -176,7 +147,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ Función para cargar datos del perfil
     const cargarDatosPerfil = () => {
         if (perfil) {
             setTelefono(perfil.telefono || '');
@@ -200,7 +170,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ ACTUALIZAR PERFIL CON LA NUEVA DIRECCIÓN
     const guardarDireccionEnPerfil = async () => {
         if (!perfil?.id) return;
 
@@ -223,7 +192,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ FUNCIÓN PARA CALCULAR COSTO DE ENVÍO
     const calcularCostoEnvio = async (lat: number, lng: number) => {
         setCalculandoEnvio(true);
         try {
@@ -250,13 +218,11 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ Recalcular totalFinal cuando cambia el costo de envío
     useEffect(() => {
         const costoEnvioFinal = tipoEntrega === 'retiro' ? 0 : costoEnvioCalculado;
         setTotalFinal(total + costoEnvioFinal - descuento);
     }, [costoEnvioCalculado, tipoEntrega, total, descuento]);
 
-    // ✅ Cuando se selecciona una ubicación, recalcular envío
     useEffect(() => {
         if (ubicacionSeleccionada && tipoEntrega === 'domicilio') {
             calcularCostoEnvio(
@@ -303,7 +269,6 @@ export default function PantallaCheckout(props: any) {
         }
     }, [mostrarModalExito]);
 
-    // ✅ OBTENER UBICACIÓN ACTUAL
     const obtenerUbicacionActual = async () => {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
@@ -320,7 +285,6 @@ export default function PantallaCheckout(props: any) {
                     setDireccion(direccionObtenida);
                     setDireccionDelPerfil(false);
 
-                    // ✅ GUARDAR EN STORE + ASYNCSTORAGE
                     await guardarUbicacionTemporal({
                         latitude,
                         longitude,
@@ -333,7 +297,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ OBTENER DIRECCIÓN DESDE COORDENADAS
     const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
         try {
             const resultados = await Location.reverseGeocodeAsync({
@@ -358,7 +321,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ BUSCAR DIRECCIÓN MANUALMENTE
     const buscarDireccionManual = async () => {
         if (busquedaManual.length < 3) {
             Alert.alert('Dirección muy corta', 'Ingresa al menos 3 caracteres para buscar');
@@ -380,7 +342,6 @@ export default function PantallaCheckout(props: any) {
                     setDireccion(direccionFormateada);
                     setDireccionDelPerfil(false);
 
-                    // ✅ GUARDAR EN STORE + ASYNCSTORAGE
                     await guardarUbicacionTemporal({
                         latitude,
                         longitude,
@@ -407,7 +368,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ SELECCIONAR UBICACIÓN EN EL MAPA
     const seleccionarUbicacionEnMapa = async (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setUbicacionSeleccionada({ latitude, longitude });
@@ -418,7 +378,6 @@ export default function PantallaCheckout(props: any) {
             setDireccion(direccionObtenida);
             setDireccionDelPerfil(false);
 
-            // ✅ GUARDAR EN STORE + ASYNCSTORAGE
             await guardarUbicacionTemporal({
                 latitude,
                 longitude,
@@ -461,12 +420,11 @@ export default function PantallaCheckout(props: any) {
     const isSmallPhone = width < 375;
 
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
-    const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
+    const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
     const seccionTituloSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
     const inputSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
     const buttonTextSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
 
-    // ✅ CONFIRMAR PEDIDO
     const confirmarPedido = async () => {
         if (!direccion && tipoEntrega === 'domicilio') {
             Alert.alert('Error', 'Ingresa una dirección de entrega');
@@ -529,7 +487,6 @@ export default function PantallaCheckout(props: any) {
         setPedidoCreadoId(resultado.id);
         console.log(`✅ Pedido creado con ID: ${resultado.id}`);
 
-        // ✅ LIMPIAR UBICACIÓN GUARDADA DESPUÉS DE CONFIRMAR
         await limpiarUbicacionTemporal();
 
         setMostrarModalExito(true);
@@ -573,8 +530,9 @@ export default function PantallaCheckout(props: any) {
 
     return (
         <View style={estilos.contenedor}>
+            {/* 🛹 GRADIENTE BART: Naranja → Rojo */}
             <LinearGradient
-                colors={[COLORS.verde, COLORS.negro]}
+                colors={[Colores.bartNaranja, Colores.bartRojo]}
                 style={estilos.fondoGradiente}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -593,9 +551,9 @@ export default function PantallaCheckout(props: any) {
                     onPress={() => props.navigation.goBack()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.textoClaro} />
                 </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.bartNaranja }]}>
                     Checkout
                 </Text>
                 <View style={{ width: isTablet ? 28 : 24 }} />
@@ -608,32 +566,38 @@ export default function PantallaCheckout(props: any) {
                     {
                         paddingHorizontal: paddingHorizontal,
                         paddingBottom: insets.bottom + 100,
+                        paddingTop: isTablet ? 18 : 10,  // ✅ ESPACIO ENTRE HEADER Y PRIMERA TARJETA
                     }
                 ]}
             >
-                {/* ✅ INDICADOR DE CARGA DE UBICACIÓN */}
                 {cargandoUbicacion && (
                     <View style={estilos.cargandoUbicacion}>
-                        <ActivityIndicator size="small" color={COLORS.amarillo} />
+                        <ActivityIndicator size="small" color={Colores.bartNaranja} />
                         <Text style={estilos.cargandoUbicacionTexto}>Cargando ubicación...</Text>
                     </View>
                 )}
 
-                {/* DATOS DE CONTACTO */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ DATOS DE CONTACTO - PRIMERA TARJETA */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         📞 Datos de contacto
                     </Text>
                     <View style={estilos.inputContainer}>
-                        <Ionicons name="call-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+                        <Ionicons name="call-outline" size={22} color={Colores.bartNaranja} style={estilos.inputIcon} />
                         <TextInput
-                            style={[estilos.input, { fontSize: inputSize }]}
+                            style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
                             value={telefono}
                             onChangeText={setTelefono}
                             placeholder="Teléfono"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
+                            placeholderTextColor={Colores.textoClaro + '40'}
                             keyboardType="phone-pad"
-                            selectionColor={COLORS.amarillo}
+                            selectionColor={Colores.bartNaranja}
                         />
                     </View>
                     {perfil?.telefono && (
@@ -643,17 +607,23 @@ export default function PantallaCheckout(props: any) {
                     )}
                 </Animated.View>
 
-                {/* ✅ INDICADOR DE GUARDANDO PERFIL */}
                 {guardandoPerfil && (
                     <View style={estilos.guardandoPerfilContainer}>
-                        <ActivityIndicator size="small" color={COLORS.amarillo} />
+                        <ActivityIndicator size="small" color={Colores.bartNaranja} />
                         <Text style={estilos.guardandoPerfilTexto}>Guardando en tu perfil...</Text>
                     </View>
                 )}
 
-                {/* TIPO DE ENTREGA */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ TIPO DE ENTREGA */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         🚚 Tipo de entrega
                     </Text>
                     <View style={[estilos.opciones, { gap: isTablet ? 12 : 8 }]}>
@@ -665,8 +635,8 @@ export default function PantallaCheckout(props: any) {
                                     {
                                         padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
                                         borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: tipoEntrega === t.id ? COLORS.amarillo : COLORS.negro + '40',
-                                        borderColor: tipoEntrega === t.id ? COLORS.amarillo : COLORS.blanco + '10',
+                                        backgroundColor: tipoEntrega === t.id ? Colores.bartNaranja : Colores.textoOscuro + '40',
+                                        borderColor: tipoEntrega === t.id ? Colores.bartNaranja : Colores.textoClaro + '10',
                                     }
                                 ]}
                                 onPress={() => setTipoEntrega(t.id)}
@@ -675,13 +645,13 @@ export default function PantallaCheckout(props: any) {
                                 <Ionicons
                                     name={t.icono as any}
                                     size={isTablet ? 28 : 22}
-                                    color={tipoEntrega === t.id ? COLORS.negro : COLORS.grisClaro}
+                                    color={tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoGris}
                                 />
                                 <Text style={[
                                     estilos.opcionTexto,
                                     {
                                         fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                                        color: tipoEntrega === t.id ? COLORS.negro : COLORS.blanco,
+                                        color: tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoClaro,
                                     }
                                 ]}>
                                     {t.label}
@@ -690,7 +660,7 @@ export default function PantallaCheckout(props: any) {
                                     estilos.opcionPrecio,
                                     {
                                         fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: tipoEntrega === t.id ? COLORS.negro : COLORS.grisClaro,
+                                        color: tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoGris,
                                     }
                                 ]}>
                                     {t.costo === 0 ? 'GRATIS' : `$${t.costo.toFixed(2)}`}
@@ -700,41 +670,47 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ✅ DIRECCIÓN - CON BÚSQUEDA MANUAL Y CAMPO NO EDITABLE */}
+                {/* ✅ DIRECCIÓN DE ENTREGA */}
                 {tipoEntrega === 'domicilio' && (
-                    <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                        <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                    <Animated.View style={[
+                        estilos.seccion,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideUpAnim }],
+                            marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        }
+                    ]}>
+                        <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                             📍 Dirección de entrega
                         </Text>
 
-                        {/* ✅ DIRECCIÓN DEL PERFIL (NO EDITABLE) */}
                         <View style={[
                             estilos.direccionPerfilContainer,
                             {
                                 padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                 borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                backgroundColor: direccionDelPerfil ? COLORS.verdeClaro + '15' : COLORS.negro + '40',
-                                borderColor: direccionDelPerfil ? COLORS.verdeClaro + '30' : COLORS.blanco + '10',
+                                backgroundColor: direccionDelPerfil ? Colores.verdeClaro + '15' : Colores.textoOscuro + '40',
+                                borderColor: direccionDelPerfil ? Colores.verdeClaro + '30' : Colores.textoClaro + '10',
                             }
                         ]}>
                             <View style={estilos.direccionPerfilHeader}>
                                 <Ionicons
                                     name={direccionDelPerfil ? "checkmark-circle" : "location-outline"}
                                     size={isTablet ? 22 : 18}
-                                    color={direccionDelPerfil ? COLORS.verdeClaro : COLORS.grisClaro}
+                                    color={direccionDelPerfil ? Colores.verdeClaro : Colores.bartNaranja}
                                 />
                                 <Text style={[
                                     estilos.direccionPerfilLabel,
                                     {
                                         fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                        color: direccionDelPerfil ? COLORS.verdeClaro : COLORS.grisClaro,
+                                        color: direccionDelPerfil ? Colores.verdeClaro : Colores.bartNaranja,
                                     }
                                 ]}>
                                     {direccionDelPerfil ? 'Dirección de tu perfil' : 'Dirección personalizada'}
                                 </Text>
                                 {ubicacionSeleccionada && !direccionDelPerfil && (
                                     <View style={estilos.ubicacionConfirmada}>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={COLORS.verdeClaro} />
+                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={Colores.verdeClaro} />
                                         <Text style={[estilos.ubicacionConfirmadaTexto, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9 }]}>
                                             Confirmada
                                         </Text>
@@ -745,7 +721,7 @@ export default function PantallaCheckout(props: any) {
                                 estilos.direccionPerfilTexto,
                                 {
                                     fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
-                                    color: direccionDelPerfil ? COLORS.blanco : COLORS.blanco,
+                                    color: Colores.textoClaro,
                                 }
                             ]}>
                                 {direccion || 'No hay dirección cargada'}
@@ -762,11 +738,10 @@ export default function PantallaCheckout(props: any) {
                             )}
                         </View>
 
-                        {/* ✅ INFORMACIÓN DE ENVÍO DINÁMICO */}
                         {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
                             <View style={estilos.infoEnvioContainer}>
                                 <View style={estilos.infoEnvioFila}>
-                                    <Ionicons name="navigate" size={18} color={COLORS.amarillo} />
+                                    <Ionicons name="navigate" size={18} color={Colores.bartNaranja} />
                                     <Text style={estilos.infoEnvioTexto}>
                                         📏 Distancia: {distanciaFormateada || 'Calculando...'}
                                     </Text>
@@ -775,22 +750,22 @@ export default function PantallaCheckout(props: any) {
                                 {envioDisponible ? (
                                     <>
                                         <View style={estilos.infoEnvioFila}>
-                                            <Ionicons name="cash" size={18} color={COLORS.verdeClaro} />
-                                            <Text style={[estilos.infoEnvioTexto, { color: COLORS.verdeClaro }]}>
+                                            <Ionicons name="cash" size={18} color={Colores.verdeClaro} />
+                                            <Text style={[estilos.infoEnvioTexto, { color: Colores.verdeClaro }]}>
                                                 💰 Costo de envío: ${costoEnvioCalculado.toFixed(2)}
                                             </Text>
                                         </View>
                                         <View style={estilos.infoEnvioFila}>
-                                            <Ionicons name="time-outline" size={18} color={COLORS.amarillo} />
-                                            <Text style={[estilos.infoEnvioTexto, { color: COLORS.amarillo }]}>
+                                            <Ionicons name="time-outline" size={18} color={Colores.bartNaranja} />
+                                            <Text style={[estilos.infoEnvioTexto, { color: Colores.bartNaranja }]}>
                                                 ⏱️ Tiempo estimado: {tiempoEstimado} min
                                             </Text>
                                         </View>
                                     </>
                                 ) : (
                                     <View style={estilos.infoEnvioFila}>
-                                        <Ionicons name="warning" size={18} color={COLORS.rojo} />
-                                        <Text style={[estilos.infoEnvioTexto, { color: COLORS.rojo }]}>
+                                        <Ionicons name="warning" size={18} color={Colores.bartRojo} />
+                                        <Text style={[estilos.infoEnvioTexto, { color: Colores.bartRojo }]}>
                                             ⚠️ {mensajeEnvio}
                                         </Text>
                                     </View>
@@ -801,25 +776,24 @@ export default function PantallaCheckout(props: any) {
                         {calculandoEnvio && tipoEntrega === 'domicilio' && (
                             <View style={estilos.infoEnvioContainer}>
                                 <View style={estilos.infoEnvioFila}>
-                                    <ActivityIndicator size="small" color={COLORS.amarillo} />
+                                    <ActivityIndicator size="small" color={Colores.bartNaranja} />
                                     <Text style={estilos.infoEnvioTexto}>Calculando envío...</Text>
                                 </View>
                             </View>
                         )}
 
-                        {/* ✅ BUSCADOR MANUAL DE DIRECCIÓN */}
                         <View style={estilos.buscadorManualContainer}>
                             <Text style={[estilos.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12 }]}>
                                 🔍 Buscar dirección en el mapa
                             </Text>
                             <View style={estilos.buscadorManualFila}>
                                 <TextInput
-                                    style={[estilos.buscadorManualInput, { fontSize: inputSize }]}
+                                    style={[estilos.buscadorManualInput, { fontSize: inputSize, color: Colores.textoClaro }]}
                                     value={busquedaManual}
                                     onChangeText={setBusquedaManual}
                                     placeholder="Ej: Av. Corrientes 1234, CABA"
-                                    placeholderTextColor={COLORS.grisClaro + '60'}
-                                    selectionColor={COLORS.amarillo}
+                                    placeholderTextColor={Colores.textoClaro + '40'}
+                                    selectionColor={Colores.bartNaranja}
                                 />
                                 <TouchableOpacity
                                     style={[estilos.botonBuscar, {
@@ -831,15 +805,14 @@ export default function PantallaCheckout(props: any) {
                                     disabled={buscandoDireccion}
                                 >
                                     {buscandoDireccion ? (
-                                        <ActivityIndicator size="small" color={COLORS.negro} />
+                                        <ActivityIndicator size="small" color={Colores.textoOscuro} />
                                     ) : (
-                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={COLORS.negro} />
+                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={Colores.textoOscuro} />
                                     )}
                                 </TouchableOpacity>
                             </View>
                         </View>
 
-                        {/* ✅ BOTÓN SELECCIONAR EN MAPA */}
                         <TouchableOpacity
                             style={[estilos.botonMapa, {
                                 padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
@@ -849,14 +822,13 @@ export default function PantallaCheckout(props: any) {
                             onPress={() => setMostrarMapa(true)}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={COLORS.amarillo} />
+                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={Colores.bartNaranja} />
                             <Text style={[estilos.botonMapaTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
                                 📍 Seleccionar ubicación en el mapa
                             </Text>
-                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={COLORS.grisClaro} />
+                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={Colores.textoGris} />
                         </TouchableOpacity>
 
-                        {/* ✅ SUGERENCIA DE DIRECCIÓN ENCONTRADA */}
                         {direccionSugerida !== '' && direccion !== direccionSugerida && (
                             <TouchableOpacity
                                 style={[estilos.sugerenciaContainer, {
@@ -872,7 +844,7 @@ export default function PantallaCheckout(props: any) {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="location" size={isTablet ? 20 : 16} color={COLORS.verdeClaro} />
+                                <Ionicons name="location" size={isTablet ? 20 : 16} color={Colores.verdeClaro} />
                                 <Text style={[estilos.sugerenciaTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
                                     {direccionSugerida}
                                 </Text>
@@ -881,7 +853,6 @@ export default function PantallaCheckout(props: any) {
                     </Animated.View>
                 )}
 
-                {/* ✅ MODAL DEL MAPA */}
                 <Modal
                     visible={mostrarMapa}
                     transparent={false}
@@ -895,7 +866,7 @@ export default function PantallaCheckout(props: any) {
                                 onPress={() => setMostrarMapa(false)}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="arrow-back" size={28} color={COLORS.blanco} />
+                                <Ionicons name="arrow-back" size={28} color={Colores.textoClaro} />
                             </TouchableOpacity>
                             <Text style={estilos.mapaHeaderTitulo}>Selecciona tu ubicación</Text>
                             <TouchableOpacity
@@ -926,7 +897,7 @@ export default function PantallaCheckout(props: any) {
                                     coordinate={ubicacionSeleccionada}
                                     draggable
                                     onDragEnd={seleccionarUbicacionEnMapa}
-                                    pinColor={COLORS.amarillo}
+                                    pinColor={Colores.bartNaranja}
                                 >
                                     <View style={estilos.marcadorPersonalizado}>
                                         <View style={estilos.marcadorPunto} />
@@ -944,15 +915,22 @@ export default function PantallaCheckout(props: any) {
                                 onPress={obtenerUbicacionActual}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="locate" size={24} color={COLORS.amarillo} />
+                                <Ionicons name="locate" size={24} color={Colores.bartNaranja} />
                             </TouchableOpacity>
                         </View>
                     </View>
                 </Modal>
 
-                {/* MÉTODO DE PAGO */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ MÉTODO DE PAGO */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         💳 Método de pago
                     </Text>
                     <View style={[estilos.opciones, { flexDirection: 'row', gap: isTablet ? 12 : 8 }]}>
@@ -964,8 +942,8 @@ export default function PantallaCheckout(props: any) {
                                     {
                                         padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                         borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: metodoPago === m.id ? COLORS.amarillo : COLORS.negro + '40',
-                                        borderColor: metodoPago === m.id ? COLORS.amarillo : COLORS.blanco + '10',
+                                        backgroundColor: metodoPago === m.id ? Colores.bartNaranja : Colores.textoOscuro + '40',
+                                        borderColor: metodoPago === m.id ? Colores.bartNaranja : Colores.textoClaro + '10',
                                     }
                                 ]}
                                 onPress={() => setMetodoPago(m.id)}
@@ -974,13 +952,13 @@ export default function PantallaCheckout(props: any) {
                                 <Ionicons
                                     name={m.icono as any}
                                     size={isTablet ? 26 : 20}
-                                    color={metodoPago === m.id ? COLORS.negro : COLORS.grisClaro}
+                                    color={metodoPago === m.id ? Colores.textoOscuro : Colores.textoGris}
                                 />
                                 <Text style={[
                                     estilos.opcionTexto,
                                     {
                                         fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: metodoPago === m.id ? COLORS.negro : COLORS.blanco,
+                                        color: metodoPago === m.id ? Colores.textoOscuro : Colores.textoClaro,
                                     }
                                 ]}>
                                     {m.label}
@@ -990,29 +968,43 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* NOTAS */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ NOTAS */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         📝 Notas (opcional)
                     </Text>
                     <View style={estilos.inputContainer}>
-                        <Ionicons name="create-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+                        <Ionicons name="create-outline" size={22} color={Colores.bartNaranja} style={estilos.inputIcon} />
                         <TextInput
-                            style={[estilos.input, estilos.textArea, { fontSize: inputSize }]}
+                            style={[estilos.input, estilos.textArea, { fontSize: inputSize, color: Colores.textoClaro }]}
                             value={notas}
                             onChangeText={setNotas}
                             placeholder="Sin cebolla, extra queso..."
-                            placeholderTextColor={COLORS.grisClaro + '60'}
+                            placeholderTextColor={Colores.textoClaro + '40'}
                             multiline
                             numberOfLines={2}
-                            selectionColor={COLORS.amarillo}
+                            selectionColor={Colores.bartNaranja}
                         />
                     </View>
                 </Animated.View>
 
-                {/* PRODUCTOS */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ PRODUCTOS */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         🛒 Productos ({elementos.length})
                     </Text>
                     {elementos.map((e, i) => (
@@ -1027,23 +1019,34 @@ export default function PantallaCheckout(props: any) {
                     ))}
                 </Animated.View>
 
-                {/* CUPÓN */}
+                {/* ✅ CUPÓN */}
                 {cuponAplicado && (
                     <Animated.View style={[
                         estilos.seccion,
                         estilos.cuponSeccion,
-                        { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideUpAnim }],
+                            marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        }
                     ]}>
-                        <Ionicons name="pricetag" size={isTablet ? 24 : 20} color={COLORS.amarillo} />
+                        <Ionicons name="pricetag" size={isTablet ? 24 : 20} color={Colores.bartNaranja} />
                         <Text style={[estilos.cuponTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
                             Cupón: {cuponAplicado.recompensas?.nombre} (-${descuento.toFixed(2)})
                         </Text>
                     </Animated.View>
                 )}
 
-                {/* RESUMEN */}
-                <Animated.View style={[estilos.seccion, { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                {/* ✅ RESUMEN */}
+                <Animated.View style={[
+                    estilos.seccion,
+                    {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    }
+                ]}>
+                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
                         📊 Resumen
                     </Text>
                     <View style={estilos.resumenFila}>
@@ -1063,10 +1066,10 @@ export default function PantallaCheckout(props: any) {
                     </View>
                     {descuento > 0 && (
                         <View style={estilos.resumenFila}>
-                            <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: COLORS.verdeClaro }]}>
+                            <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.verdeClaro }]}>
                                 Descuento
                             </Text>
-                            <Text style={[estilos.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: COLORS.verdeClaro }]}>
+                            <Text style={[estilos.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.verdeClaro }]}>
                                 -${descuento.toFixed(2)}
                             </Text>
                         </View>
@@ -1079,8 +1082,12 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* BOTÓN CONFIRMAR */}
-                <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] }}>
+                {/* ✅ BOTÓN CONFIRMAR */}
+                <Animated.View style={{
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideUpAnim }],
+                    marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                }}>
                     <TouchableOpacity
                         style={[estilos.botonConfirmar, cargando && { opacity: 0.6 }]}
                         onPress={confirmarPedido}
@@ -1088,12 +1095,12 @@ export default function PantallaCheckout(props: any) {
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                            colors={[Colores.bartNaranja, Colores.bartAzul]}
                             style={estilos.botonConfirmarGradient}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
-                            <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={COLORS.negro} />
+                            <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={Colores.textoOscuro} />
                             <Text style={[estilos.botonConfirmarTexto, { fontSize: buttonTextSize }]}>
                                 {cargando ? 'Procesando...' : 'Confirmar Pedido'}
                             </Text>
@@ -1104,7 +1111,7 @@ export default function PantallaCheckout(props: any) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* MODAL DE ÉXITO */}
+            {/* ✅ MODAL DE ÉXITO */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
                 <View style={estilos.modalFondo}>
                     <View style={[
@@ -1112,14 +1119,14 @@ export default function PantallaCheckout(props: any) {
                         {
                             padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
                             borderRadius: isTablet ? 28 : 24,
-                            borderColor: COLORS.verdeClaro,
+                            borderColor: Colores.bartNaranja,
                         }
                     ]}>
                         <Text style={[estilos.modalIcono, { fontSize: isTablet ? 80 : 60 }]}>✅</Text>
-                        <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
+                        <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: Colores.bartNaranja }]}>
                             ¡Pedido confirmado!
                         </Text>
-                        <Text style={[estilos.modalTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                        <Text style={[estilos.modalTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.textoGris }]}>
                             Tu pedido está siendo preparado
                         </Text>
                         <Text style={[estilos.modalSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
@@ -1141,7 +1148,7 @@ export default function PantallaCheckout(props: any) {
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
-        backgroundColor: COLORS.negro,
+        backgroundColor: Colores.textoOscuro,
     },
     fondoGradiente: {
         position: 'absolute',
@@ -1155,14 +1162,13 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '10',
+        borderBottomColor: Colores.textoClaro + '10',
     },
     botonVolver: {
         padding: 4,
     },
     titulo: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
         letterSpacing: 1,
     },
     scroll: {
@@ -1173,17 +1179,16 @@ const estilos = StyleSheet.create({
     },
     seccionTitulo: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
         marginBottom: 10,
         letterSpacing: 0.5,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: COLORS.negro + '50',
+        backgroundColor: Colores.textoOscuro + '50',
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.textoClaro + '10',
         paddingHorizontal: 14,
         paddingVertical: 4,
     },
@@ -1193,7 +1198,6 @@ const estilos = StyleSheet.create({
     },
     input: {
         flex: 1,
-        color: COLORS.blanco,
         paddingVertical: 12,
         paddingRight: 8,
     },
@@ -1228,13 +1232,13 @@ const estilos = StyleSheet.create({
     botonMapa: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.amarillo + '15',
+        backgroundColor: Colores.bartNaranja + '15',
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '20',
+        borderColor: Colores.bartNaranja + '20',
         marginBottom: 10,
     },
     botonMapaTexto: {
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
         fontWeight: '600',
         flex: 1,
         marginLeft: 8,
@@ -1245,25 +1249,25 @@ const estilos = StyleSheet.create({
     sugerenciaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.verdeClaro + '15',
+        backgroundColor: Colores.verdeClaro + '15',
         borderWidth: 1,
-        borderColor: COLORS.verdeClaro + '20',
+        borderColor: Colores.verdeClaro + '20',
         marginTop: 8,
         gap: 8,
     },
     sugerenciaTexto: {
-        color: COLORS.verdeClaro,
+        color: Colores.verdeClaro,
         fontWeight: '500',
         flex: 1,
     },
     infoEnvioContainer: {
-        backgroundColor: COLORS.negro + '30',
+        backgroundColor: Colores.textoOscuro + '30',
         borderRadius: 12,
         padding: 14,
         marginTop: 8,
         marginBottom: 4,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '8',
+        borderColor: Colores.textoClaro + '8',
     },
     infoEnvioFila: {
         flexDirection: 'row',
@@ -1272,13 +1276,13 @@ const estilos = StyleSheet.create({
         paddingVertical: 3,
     },
     infoEnvioTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         fontSize: 13,
         fontWeight: '500',
     },
     mapaModal: {
         flex: 1,
-        backgroundColor: COLORS.negro,
+        backgroundColor: Colores.textoOscuro,
     },
     mapaHeader: {
         flexDirection: 'row',
@@ -1287,9 +1291,9 @@ const estilos = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 50,
         paddingBottom: 12,
-        backgroundColor: COLORS.negro,
+        backgroundColor: Colores.textoOscuro,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '10',
+        borderBottomColor: Colores.textoClaro + '10',
     },
     mapaHeaderBoton: {
         padding: 8,
@@ -1297,16 +1301,16 @@ const estilos = StyleSheet.create({
     mapaHeaderTitulo: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: COLORS.blanco,
+        color: Colores.textoClaro,
     },
     mapaHeaderConfirmar: {
-        backgroundColor: COLORS.amarillo,
+        backgroundColor: Colores.bartNaranja,
         borderRadius: 12,
         paddingHorizontal: 16,
         paddingVertical: 6,
     },
     mapaHeaderConfirmarTexto: {
-        color: COLORS.negro,
+        color: Colores.textoOscuro,
         fontWeight: 'bold',
     },
     mapaCompleto: {
@@ -1320,24 +1324,24 @@ const estilos = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: COLORS.negro + '80',
+        backgroundColor: Colores.textoOscuro + '80',
         padding: 12,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.textoClaro + '10',
     },
     mapaFooterTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         fontSize: 12,
         flex: 1,
         marginRight: 12,
     },
     botonMiUbicacion: {
-        backgroundColor: COLORS.amarillo + '20',
+        backgroundColor: Colores.bartNaranja + '20',
         padding: 10,
         borderRadius: 30,
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '30',
+        borderColor: Colores.bartNaranja + '30',
     },
     marcadorPersonalizado: {
         alignItems: 'center',
@@ -1347,10 +1351,10 @@ const estilos = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: COLORS.amarillo,
+        backgroundColor: Colores.bartNaranja,
         borderWidth: 3,
-        borderColor: COLORS.blanco,
-        shadowColor: COLORS.amarillo,
+        borderColor: Colores.textoClaro,
+        shadowColor: Colores.bartNaranja,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 12,
@@ -1361,28 +1365,28 @@ const estilos = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '5',
+        borderBottomColor: Colores.textoClaro + '5',
     },
     productoNombre: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         fontWeight: '500',
     },
     productoPrecio: {
         fontWeight: 'bold',
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
     },
     cuponSeccion: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.amarillo + '15',
+        backgroundColor: Colores.bartNaranja + '15',
         borderRadius: 12,
         padding: 14,
         gap: 10,
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '20',
+        borderColor: Colores.bartNaranja + '20',
     },
     cuponTexto: {
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
         fontWeight: 'bold',
         flex: 1,
     },
@@ -1392,31 +1396,31 @@ const estilos = StyleSheet.create({
         marginBottom: 6,
     },
     resumenTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
     },
     resumenValor: {
-        color: COLORS.blanco,
+        color: Colores.textoClaro,
         fontWeight: '600',
     },
     resumenTotal: {
         borderTopWidth: 1,
-        borderTopColor: COLORS.blanco + '15',
+        borderTopColor: Colores.textoClaro + '15',
         paddingTop: 10,
         marginTop: 4,
     },
     totalTexto: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
+        color: Colores.textoClaro,
     },
     totalPrecio: {
         fontWeight: 'bold',
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
     },
     botonConfirmar: {
         borderRadius: 16,
         overflow: 'hidden',
         elevation: 8,
-        shadowColor: COLORS.amarillo,
+        shadowColor: Colores.bartNaranja,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.4,
         shadowRadius: 20,
@@ -1431,7 +1435,7 @@ const estilos = StyleSheet.create({
         paddingHorizontal: 24,
     },
     botonConfirmarTexto: {
-        color: COLORS.negro,
+        color: Colores.textoOscuro,
         fontWeight: 'bold',
         letterSpacing: 0.5,
     },
@@ -1443,7 +1447,7 @@ const estilos = StyleSheet.create({
         padding: 20,
     },
     modal: {
-        backgroundColor: COLORS.grisOscuro,
+        backgroundColor: Colores.fondoOscuro,
         width: '90%',
         maxWidth: 400,
         alignItems: 'center',
@@ -1454,15 +1458,13 @@ const estilos = StyleSheet.create({
     },
     modalTitulo: {
         fontWeight: 'bold',
-        color: COLORS.verdeClaro,
         marginBottom: 8,
     },
     modalTexto: {
-        color: COLORS.grisClaro,
         textAlign: 'center',
     },
     modalSubtexto: {
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
         marginTop: 12,
         fontWeight: '500',
     },
@@ -1475,22 +1477,22 @@ const estilos = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: COLORS.amarillo,
+        backgroundColor: Colores.bartNaranja,
     },
     cargandoUbicacion: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: COLORS.negro + '30',
+        backgroundColor: Colores.textoOscuro + '30',
         paddingVertical: 10,
         marginBottom: 12,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '5',
+        borderColor: Colores.textoClaro + '5',
         gap: 10,
     },
     cargandoUbicacionTexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         fontSize: 13,
         fontWeight: '500',
     },
@@ -1514,7 +1516,7 @@ const estilos = StyleSheet.create({
         lineHeight: 20,
     },
     direccionPerfilSubtexto: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         marginTop: 6,
         opacity: 0.6,
         fontStyle: 'italic',
@@ -1523,7 +1525,7 @@ const estilos = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: COLORS.amarillo + '15',
+        backgroundColor: Colores.bartNaranja + '15',
         paddingVertical: 8,
         paddingHorizontal: 16,
         borderRadius: 8,
@@ -1531,17 +1533,17 @@ const estilos = StyleSheet.create({
         marginBottom: 12,
         gap: 10,
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '20',
+        borderColor: Colores.bartNaranja + '20',
     },
     guardandoPerfilTexto: {
-        color: COLORS.amarillo,
+        color: Colores.bartNaranja,
         fontSize: 13,
         fontWeight: '500',
     },
     ubicacionConfirmada: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.verdeClaro + '15',
+        backgroundColor: Colores.verdeClaro + '15',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 12,
@@ -1549,11 +1551,11 @@ const estilos = StyleSheet.create({
         marginLeft: 8,
     },
     ubicacionConfirmadaTexto: {
-        color: COLORS.verdeClaro,
+        color: Colores.verdeClaro,
         fontWeight: '500',
     },
     datosGuardados: {
-        color: COLORS.verdeClaro,
+        color: Colores.verdeClaro,
         fontSize: 11,
         marginTop: 4,
         opacity: 0.7,
@@ -1564,7 +1566,7 @@ const estilos = StyleSheet.create({
         marginBottom: 4,
     },
     buscadorManualLabel: {
-        color: COLORS.grisClaro,
+        color: Colores.textoGris,
         fontWeight: '500',
         marginBottom: 6,
         opacity: 0.7,
@@ -1575,16 +1577,15 @@ const estilos = StyleSheet.create({
     },
     buscadorManualInput: {
         flex: 1,
-        backgroundColor: COLORS.negro + '40',
+        backgroundColor: Colores.textoOscuro + '40',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
-        color: COLORS.blanco,
+        borderColor: Colores.textoClaro + '10',
     },
     botonBuscar: {
-        backgroundColor: COLORS.amarillo,
+        backgroundColor: Colores.bartNaranja,
         justifyContent: 'center',
         alignItems: 'center',
         minWidth: 50,

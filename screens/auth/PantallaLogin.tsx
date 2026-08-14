@@ -1,8 +1,9 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿// screens/auth/PantallaLogin.tsx
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Animated, Dimensions, Image
+  Animated, Dimensions, Image, Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,17 +17,25 @@ const { width, height } = Dimensions.get('window');
 const logoImage = require('../../assets/logo-krusty.png');
 
 export default function PantallaLogin(props: any) {
+  // ✅ ESTADOS
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
+  const [errores, setErrores] = useState<{ correo?: string; contrasena?: string }>({});
+  const [intentosFallidos, setIntentosFallidos] = useState(0);
   const { iniciarSesion } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
 
+  // ✅ REFS
+  const correoInputRef = useRef<TextInput>(null);
+  const contrasenaInputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
+  // ✅ ANIMACIONES
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -48,6 +57,74 @@ export default function PantallaLogin(props: any) {
     ]).start();
   }, []);
 
+  // ✅ FUNCIÓN DE SHAKE PARA ERRORES
+  const shake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // ✅ VALIDACIONES
+  const validarCampos = (): boolean => {
+    const nuevosErrores: { correo?: string; contrasena?: string } = {};
+    let isValid = true;
+
+    // Validar correo
+    if (!correo || correo.trim() === '') {
+      nuevosErrores.correo = 'El correo electrónico es requerido';
+      isValid = false;
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(correo)) {
+        nuevosErrores.correo = 'Ingresa un correo electrónico válido';
+        isValid = false;
+      }
+    }
+
+    // Validar contraseña
+    if (!contrasena || contrasena.trim() === '') {
+      nuevosErrores.contrasena = 'La contraseña es requerida';
+      isValid = false;
+    } else if (contrasena.length < 6) {
+      nuevosErrores.contrasena = 'La contraseña debe tener al menos 6 caracteres';
+      isValid = false;
+    }
+
+    setErrores(nuevosErrores);
+
+    if (!isValid) {
+      shake();
+      // ✅ Enfocar el primer campo con error
+      if (nuevosErrores.correo) {
+        correoInputRef.current?.focus();
+      } else if (nuevosErrores.contrasena) {
+        contrasenaInputRef.current?.focus();
+      }
+    }
+
+    return isValid;
+  };
+
+  // ✅ REGISTRAR NOTIFICACIONES
   const registrarNotificaciones = async (usuarioId: string) => {
     try {
       const permisos = await notificacionService.solicitarPermisos();
@@ -66,37 +143,73 @@ export default function PantallaLogin(props: any) {
     }
   };
 
+  // ✅ MANEJAR LOGIN
   const manejarLogin = async () => {
-    if (!correo || !contrasena) {
-      Alert.alert('Error', 'Completa todos los campos');
+    // ✅ Ocultar teclado
+    Keyboard.dismiss();
+
+    // ✅ Validar campos
+    if (!validarCampos()) {
       return;
     }
 
     setCargando(true);
+    setErrores({});
 
     try {
-      const error = await iniciarSesion(correo, contrasena);
+      const resultado = await iniciarSesion(correo.trim(), contrasena);
 
-      if (error) {
-        Alert.alert('Error', error);
+      if (!resultado.success) {
+        // ✅ Incrementar intentos fallidos
+        setIntentosFallidos(prev => prev + 1);
+
+        // ✅ Mensaje de error según el tipo
+        let mensajeError = resultado.error || 'Error al iniciar sesión';
+
+        // ✅ Si es error de credenciales, mensaje más amigable
+        if (mensajeError.includes('Invalid login credentials') ||
+          mensajeError.includes('Invalid credentials') ||
+          mensajeError.includes('User not found')) {
+          mensajeError = '❌ Correo o contraseña incorrectos. Verifica tus datos.';
+
+          // ✅ Si hay muchos intentos, mostrar mensaje adicional
+          if (intentosFallidos >= 2) {
+            mensajeError += '\n\n💡 ¿Olvidaste tu contraseña? Toca "¿Olvidaste tu contraseña?" para recuperarla.';
+          }
+        }
+
+        // ✅ Mostrar error con shake
+        shake();
+        Alert.alert('⚠️ Error', mensajeError);
         setCargando(false);
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      // ✅ Login exitoso - resetear intentos
+      setIntentosFallidos(0);
 
+      // ✅ Registrar notificaciones
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
         await registrarNotificaciones(session.user.id);
       }
 
-    } catch (error) {
-      console.error('Error en login:', error);
-      Alert.alert('Error', 'Ocurrió un error inesperado');
+      // ✅ La navegación la maneja el store
+
+    } catch (error: any) {
+      console.error('❌ Error en login:', error);
+      const mensajeError = typeof error === 'string'
+        ? error
+        : error?.message || 'Ocurrió un error inesperado. Intenta nuevamente.';
+
+      shake();
+      Alert.alert('⚠️ Error', mensajeError);
     } finally {
       setCargando(false);
     }
   };
 
+  // ✅ MANEJAR INVITADO
   const manejarInvitado = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -109,6 +222,22 @@ export default function PantallaLogin(props: any) {
     props.navigation.navigate('Principal');
   };
 
+  // ✅ LIMPIAR ERRORES AL ESCRIBIR
+  const handleCorreoChange = (text: string) => {
+    setCorreo(text);
+    if (errores.correo) {
+      setErrores(prev => ({ ...prev, correo: undefined }));
+    }
+  };
+
+  const handleContrasenaChange = (text: string) => {
+    setContrasena(text);
+    if (errores.contrasena) {
+      setErrores(prev => ({ ...prev, contrasena: undefined }));
+    }
+  };
+
+  // ✅ RESPONSIVE
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
@@ -122,7 +251,6 @@ export default function PantallaLogin(props: any) {
   const paddingTop = insets.top + (isTablet ? 40 : 20);
 
   return (
-    // 🦈 GRADIENTE GORGORY: Azul marino → Gris
     <LinearGradient
       colors={[Colores.gorgoryAzul, Colores.gorgoryGris]}
       style={estilos.contenedor}
@@ -144,7 +272,9 @@ export default function PantallaLogin(props: any) {
           ]}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          keyboardShouldPersistTaps="handled"
         >
+          {/* ✅ LOGO Y TÍTULO */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -168,7 +298,6 @@ export default function PantallaLogin(props: any) {
                 resizeMode="contain"
               />
             </View>
-            {/* 🦈 Título en Blanco Gorgory */}
             <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
               Krusty Burger
             </Text>
@@ -177,47 +306,86 @@ export default function PantallaLogin(props: any) {
             </Text>
           </Animated.View>
 
+          {/* ✅ FORMULARIO */}
           <Animated.View
             style={[
               estilos.formulario,
               {
                 opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
+                transform: [
+                  { translateY: slideUpAnim },
+                  { translateX: shakeAnim }
+                ],
               }
             ]}
           >
+            {/* ✅ CAMPO CORREO */}
             <Text style={[estilos.label, { fontSize: labelSize }]}>
               Correo electrónico
             </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="mail-outline" size={22} color={Colores.gorgoryGris} style={estilos.inputIcon} />
+            <View style={[
+              estilos.inputContainer,
+              errores.correo && estilos.inputError
+            ]}>
+              <Ionicons
+                name={errores.correo ? "alert-circle" : "mail-outline"}
+                size={22}
+                color={errores.correo ? Colores.gorgoryRojo : Colores.gorgoryGris}
+                style={estilos.inputIcon}
+              />
               <TextInput
+                ref={correoInputRef}
                 style={[estilos.input, { fontSize: inputSize, flex: 1, paddingRight: 12 }]}
                 value={correo}
-                onChangeText={setCorreo}
+                onChangeText={handleCorreoChange}
                 placeholder="tucorreo@ejemplo.com"
                 placeholderTextColor={Colores.gorgoryGris + '60'}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
                 selectionColor={Colores.gorgoryRojo}
                 numberOfLines={1}
+                editable={!cargando}
+                returnKeyType="next"
+                onSubmitEditing={() => contrasenaInputRef.current?.focus()}
               />
+              {correo.length > 0 && !errores.correo && (
+                <TouchableOpacity onPress={() => setCorreo('')}>
+                  <Ionicons name="close-circle" size={18} color={Colores.gorgoryGris + '40'} />
+                </TouchableOpacity>
+              )}
             </View>
+            {errores.correo && (
+              <Text style={estilos.textoError}>{errores.correo}</Text>
+            )}
 
-            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 20 }]}>
+            {/* ✅ CAMPO CONTRASEÑA */}
+            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
               Contraseña
             </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={22} color={Colores.gorgoryGris} style={estilos.inputIcon} />
+            <View style={[
+              estilos.inputContainer,
+              errores.contrasena && estilos.inputError
+            ]}>
+              <Ionicons
+                name={errores.contrasena ? "alert-circle" : "lock-closed-outline"}
+                size={22}
+                color={errores.contrasena ? Colores.gorgoryRojo : Colores.gorgoryGris}
+                style={estilos.inputIcon}
+              />
               <TextInput
+                ref={contrasenaInputRef}
                 style={[estilos.input, { fontSize: inputSize, flex: 1, paddingRight: 12 }]}
                 value={contrasena}
-                onChangeText={setContrasena}
+                onChangeText={handleContrasenaChange}
                 placeholder="Tu contraseña"
                 placeholderTextColor={Colores.gorgoryGris + '60'}
                 secureTextEntry={!mostrarContrasena}
                 selectionColor={Colores.gorgoryRojo}
                 numberOfLines={1}
+                editable={!cargando}
+                returnKeyType="done"
+                onSubmitEditing={manejarLogin}
               />
               <TouchableOpacity
                 onPress={() => setMostrarContrasena(!mostrarContrasena)}
@@ -230,10 +398,23 @@ export default function PantallaLogin(props: any) {
                 />
               </TouchableOpacity>
             </View>
+            {errores.contrasena && (
+              <Text style={estilos.textoError}>{errores.contrasena}</Text>
+            )}
 
-            {/* 🦈 Botón Rojo Gorgory */}
+            {/* ✅ INDICADOR DE INTENTOS FALLIDOS */}
+            {intentosFallidos > 0 && (
+              <View style={estilos.intentosContainer}>
+                <Ionicons name="warning-outline" size={16} color={Colores.gorgoryRojo + '80'} />
+                <Text style={estilos.intentosTexto}>
+                  {intentosFallidos} {intentosFallidos === 1 ? 'intento fallido' : 'intentos fallidos'}
+                </Text>
+              </View>
+            )}
+
+            {/* ✅ BOTÓN LOGIN */}
             <TouchableOpacity
-              style={estilos.boton}
+              style={[estilos.boton, cargando && { opacity: 0.6 }]}
               onPress={manejarLogin}
               disabled={cargando}
               activeOpacity={0.8}
@@ -257,6 +438,7 @@ export default function PantallaLogin(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* ✅ ENLACES */}
             <View style={estilos.enlacesContainer}>
               <TouchableOpacity
                 onPress={() => props.navigation.navigate('Registro')}
@@ -278,22 +460,41 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
             </View>
 
+            {/* ✅ SEPARADOR */}
             <View style={estilos.separadorContainer}>
               <View style={estilos.separador} />
               <Text style={estilos.separadorTexto}>o</Text>
               <View style={estilos.separador} />
             </View>
 
+            {/* ✅ BANNER 500 PUNTOS */}
+            <TouchableOpacity
+              style={estilos.bannerLogin}
+              onPress={() => props.navigation.navigate('Registro')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="gift-outline" size={18} color={Colores.gorgoryBlanco} />
+              <Text style={[estilos.bannerLoginTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                🎁 ¿Nuevo? Gana <Text style={estilos.bannerLoginDestacado}>500 puntos</Text> al registrarte
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={Colores.gorgoryBlanco + '50'} />
+            </TouchableOpacity>
+
+            {/* ✅ BOTÓN INVITADO */}
             <TouchableOpacity
               style={estilos.botonInvitado}
               onPress={manejarInvitado}
               activeOpacity={0.6}
+              disabled={cargando}
             >
               <Ionicons name="person-outline" size={20} color={Colores.gorgoryGris} />
               <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
                 Continuar como invitado
               </Text>
             </TouchableOpacity>
+
+            {/* ✅ VERSIÓN DE LA APP */}
+            <Text style={estilos.versionTexto}>v1.0.0</Text>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -357,10 +558,14 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colores.gorgoryBlanco,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colores.gorgoryGris + '30',
     paddingHorizontal: 14,
     height: 56,
+  },
+  inputError: {
+    borderColor: Colores.gorgoryRojo,
+    borderWidth: 1.5,
   },
   inputIcon: {
     marginRight: 12,
@@ -369,14 +574,31 @@ const estilos = StyleSheet.create({
   input: {
     color: Colores.gorgoryAzul,
     paddingVertical: 12,
-    paddingTop: 14,
+    paddingTop: 15,
   },
   eyeButton: {
     padding: 4,
     flexShrink: 0,
   },
+  textoError: {
+    color: Colores.gorgoryRojo,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  intentosContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    gap: 4,
+  },
+  intentosTexto: {
+    color: Colores.gorgoryRojo + '80',
+    fontSize: 12,
+  },
   boton: {
-    marginTop: 28,
+    marginTop: 24,
     borderRadius: 14,
     overflow: 'hidden',
     elevation: 8,
@@ -436,6 +658,29 @@ const estilos = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  bannerLogin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: Colores.gorgoryBlanco + '10',
+    borderWidth: 1,
+    borderColor: Colores.gorgoryBlanco + '15',
+  },
+  bannerLoginTexto: {
+    color: Colores.gorgoryBlanco + '80',
+    fontWeight: '400',
+    flex: 1,
+    textAlign: 'center',
+  },
+  bannerLoginDestacado: {
+    color: Colores.gorgoryBlanco,
+    fontWeight: '700',
+  },
   botonInvitado: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -451,5 +696,11 @@ const estilos = StyleSheet.create({
     color: Colores.gorgoryBlanco + '70',
     fontWeight: '500',
     letterSpacing: 0.5,
+  },
+  versionTexto: {
+    color: Colores.gorgoryBlanco + '20',
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 16,
   },
 });

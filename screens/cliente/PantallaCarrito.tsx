@@ -13,24 +13,6 @@ import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-};
-
 const { width, height } = Dimensions.get('window');
 
 export default function PantallaCarrito(props: any) {
@@ -49,7 +31,6 @@ export default function PantallaCarrito(props: any) {
   const [mostrarCupones, setMostrarCupones] = useState(false);
   const [mostrarModalLogin, setMostrarModalLogin] = useState(false);
 
-  // ✅ ESTADOS PARA ENVÍO DINÁMICO
   const [costoEnvioEstimado, setCostoEnvioEstimado] = useState(0);
   const [distanciaEstimada, setDistanciaEstimada] = useState<number | null>(null);
   const [distanciaFormateada, setDistanciaFormateada] = useState('');
@@ -62,7 +43,6 @@ export default function PantallaCarrito(props: any) {
   } | null>(null);
   const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
@@ -83,12 +63,10 @@ export default function PantallaCarrito(props: any) {
 
   useEffect(() => { cargarCupones(); }, [perfil, cuponAplicado]);
 
-  // ✅ CARGAR UBICACIÓN DESDE EL STORE AL MONTAR
   useEffect(() => {
     cargarUbicacionDesdeStore();
   }, []);
 
-  // ✅ CALCULAR ENVÍO CUANDO HAY UBICACIÓN Y PRODUCTOS
   useEffect(() => {
     if (ubicacionGuardada && elementos.length > 0) {
       calcularEnvioEstimado();
@@ -101,13 +79,11 @@ export default function PantallaCarrito(props: any) {
     }
   }, [ubicacionGuardada, elementos.length]);
 
-  // ✅ Función para cargar ubicación desde el store
   const cargarUbicacionDesdeStore = async () => {
     console.log('📍 [Carrito] Cargando ubicación desde store...');
     setCargandoUbicacion(true);
 
     try {
-      // Intentar cargar desde AsyncStorage al store
       const ubicacionCargada = await cargarUbicacionTemporal();
 
       if (ubicacionCargada) {
@@ -120,7 +96,6 @@ export default function PantallaCarrito(props: any) {
         return;
       }
 
-      // Si no hay ubicación en AsyncStorage, verificar el store
       if (ubicacionStore) {
         console.log('📍 [Carrito] Usando ubicación del store:', ubicacionStore);
         setUbicacionGuardada({
@@ -131,7 +106,6 @@ export default function PantallaCarrito(props: any) {
         return;
       }
 
-      // Si no hay ubicación guardada, usar coordenadas por defecto del local
       console.log('📍 [Carrito] No hay ubicación guardada, usando local por defecto');
       setUbicacionGuardada({
         latitude: -34.776484410467525,
@@ -140,7 +114,6 @@ export default function PantallaCarrito(props: any) {
 
     } catch (error) {
       console.error('❌ [Carrito] Error cargando ubicación:', error);
-      // Fallback a coordenadas del local
       setUbicacionGuardada({
         latitude: -34.776484410467525,
         longitude: -58.29220250409459,
@@ -150,7 +123,6 @@ export default function PantallaCarrito(props: any) {
     }
   };
 
-  // ✅ Función para calcular envío estimado
   const calcularEnvioEstimado = async () => {
     if (!ubicacionGuardada) return;
 
@@ -183,7 +155,6 @@ export default function PantallaCarrito(props: any) {
     }
   };
 
-  // ✅ Calcular descuento y total final
   const calcularDescuento = () => {
     if (!cuponAplicado || !cuponAplicado.recompensas) return 0;
     const r = cuponAplicado.recompensas;
@@ -219,7 +190,6 @@ export default function PantallaCarrito(props: any) {
 
   const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
 
-  // ✅ Responsive
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
@@ -280,7 +250,7 @@ export default function PantallaCarrito(props: any) {
               style={[estilos.botonControl, { width: botonControlSize, height: botonControlSize, borderRadius: botonControlSize / 2 }]}
               activeOpacity={0.7}
             >
-              <Ionicons name="remove" size={isTablet ? 20 : isSmallPhone ? 14 : 18} color={COLORS.blanco} />
+              <Ionicons name="remove" size={isTablet ? 20 : isSmallPhone ? 14 : 18} color={Colores.textoOscuro} />
             </TouchableOpacity>
             <Text style={[estilos.cantidad, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
               {item.cantidad}
@@ -290,14 +260,14 @@ export default function PantallaCarrito(props: any) {
               style={[estilos.botonControl, { width: botonControlSize, height: botonControlSize, borderRadius: botonControlSize / 2 }]}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={isTablet ? 20 : isSmallPhone ? 14 : 18} color={COLORS.blanco} />
+              <Ionicons name="add" size={isTablet ? 20 : isSmallPhone ? 14 : 18} color={Colores.textoOscuro} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => quitarProducto(item.producto.id)}
               style={estilos.botonEliminar}
               activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={isTablet ? 20 : isSmallPhone ? 16 : 18} color={COLORS.rojo} />
+              <Ionicons name="trash-outline" size={isTablet ? 20 : isSmallPhone ? 16 : 18} color={Colores.bartRojo} />
             </TouchableOpacity>
           </View>
         </View>
@@ -307,8 +277,9 @@ export default function PantallaCarrito(props: any) {
 
   return (
     <View style={estilos.contenedor}>
+      {/* 🛹 GRADIENTE BART: Naranja → Rojo */}
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
+        colors={[Colores.bartNaranja, Colores.bartRojo]}
         style={estilos.fondoGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -316,7 +287,7 @@ export default function PantallaCarrito(props: any) {
 
       {elementos.length === 0 ? (
         <View style={estilos.vacio}>
-          <Ionicons name="cart-outline" size={isTablet ? 100 : 80} color={COLORS.grisClaro + '40'} />
+          <Ionicons name="cart-outline" size={isTablet ? 100 : 80} color={Colores.textoClaro + '40'} />
           <Text style={[estilos.vacioTexto, { fontSize: isTablet ? 24 : isSmallPhone ? 18 : 20 }]}>
             Tu carrito está vacío
           </Text>
@@ -329,10 +300,10 @@ export default function PantallaCarrito(props: any) {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+              colors={[Colores.bartNaranja, Colores.bartAzul]}
               style={estilos.botonVolverGradient}
             >
-              <Ionicons name="restaurant" size={isTablet ? 24 : 20} color={COLORS.negro} />
+              <Ionicons name="restaurant" size={isTablet ? 24 : 20} color={Colores.textoClaro} />
               <Text style={[estilos.botonVolverTexto, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
                 Ir al Menú
               </Text>
@@ -341,10 +312,9 @@ export default function PantallaCarrito(props: any) {
         </View>
       ) : (
         <>
-          {/* ✅ INDICADOR DE CARGA DE UBICACIÓN */}
           {cargandoUbicacion && (
             <View style={estilos.cargandoUbicacion}>
-              <ActivityIndicator size="small" color={COLORS.amarillo} />
+              <ActivityIndicator size="small" color={Colores.bartNaranja} />
               <Text style={estilos.cargandoUbicacionTexto}>Cargando ubicación...</Text>
             </View>
           )}
@@ -364,7 +334,6 @@ export default function PantallaCarrito(props: any) {
             renderItem={renderItem}
           />
 
-          {/* ✅ FOOTER */}
           <Animated.View style={[
             estilos.footer,
             {
@@ -374,24 +343,23 @@ export default function PantallaCarrito(props: any) {
               opacity: fadeAnim,
             }
           ]}>
-            {/* Cupones */}
             {cupones.length > 0 && !cuponAplicado && (
               <TouchableOpacity
                 style={[estilos.botonCupones, { padding: isTablet ? 14 : isSmallPhone ? 10 : 12 }]}
                 onPress={() => setMostrarCupones(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="pricetag" size={isTablet ? 22 : isSmallPhone ? 18 : 20} color={COLORS.amarillo} />
+                <Ionicons name="pricetag" size={isTablet ? 22 : isSmallPhone ? 18 : 20} color={Colores.bartNaranja} />
                 <Text style={[estilos.botonCuponesTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
                   Tenés {cupones.length} cupón(es) disponible(s)
                 </Text>
-                <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={COLORS.grisClaro} />
+                <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={Colores.textoGris} />
               </TouchableOpacity>
             )}
 
             {cuponAplicado && (
               <View style={[estilos.cuponAplicado, { padding: isTablet ? 14 : isSmallPhone ? 10 : 12 }]}>
-                <Ionicons name="checkmark-circle" size={isTablet ? 22 : 20} color={COLORS.verdeClaro} />
+                <Ionicons name="checkmark-circle" size={isTablet ? 22 : 20} color={Colores.verdeClaro} />
                 <Text style={[estilos.cuponAplicadoTexto, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13 }]}>
                   Cupón: {cuponAplicado.recompensas?.nombre}
                 </Text>
@@ -399,12 +367,11 @@ export default function PantallaCarrito(props: any) {
                   onPress={() => setCuponAplicado(null)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close-circle" size={isTablet ? 22 : 20} color={COLORS.rojo} />
+                  <Ionicons name="close-circle" size={isTablet ? 22 : 20} color={Colores.bartRojo} />
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* ✅ INFORMACIÓN DE ENVÍO ESTIMADO */}
             {elementos.length > 0 && !cargandoUbicacion && (
               <View style={estilos.resumenEnvio}>
                 {calculandoEnvio ? (
@@ -412,7 +379,7 @@ export default function PantallaCarrito(props: any) {
                     <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                       Calculando envío...
                     </Text>
-                    <ActivityIndicator size="small" color={COLORS.amarillo} />
+                    <ActivityIndicator size="small" color={Colores.bartNaranja} />
                   </View>
                 ) : (
                   <>
@@ -435,7 +402,7 @@ export default function PantallaCarrito(props: any) {
                         estilos.resumenValor,
                         {
                           fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                          color: cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? COLORS.verdeClaro : COLORS.blanco,
+                          color: cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? Colores.verdeClaro : Colores.textoClaro,
                         }
                       ]}>
                         {cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
@@ -449,7 +416,6 @@ export default function PantallaCarrito(props: any) {
               </View>
             )}
 
-            {/* Resumen */}
             <View style={estilos.resumen}>
               <View style={estilos.resumenFila}>
                 <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>Subtotal</Text>
@@ -457,10 +423,10 @@ export default function PantallaCarrito(props: any) {
               </View>
               {descuento > 0 && (
                 <View style={estilos.resumenFila}>
-                  <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.verdeClaro }]}>
+                  <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.verdeClaro }]}>
                     Descuento
                   </Text>
-                  <Text style={[estilos.resumenValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.verdeClaro }]}>
+                  <Text style={[estilos.resumenValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.verdeClaro }]}>
                     -${descuento.toFixed(2)}
                   </Text>
                 </View>
@@ -473,7 +439,6 @@ export default function PantallaCarrito(props: any) {
               </View>
             </View>
 
-            {/* ✅ BOTÓN CHECKOUT */}
             <TouchableOpacity
               style={[
                 estilos.botonCheckout,
@@ -492,7 +457,7 @@ export default function PantallaCarrito(props: any) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                colors={[Colores.bartNaranja, Colores.bartAzul]}
                 style={[
                   estilos.botonCheckoutGradient,
                   {
@@ -504,7 +469,7 @@ export default function PantallaCarrito(props: any) {
                 end={{ x: 1, y: 0 }}
               >
                 <View style={estilos.botonCheckoutIcon}>
-                  <Ionicons name="cart" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.negro} />
+                  <Ionicons name="cart" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.textoOscuro} />
                 </View>
                 <Text style={[estilos.botonCheckoutTexto, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
                   Ir al Checkout
@@ -530,7 +495,6 @@ export default function PantallaCarrito(props: any) {
         </>
       )}
 
-      {/* ✅ MODAL LOGIN */}
       <Modal visible={mostrarModalLogin} transparent animationType="fade">
         <View style={estilos.modalFondo}>
           <View style={[estilos.modal, { padding: isTablet ? 40 : isSmallPhone ? 24 : 30 }]}>
@@ -559,7 +523,7 @@ export default function PantallaCarrito(props: any) {
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-in" size={isTablet ? 20 : 18} color={COLORS.blanco} />
+                <Ionicons name="log-in" size={isTablet ? 20 : 18} color={Colores.textoOscuro} />
                 <Text style={[estilos.modalConfirmarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
                   Iniciar sesión
                 </Text>
@@ -581,7 +545,6 @@ export default function PantallaCarrito(props: any) {
         </View>
       </Modal>
 
-      {/* ✅ MODAL CUPONES */}
       <Modal visible={mostrarCupones} transparent animationType="slide">
         <View style={estilos.modalFondo}>
           <View style={[estilos.modalCupones, { padding: isTablet ? 32 : isSmallPhone ? 20 : 24 }]}>
@@ -634,7 +597,7 @@ export default function PantallaCarrito(props: any) {
 const estilos = StyleSheet.create({
   contenedor: {
     flex: 1,
-    backgroundColor: COLORS.negro,
+    backgroundColor: Colores.textoOscuro,
   },
   fondoGradiente: {
     position: 'absolute',
@@ -643,7 +606,6 @@ const estilos = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  // ✅ VACÍO
   vacio: {
     flex: 1,
     justifyContent: 'center',
@@ -652,12 +614,12 @@ const estilos = StyleSheet.create({
   },
   vacioTexto: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     marginTop: 16,
     textAlign: 'center',
   },
   vacioSubtexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -666,7 +628,7 @@ const estilos = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: 12,
     elevation: 4,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.bartNaranja,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -679,54 +641,51 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
   },
   botonVolverTexto: {
-    color: COLORS.negro,
+    color: Colores.textoClaro,
     fontWeight: 'bold',
   },
-  // ✅ LISTA
   lista: {
     flexGrow: 1,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '60',
+    backgroundColor: Colores.textoOscuro + '60',
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
+    borderColor: Colores.textoClaro + '8',
   },
   imagen: {
     marginRight: 12,
   },
   imagenPlaceholder: {
-    backgroundColor: COLORS.amarillo + '20',
+    backgroundColor: Colores.bartNaranja + '20',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  emoji: {
-    // Tamaño dinámico
-  },
+  emoji: {},
   itemInfo: {
     flex: 1,
   },
   itemNombre: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     letterSpacing: 0.3,
   },
   itemDescripcion: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     marginTop: 2,
     opacity: 0.7,
   },
   itemPrecioUnitario: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     marginTop: 2,
     opacity: 0.6,
   },
   itemPrecioTotal: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
+    color: Colores.bartNaranja,
     marginTop: 4,
   },
   controles: {
@@ -735,62 +694,60 @@ const estilos = StyleSheet.create({
     marginLeft: 8,
   },
   botonControl: {
-    backgroundColor: COLORS.amarillo,
+    backgroundColor: Colores.bartNaranja,
     justifyContent: 'center',
     alignItems: 'center',
   },
   cantidad: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     fontWeight: 'bold',
   },
   botonEliminar: {
     padding: 4,
     marginTop: 2,
   },
-  // ✅ FOOTER
   footer: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '10',
-    backgroundColor: COLORS.negro + '80',
+    borderTopColor: Colores.textoClaro + '10',
+    backgroundColor: Colores.textoOscuro + '80',
   },
   botonCupones: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.amarillo + '15',
+    backgroundColor: Colores.bartNaranja + '15',
     borderRadius: 12,
     marginBottom: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: COLORS.amarillo + '20',
+    borderColor: Colores.bartNaranja + '20',
   },
   botonCuponesTexto: {
-    color: COLORS.amarillo,
+    color: Colores.bartNaranja,
     fontWeight: '600',
     flex: 1,
   },
   cuponAplicado: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.verdeClaro + '15',
+    backgroundColor: Colores.verdeClaro + '15',
     borderRadius: 12,
     marginBottom: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: COLORS.verdeClaro + '20',
+    borderColor: Colores.verdeClaro + '20',
   },
   cuponAplicadoTexto: {
     flex: 1,
-    color: COLORS.verdeClaro,
+    color: Colores.verdeClaro,
     fontWeight: '600',
   },
-  // ✅ RESUMEN ENVÍO
   resumenEnvio: {
-    backgroundColor: COLORS.negro + '30',
+    backgroundColor: Colores.textoOscuro + '30',
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
+    borderColor: Colores.textoClaro + '8',
   },
   resumen: {
     marginBottom: 16,
@@ -801,31 +758,30 @@ const estilos = StyleSheet.create({
     marginBottom: 6,
   },
   resumenTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
   },
   resumenValor: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     fontWeight: '600',
   },
   resumenTotal: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '15',
+    borderTopColor: Colores.textoClaro + '15',
     paddingTop: 10,
     marginTop: 4,
   },
   totalTexto: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
   },
   totalPrecio: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
+    color: Colores.bartNaranja,
   },
-  // ✅ BOTÓN CHECKOUT
   botonCheckout: {
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: COLORS.amarillo,
+    shadowColor: Colores.bartNaranja,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
@@ -839,25 +795,25 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
   },
   botonCheckoutIcon: {
-    backgroundColor: COLORS.negro + '20',
+    backgroundColor: Colores.textoOscuro + '20',
     padding: 4,
     borderRadius: 20,
   },
   botonCheckoutTexto: {
-    color: COLORS.negro,
+    color: Colores.textoClaro,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   botonCheckoutPrecio: {
-    backgroundColor: COLORS.negro + '15',
+    backgroundColor: Colores.textoOscuro + '15',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.negro + '10',
+    borderColor: Colores.textoOscuro + '10',
   },
   botonCheckoutPrecioTexto: {
-    color: COLORS.negro,
+    color: Colores.textoClaro,
     fontWeight: '800',
   },
   botonVaciar: {
@@ -865,11 +821,10 @@ const estilos = StyleSheet.create({
     paddingVertical: 10,
   },
   botonVaciarTexto: {
-    color: COLORS.rojo,
+    color: Colores.bartRojo,
     fontWeight: '500',
     opacity: 0.7,
   },
-  // ✅ MODALES
   modalFondo: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.85)',
@@ -878,24 +833,24 @@ const estilos = StyleSheet.create({
     padding: 20,
   },
   modal: {
-    backgroundColor: COLORS.grisOscuro,
+    backgroundColor: Colores.fondoOscuro,
     borderRadius: 24,
     width: '90%',
     maxWidth: 400,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: COLORS.amarillo + '30',
+    borderColor: Colores.bartNaranja + '30',
   },
   modalIcono: {
     marginBottom: 12,
   },
   modalTitulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     marginBottom: 8,
   },
   modalTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -914,93 +869,90 @@ const estilos = StyleSheet.create({
     gap: 6,
   },
   modalCancelar: {
-    backgroundColor: COLORS.negro + '60',
+    backgroundColor: Colores.textoOscuro + '60',
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
+    borderColor: Colores.textoClaro + '10',
   },
   modalCancelarTexto: {
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     fontWeight: '600',
   },
   modalConfirmar: {
-    backgroundColor: COLORS.amarillo,
+    backgroundColor: Colores.bartNaranja,
   },
   modalConfirmarTexto: {
-    color: COLORS.negro,
+    color: Colores.textoOscuro,
     fontWeight: 'bold',
   },
   modalRegistro: {
-    color: COLORS.amarillo,
+    color: Colores.bartNaranja,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
   modalCupones: {
-    backgroundColor: COLORS.grisOscuro,
+    backgroundColor: Colores.fondoOscuro,
     borderRadius: 24,
     width: '92%',
     maxWidth: 500,
     maxHeight: '75%',
     borderWidth: 2,
-    borderColor: COLORS.amarillo + '20',
+    borderColor: Colores.bartNaranja + '20',
   },
   modalCuponTitulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
     textAlign: 'center',
     marginBottom: 16,
   },
   cuponItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '40',
+    backgroundColor: Colores.textoOscuro + '40',
     borderRadius: 12,
     marginBottom: 8,
     gap: 10,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
+    borderColor: Colores.textoClaro + '8',
   },
-  cuponIcono: {
-    // Tamaño dinámico
-  },
+  cuponIcono: {},
   cuponNombre: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
+    color: Colores.textoClaro,
   },
   cuponDesc: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     marginTop: 2,
     opacity: 0.7,
   },
   cuponAplicar: {
-    color: COLORS.amarillo,
+    color: Colores.bartNaranja,
     fontWeight: '600',
   },
   botonCerrarCupones: {
-    backgroundColor: COLORS.amarillo,
+    backgroundColor: Colores.bartNaranja,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
   },
   botonCerrarCuponesTexto: {
-    color: COLORS.negro,
+    color: Colores.textoOscuro,
     fontWeight: 'bold',
   },
-  // ✅ NUEVOS ESTILOS
   cargandoUbicacion: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.negro + '30',
+    backgroundColor: Colores.textoOscuro + '30',
     paddingVertical: 10,
     marginHorizontal: 16,
     marginBottom: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
+    borderColor: Colores.textoClaro + '5',
     gap: 10,
   },
   cargandoUbicacionTexto: {
-    color: COLORS.grisClaro,
+    color: Colores.textoGris,
     fontSize: 13,
     fontWeight: '500',
   },

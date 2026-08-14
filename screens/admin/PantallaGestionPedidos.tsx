@@ -11,41 +11,17 @@ import { supabase } from '../../lib/supabase';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-  pendiente: '#FF9800',
-  confirmado: '#2196F3',
-  preparando: '#9C27B0',
-  listo: '#4CAF50',
-  enCamino: '#FF5722',
-  entregado: '#4CAF50',
-  cancelado: '#F44336',
-};
-
 const { width, height } = Dimensions.get('window');
 
+// 👔 ESTADOS DE PEDIDO - CON COLORES BURNS
 const ESTADOS_PEDIDO: Record<string, { label: string; color: string; icono: string; siguiente?: string }> = {
-  pendiente: { label: 'Pendiente', color: COLORS.pendiente, icono: 'time-outline', siguiente: 'confirmado' },
-  confirmado: { label: 'Confirmado', color: COLORS.confirmado, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
-  preparando: { label: 'Preparando', color: COLORS.preparando, icono: 'cafe-outline', siguiente: 'listo' },
-  listo: { label: 'Listo', color: COLORS.listo, icono: 'restaurant-outline', siguiente: 'en_camino' },
-  en_camino: { label: 'En camino', color: COLORS.enCamino, icono: 'bicycle-outline', siguiente: 'entregado' },
-  entregado: { label: 'Entregado', color: COLORS.entregado, icono: 'checkmark-done-outline' },
-  cancelado: { label: 'Cancelado', color: COLORS.cancelado, icono: 'close-circle-outline' },
+  pendiente: { label: 'Pendiente', color: Colores.burnsDorado, icono: 'time-outline', siguiente: 'confirmado' },
+  confirmado: { label: 'Confirmado', color: Colores.burnsBlanco, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
+  preparando: { label: 'Preparando', color: Colores.burnsVerde, icono: 'cafe-outline', siguiente: 'listo' },
+  listo: { label: 'Listo', color: Colores.burnsDorado, icono: 'restaurant-outline', siguiente: 'en_camino' },
+  en_camino: { label: 'En camino', color: Colores.burnsRojo, icono: 'bicycle-outline', siguiente: 'entregado' },
+  entregado: { label: 'Entregado', color: Colores.burnsVerde, icono: 'checkmark-done-outline' },
+  cancelado: { label: 'Cancelado', color: Colores.burnsRojo, icono: 'close-circle-outline' },
 };
 
 export default function PantallaGestionPedidos(props: any) {
@@ -115,7 +91,7 @@ export default function PantallaGestionPedidos(props: any) {
   const isSmallPhone = width < 375;
 
   const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
-  const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
+  const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
   const tarjetaPadding = isTablet ? 20 : isSmallPhone ? 12 : 16;
   const pedidoIdSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
   const totalSize = isTablet ? 24 : isSmallPhone ? 18 : 20;
@@ -136,7 +112,6 @@ export default function PantallaGestionPedidos(props: any) {
       outputRange: [20 * (index + 1), 0],
     });
 
-    // ✅ Verificar si tiene info de envío
     const tieneInfoEnvio = item.distancia_km !== undefined && item.distancia_km !== null;
 
     return (
@@ -152,14 +127,15 @@ export default function PantallaGestionPedidos(props: any) {
             padding: tarjetaPadding,
             borderRadius: isTablet ? 20 : isSmallPhone ? 12 : 16,
             borderColor: estadoInfo.color + '40',
+            backgroundColor: Colores.burnsNegro + '60',
           }
         ]}>
           <View style={estilos.encabezado}>
             <View style={estilos.pedidoInfo}>
-              <Text style={[estilos.pedidoId, { fontSize: pedidoIdSize }]}>
+              <Text style={[estilos.pedidoId, { fontSize: pedidoIdSize, color: Colores.burnsBlanco }]}>
                 Pedido #{item.id}
               </Text>
-              <Text style={[estilos.pedidoFecha, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}>
+              <Text style={[estilos.pedidoFecha, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: Colores.burnsBlanco + '50' }]}>
                 {new Date(item.creado_en).toLocaleDateString('es-AR', {
                   day: '2-digit',
                   month: '2-digit',
@@ -176,6 +152,8 @@ export default function PantallaGestionPedidos(props: any) {
                 paddingHorizontal: isTablet ? 14 : isSmallPhone ? 8 : 10,
                 paddingVertical: isTablet ? 6 : isSmallPhone ? 4 : 5,
                 borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
+                borderWidth: 1,
+                borderColor: estadoInfo.color + '30',
               }
             ]}>
               <Ionicons name={estadoInfo.icono as any} size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={estadoInfo.color} />
@@ -191,31 +169,35 @@ export default function PantallaGestionPedidos(props: any) {
             </View>
           </View>
 
-          {/* ✅ Información de envío (para admin) */}
           {tieneInfoEnvio && (
-            <View style={estilos.infoEnvioContainer}>
+            <View style={[estilos.infoEnvioContainer, {
+              backgroundColor: Colores.burnsNegro + '40',
+              borderColor: Colores.burnsBlanco + '5',
+            }]}>
               {item.distancia_km !== undefined && item.distancia_km !== null && (
                 <View style={estilos.infoEnvioFila}>
-                  <Ionicons name="navigate" size={isTablet ? 14 : 10} color={COLORS.amarillo} />
-                  <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize }]}>
+                  <Ionicons name="navigate" size={isTablet ? 14 : 10} color={Colores.burnsDorado} />
+                  <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize, color: Colores.burnsBlanco + '60' }]}>
                     📏 {item.distancia_km.toFixed(1)} km
                   </Text>
                 </View>
               )}
               <View style={estilos.infoEnvioFila}>
-                <Ionicons name="cash" size={isTablet ? 14 : 10} color={COLORS.verdeClaro} />
-                <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize }]}>
+                <Ionicons name="cash" size={isTablet ? 14 : 10} color={Colores.burnsDorado} />
+                <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize, color: Colores.burnsBlanco + '60' }]}>
                   💰 ${item.costo_envio?.toFixed(2) || '0.00'}
                 </Text>
               </View>
             </View>
           )}
 
-          <View style={estilos.totalContainer}>
-            <Text style={[estilos.totalLabel, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+          <View style={[estilos.totalContainer, {
+            borderTopColor: Colores.burnsBlanco + '8',
+          }]}>
+            <Text style={[estilos.totalLabel, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '50' }]}>
               Total
             </Text>
-            <Text style={[estilos.total, { fontSize: totalSize }]}>
+            <Text style={[estilos.total, { fontSize: totalSize, color: Colores.burnsDorado }]}>
               ${item.total?.toFixed(2)}
             </Text>
           </View>
@@ -235,8 +217,8 @@ export default function PantallaGestionPedidos(props: any) {
                 onPress={() => cambiarEstado(item.id, estadoInfo.siguiente!)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="arrow-forward" size={isTablet ? 18 : isSmallPhone ? 12 : 16} color={COLORS.blanco} />
-                <Text style={[estilos.botonTexto, { fontSize: botonTextSize }]}>
+                <Ionicons name="arrow-forward" size={isTablet ? 18 : isSmallPhone ? 12 : 16} color={Colores.burnsNegro} />
+                <Text style={[estilos.botonTexto, { fontSize: botonTextSize, color: Colores.burnsNegro }]}>
                   Avanzar a {ESTADOS_PEDIDO[estadoInfo.siguiente]?.label || estadoInfo.siguiente}
                 </Text>
               </TouchableOpacity>
@@ -249,14 +231,14 @@ export default function PantallaGestionPedidos(props: any) {
                       paddingHorizontal: isTablet ? 14 : isSmallPhone ? 10 : 12,
                       paddingVertical: isTablet ? 10 : isSmallPhone ? 6 : 8,
                       borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                      borderColor: COLORS.cancelado,
+                      borderColor: Colores.burnsRojo,
                     }
                   ]}
                   onPress={() => cambiarEstado(item.id, 'cancelado')}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="close" size={isTablet ? 18 : isSmallPhone ? 12 : 16} color={COLORS.cancelado} />
-                  <Text style={[estilos.botonCancelarTexto, { fontSize: botonTextSize }]}>
+                  <Ionicons name="close" size={isTablet ? 18 : isSmallPhone ? 12 : 16} color={Colores.burnsRojo} />
+                  <Text style={[estilos.botonCancelarTexto, { fontSize: botonTextSize, color: Colores.burnsRojo }]}>
                     Cancelar
                   </Text>
                 </TouchableOpacity>
@@ -265,17 +247,19 @@ export default function PantallaGestionPedidos(props: any) {
           )}
 
           {isTerminado && (
-            <View style={estilos.estadoFinal}>
+            <View style={[estilos.estadoFinal, {
+              borderTopColor: Colores.burnsBlanco + '8',
+            }]}>
               <Ionicons
                 name={item.estado === 'entregado' ? 'checkmark-circle' : 'close-circle'}
                 size={isTablet ? 24 : 20}
-                color={item.estado === 'entregado' ? COLORS.entregado : COLORS.cancelado}
+                color={item.estado === 'entregado' ? Colores.burnsVerde : Colores.burnsRojo}
               />
               <Text style={[
                 estilos.estadoFinalTexto,
                 {
                   fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  color: item.estado === 'entregado' ? COLORS.entregado : COLORS.cancelado,
+                  color: item.estado === 'entregado' ? Colores.burnsVerde : Colores.burnsRojo,
                 }
               ]}>
                 {item.estado === 'entregado' ? '✅ Pedido completado' : '❌ Pedido cancelado'}
@@ -290,7 +274,7 @@ export default function PantallaGestionPedidos(props: any) {
   return (
     <View style={estilos.contenedor}>
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
+        colors={[Colores.burnsVerde, Colores.burnsNegro]}
         style={estilos.fondoGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -309,9 +293,9 @@ export default function PantallaGestionPedidos(props: any) {
           onPress={() => props.navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+          <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.burnsBlanco} />
         </TouchableOpacity>
-        <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+        <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.burnsDorado }]}>
           📋 Gestión de Pedidos
         </Text>
         <View style={{ width: isTablet ? 28 : 24 }} />
@@ -325,18 +309,18 @@ export default function PantallaGestionPedidos(props: any) {
           estilos.lista,
           {
             paddingHorizontal: paddingHorizontal,
-            paddingBottom: insets.bottom + 40,
+            paddingBottom: insets.bottom + 150,
             paddingTop: isTablet ? 12 : 8,
           }
         ]}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={estilos.vacio}>
-            <Ionicons name="receipt-outline" size={isTablet ? 80 : 60} color={COLORS.grisClaro + '30'} />
-            <Text style={[estilos.vacioTexto, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
+            <Ionicons name="receipt-outline" size={isTablet ? 80 : 60} color={Colores.burnsBlanco + '20'} />
+            <Text style={[estilos.vacioTexto, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16, color: Colores.burnsBlanco }]}>
               No hay pedidos
             </Text>
-            <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+            <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '40' }]}>
               Los pedidos aparecerán aquí cuando los clientes realicen compras
             </Text>
           </View>
@@ -345,8 +329,8 @@ export default function PantallaGestionPedidos(props: any) {
           <RefreshControl
             refreshing={refrescando}
             onRefresh={manejarRefresh}
-            tintColor={COLORS.amarillo}
-            colors={[COLORS.amarillo]}
+            tintColor={Colores.burnsDorado}
+            colors={[Colores.burnsDorado]}
           />
         }
       />
@@ -357,7 +341,7 @@ export default function PantallaGestionPedidos(props: any) {
 const estilos = StyleSheet.create({
   contenedor: {
     flex: 1,
-    backgroundColor: COLORS.negro,
+    backgroundColor: Colores.burnsNegro,
   },
   fondoGradiente: {
     position: 'absolute',
@@ -371,21 +355,19 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.blanco + '10',
+    borderBottomColor: Colores.burnsBlanco + '10',
   },
   botonVolver: {
     padding: 4,
   },
   titulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
     letterSpacing: 1,
   },
   lista: {
     flexGrow: 1,
   },
   tarjeta: {
-    backgroundColor: COLORS.negro + '60',
     marginBottom: 12,
     borderWidth: 1,
   },
@@ -399,10 +381,8 @@ const estilos = StyleSheet.create({
   },
   pedidoId: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
   },
   pedidoFecha: {
-    color: COLORS.grisClaro,
     marginTop: 2,
     opacity: 0.6,
   },
@@ -418,13 +398,11 @@ const estilos = StyleSheet.create({
   infoEnvioContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: COLORS.negro + '30',
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 8,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
   },
   infoEnvioFila: {
     flexDirection: 'row',
@@ -432,7 +410,6 @@ const estilos = StyleSheet.create({
     gap: 4,
   },
   infoEnvioTexto: {
-    color: COLORS.grisClaro,
     fontWeight: '500',
   },
   totalContainer: {
@@ -442,15 +419,12 @@ const estilos = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '8',
   },
   totalLabel: {
-    color: COLORS.grisClaro,
     fontWeight: '500',
   },
   total: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
   },
   botones: {
     flexDirection: 'row',
@@ -465,7 +439,6 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
   },
   botonTexto: {
-    color: COLORS.blanco,
     fontWeight: 'bold',
   },
   botonCancelar: {
@@ -476,7 +449,6 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
   },
   botonCancelarTexto: {
-    color: COLORS.cancelado,
     fontWeight: '600',
   },
   estadoFinal: {
@@ -487,7 +459,6 @@ const estilos = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '8',
   },
   estadoFinalTexto: {
     fontWeight: '600',
@@ -499,13 +470,11 @@ const estilos = StyleSheet.create({
     paddingVertical: 60,
   },
   vacioTexto: {
-    color: COLORS.blanco,
     fontWeight: 'bold',
     marginTop: 16,
     textAlign: 'center',
   },
   vacioSubtexto: {
-    color: COLORS.grisClaro,
     textAlign: 'center',
     marginTop: 4,
     opacity: 0.6,

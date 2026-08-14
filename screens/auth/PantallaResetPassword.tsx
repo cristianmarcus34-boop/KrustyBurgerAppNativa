@@ -3,30 +3,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
     ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-    Animated, Dimensions
+    Animated, Dimensions, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-    amarillo: '#F5C518',
-    amarilloClaro: '#FFE066',
-    amarilloOscuro: '#D4A800',
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
-};
+import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,13 +20,26 @@ export default function PantallaResetPassword(props: any) {
     const [intentos, setIntentos] = useState(0);
     const [bloqueado, setBloqueado] = useState(false);
     const [tiempoRestante, setTiempoRestante] = useState(0);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [modalData, setModalData] = useState<{
+        type: 'success' | 'error' | 'blocked';
+        title: string;
+        message: string;
+        icon: string;
+    }>({
+        type: 'success',
+        title: '',
+        message: '',
+        icon: '✅',
+    });
     const { resetearContrasena } = tiendaAutenticacion();
     const insets = useSafeAreaInsets();
 
-    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(50)).current;
     const scaleAnim = useRef(new Animated.Value(0.9)).current;
+    const modalScaleAnim = useRef(new Animated.Value(0.8)).current;
+    const modalFadeAnim = useRef(new Animated.Value(0)).current;
 
     // ✅ TIMER PARA DESBLOQUEO
     useEffect(() => {
@@ -84,20 +80,76 @@ export default function PantallaResetPassword(props: any) {
         ]).start();
     }, []);
 
+    // ✅ ANIMACIÓN DEL MODAL
+    useEffect(() => {
+        if (modalVisible) {
+            Animated.parallel([
+                Animated.spring(modalScaleAnim, {
+                    toValue: 1,
+                    friction: 6,
+                    tension: 40,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(modalFadeAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            modalScaleAnim.setValue(0.8);
+            modalFadeAnim.setValue(0);
+        }
+    }, [modalVisible]);
+
+    const mostrarModal = (type: 'success' | 'error' | 'blocked', title: string, message: string, icon: string) => {
+        setModalData({ type, title, message, icon });
+        setModalVisible(true);
+    };
+
+    const formatearTiempo = (segundos: number) => {
+        const horas = Math.floor(segundos / 3600);
+        const mins = Math.floor((segundos % 3600) / 60);
+        const secs = segundos % 60;
+
+        if (horas > 0) {
+            return `${horas}h ${mins}m ${secs}s`;
+        }
+        if (mins > 0) {
+            return `${mins}m ${secs}s`;
+        }
+        return `${secs}s`;
+    };
+
     const manejarReset = async () => {
         if (!correo) {
-            Alert.alert('Error', 'Ingresa tu correo electrónico');
+            mostrarModal(
+                'error',
+                '❌ Correo requerido',
+                'Por favor, ingresa tu correo electrónico para continuar.',
+                '📧'
+            );
             return;
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(correo)) {
-            Alert.alert('Error', 'Ingresa un correo electrónico válido');
+            mostrarModal(
+                'error',
+                '❌ Correo inválido',
+                'El formato del correo electrónico no es válido. Ej: usuario@email.com',
+                '📧'
+            );
             return;
         }
 
         if (bloqueado) {
-            Alert.alert('⏳ Bloqueado temporalmente', `Espera ${Math.ceil(tiempoRestante / 60)} minutos para volver a intentar.`);
+            mostrarModal(
+                'blocked',
+                '⏳ Bloqueado temporalmente',
+                `Has excedido el límite de intentos.\n\n⏱️ Espera ${formatearTiempo(tiempoRestante)} para volver a intentar.\n\n📌 Revisa tu carpeta de SPAM.`,
+                '🔒'
+            );
             return;
         }
 
@@ -108,33 +160,42 @@ export default function PantallaResetPassword(props: any) {
         if (resultado.success) {
             setEnviado(true);
             setIntentos(0);
+
+            mostrarModal(
+                'success',
+                '📧 ¡Correo enviado!',
+                `Hemos enviado un enlace de recuperación a:\n\n📬 ${correo}\n\n📌 IMPORTANTE:\n• Abre el enlace desde tu TELÉFONO\n• Revisa tu carpeta de SPAM\n• El enlace expira en 1 hora`,
+                '🎉'
+            );
         } else {
             setIntentos(prev => prev + 1);
 
-            // ✅ MANEJO DE ERROR SEGÚN TIPO
             if (resultado.errorType === 'rate_limit') {
-                // Bloquear por 1 hora (3600 segundos)
                 setBloqueado(true);
                 setTiempoRestante(3600);
 
-                Alert.alert(
+                mostrarModal(
+                    'blocked',
                     '⏳ Demasiados intentos',
-                    'Has excedido el límite de intentos. Serás bloqueado por 1 hora.\n\n' +
-                    '📌 Consejo: Revisa tu carpeta de SPAM por si el correo ya fue enviado.\n\n' +
-                    '⏱️ Tiempo restante: 60 minutos',
-                    [{ text: 'Entendido' }]
+                    `Has excedido el límite de intentos.\n\n🔒 Bloqueado por 1 hora.\n\n📌 Consejos:\n• Espera 1 hora\n• Revisa SPAM\n• Abre el enlace desde tu TELÉFONO\n\n⏱️ ${formatearTiempo(3600)} restantes`,
+                    '🔒'
+                );
+            } else if (resultado.errorType === 'not_found') {
+                mostrarModal(
+                    'error',
+                    '❌ Cuenta no encontrada',
+                    `No existe una cuenta con el correo:\n\n📬 ${correo}\n\n¿Quieres crear una cuenta nueva?`,
+                    '🔍'
                 );
             } else {
-                // Mostrar el error específico
-                Alert.alert('Error', resultado.error || 'No se pudo enviar el correo de recuperación');
+                mostrarModal(
+                    'error',
+                    '❌ Error al enviar',
+                    resultado.error || 'Ocurrió un error inesperado. Intenta nuevamente.',
+                    '⚠️'
+                );
             }
         }
-    };
-
-    const formatearTiempo = (segundos: number) => {
-        const mins = Math.floor(segundos / 60);
-        const secs = segundos % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     const isTablet = width >= 768;
@@ -150,9 +211,52 @@ export default function PantallaResetPassword(props: any) {
 
     const estaBloqueado = bloqueado || intentos >= 3;
 
+    // ✅ COLORES DEL MODAL SEGÚN TIPO
+    // ✅ COLORES DEL MODAL SEGÚN TIPO - CORREGIDO
+    const getModalColors = () => {
+        switch (modalData.type) {
+            case 'success':
+                return {
+                    gradient: [Colores.verdeClaro, Colores.verdeOscuro] as const,
+                    iconBg: Colores.verdeClaro + '20',
+                    iconColor: Colores.verdeClaro,
+                    titleColor: Colores.verdeClaro,
+                };
+            case 'error':
+                return {
+                    gradient: [Colores.secundario, Colores.secundarioOscuro] as const,
+                    iconBg: Colores.secundario + '20',
+                    iconColor: Colores.secundario,
+                    titleColor: Colores.secundario,
+                };
+            case 'blocked':
+                return {
+                    gradient: [Colores.acento, Colores.acentoOscuro] as const,
+                    iconBg: Colores.acento + '20',
+                    iconColor: Colores.acento,
+                    titleColor: Colores.acento,
+                };
+            default:
+                return {
+                    gradient: [Colores.primario, Colores.primarioOscuro] as const,
+                    iconBg: Colores.primario + '20',
+                    iconColor: Colores.primario,
+                    titleColor: Colores.primario,
+                };
+        }
+    };
+
+
+    const modalColors = getModalColors() as {
+        gradient: readonly [string, string];
+        iconBg: string;
+        iconColor: string;
+        titleColor: string;
+    };
+
     return (
         <LinearGradient
-            colors={[COLORS.verde, COLORS.negro]}
+            colors={[Colores.frinkBlanco, Colores.frinkGris]}
             style={estilos.contenedor}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -173,7 +277,6 @@ export default function PantallaResetPassword(props: any) {
                     showsVerticalScrollIndicator={false}
                     bounces={false}
                 >
-                    {/* ✅ HEADER CON ANIMACIÓN */}
                     <Animated.View
                         style={[
                             estilos.header,
@@ -188,28 +291,27 @@ export default function PantallaResetPassword(props: any) {
                             onPress={() => props.navigation.goBack()}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+                            <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.frinkAzul} />
                         </TouchableOpacity>
 
                         <View style={estilos.headerContent}>
                             <Text style={[estilos.icono, { fontSize: isTablet ? 64 : 48 }]}>🔐</Text>
-                            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                            <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.frinkAzul }]}>
                                 Recuperar Contraseña
                             </Text>
-                            <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
+                            <Text style={[estilos.subtitulo, { fontSize: subtituloSize, color: Colores.frinkGris }]}>
                                 {enviado
-                                    ? 'Revisa tu correo para continuar'
-                                    : 'Te enviaremos un enlace para restablecer tu contraseña'}
+                                    ? '✅ Revisa tu correo para continuar'
+                                    : '"Glaaaven! Recuperemos tu acceso!" 🧪'}
                             </Text>
                             {!enviado && (
-                                <Text style={[estilos.intentosTexto, { fontSize: isTablet ? 13 : 11 }]}>
+                                <Text style={[estilos.intentosTexto, { fontSize: isTablet ? 13 : 11, color: Colores.frinkAzul + '70' }]}>
                                     Intentos: {intentos}/3
                                 </Text>
                             )}
                         </View>
                     </Animated.View>
 
-                    {/* ✅ FORMULARIO CON ANIMACIÓN */}
                     <Animated.View
                         style={[
                             estilos.formulario,
@@ -221,36 +323,33 @@ export default function PantallaResetPassword(props: any) {
                     >
                         {!enviado ? (
                             <>
-                                {/* Email */}
-                                <Text style={[estilos.label, { fontSize: labelSize }]}>
+                                <Text style={[estilos.label, { fontSize: labelSize, color: Colores.frinkAzul }]}>
                                     Correo electrónico
                                 </Text>
                                 <View style={estilos.inputContainer}>
-                                    <Ionicons name="mail-outline" size={22} color={COLORS.grisClaro} style={estilos.inputIcon} />
+                                    <Ionicons name="mail-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
                                     <TextInput
-                                        style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
+                                        style={[estilos.input, { fontSize: inputSize, flex: 1, color: Colores.frinkAzul }]}
                                         value={correo}
                                         onChangeText={setCorreo}
                                         placeholder="tucorreo@ejemplo.com"
-                                        placeholderTextColor={COLORS.grisClaro + '60'}
+                                        placeholderTextColor={Colores.frinkGris + '60'}
                                         keyboardType="email-address"
                                         autoCapitalize="none"
-                                        selectionColor={COLORS.amarillo}
+                                        selectionColor={Colores.frinkAzul}
                                         editable={!estaBloqueado}
                                     />
                                 </View>
 
-                                {/* ✅ INDICADOR DE BLOQUEO */}
                                 {estaBloqueado && (
                                     <View style={estilos.bloqueadoContainer}>
-                                        <Ionicons name="time-outline" size={isTablet ? 24 : 20} color={COLORS.amarillo} />
-                                        <Text style={[estilos.bloqueadoTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                                        <Ionicons name="time-outline" size={isTablet ? 24 : 20} color={Colores.frinkAzul} />
+                                        <Text style={[estilos.bloqueadoTexto, { fontSize: isTablet ? 14 : 12, color: Colores.frinkAzul }]}>
                                             ⏳ Bloqueado: {formatearTiempo(tiempoRestante)}
                                         </Text>
                                     </View>
                                 )}
 
-                                {/* ✅ BOTÓN ENVIAR */}
                                 <TouchableOpacity
                                     style={[estilos.boton, estaBloqueado && { opacity: 0.5 }]}
                                     onPress={manejarReset}
@@ -258,17 +357,17 @@ export default function PantallaResetPassword(props: any) {
                                     activeOpacity={0.8}
                                 >
                                     <LinearGradient
-                                        colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                        colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
                                         style={estilos.botonGradient}
                                         start={{ x: 0, y: 0 }}
                                         end={{ x: 1, y: 0 }}
                                     >
                                         {cargando ? (
-                                            <ActivityIndicator color={COLORS.negro} size="small" />
+                                            <ActivityIndicator color={Colores.frinkBlanco} size="small" />
                                         ) : (
                                             <>
-                                                <Ionicons name="send" size={buttonTextSize + 4} color={COLORS.negro} />
-                                                <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
+                                                <Ionicons name="send" size={buttonTextSize + 4} color={Colores.frinkBlanco} />
+                                                <Text style={[estilos.textoBoton, { fontSize: buttonTextSize, color: Colores.frinkBlanco }]}>
                                                     {estaBloqueado ? '⏳ Bloqueado' : 'Enviar enlace'}
                                                 </Text>
                                             </>
@@ -276,38 +375,40 @@ export default function PantallaResetPassword(props: any) {
                                     </LinearGradient>
                                 </TouchableOpacity>
 
-                                {/* ✅ ENLACE A LOGIN */}
                                 <TouchableOpacity
                                     style={estilos.enlaceLogin}
                                     onPress={() => props.navigation.navigate('Login')}
                                     activeOpacity={0.6}
                                 >
-                                    <Text style={[estilos.enlaceLoginTexto, { fontSize: isTablet ? 15 : 13 }]}>
-                                        <Ionicons name="arrow-back" size={isTablet ? 16 : 14} color={COLORS.grisClaro} />
+                                    <Text style={[estilos.enlaceLoginTexto, { fontSize: isTablet ? 15 : 13, color: Colores.frinkGris }]}>
+                                        <Ionicons name="arrow-back" size={isTablet ? 16 : 14} color={Colores.frinkGris} />
                                         {' '}Volver al inicio de sesión
                                     </Text>
                                 </TouchableOpacity>
                             </>
                         ) : (
-                            // ✅ MENSAJE DE ÉXITO
+                            // ✅ VERSIÓN SIMPLIFICADA CUANDO YA SE ENVIÓ
                             <View style={estilos.exitoContainer}>
                                 <View style={estilos.exitoIcono}>
-                                    <Ionicons name="checkmark-circle" size={isTablet ? 80 : 60} color={COLORS.verdeClaro} />
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 80 : 60} color={Colores.verdeClaro} />
                                 </View>
-                                <Text style={[estilos.exitoTitulo, { fontSize: isTablet ? 24 : 20 }]}>
+                                <Text style={[estilos.exitoTitulo, { fontSize: isTablet ? 24 : 20, color: Colores.verdeClaro }]}>
                                     ¡Correo enviado! 📧
                                 </Text>
-                                <Text style={[estilos.exitoTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                <Text style={[estilos.exitoTexto, { fontSize: isTablet ? 16 : 14, color: Colores.frinkGris }]}>
                                     Hemos enviado un enlace de recuperación a:
                                 </Text>
-                                <Text style={[estilos.exitoCorreo, { fontSize: isTablet ? 17 : 15 }]}>
+                                <Text style={[estilos.exitoCorreo, { fontSize: isTablet ? 17 : 15, color: Colores.frinkAzul }]}>
                                     {correo}
                                 </Text>
-                                <Text style={[estilos.exitoInstrucciones, { fontSize: isTablet ? 14 : 12 }]}>
-                                    Revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+                                <Text style={[estilos.exitoInstrucciones, { fontSize: isTablet ? 14 : 12, color: Colores.frinkGris }]}>
+                                    Revisa tu bandeja de entrada y sigue las instrucciones.
                                 </Text>
-                                <Text style={[estilos.exitoSpam, { fontSize: isTablet ? 12 : 10 }]}>
+                                <Text style={[estilos.exitoSpam, { fontSize: isTablet ? 12 : 10, color: Colores.frinkAzul + '70' }]}>
                                     📌 Si no ves el correo, revisa tu carpeta de SPAM.
+                                </Text>
+                                <Text style={[estilos.exitoImportante, { fontSize: isTablet ? 12 : 10, color: Colores.secundario }]}>
+                                    ⚠️ IMPORTANTE: Abre el enlace desde tu TELÉFONO
                                 </Text>
 
                                 <TouchableOpacity
@@ -316,13 +417,13 @@ export default function PantallaResetPassword(props: any) {
                                     activeOpacity={0.8}
                                 >
                                     <LinearGradient
-                                        colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+                                        colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
                                         style={estilos.botonGradient}
                                         start={{ x: 0, y: 0 }}
                                         end={{ x: 1, y: 0 }}
                                     >
-                                        <Ionicons name="log-in" size={buttonTextSize + 4} color={COLORS.negro} />
-                                        <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
+                                        <Ionicons name="log-in" size={buttonTextSize + 4} color={Colores.frinkBlanco} />
+                                        <Text style={[estilos.textoBoton, { fontSize: buttonTextSize, color: Colores.frinkBlanco }]}>
                                             Volver al inicio de sesión
                                         </Text>
                                     </LinearGradient>
@@ -332,6 +433,92 @@ export default function PantallaResetPassword(props: any) {
                     </Animated.View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            {/* ✅ MODAL MODERNO */}
+            <Modal
+                visible={modalVisible}
+                transparent
+                animationType="none"
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <Animated.View
+                    style={[
+                        estilos.modalOverlay,
+                        {
+                            opacity: modalFadeAnim,
+                        }
+                    ]}
+                >
+                    <TouchableOpacity
+                        style={estilos.modalBackdrop}
+                        activeOpacity={1}
+                        onPress={() => { }}
+                    >
+                        <Animated.View
+                            style={[
+                                estilos.modalContainer,
+                                {
+                                    transform: [{ scale: modalScaleAnim }],
+                                    borderColor: modalColors.iconColor + '40',
+                                }
+                            ]}
+                        >
+                            {/* ✅ CABECERA CON GRADIENTE */}
+                            <LinearGradient
+                                colors={modalColors.gradient}
+                                style={estilos.modalHeader}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                            >
+                                <View style={[estilos.modalIconContainer, { backgroundColor: modalColors.iconBg }]}>
+                                    <Text style={[estilos.modalIcon, { fontSize: isTablet ? 56 : 44 }]}>
+                                        {modalData.icon}
+                                    </Text>
+                                </View>
+                            </LinearGradient>
+
+                            {/* ✅ CUERPO DEL MODAL */}
+                            <View style={estilos.modalBody}>
+                                <Text style={[estilos.modalTitle, { fontSize: isTablet ? 24 : 20, color: modalColors.titleColor }]}>
+                                    {modalData.title}
+                                </Text>
+
+                                <View style={estilos.modalMessageContainer}>
+                                    <Text style={[estilos.modalMessage, { fontSize: isTablet ? 16 : 14 }]}>
+                                        {modalData.message}
+                                    </Text>
+                                </View>
+
+                                {/* ✅ BOTÓN DE ACCIÓN */}
+                                <TouchableOpacity
+                                    style={estilos.modalButton}
+                                    onPress={() => {
+                                        setModalVisible(false);
+                                        if (modalData.type === 'success') {
+                                            // Si fue éxito, redirigir al login después de cerrar
+                                            setTimeout(() => {
+                                                props.navigation.navigate('Login');
+                                            }, 300);
+                                        }
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <LinearGradient
+                                        colors={modalColors.gradient}
+                                        style={estilos.modalButtonGradient}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                    >
+                                        <Text style={[estilos.modalButtonText, { fontSize: isTablet ? 17 : 15 }]}>
+                                            {modalData.type === 'success' ? '¡Entendido!' : 'Entendido'}
+                                        </Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+                        </Animated.View>
+                    </TouchableOpacity>
+                </Animated.View>
+            </Modal>
         </LinearGradient>
     );
 }
@@ -367,18 +554,16 @@ const estilos = StyleSheet.create({
     },
     titulo: {
         fontWeight: 'bold',
-        color: COLORS.blanco,
         letterSpacing: 1,
         textAlign: 'center',
     },
     subtitulo: {
-        color: COLORS.grisClaro,
         marginTop: 6,
         textAlign: 'center',
         opacity: 0.7,
+        fontStyle: 'italic',
     },
     intentosTexto: {
-        color: COLORS.amarillo,
         marginTop: 4,
         opacity: 0.7,
     },
@@ -387,17 +572,16 @@ const estilos = StyleSheet.create({
     },
     label: {
         fontWeight: '600',
-        color: COLORS.blanco,
         marginBottom: 6,
         letterSpacing: 0.5,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.negro + '50',
+        backgroundColor: Colores.textoClaro,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderColor: Colores.frinkGris + '30',
         paddingHorizontal: 14,
         height: 56,
         marginBottom: 20,
@@ -407,30 +591,28 @@ const estilos = StyleSheet.create({
         flexShrink: 0,
     },
     input: {
-        color: COLORS.blanco,
         paddingVertical: 12,
     },
     bloqueadoContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: COLORS.amarillo + '15',
+        backgroundColor: Colores.frinkAzul + '15',
         paddingVertical: 10,
         borderRadius: 10,
         marginBottom: 16,
         gap: 8,
         borderWidth: 1,
-        borderColor: COLORS.amarillo + '20',
+        borderColor: Colores.frinkAzul + '20',
     },
     bloqueadoTexto: {
-        color: COLORS.amarillo,
         fontWeight: '600',
     },
     boton: {
         borderRadius: 14,
         overflow: 'hidden',
         elevation: 8,
-        shadowColor: COLORS.amarillo,
+        shadowColor: Colores.frinkAmarillo,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.4,
         shadowRadius: 16,
@@ -445,7 +627,6 @@ const estilos = StyleSheet.create({
     },
     textoBoton: {
         fontWeight: '800',
-        color: COLORS.negro,
         letterSpacing: 1,
     },
     enlaceLogin: {
@@ -453,7 +634,6 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
     },
     enlaceLoginTexto: {
-        color: COLORS.grisClaro,
         fontWeight: '500',
     },
     exitoContainer: {
@@ -464,31 +644,120 @@ const estilos = StyleSheet.create({
     },
     exitoTitulo: {
         fontWeight: 'bold',
-        color: COLORS.verdeClaro,
         textAlign: 'center',
     },
     exitoTexto: {
-        color: COLORS.grisClaro,
         textAlign: 'center',
         marginTop: 8,
     },
     exitoCorreo: {
-        color: COLORS.blanco,
         fontWeight: 'bold',
         textAlign: 'center',
         marginTop: 4,
     },
     exitoInstrucciones: {
-        color: COLORS.grisClaro,
         textAlign: 'center',
         marginTop: 12,
         opacity: 0.7,
         lineHeight: 20,
     },
     exitoSpam: {
-        color: COLORS.amarillo,
         textAlign: 'center',
         marginTop: 8,
         opacity: 0.6,
+    },
+    exitoImportante: {
+        textAlign: 'center',
+        marginTop: 12,
+        fontWeight: 'bold',
+    },
+    // ✅ ESTILOS DEL MODAL MODERNO
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalBackdrop: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+    },
+    modalContainer: {
+        backgroundColor: Colores.fondoOscuro,
+        borderRadius: 24,
+        width: '92%',
+        maxWidth: 420,
+        overflow: 'hidden',
+        borderWidth: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 0.5,
+        shadowRadius: 30,
+        elevation: 30,
+    },
+    modalHeader: {
+        paddingVertical: 24,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    modalIcon: {
+        // Tamaño dinámico
+    },
+    modalBody: {
+        padding: 24,
+        paddingTop: 20,
+        alignItems: 'center',
+    },
+    modalTitle: {
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    modalMessageContainer: {
+        backgroundColor: Colores.textoOscuro + '20',
+        borderRadius: 12,
+        padding: 16,
+        width: '100%',
+        borderWidth: 1,
+        borderColor: Colores.textoClaro + '8',
+        marginBottom: 20,
+    },
+    modalMessage: {
+        color: Colores.textoClaro,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalButton: {
+        borderRadius: 14,
+        overflow: 'hidden',
+        width: '100%',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    modalButtonGradient: {
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalButtonText: {
+        color: Colores.textoClaro,
+        fontWeight: '700',
+        letterSpacing: 1,
     },
 });

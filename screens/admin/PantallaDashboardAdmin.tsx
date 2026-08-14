@@ -335,7 +335,7 @@ export default function PantallaDashboardAdmin(props: any) {
                     {
                         paddingHorizontal: paddingHorizontal,
                         paddingTop: insets.top + (isTablet ? 20 : 10),
-                        paddingBottom: insets.bottom + 40,
+                        paddingBottom: insets.bottom + 150,
                     }
                 ]}
             >

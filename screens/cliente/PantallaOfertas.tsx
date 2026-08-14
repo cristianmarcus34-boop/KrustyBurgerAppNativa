@@ -338,7 +338,7 @@ export default function PantallaOfertas(props: any) {
             estilos.scroll,
             {
               paddingHorizontal: paddingHorizontal,
-              paddingBottom: insets.bottom + 40,
+              paddingBottom: insets.bottom + 150,
               paddingTop: isTablet ? 8 : 4,
             }
           ]}

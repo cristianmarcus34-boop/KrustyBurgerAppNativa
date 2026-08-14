@@ -11,7 +11,7 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
-const logoImage = require('../../assets/logo-krusty.png'); // Asegúrate de que la ruta sea correcta y que el archivo exista
+const logoImage = require('../../assets/logo-krusty.png');
 
 export default function PantallaRegistro(props: any) {
   const [nombre, setNombre] = useState('');
@@ -156,6 +156,26 @@ export default function PantallaRegistro(props: any) {
             </Text>
           </Animated.View>
 
+          {/* ✅ BANNER DESTACADO - 500 PUNTOS DE BIENVENIDA */}
+          <View style={estilos.bannerPuntosContainer}>
+            <LinearGradient
+              colors={[Colores.primario, Colores.primarioOscuro]}
+              style={estilos.bannerPuntosGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
+              <View style={estilos.bannerPuntosTextos}>
+                <Text style={[estilos.bannerPuntosTitulo, { fontSize: isTablet ? 17 : 14 }]}>
+                  ¡Regístrate y obtén 500 puntos!
+                </Text>
+                <Text style={[estilos.bannerPuntosDesc, { fontSize: isTablet ? 13 : 11 }]}>
+                  Canjealos por descuentos, envíos gratis y más
+                </Text>
+              </View>
+            </LinearGradient>
+          </View>
+
           <Animated.View
             style={[
               estilos.formulario,
@@ -292,7 +312,6 @@ export default function PantallaRegistro(props: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ TÉRMINOS Y CONDICIONES - CORREGIDO */}
             <TouchableOpacity
               style={estilos.terminosContainer}
               onPress={() => Alert.alert('Términos y Condiciones', 'Función en desarrollo')}
@@ -324,7 +343,6 @@ const estilos = StyleSheet.create({
   logoContainer: {
     alignItems: 'center',
     marginBottom: 30,
-
   },
   logoWrapper: {
     marginBottom: 12,
@@ -333,12 +351,10 @@ const estilos = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 16,
     elevation: 12,
-
   },
   logoImage: {
     backgroundColor: 'transparent',
     borderRadius: 100,
-
   },
   titulo: {
     fontWeight: '900',
@@ -351,6 +367,37 @@ const estilos = StyleSheet.create({
     fontWeight: '300',
     letterSpacing: 0.5,
     fontStyle: 'italic',
+  },
+  // ✅ BANNER DESTACADO DE 500 PUNTOS
+  bannerPuntosContainer: {
+    marginVertical: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: Colores.primario,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  bannerPuntosGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  bannerPuntosEmoji: {
+    fontSize: 32,
+  },
+  bannerPuntosTextos: {
+    flex: 1,
+  },
+  bannerPuntosTitulo: {
+    color: Colores.textoOscuro,
+    fontWeight: 'bold',
+  },
+  bannerPuntosDesc: {
+    color: Colores.textoOscuro + '80',
+    marginTop: 2,
   },
   formulario: {
     width: '100%',
@@ -455,12 +502,12 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
   },
   terminosTexto: {
-    color: Colores.frinkAzul + '70', // ✅ Más oscuro que antes
+    color: Colores.frinkAzul + '70',
     textAlign: 'center',
     fontWeight: '400',
   },
   terminosDestacado: {
-    color: Colores.frinkAzul, // ✅ Azul fuerte
+    color: Colores.frinkAzul,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },

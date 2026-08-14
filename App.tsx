@@ -73,13 +73,18 @@ import { notificacionService } from './services/notificacionService';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ✅ CONFIGURACIÓN DE DEEP LINKING
+// ✅ CONFIGURACIÓN DE DEEP LINKING - MEJORADA
 const linking = {
-  prefixes: ['krustyburger://', 'https://krustyburger.com'],
+  prefixes: ['krustyburger://', 'https://www.krustyburger.com.ar', 'https://krustyburger.com'],
   config: {
     screens: {
       ResetPassword: 'reset-password',
-      NuevaContrasena: 'nueva-contrasena',
+      NuevaContrasena: {
+        path: 'nueva-contrasena',
+        parse: {
+          token: (token: string) => token,
+        },
+      },
       Login: 'login',
       Registro: 'registro',
       Bienvenida: 'bienvenida',
@@ -105,7 +110,7 @@ const HEADER_OPTIONS = {
   headerTitleStyle: {
     fontWeight: 'bold' as const,
     fontSize: 18,
-    color: Colores.primario, // ✅ Títulos en amarillo Simpsons
+    color: Colores.primario,
   },
   headerBackTitle: '',
   headerShadowVisible: false,
@@ -152,7 +157,7 @@ const TabBarButton = (props: any) => {
         {isFocused && (
           <View style={estilos.tabIndicator}>
             <LinearGradient
-              colors={Colores.gradientKrusty} // ✅ Gradiente Krusty (Rojo a Amarillo)
+              colors={Colores.gradientKrusty}
               style={estilos.tabIndicatorLine}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -184,7 +189,7 @@ function PestanasCliente() {
             />
           );
         },
-        tabBarActiveTintColor: Colores.primario, // ✅ Amarillo Simpsons
+        tabBarActiveTintColor: Colores.primario,
         tabBarInactiveTintColor: Colores.textoGris,
         tabBarShowLabel: true,
         tabBarLabelStyle: {
@@ -245,7 +250,7 @@ export default function App() {
     configurarNotificaciones();
   }, [sesion, perfil]);
 
-  // ✅ NAVIGATIONBAR - CORREGIDO PARA VERSIÓN ACTUAL
+  // ✅ NAVIGATIONBAR
   useEffect(() => {
     const setupNavigationBar = async () => {
       if (Platform.OS === 'android') {
@@ -254,7 +259,6 @@ export default function App() {
 
           const navBar = NavigationBar as any;
 
-          // ✅ NUEVA VERSIÓN - Usar setStyle
           if (typeof navBar.setStyle === 'function') {
             await navBar.setStyle('dark');
             console.log('✅ NavigationBar configurada con setStyle');
@@ -291,28 +295,51 @@ export default function App() {
     cargarCarrito();
   }, []);
 
+  // ✅ MANEJO DE DEEP LINKING - MEJORADO
   useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
-      const url = event.url;
-      console.log('🔗 Deep Link recibido:', url);
+    // ✅ Función para procesar el deep link correctamente
+    const procesarDeepLink = (url: string) => {
+      console.log('🔗 Procesando Deep Link:', url);
+
+      if (!url) return;
+
+      // Buscar token en la URL
+      const tokenMatch = url.match(/token=([^&]+)/);
 
       if (url.includes('reset-password')) {
-        setTimeout(() => {
-          navigationRef.current?.navigate('NuevaContrasena');
-        }, 500);
+        console.log('🔑 Deep Link de reset-password detectado');
+
+        // Si hay token, pasarlo como parámetro
+        if (tokenMatch) {
+          const token = decodeURIComponent(tokenMatch[1]);
+          console.log('🔑 Token extraído:', token.substring(0, 30) + '...');
+
+          setTimeout(() => {
+            navigationRef.current?.navigate('NuevaContrasena', { token });
+          }, 500);
+        } else {
+          // Si no hay token, navegar sin él
+          console.log('⚠️ No se encontró token en el deep link');
+          setTimeout(() => {
+            navigationRef.current?.navigate('NuevaContrasena');
+          }, 500);
+        }
       }
     };
 
-    const subscription = Linking.addEventListener('url', handleDeepLink);
+    // ✅ Escuchar eventos de deep link cuando la app está abierta
+    const subscription = Linking.addEventListener('url', (event) => {
+      console.log('🔗 Evento de Deep Link recibido:', event.url);
+      procesarDeepLink(event.url);
+    });
 
+    // ✅ Obtener URL inicial si la app se abrió con un deep link
     Linking.getInitialURL().then((url) => {
       if (url) {
-        console.log('🔗 App abierta con deep link:', url);
-        if (url.includes('reset-password')) {
-          setTimeout(() => {
-            navigationRef.current?.navigate('NuevaContrasena');
-          }, 800);
-        }
+        console.log('🔗 App abierta con deep link inicial:', url);
+        procesarDeepLink(url);
+      } else {
+        console.log('ℹ️ App abierta normalmente (sin deep link)');
       }
     });
 
@@ -334,7 +361,7 @@ export default function App() {
   if (cargando) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colores.fondoOscuro }}>
-        <ActivityIndicator size="large" color={Colores.primario} /> {/* ✅ Ahora amarillo */}
+        <ActivityIndicator size="large" color={Colores.primario} />
       </View>
     );
   }
@@ -351,7 +378,12 @@ export default function App() {
             <Stack.Screen name="Login" component={PantallaLogin} />
             <Stack.Screen name="Registro" component={PantallaRegistro} />
             <Stack.Screen name="ResetPassword" component={PantallaResetPassword} options={{ headerShown: false }} />
-            <Stack.Screen name="NuevaContrasena" component={PantallaNuevaContrasena} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="NuevaContrasena"
+              component={PantallaNuevaContrasena}
+              options={{ headerShown: false }}
+              initialParams={{ token: null }}
+            />
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
             <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
@@ -422,7 +454,7 @@ const estilos = StyleSheet.create({
     position: 'absolute',
     top: -6,
     right: -10,
-    backgroundColor: Colores.secundario, // ✅ Rojo Krusty
+    backgroundColor: Colores.secundario,
     borderRadius: 10,
     minWidth: 18,
     height: 18,

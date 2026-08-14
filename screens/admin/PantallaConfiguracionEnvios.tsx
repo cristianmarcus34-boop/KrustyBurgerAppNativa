@@ -284,7 +284,7 @@ export default function PantallaConfiguracionEnvios(props: any) {
                     estilos.scroll,
                     {
                         paddingHorizontal: paddingHorizontal,
-                        paddingBottom: insets.bottom + 40,
+                        paddingBottom: insets.bottom + 150,
                         paddingTop: 8,
                     }
                 ]}

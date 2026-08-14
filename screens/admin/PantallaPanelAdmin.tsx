@@ -158,7 +158,7 @@ export default function PantallaPanelAdmin(props: any) {
           {
             paddingHorizontal: paddingHorizontal,
             paddingTop: insets.top + (isTablet ? 30 : 20),
-            paddingBottom: insets.bottom + 40,
+            paddingBottom: insets.bottom + 150,
           }
         ]}
       >

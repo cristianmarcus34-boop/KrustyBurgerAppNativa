@@ -10,15 +10,16 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { notificacionService } from '../../services/notificacionService';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
+import { Colores } from '../../lib/colores';
 
-const COLORS = {
-    amarillo: '#F5C518',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    grisClaro: '#B0B0B0',
-    verde: '#43A047',
-    rojo: '#E53935',
+// 🎷 COLORES DE LISA SIMPSON
+const LISA_COLORS = {
+    morado: Colores.moradoLisa,      // '#7B1FA2' - Vestido de Lisa
+    rosa: Colores.rosaMaggie,        // '#F48FB1' - Collar de Lisa
+    blanco: Colores.textoClaro,      // '#FFFFFF'
+    negro: Colores.textoOscuro,      // '#0A0A0A'
+    gris: Colores.textoGris,         // '#B0B0B0'
+    amarillo: Colores.primario,      // '#F5C518' - Piel de Lisa
 };
 
 const getIconForTipo = (tipo: string) => {
@@ -34,13 +35,13 @@ const getIconForTipo = (tipo: string) => {
 
 const getColorForTipo = (tipo: string) => {
     const map: any = {
-        promocion: '#F5C518',
-        oferta: '#66BB6A',
-        recompensa: '#EC407A',
-        sistema: '#42A5F5',
-        pedido: '#FF6F00',
+        promocion: Colores.primario,
+        oferta: Colores.verdeClaro,
+        recompensa: Colores.rosaMaggie,
+        sistema: Colores.azulClaro,
+        pedido: Colores.acento,
     };
-    return map[tipo] || COLORS.grisClaro;
+    return map[tipo] || LISA_COLORS.gris;
 };
 
 export default function PantallaNotificacionesUsuario(props: any) {
@@ -97,7 +98,7 @@ export default function PantallaNotificacionesUsuario(props: any) {
     if (cargando) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.amarillo} />
+                <ActivityIndicator size="large" color={LISA_COLORS.morado} />
                 <Text style={styles.loadingText}>Cargando notificaciones...</Text>
             </View>
         );
@@ -105,16 +106,22 @@ export default function PantallaNotificacionesUsuario(props: any) {
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#43A047', '#0A0A0A']} style={styles.gradient} />
+            {/* 🎷 GRADIENTE LISA: Morado → Rosa */}
+            <LinearGradient
+                colors={[LISA_COLORS.morado, LISA_COLORS.rosa]}
+                style={styles.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            />
 
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <TouchableOpacity onPress={() => props.navigation.goBack()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={28} color={COLORS.blanco} />
+                    <Ionicons name="arrow-back" size={28} color={LISA_COLORS.blanco} />
                 </TouchableOpacity>
-                <Text style={styles.title}>📱 Notificaciones</Text>
+                <Text style={styles.title}>🎷 Notificaciones</Text>
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={cargarNotificaciones} style={styles.reloadButton}>
-                        <Ionicons name="refresh" size={22} color={COLORS.amarillo} />
+                        <Ionicons name="refresh" size={22} color={LISA_COLORS.blanco} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={marcarTodasComoLeidas} style={styles.markAllButton}>
                         <Text style={styles.markAllText}>Leer todas</Text>
@@ -124,11 +131,11 @@ export default function PantallaNotificacionesUsuario(props: any) {
 
             <ScrollView
                 contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 20 }]}
-                refreshControl={<RefreshControl refreshing={refrescando} onRefresh={cargarNotificaciones} tintColor={COLORS.amarillo} />}
+                refreshControl={<RefreshControl refreshing={refrescando} onRefresh={cargarNotificaciones} tintColor={LISA_COLORS.morado} />}
             >
                 {notificaciones.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="notifications-off-outline" size={60} color={COLORS.grisClaro} />
+                        <Ionicons name="notifications-off-outline" size={60} color={LISA_COLORS.blanco + '40'} />
                         <Text style={styles.emptyText}>No tienes notificaciones</Text>
                         <Text style={styles.emptySubtext}>ID de usuario: {perfil?.id || 'N/A'}</Text>
                     </View>
@@ -159,7 +166,7 @@ export default function PantallaNotificacionesUsuario(props: any) {
                                     {!item.leida && <View style={styles.notificacionNoLeidaDot} />}
                                 </View>
 
-                                {/* ✅ BANNER / IMAGEN - ESTILO MOSTAZA */}
+                                {/* 🎷 BANNER / IMAGEN */}
                                 {hasImage && (
                                     <View style={styles.bannerContainer}>
                                         <Image
@@ -191,40 +198,147 @@ export default function PantallaNotificacionesUsuario(props: any) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.negro },
-    gradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.negro },
-    loadingText: { color: COLORS.grisClaro, marginTop: 12 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.grisClaro + '20' },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    backButton: { padding: 4 },
-    reloadButton: { padding: 8 },
-    title: { fontWeight: 'bold', color: COLORS.blanco, fontSize: 20, flex: 1, textAlign: 'center' },
-    markAllButton: { padding: 8 },
-    markAllText: { color: COLORS.amarillo, fontSize: 12, fontWeight: '500' },
-    scroll: { padding: 16, flexGrow: 1 },
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-    emptyText: { color: COLORS.grisClaro, fontSize: 16, marginTop: 12, opacity: 0.6 },
-    emptySubtext: { color: COLORS.grisClaro, fontSize: 12, marginTop: 4, opacity: 0.4 },
-    notificacionItem: { backgroundColor: COLORS.negro + '60', borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.grisClaro + '10' },
-    notificacionNoLeida: { borderColor: COLORS.amarillo, backgroundColor: COLORS.amarillo + '10' },
-    notificacionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-    notificacionTipo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    notificacionIcono: { fontSize: 16 },
-    notificacionTipoText: { fontSize: 11, fontWeight: 'bold' },
-    notificacionNoLeidaDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.amarillo },
-    notificacionTitulo: { color: COLORS.blanco, fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
-    notificacionMensaje: { color: COLORS.grisClaro, fontSize: 13, marginBottom: 6, opacity: 0.8 },
-    notificacionFecha: { color: COLORS.grisClaro, fontSize: 11, opacity: 0.4 },
-    // ✅ BANNER / IMAGEN - ESTILO MOSTAZA
+    container: {
+        flex: 1,
+        backgroundColor: LISA_COLORS.negro,
+    },
+    gradient: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: LISA_COLORS.negro,
+    },
+    loadingText: {
+        color: LISA_COLORS.gris,
+        marginTop: 12,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: LISA_COLORS.blanco + '20',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    backButton: {
+        padding: 4,
+    },
+    reloadButton: {
+        padding: 8,
+    },
+    title: {
+        fontWeight: 'bold',
+        color: LISA_COLORS.blanco,
+        fontSize: 20,
+        flex: 1,
+        textAlign: 'center',
+    },
+    markAllButton: {
+        padding: 8,
+    },
+    markAllText: {
+        color: LISA_COLORS.blanco,
+        fontSize: 12,
+        fontWeight: '500',
+        opacity: 0.8,
+    },
+    scroll: {
+        padding: 16,
+        flexGrow: 1,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 60,
+    },
+    emptyText: {
+        color: LISA_COLORS.blanco,
+        fontSize: 16,
+        marginTop: 12,
+        opacity: 0.6,
+    },
+    emptySubtext: {
+        color: LISA_COLORS.blanco,
+        fontSize: 12,
+        marginTop: 4,
+        opacity: 0.4,
+    },
+    notificacionItem: {
+        backgroundColor: LISA_COLORS.negro + '60',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: LISA_COLORS.blanco + '10',
+    },
+    notificacionNoLeida: {
+        borderColor: LISA_COLORS.rosa,
+        backgroundColor: LISA_COLORS.rosa + '10',
+    },
+    notificacionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    notificacionTipo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    notificacionIcono: {
+        fontSize: 16,
+    },
+    notificacionTipoText: {
+        fontSize: 11,
+        fontWeight: 'bold',
+    },
+    notificacionNoLeidaDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: LISA_COLORS.rosa,
+    },
+    notificacionTitulo: {
+        color: LISA_COLORS.blanco,
+        fontSize: 15,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    notificacionMensaje: {
+        color: LISA_COLORS.blanco,
+        fontSize: 13,
+        marginBottom: 6,
+        opacity: 0.7,
+    },
+    notificacionFecha: {
+        color: LISA_COLORS.blanco,
+        fontSize: 11,
+        opacity: 0.4,
+    },
     bannerContainer: {
         marginTop: 8,
         marginBottom: 10,
         borderRadius: 8,
         overflow: 'hidden',
-        backgroundColor: COLORS.grisOscuro,
+        backgroundColor: LISA_COLORS.negro + '40',
         width: '100%',
-        aspectRatio: 16 / 9, // 👈 Relación de aspecto 16:9 como Mostaza
+        aspectRatio: 16 / 9,
+        borderWidth: 1,
+        borderColor: LISA_COLORS.rosa + '30',
     },
     bannerImage: {
         width: '100%',
