@@ -1,14 +1,24 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-  Animated, Dimensions, Image
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Animated,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Colores } from '../../lib/colores';
+import { useToast, Toast } from '../../components/Toast';
 
 const { width, height } = Dimensions.get('window');
 const logoImage = require('../../assets/logo-krusty.png');
@@ -22,6 +32,9 @@ export default function PantallaRegistro(props: any) {
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const { registrarCliente } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
+
+  // ✅ Toast
+  const toast = useToast();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
@@ -49,44 +62,47 @@ export default function PantallaRegistro(props: any) {
   }, []);
 
   const manejarRegistro = async () => {
+    // ✅ Validaciones con toast - USANDO LOS ATAJOS
     if (!nombre || !correo || !telefono || !contrasena) {
-      Alert.alert('Error', 'Completa todos los campos');
+      toast.advertencia('Completa todos los campos');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(correo)) {
-      Alert.alert('Error', 'Ingresa un correo electrónico válido');
+      toast.error('Correo electrónico inválido');
       return;
     }
 
     if (contrasena.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      toast.advertencia('La contraseña debe tener al menos 6 caracteres');
       return;
     }
 
     if (telefono.length < 8) {
-      Alert.alert('Error', 'Ingresa un número de teléfono válido');
+      toast.advertencia('Ingresa un número de teléfono válido');
       return;
     }
 
     setCargando(true);
-    const error = await registrarCliente({
+    const resultado = await registrarCliente({
       correo,
       contrasena,
       nombre,
-      telefono
+      telefono,
     });
     setCargando(false);
 
-    if (error) {
-      Alert.alert('Error', error);
+    // ✅ Manejar el resultado
+    if (typeof resultado === 'string' && resultado) {
+      toast.error(resultado);
+    } else if (resultado && typeof resultado === 'object' && 'error' in resultado) {
+      toast.error(resultado.error || 'Error al registrarse');
     } else {
-      Alert.alert(
-        '¡Éxito! 🎉',
-        'Cuenta creada correctamente. Ya puedes iniciar sesión.',
-        [{ text: 'OK', onPress: () => props.navigation.goBack() }]
-      );
+      toast.exito('¡Cuenta creada con éxito! 🎉');
+      setTimeout(() => {
+        props.navigation.goBack();
+      }, 1500);
     }
   };
 
@@ -103,229 +119,322 @@ export default function PantallaRegistro(props: any) {
   const paddingTop = insets.top + (isTablet ? 30 : 15);
 
   return (
-    <LinearGradient
-      colors={[Colores.frinkBlanco, Colores.frinkGris]}
-      style={estilos.contenedor}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={estilos.keyboardView}
+    <>
+      <LinearGradient
+        colors={[Colores.frinkBlanco, Colores.frinkGris]}
+        style={estilos.contenedor}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={[
-            estilos.scroll,
-            {
-              paddingHorizontal: paddingHorizontal,
-              paddingTop: paddingTop,
-              paddingBottom: insets.bottom + 20,
-            }
-          ]}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={estilos.keyboardView}
         >
-          <Animated.View
-            style={[
-              estilos.logoContainer,
+          <ScrollView
+            contentContainerStyle={[
+              estilos.scroll,
               {
-                opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }],
-              }
+                paddingHorizontal: paddingHorizontal,
+                paddingTop: paddingTop,
+                paddingBottom: insets.bottom + 20,
+              },
             ]}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
           >
-            <View style={estilos.logoWrapper}>
-              <Image
-                source={logoImage}
-                style={[
-                  estilos.logoImage,
-                  {
-                    width: logoSize,
-                    height: logoSize,
-                  }
-                ]}
-                resizeMode="contain"
-              />
-            </View>
-
-            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-              ¡Crear Cuenta!
-            </Text>
-            <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
-              "Glaaaven! Un nuevo usuario!" 🧪
-            </Text>
-          </Animated.View>
-
-          {/* ✅ BANNER DESTACADO - 500 PUNTOS DE BIENVENIDA */}
-          <View style={estilos.bannerPuntosContainer}>
-            <LinearGradient
-              colors={[Colores.primario, Colores.primarioOscuro]}
-              style={estilos.bannerPuntosGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+            <Animated.View
+              style={[
+                estilos.logoContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }],
+                },
+              ]}
             >
-              <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
-              <View style={estilos.bannerPuntosTextos}>
-                <Text style={[estilos.bannerPuntosTitulo, { fontSize: isTablet ? 17 : 14 }]}>
-                  ¡Regístrate y obtén 500 puntos!
-                </Text>
-                <Text style={[estilos.bannerPuntosDesc, { fontSize: isTablet ? 13 : 11 }]}>
-                  Canjealos por descuentos, envíos gratis y más
-                </Text>
-              </View>
-            </LinearGradient>
-          </View>
-
-          <Animated.View
-            style={[
-              estilos.formulario,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              }
-            ]}
-          >
-            <Text style={[estilos.label, { fontSize: labelSize }]}>
-              Nombre completo
-            </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="person-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
-              <TextInput
-                style={[estilos.input, { fontSize: inputSize }]}
-                value={nombre}
-                onChangeText={setNombre}
-                placeholder="Tu nombre completo"
-                placeholderTextColor={Colores.frinkGris + '60'}
-                selectionColor={Colores.frinkAzul}
-              />
-            </View>
-
-            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
-              Correo electrónico
-            </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="mail-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
-              <TextInput
-                style={[estilos.input, { fontSize: inputSize }]}
-                value={correo}
-                onChangeText={setCorreo}
-                placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={Colores.frinkGris + '60'}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                selectionColor={Colores.frinkAzul}
-              />
-            </View>
-
-            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
-              Teléfono
-            </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="call-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
-              <TextInput
-                style={[estilos.input, { fontSize: inputSize }]}
-                value={telefono}
-                onChangeText={setTelefono}
-                placeholder="Tu número de teléfono"
-                placeholderTextColor={Colores.frinkGris + '60'}
-                keyboardType="phone-pad"
-                selectionColor={Colores.frinkAzul}
-              />
-            </View>
-
-            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
-              Contraseña
-            </Text>
-            <View style={estilos.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={22} color={Colores.frinkGris} style={estilos.inputIcon} />
-              <TextInput
-                style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
-                value={contrasena}
-                onChangeText={setContrasena}
-                placeholder="Mínimo 6 caracteres"
-                placeholderTextColor={Colores.frinkGris + '60'}
-                secureTextEntry={!mostrarContrasena}
-                selectionColor={Colores.frinkAzul}
-              />
-              <TouchableOpacity
-                onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                style={estilos.eyeButton}
-              >
-                <Ionicons
-                  name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
-                  size={22}
-                  color={Colores.frinkGris}
+              <View style={estilos.logoWrapper}>
+                <Image
+                  source={logoImage}
+                  style={[
+                    estilos.logoImage,
+                    {
+                      width: logoSize,
+                      height: logoSize,
+                    },
+                  ]}
+                  resizeMode="contain"
                 />
-              </TouchableOpacity>
-            </View>
+              </View>
 
-            <TouchableOpacity
-              style={estilos.boton}
-              onPress={manejarRegistro}
-              disabled={cargando}
-              activeOpacity={0.8}
-            >
+              <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                ¡Crear Cuenta!
+              </Text>
+              <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
+                "Glaaaven! Un nuevo usuario!" 🧪
+              </Text>
+            </Animated.View>
+
+            {/* BANNER DESTACADO */}
+            <View style={estilos.bannerPuntosContainer}>
               <LinearGradient
-                colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
-                style={estilos.botonGradient}
+                colors={[Colores.primario, Colores.primarioOscuro]}
+                style={estilos.bannerPuntosGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                {cargando ? (
-                  <ActivityIndicator color={Colores.frinkBlanco} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="person-add" size={buttonTextSize + 4} color={Colores.frinkBlanco} />
-                    <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
-                      Crear Cuenta
-                    </Text>
-                  </>
-                )}
+                <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
+                <View style={estilos.bannerPuntosTextos}>
+                  <Text
+                    style={[
+                      estilos.bannerPuntosTitulo,
+                      { fontSize: isTablet ? 17 : 14 },
+                    ]}
+                  >
+                    ¡Regístrate y obtén 500 puntos!
+                  </Text>
+                  <Text
+                    style={[
+                      estilos.bannerPuntosDesc,
+                      { fontSize: isTablet ? 13 : 11 },
+                    ]}
+                  >
+                    Canjealos por descuentos, envíos gratis y más
+                  </Text>
+                </View>
               </LinearGradient>
-            </TouchableOpacity>
+            </View>
 
-            <View style={estilos.enlacesContainer}>
+            <Animated.View
+              style={[
+                estilos.formulario,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideUpAnim }],
+                },
+              ]}
+            >
+              <Text style={[estilos.label, { fontSize: labelSize }]}>
+                Nombre completo
+              </Text>
+              <View style={estilos.inputContainer}>
+                <Ionicons
+                  name="person-outline"
+                  size={22}
+                  color={Colores.frinkGris}
+                  style={estilos.inputIcon}
+                />
+                <TextInput
+                  style={[estilos.input, { fontSize: inputSize }]}
+                  value={nombre}
+                  onChangeText={setNombre}
+                  placeholder="Tu nombre completo"
+                  placeholderTextColor={Colores.frinkGris + '60'}
+                  selectionColor={Colores.frinkAzul}
+                />
+              </View>
+
+              <Text
+                style={[
+                  estilos.label,
+                  { fontSize: labelSize, marginTop: 16 },
+                ]}
+              >
+                Correo electrónico
+              </Text>
+              <View style={estilos.inputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={22}
+                  color={Colores.frinkGris}
+                  style={estilos.inputIcon}
+                />
+                <TextInput
+                  style={[estilos.input, { fontSize: inputSize }]}
+                  value={correo}
+                  onChangeText={setCorreo}
+                  placeholder="tucorreo@ejemplo.com"
+                  placeholderTextColor={Colores.frinkGris + '60'}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  selectionColor={Colores.frinkAzul}
+                />
+              </View>
+
+              <Text
+                style={[
+                  estilos.label,
+                  { fontSize: labelSize, marginTop: 16 },
+                ]}
+              >
+                Teléfono
+              </Text>
+              <View style={estilos.inputContainer}>
+                <Ionicons
+                  name="call-outline"
+                  size={22}
+                  color={Colores.frinkGris}
+                  style={estilos.inputIcon}
+                />
+                <TextInput
+                  style={[estilos.input, { fontSize: inputSize }]}
+                  value={telefono}
+                  onChangeText={setTelefono}
+                  placeholder="Tu número de teléfono"
+                  placeholderTextColor={Colores.frinkGris + '60'}
+                  keyboardType="phone-pad"
+                  selectionColor={Colores.frinkAzul}
+                />
+              </View>
+
+              <Text
+                style={[
+                  estilos.label,
+                  { fontSize: labelSize, marginTop: 16 },
+                ]}
+              >
+                Contraseña
+              </Text>
+              <View style={estilos.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={22}
+                  color={Colores.frinkGris}
+                  style={estilos.inputIcon}
+                />
+                <TextInput
+                  style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
+                  value={contrasena}
+                  onChangeText={setContrasena}
+                  placeholder="Mínimo 6 caracteres"
+                  placeholderTextColor={Colores.frinkGris + '60'}
+                  secureTextEntry={!mostrarContrasena}
+                  selectionColor={Colores.frinkAzul}
+                />
+                <TouchableOpacity
+                  onPress={() => setMostrarContrasena(!mostrarContrasena)}
+                  style={estilos.eyeButton}
+                >
+                  <Ionicons
+                    name={
+                      mostrarContrasena ? 'eye-outline' : 'eye-off-outline'
+                    }
+                    size={22}
+                    color={Colores.frinkGris}
+                  />
+                </TouchableOpacity>
+              </View>
+
               <TouchableOpacity
-                onPress={() => props.navigation.goBack()}
+                style={estilos.boton}
+                onPress={manejarRegistro}
+                disabled={cargando}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
+                  style={estilos.botonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {cargando ? (
+                    <ActivityIndicator
+                      color={Colores.frinkBlanco}
+                      size="small"
+                    />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="person-add"
+                        size={buttonTextSize + 4}
+                        color={Colores.frinkBlanco}
+                      />
+                      <Text
+                        style={[
+                          estilos.textoBoton,
+                          { fontSize: buttonTextSize },
+                        ]}
+                      >
+                        Crear Cuenta
+                      </Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={estilos.enlacesContainer}>
+                <TouchableOpacity
+                  onPress={() => props.navigation.goBack()}
+                  activeOpacity={0.6}
+                >
+                  <Text
+                    style={[
+                      estilos.enlace,
+                      { fontSize: isTablet ? 16 : 14 },
+                    ]}
+                  >
+                    ¿Ya tienes cuenta?{' '}
+                    <Text style={estilos.enlaceDestacado}>
+                      Inicia sesión
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={estilos.separadorContainer}>
+                <View style={estilos.separador} />
+                <Text style={estilos.separadorTexto}>o</Text>
+                <View style={estilos.separador} />
+              </View>
+
+              <TouchableOpacity
+                style={estilos.botonInvitado}
+                onPress={() => props.navigation.navigate('Principal')}
                 activeOpacity={0.6}
               >
-                <Text style={[estilos.enlace, { fontSize: isTablet ? 16 : 14 }]}>
-                  ¿Ya tienes cuenta? <Text style={estilos.enlaceDestacado}>Inicia sesión</Text>
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color={Colores.frinkGris}
+                />
+                <Text
+                  style={[
+                    estilos.botonInvitadoTexto,
+                    { fontSize: isTablet ? 16 : 14 },
+                  ]}
+                >
+                  Continuar como invitado
                 </Text>
               </TouchableOpacity>
-            </View>
 
-            <View style={estilos.separadorContainer}>
-              <View style={estilos.separador} />
-              <Text style={estilos.separadorTexto}>o</Text>
-              <View style={estilos.separador} />
-            </View>
+              <TouchableOpacity
+                style={estilos.terminosContainer}
+                onPress={() => toast.info('Función en desarrollo')}
+                activeOpacity={0.6}
+              >
+                <Text
+                  style={[
+                    estilos.terminosTexto,
+                    { fontSize: isTablet ? 12 : 10 },
+                  ]}
+                >
+                  Al registrarte, aceptas nuestros{' '}
+                  <Text style={estilos.terminosDestacado}>
+                    Términos y Condiciones
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
 
-            <TouchableOpacity
-              style={estilos.botonInvitado}
-              onPress={() => props.navigation.navigate('Principal')}
-              activeOpacity={0.6}
-            >
-              <Ionicons name="person-outline" size={20} color={Colores.frinkGris} />
-              <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
-                Continuar como invitado
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={estilos.terminosContainer}
-              onPress={() => Alert.alert('Términos y Condiciones', 'Función en desarrollo')}
-              activeOpacity={0.6}
-            >
-              <Text style={[estilos.terminosTexto, { fontSize: isTablet ? 12 : 10 }]}>
-                Al registrarte, aceptas nuestros{' '}
-                <Text style={estilos.terminosDestacado}>Términos y Condiciones</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+      {/* ✅ Toast */}
+      <Toast
+        visible={toast.visible}
+        mensaje={toast.mensaje}
+        tipo={toast.tipo}
+        ocultar={toast.ocultar}
+      />
+    </>
   );
 }
 
@@ -368,7 +477,6 @@ const estilos = StyleSheet.create({
     letterSpacing: 0.5,
     fontStyle: 'italic',
   },
-  // ✅ BANNER DESTACADO DE 500 PUNTOS
   bannerPuntosContainer: {
     marginVertical: 12,
     borderRadius: 14,
@@ -425,6 +533,7 @@ const estilos = StyleSheet.create({
     color: Colores.frinkAzul,
     paddingVertical: 12,
     paddingRight: 8,
+    flex: 1,
   },
   eyeButton: {
     padding: 4,

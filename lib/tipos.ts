@@ -214,3 +214,125 @@ export interface RepartidorInfo {
     ultimo_acceso: string;
     pedidos_activos: number;
 }
+
+// ============================================================
+// 🆕 SISTEMA DE PAGOS CON MERCADO PAGO (EN CASTELLANO)
+// ============================================================
+
+export type EstadoTransaccion = 'pendiente' | 'aprobado' | 'rechazado' | 'cancelado' | 'expirado';
+
+export interface Transaccion {
+    id: string;
+    usuario_id: string;
+    pedido_id: number;
+
+    // Datos de Mercado Pago
+    mp_preference_id: string;
+    mp_payment_id: string | null;
+    mp_estado: string | null;
+    mp_detalle_estado: string | null;
+
+    // Datos del pago
+    monto_total: number;
+    metodo_pago: string;
+    estado: EstadoTransaccion;
+
+    // Datos del pagador
+    email_pagador: string | null;
+    nombre_pagador: string | null;
+    telefono_pagador: string | null;
+
+    // Fechas
+    creado_en: string;
+    actualizado_en: string;
+    fecha_pago: string | null;
+    fecha_expiracion: string | null;
+
+    // Metadata
+    metadata: any;
+    webhook_recibido: boolean;
+}
+
+// Para crear una transacción
+export interface CrearTransaccionDTO {
+    usuario_id: string;
+    pedido_id: number;
+    mp_preference_id: string;
+    monto_total: number;
+    metodo_pago: string;
+    email_pagador?: string;
+    nombre_pagador?: string;
+    telefono_pagador?: string;
+    metadata?: any;
+}
+
+// Respuesta de Mercado Pago
+export interface RespuestaMercadoPago {
+    exito: boolean;
+    id_preferencia?: string;
+    url_pago?: string;
+    url_pruebas?: string;
+    error?: string;
+}
+
+// Estado del pago para consultar
+export interface RespuestaEstadoPago {
+    exito: boolean;
+    datos?: {
+        estado: EstadoTransaccion;
+        mp_estado: string | null;
+        mp_detalle_estado: string | null;
+        mp_preference_id: string;
+    };
+    error?: string;
+}
+
+// Webhook de Mercado Pago
+export interface WebhookMercadoPago {
+    id: string;
+    tema: 'payment' | 'merchant_order';
+    accion?: string;
+    fecha_creacion?: string;
+    usuario_id?: string;
+    version_api?: string;
+}
+
+// Pago de Mercado Pago
+export interface PagoMP {
+    id: string;
+    referencia_externa: string; // pedido_id
+    id_preferencia: string;
+    estado: string;
+    detalle_estado: string;
+    fecha_aprobacion: string | null;
+    pagador: {
+        email: string;
+        nombre: string;
+        telefono: {
+            numero: string;
+        };
+    };
+    monto: number;
+}
+
+// Item para el pago
+export interface ItemPago {
+    producto_id: number;
+    nombre: string;
+    cantidad: number;
+    precio_unitario: number;
+    total: number;
+    descripcion?: string;
+    imagen?: string;
+}
+
+// Datos para iniciar un pago
+export interface DatosPago {
+    items: ItemPago[];
+    pedidoId: number;
+    usuarioId: string;
+    total: number;
+    correo: string;
+    nombre?: string;
+    telefono?: string;
+}
