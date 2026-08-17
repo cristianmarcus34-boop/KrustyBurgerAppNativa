@@ -710,14 +710,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'transparent',
     marginTop: 20,
-    marginBottom: -250,
-    marginLeft: 60,
+    marginBottom: -300,
+    marginLeft: 70,
 
   },
   logoBienvenida: {
     backgroundColor: 'transparent',
-    marginBottom: 32,
-    marginLeft: 60,
+    marginBottom: 12,
+    marginLeft: 80,
   },
 
 
