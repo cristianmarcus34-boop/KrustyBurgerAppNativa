@@ -3,6 +3,85 @@ import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// ✅ NAVIGATION REF - Para navegar desde notificaciones
+let navigationRef: any = null;
+let isAppReady = false;
+let notificacionesPendientes: any[] = [];
+
+export const setNavigationRef = (ref: any) => {
+    navigationRef = ref;
+    isAppReady = true;
+    console.log('✅ NavigationRef configurado para notificaciones');
+
+    // ✅ Procesar notificaciones pendientes
+    if (notificacionesPendientes.length > 0) {
+        console.log(`📱 Procesando ${notificacionesPendientes.length} notificaciones pendientes...`);
+        notificacionesPendientes.forEach(notif => {
+            procesarNotificacion(notif);
+        });
+        notificacionesPendientes = [];
+    }
+};
+
+// ✅ FUNCIÓN PARA PROCESAR NOTIFICACIÓN
+const procesarNotificacion = (data: any) => {
+    if (!navigationRef) {
+        // ✅ Guardar para después
+        notificacionesPendientes.push(data);
+        console.log('📱 Notificación guardada para procesar después');
+        return;
+    }
+
+    const tipo = data?.tipo || 'sistema';
+
+    // ✅ Verificar si el usuario está logueado (usando el store)
+    try {
+        const { tiendaAutenticacion } = require('../stores/tiendaAutenticacion');
+        const state = tiendaAutenticacion.getState();
+        const { sesion } = state;
+
+        if (!sesion) {
+            // ✅ Si no está logueado, guardar la notificación y redirigir al Login
+            console.log('🔒 Usuario no logueado, guardando notificación para después');
+            notificacionesPendientes.push(data);
+
+            // ✅ Navegar al Login
+            navigationRef.navigate('Login');
+            return;
+        }
+    } catch (error) {
+        console.error('Error verificando sesión:', error);
+        // Si hay error, redirigir al Login por seguridad
+        navigationRef.navigate('Login');
+        return;
+    }
+
+    // ✅ Usuario logueado - navegar según tipo
+    switch (tipo) {
+        case 'pedido':
+            if (data?.pedidoId) {
+                console.log('🔗 Navegando a Seguimiento con pedido:', data.pedidoId);
+                navigationRef.navigate('Seguimiento', { pedidoId: data.pedidoId });
+            } else {
+                console.log('🔗 Navegando a NotificacionesUsuario');
+                navigationRef.navigate('NotificacionesUsuario');
+            }
+            break;
+        case 'recompensa':
+            console.log('🔗 Navegando a Recompensas');
+            navigationRef.navigate('Recompensas');
+            break;
+        case 'promocion':
+        case 'oferta':
+        case 'sistema':
+        default:
+            console.log('🔗 Navegando a NotificacionesUsuario');
+            navigationRef.navigate('NotificacionesUsuario');
+            break;
+    }
+};
 
 // ✅ CONFIGURACIÓN DE NOTIFICACIONES
 Notifications.setNotificationHandler({
@@ -15,6 +94,7 @@ Notifications.setNotificationHandler({
 });
 
 const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send';
+const NOTIFICACIONES_OCULTAS_KEY = '@notificaciones_ocultas';
 
 export const notificacionService = {
 
@@ -37,7 +117,7 @@ export const notificacionService = {
                 .eq('id', usuarioId);
 
             if (error) throw error;
-            console.log('✅ Token FCM registrado');
+            console.log('✅ Token FCM registrado:', token.data);
             return true;
         } catch (error) {
             console.error('❌ Error registrando token:', error);
@@ -55,7 +135,6 @@ export const notificacionService = {
             }
 
             if (Platform.OS === 'android') {
-                // ✅ CANAL PROMOCIONES (con sonido Krusty por defecto)
                 await Notifications.setNotificationChannelAsync('promociones', {
                     name: '🎪 Promociones Krusty',
                     importance: Notifications.AndroidImportance.MAX,
@@ -65,10 +144,9 @@ export const notificacionService = {
                     enableLights: true,
                     bypassDnd: true,
                     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'krustyyotequieromucho.wav', // 👈 SONIDO POR DEFECTO
+                    sound: 'krustyyotequieromucho.wav',
                 });
 
-                // ✅ CANAL OFERTAS (con sonido Saxo por defecto)
                 await Notifications.setNotificationChannelAsync('ofertas', {
                     name: '💰 Ofertas Krusty',
                     importance: Notifications.AndroidImportance.MAX,
@@ -78,10 +156,9 @@ export const notificacionService = {
                     enableLights: true,
                     bypassDnd: true,
                     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'saxolisa.wav', // 👈 SONIDO POR DEFECTO
+                    sound: 'saxolisa.wav',
                 });
 
-                // ✅ CANAL RECOMPENSAS (con sonido Circo por defecto)
                 await Notifications.setNotificationChannelAsync('recompensa', {
                     name: '🎁 Recompensas',
                     importance: Notifications.AndroidImportance.MAX,
@@ -91,10 +168,9 @@ export const notificacionService = {
                     enableLights: true,
                     bypassDnd: true,
                     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'circopararapapa.wav', // 👈 SONIDO POR DEFECTO
+                    sound: 'circopararapapa.wav',
                 });
 
-                // ✅ CANAL PEDIDOS
                 await Notifications.setNotificationChannelAsync('pedidos', {
                     name: '📦 Pedidos',
                     importance: Notifications.AndroidImportance.MAX,
@@ -104,10 +180,9 @@ export const notificacionService = {
                     enableLights: true,
                     bypassDnd: true,
                     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: null,
+                    sound: 'saxolisa.wav',
                 });
 
-                // ✅ CANAL SISTEMA
                 await Notifications.setNotificationChannelAsync('sistema', {
                     name: '⚙️ Sistema',
                     importance: Notifications.AndroidImportance.HIGH,
@@ -118,7 +193,6 @@ export const notificacionService = {
                     sound: 'saxolisa.wav',
                 });
 
-                // ✅ CANAL DEFAULT
                 await Notifications.setNotificationChannelAsync('default', {
                     name: '🔔 General',
                     importance: Notifications.AndroidImportance.HIGH,
@@ -137,14 +211,39 @@ export const notificacionService = {
         }
     },
 
+    // ✅ ESCUCHAR NOTIFICACIONES CON NAVEGACIÓN
     escucharNotificaciones() {
         const subscription = Notifications.addNotificationReceivedListener(n => {
             console.log('📱 Notificación recibida:', n.request.content.title);
         });
+
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(n => {
             console.log('👆 Click en notificación:', n.notification.request.content.data);
+            const data = n.notification.request.content.data;
+            procesarNotificacion(data);
         });
+
         return { subscription, responseSubscription };
+    },
+
+    // ✅ PROCESAR NOTIFICACIÓN INICIAL (app cerrada)
+    async procesarNotificacionInicial() {
+        try {
+            const response = await Notifications.getLastNotificationResponseAsync();
+            if (response) {
+                console.log('📱 Notificación inicial (app cerrada):', response.notification.request.content.data);
+                const data = response.notification.request.content.data;
+                // ✅ Esperar a que la app esté lista
+                if (navigationRef) {
+                    procesarNotificacion(data);
+                } else {
+                    notificacionesPendientes.push(data);
+                    console.log('📱 Notificación guardada para procesar después (app iniciando)');
+                }
+            }
+        } catch (error) {
+            console.error('Error procesando notificación inicial:', error);
+        }
     },
 
     // ============================================================
@@ -164,20 +263,19 @@ export const notificacionService = {
             console.log('📷 Mensaje:', mensaje);
             console.log('📷 Datos recibidos:', JSON.stringify(data, null, 2));
 
-            // ✅ CONSTRUIR MENSAJES CON IMAGEN Y SONIDO
             const messages = tokensValidos.map(token => {
-                // ✅ OBTENER EL SONIDO DE LOS DATOS
                 const sonidoSeleccionado = data?.sonido;
-
-                // ✅ SOLO agregar sound si NO es 'default' y existe
                 const hasCustomSound = sonidoSeleccionado && sonidoSeleccionado !== 'default';
-                console.log('🔊 Sonido para esta notificación:', hasCustomSound ? sonidoSeleccionado : 'sin sonido personalizado');
 
                 const message: any = {
                     to: token,
                     title: titulo,
                     body: mensaje,
-                    data: data || {},
+                    data: {
+                        ...data,
+                        screen: 'NotificacionesUsuario',
+                        timestamp: Date.now(),
+                    },
                     priority: 'high',
                     channelId: data?.tipo === 'promocion' ? 'promociones' :
                         data?.tipo === 'oferta' ? 'ofertas' :
@@ -186,35 +284,25 @@ export const notificacionService = {
                                     data?.tipo === 'sistema' ? 'sistema' : 'default',
                 };
 
-                // ✅ Agregar sound SOLO si es un sonido personalizado
                 if (hasCustomSound) {
-                    message.sound = sonidoSeleccionado;
-                    console.log('🔊 Sonido personalizado agregado al payload:', sonidoSeleccionado);
+                    const soundFile = sonidoSeleccionado.endsWith('.wav')
+                        ? sonidoSeleccionado
+                        : `${sonidoSeleccionado}.wav`;
+                    message.sound = soundFile;
+                    console.log('🔊 Sonido personalizado agregado al payload:', soundFile);
                 }
 
-                // ✅ AGREGAR IMAGEN SI EXISTE
                 const imagenUrl = data?.imagen;
-                console.log('📷 URL de imagen a procesar:', imagenUrl);
-
                 if (imagenUrl && typeof imagenUrl === 'string') {
                     if (imagenUrl.startsWith('http://') || imagenUrl.startsWith('https://')) {
                         message.image = imagenUrl;
                         message.sticky = true;
                         console.log('✅ IMAGEN AGREGADA AL PAYLOAD:', imagenUrl);
-                    } else {
-                        console.log('⚠️ URL de imagen no válida (no comienza con http):', imagenUrl);
                     }
-                } else {
-                    console.log('ℹ️ No hay imagen para esta notificación');
                 }
 
                 return message;
             });
-
-            // ✅ LOG DETALLADO DEL PAYLOAD
-            console.log('📷 ========== PAYLOAD COMPLETO ==========');
-            console.log(JSON.stringify(messages, null, 2));
-            console.log('📷 ========================================');
 
             const response = await fetch(EXPO_PUSH_API, {
                 method: 'POST',
@@ -223,10 +311,6 @@ export const notificacionService = {
             });
 
             const result = await response.json();
-
-            console.log('📷 ========== RESPUESTA DE EXPO ==========');
-            console.log(JSON.stringify(result, null, 2));
-            console.log('📷 ========================================');
 
             if (result.errors) {
                 console.error('❌ Errores en la respuesta:', result.errors);
@@ -237,15 +321,6 @@ export const notificacionService = {
             const fallidos = result.data?.filter((r: any) => r.status === 'error').length || 0;
 
             console.log(`✅ Enviados: ${exitos}, Fallidos: ${fallidos}`);
-
-            if (result.data) {
-                result.data.forEach((r: any, index: number) => {
-                    if (r.status === 'error') {
-                        console.log(`❌ Error en mensaje ${index + 1}:`, r.message);
-                        console.log(`   Token: ${messages[index]?.to?.substring(0, 30)}...`);
-                    }
-                });
-            }
 
             return {
                 success: fallidos === 0,
@@ -260,7 +335,7 @@ export const notificacionService = {
         }
     },
 
-    async enviarNotificacionAUsuario(usuarioId: string, titulo: string, mensaje: string, tipo: string = 'sistema', imagen?: string) {
+    async enviarNotificacionAUsuario(usuarioId: string, titulo: string, mensaje: string, tipo: string = 'sistema', imagen?: string, sonido?: string) {
         try {
             const { error: insertError } = await supabase
                 .from('notificaciones_usuarios')
@@ -286,14 +361,22 @@ export const notificacionService = {
                     to: usuario.fcm_token,
                     title: titulo,
                     body: mensaje,
-                    data: { tipo },
+                    data: {
+                        tipo,
+                        screen: 'NotificacionesUsuario',
+                        timestamp: Date.now(),
+                    },
                     priority: 'high',
                 };
+
+                if (sonido && sonido !== 'default') {
+                    const soundFile = sonido.endsWith('.wav') ? sonido : `${sonido}.wav`;
+                    message.sound = soundFile;
+                }
 
                 if (imagen && imagen.startsWith('http')) {
                     message.image = imagen;
                     message.sticky = true;
-                    console.log('📷 Imagen agregada a notificación individual:', imagen);
                 }
 
                 await fetch(EXPO_PUSH_API, {
@@ -311,11 +394,73 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // 📥 OBTENER NOTIFICACIONES
+    // 📥 OBTENER NOTIFICACIONES (CON FILTRO DE OCULTAS)
     // ============================================================
+
+    async obtenerNotificacionesOcultas(usuarioId: string): Promise<number[]> {
+        try {
+            const key = `${NOTIFICACIONES_OCULTAS_KEY}_${usuarioId}`;
+            const data = await AsyncStorage.getItem(key);
+            return data ? JSON.parse(data) : [];
+        } catch (error) {
+            console.error('Error obteniendo notificaciones ocultas:', error);
+            return [];
+        }
+    },
+
+    async guardarNotificacionesOcultas(usuarioId: string, ids: number[]): Promise<void> {
+        try {
+            const key = `${NOTIFICACIONES_OCULTAS_KEY}_${usuarioId}`;
+            await AsyncStorage.setItem(key, JSON.stringify(ids));
+        } catch (error) {
+            console.error('Error guardando notificaciones ocultas:', error);
+        }
+    },
+
+    async ocultarNotificacion(usuarioId: string, id: number): Promise<boolean> {
+        try {
+            const ocultas = await this.obtenerNotificacionesOcultas(usuarioId);
+            if (!ocultas.includes(id)) {
+                ocultas.push(id);
+                await this.guardarNotificacionesOcultas(usuarioId, ocultas);
+            }
+            return true;
+        } catch (error) {
+            console.error('Error ocultando notificación:', error);
+            return false;
+        }
+    },
+
+    async ocultarTodasNotificaciones(usuarioId: string): Promise<boolean> {
+        try {
+            const { data, error } = await supabase
+                .from('notificaciones_usuarios')
+                .select('id')
+                .eq('usuario_id', usuarioId);
+
+            if (error) throw error;
+
+            const ids = data?.map(n => n.id) || [];
+            await this.guardarNotificacionesOcultas(usuarioId, ids);
+            return true;
+        } catch (error) {
+            console.error('Error ocultando todas las notificaciones:', error);
+            return false;
+        }
+    },
+
+    async mostrarTodasNotificaciones(usuarioId: string): Promise<void> {
+        try {
+            const key = `${NOTIFICACIONES_OCULTAS_KEY}_${usuarioId}`;
+            await AsyncStorage.removeItem(key);
+        } catch (error) {
+            console.error('Error mostrando todas las notificaciones:', error);
+        }
+    },
 
     async obtenerNotificaciones(usuarioId: string, soloNoLeidas: boolean = false) {
         if (!usuarioId) return [];
+
         let query = supabase
             .from('notificaciones_usuarios')
             .select('*')
@@ -325,8 +470,13 @@ export const notificacionService = {
         if (soloNoLeidas) query = query.eq('leida', false);
 
         const { data, error } = await query;
-        if (error) console.error('Error obteniendo notificaciones:', error);
-        return data || [];
+        if (error) {
+            console.error('Error obteniendo notificaciones:', error);
+            return [];
+        }
+
+        const ocultas = await this.obtenerNotificacionesOcultas(usuarioId);
+        return data?.filter(n => !ocultas.includes(n.id)) || [];
     },
 
     async marcarComoLeida(notificacionId: number) {
@@ -385,7 +535,6 @@ export const notificacionService = {
                     p_tipo: tipo,
                     p_imagen_url: imagenUrl || null,
                 });
-            console.log('📷 Notificaciones guardadas con imagen:', imagenUrl || 'sin imagen');
             return { success: !error, error };
         } catch (error) {
             return { success: false, error };
@@ -405,7 +554,25 @@ export const notificacionService = {
         }
     },
 
+    async obtenerNotificacionesAdmin(adminId: string, soloNoLeidas: boolean = false) {
+        if (!adminId) return [];
+
+        let query = supabase
+            .from('notificaciones_usuarios')
+            .select('*')
+            .eq('usuario_id', adminId)
+            .order('created_at', { ascending: false });
+
+        if (soloNoLeidas) query = query.eq('leida', false);
+
+        const { data, error } = await query;
+        if (error) console.error('Error obteniendo notificaciones de admin:', error);
+        return data || [];
+    },
+
+    // ⚠️ DEPRECADO: Usar ocultarNotificacion en su lugar
     async eliminarNotificacion(notificacionId: number) {
+        console.warn('⚠️ eliminarNotificacion está deprecado. Usar ocultarNotificacion en su lugar.');
         const { error } = await supabase
             .from('notificaciones_usuarios')
             .delete()

@@ -1,20 +1,44 @@
 // screens/cliente/PantallaCheckout.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Modal, Alert, Dimensions, Animated, ActivityIndicator
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    TextInput,
+    Modal,
+    Dimensions,
+    Animated,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    Clipboard,
+    Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
+
+// ============================================================
+// 🚫 COMENTADO TEMPORALMENTE - MERCADO PAGO (expo-web-browser)
+// ============================================================
+// import * as WebBrowser from 'expo-web-browser';
+// import { tiendaPago } from '../../stores/tiendaPago';
+// import { servicioPagos } from '../../services/servicioPagos';
+
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
 import { servicioEnvios } from '../../lib/servicioEnvios';
+import { useToast, Toast } from '../../components/Toast';
+import { UbicacionGuardada } from '../../lib/tipos';
+
+// ✅ IMPORTAR MAPA SELECTOR
+import MapaSelector from '../../components/Mapa';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,6 +46,14 @@ const UBICACION_DEFAULT = {
     latitude: -34.776484410467525,
     longitude: -58.29220250409459,
 };
+
+// ✅ DECLARADAS FUERA DEL COMPONENTE PARA QUE LOS ESTILOS PUEDAN USARLAS
+const isTablet = width >= 768;
+const isSmallPhone = width < 375;
+
+// ✅ ALIAS DE TRANSFERENCIA
+const ALIAS_TRANSFERENCIA = 'krustyburger2025';
+const CUENTA_TRANSFERENCIA = 'CBU: 1234567890123456789012';
 
 export default function PantallaCheckout(props: any) {
     const { elementos, vaciarCarrito, calcularTotal } = tiendaCarrito();
@@ -34,12 +66,17 @@ export default function PantallaCheckout(props: any) {
         cargarUbicacionTemporal,
         limpiarUbicacionTemporal
     } = tiendaAutenticacion();
+
     const insets = useSafeAreaInsets();
+    const toast = useToast();
 
     const total = calcularTotal();
 
+    // ✅ Recibir datos del carrito
     const cuponAplicado = props.route?.params?.cuponAplicado || null;
     const descuento = props.route?.params?.descuento || 0;
+    const ubicacionRecibida = props.route?.params?.ubicacionGuardada || null;
+
     const [totalFinal, setTotalFinal] = useState(total);
 
     const [direccion, setDireccion] = useState('');
@@ -54,11 +91,19 @@ export default function PantallaCheckout(props: any) {
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
     const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
 
+    // ✅ ESTADO PARA MODAL DE TRANSFERENCIA
+    const [mostrarModalTransferencia, setMostrarModalTransferencia] = useState(false);
+    const [pedidoIdTransferencia, setPedidoIdTransferencia] = useState<number | null>(null);
+
+    // ✅ ESTADO PARA EL MAPA
     const [mostrarMapa, setMostrarMapa] = useState(false);
     const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<{
         latitude: number;
         longitude: number;
-    } | null>(null);
+    } | null>(ubicacionRecibida ? {
+        latitude: ubicacionRecibida.latitude,
+        longitude: ubicacionRecibida.longitude,
+    } : null);
     const [buscandoDireccion, setBuscandoDireccion] = useState(false);
     const [direccionSugerida, setDireccionSugerida] = useState('');
     const [busquedaManual, setBusquedaManual] = useState('');
@@ -73,13 +118,22 @@ export default function PantallaCheckout(props: any) {
     const [envioDisponible, setEnvioDisponible] = useState(true);
     const [mensajeEnvio, setMensajeEnvio] = useState('');
 
-    const mapRef = useRef<MapView>(null);
-
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
     const dot1Anim = useRef(new Animated.Value(0)).current;
     const dot2Anim = useRef(new Animated.Value(0)).current;
     const dot3Anim = useRef(new Animated.Value(0)).current;
+
+    // ✅ FUNCIÓN PARA OBTENER PRECIO UNITARIO
+    const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
+
+    // ✅ EFECTO PARA MOSTRAR MODAL CUANDO SE SETEA EL ID
+    useEffect(() => {
+        if (pedidoIdTransferencia !== null) {
+            console.log('🔴 useEffect: Mostrando modal para pedido:', pedidoIdTransferencia);
+            setMostrarModalTransferencia(true);
+        }
+    }, [pedidoIdTransferencia]);
 
     useEffect(() => {
         cargarDatosPerfil();
@@ -98,8 +152,48 @@ export default function PantallaCheckout(props: any) {
             }),
         ]).start();
 
-        cargarUbicacionDesdeStore();
+        // ✅ Si recibimos ubicación del carrito, usarla
+        if (ubicacionRecibida) {
+            console.log('📍 Usando ubicación recibida del carrito:', ubicacionRecibida);
+            setUbicacionSeleccionada({
+                latitude: ubicacionRecibida.latitude,
+                longitude: ubicacionRecibida.longitude,
+            });
+            setDireccion(ubicacionRecibida.direccion || '');
+            setDireccionCompleta(ubicacionRecibida.direccion || '');
+            setDireccionDelPerfil(false);
+            calcularCostoEnvio(ubicacionRecibida.latitude, ubicacionRecibida.longitude);
+            setCargandoUbicacion(false);
+            // Guardar en el store para persistencia
+            if (ubicacionRecibida.direccion) {
+                guardarUbicacionTemporal(ubicacionRecibida);
+            }
+        } else {
+            // Si no hay ubicación recibida, cargar desde store
+            cargarUbicacionDesdeStore();
+        }
     }, []);
+
+    // ✅ GUARDAR DIRECCIÓN EN EL STORE
+    const guardarDireccionEnStore = async (ubicacion: { latitude: number; longitude: number }) => {
+        try {
+            const direccionObtenida = await obtenerDireccionDesdeCoordenadas(
+                ubicacion.latitude,
+                ubicacion.longitude
+            );
+
+            const ubicacionCompleta: UbicacionGuardada = {
+                latitude: ubicacion.latitude,
+                longitude: ubicacion.longitude,
+                direccion: direccionObtenida || `${ubicacion.latitude}, ${ubicacion.longitude}`,
+            };
+
+            await guardarUbicacionTemporal(ubicacionCompleta);
+            console.log('✅ Dirección guardada en el store');
+        } catch (error) {
+            console.error('Error guardando dirección:', error);
+        }
+    };
 
     const cargarUbicacionDesdeStore = async () => {
         console.log('📍 Cargando ubicación desde store...');
@@ -114,8 +208,8 @@ export default function PantallaCheckout(props: any) {
                     latitude: ubicacionCargada.latitude,
                     longitude: ubicacionCargada.longitude,
                 });
-                setDireccion(ubicacionCargada.direccion);
-                setDireccionCompleta(ubicacionCargada.direccion);
+                setDireccion(ubicacionCargada.direccion || '');
+                setDireccionCompleta(ubicacionCargada.direccion || '');
                 setDireccionDelPerfil(false);
                 calcularCostoEnvio(ubicacionCargada.latitude, ubicacionCargada.longitude);
                 setCargandoUbicacion(false);
@@ -128,8 +222,8 @@ export default function PantallaCheckout(props: any) {
                     latitude: ubicacionStore.latitude,
                     longitude: ubicacionStore.longitude,
                 });
-                setDireccion(ubicacionStore.direccion);
-                setDireccionCompleta(ubicacionStore.direccion);
+                setDireccion(ubicacionStore.direccion || '');
+                setDireccionCompleta(ubicacionStore.direccion || '');
                 setDireccionDelPerfil(false);
                 calcularCostoEnvio(ubicacionStore.latitude, ubicacionStore.longitude);
                 setCargandoUbicacion(false);
@@ -162,7 +256,7 @@ export default function PantallaCheckout(props: any) {
 
             const direccionCompletaPerfil = partesDireccion.length > 0 ? partesDireccion.join(', ') : '';
 
-            if (direccionCompletaPerfil && !ubicacionStore) {
+            if (direccionCompletaPerfil && !ubicacionStore && !ubicacionRecibida) {
                 setDireccion(direccionCompletaPerfil);
                 setDireccionCompleta(direccionCompletaPerfil);
                 setDireccionDelPerfil(true);
@@ -323,7 +417,7 @@ export default function PantallaCheckout(props: any) {
 
     const buscarDireccionManual = async () => {
         if (busquedaManual.length < 3) {
-            Alert.alert('Dirección muy corta', 'Ingresa al menos 3 caracteres para buscar');
+            toast.advertencia('Dirección muy corta - Ingresa al menos 3 caracteres');
             return;
         }
 
@@ -349,25 +443,18 @@ export default function PantallaCheckout(props: any) {
                     });
                 }
                 setMostrarMapa(true);
-                if (mapRef.current) {
-                    mapRef.current.animateToRegion({
-                        latitude,
-                        longitude,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                    }, 1000);
-                }
             } else {
-                Alert.alert('Dirección no encontrada', 'No se pudo encontrar la dirección ingresada. Intentá con otra.');
+                toast.error('No se pudo encontrar la dirección ingresada');
             }
         } catch (error) {
             console.log('Error buscando dirección:', error);
-            Alert.alert('Error', 'No se pudo buscar la dirección');
+            toast.error('No se pudo buscar la dirección');
         } finally {
             setBuscandoDireccion(false);
         }
     };
 
+    // ✅ seleccionarUbicacionEnMapa - ACTUALIZADO con guardado en store
     const seleccionarUbicacionEnMapa = async (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setUbicacionSeleccionada({ latitude, longitude });
@@ -378,61 +465,76 @@ export default function PantallaCheckout(props: any) {
             setDireccion(direccionObtenida);
             setDireccionDelPerfil(false);
 
+            // ✅ GUARDAR EN EL STORE
             await guardarUbicacionTemporal({
                 latitude,
                 longitude,
                 direccion: direccionObtenida,
             });
-        }
-
-        if (mapRef.current) {
-            mapRef.current.animateToRegion({
-                latitude,
-                longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-            }, 500);
+            console.log('✅ Ubicación guardada desde el mapa');
         }
     };
 
-    const metodosPago = [
-        { id: 'efectivo', label: 'Efectivo', icono: 'cash-outline' },
-        { id: 'tarjeta', label: 'Tarjeta', icono: 'card-outline' },
-        { id: 'transferencia', label: 'Transferencia', icono: 'swap-horizontal-outline' },
-    ];
+    // ✅ FUNCIÓN PARA VOLVER AL CARRITO GUARDANDO LA DIRECCIÓN
+    const handleVolverAlCarrito = async () => {
+        if (ubicacionSeleccionada) {
+            await guardarDireccionEnStore(ubicacionSeleccionada);
+        }
+        props.navigation.goBack();
+    };
 
-    const tiposEntrega = [
-        {
-            id: 'domicilio',
-            label: 'Domicilio',
-            icono: 'home-outline',
-            costo: envioDisponible && costoEnvioCalculado > 0 ? costoEnvioCalculado : 0
-        },
-        {
-            id: 'retiro',
-            label: 'Retiro en local',
-            icono: 'storefront-outline',
-            costo: 0
-        },
-    ];
+    // ✅ FUNCIÓN PARA CONFIRMAR UBICACIÓN DESDE EL MAPA
+    const handleConfirmarUbicacion = async (ubicacion: { latitude: number; longitude: number; direccion: string }) => {
+        setUbicacionSeleccionada({
+            latitude: ubicacion.latitude,
+            longitude: ubicacion.longitude,
+        });
+        setDireccion(ubicacion.direccion);
+        setDireccionCompleta(ubicacion.direccion);
+        setDireccionDelPerfil(false);
 
-    const isTablet = width >= 768;
-    const isSmallPhone = width < 375;
+        // ✅ Guardar en el store
+        await guardarUbicacionTemporal({
+            latitude: ubicacion.latitude,
+            longitude: ubicacion.longitude,
+            direccion: ubicacion.direccion,
+        });
 
-    const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
-    const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
-    const seccionTituloSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
-    const inputSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
-    const buttonTextSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
+        // ✅ Calcular envío
+        calcularCostoEnvio(ubicacion.latitude, ubicacion.longitude);
 
+        setMostrarMapa(false);
+        toast.exito('📍 Ubicación seleccionada correctamente');
+    };
+
+    // ============================================================
+    // ✅ FUNCIÓN PARA COPIAR ALIAS
+    // ============================================================
+    const copiarAlias = async () => {
+        await Clipboard.setString(ALIAS_TRANSFERENCIA);
+        toast.exito('¡Alias copiado!');
+    };
+
+    // ============================================================
+    // ✅ FUNCIÓN PARA ABRIR LA APP DEL BANCO
+    // ============================================================
+    const abrirBanco = () => {
+        Linking.openURL('https://www.mercadopago.com.ar/').catch(() => {
+            toast.info('Abrí tu app bancaria y transferí al alias');
+        });
+    };
+
+    // ============================================================
+    // CONFIRMAR PEDIDO - ACTUALIZADO CON MODAL DE TRANSFERENCIA
+    // ============================================================
     const confirmarPedido = async () => {
         if (!direccion && tipoEntrega === 'domicilio') {
-            Alert.alert('Error', 'Ingresa una dirección de entrega');
+            toast.advertencia('Ingresa una dirección de entrega');
             return;
         }
 
         if (!telefono) {
-            Alert.alert('Error', 'Ingresa un número de teléfono');
+            toast.advertencia('Ingresa un número de teléfono');
             return;
         }
 
@@ -445,6 +547,8 @@ export default function PantallaCheckout(props: any) {
             cantidad: e.cantidad,
             precio_unitario: Number(e.producto.precio),
             total: Number(e.producto.precio) * e.cantidad,
+            descripcion: e.producto.descripcion || '',
+            imagen: e.producto.imagen || '',
         }));
 
         const costoEnvioFinal = cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
@@ -475,28 +579,91 @@ export default function PantallaCheckout(props: any) {
             await supabase.from('canjes').update({ usado_en_pedido: true }).eq('id', cuponAplicado.id);
         }
 
+        // ============================================================
+        // 1. CREAR EL PEDIDO
+        // ============================================================
         const resultado = await crearPedido(datosPedido);
-        setCargando(false);
 
         if (resultado.error) {
-            Alert.alert('Error', resultado.error);
+            toast.error(resultado.error);
+            setCargando(false);
             return;
         }
 
-        vaciarCarrito();
-        setPedidoCreadoId(resultado.id);
-        console.log(`✅ Pedido creado con ID: ${resultado.id}`);
+        const pedidoId = resultado.id;
 
+        if (!pedidoId) {
+            toast.error('Error: No se pudo obtener el ID del pedido');
+            setCargando(false);
+            return;
+        }
+
+        console.log(`✅ Pedido creado con ID: ${pedidoId}`);
+
+        // ✅ VACIAR CARRITO Y LIMPIAR UBICACIÓN
+        vaciarCarrito();
         await limpiarUbicacionTemporal();
+
+        // ============================================================
+        // 2. SI ES TRANSFERENCIA → MOSTRAR MODAL CON ALIAS
+        // ============================================================
+        if (metodoPago === 'transferencia') {
+            console.log('🔴 TRANSFERENCIA SELECCIONADA - Pedido ID:', pedidoId);
+            setCargando(false);
+            setPedidoIdTransferencia(pedidoId);
+            return;
+        }
+
+        // ============================================================
+        // 3. OTROS MÉTODOS DE PAGO (efectivo, tarjeta)
+        // ============================================================
+        setCargando(false);
 
         setMostrarModalExito(true);
         setTimeout(() => {
             setMostrarModalExito(false);
-            props.navigation.navigate('Seguimiento', { pedidoId: resultado.id });
+            props.navigation.replace('Seguimiento', { pedidoId });
         }, 2500);
     };
 
-    const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
+    // ============================================================
+    // ✅ CERRAR MODAL DE TRANSFERENCIA Y NAVEGAR A SEGUIMIENTO
+    // ============================================================
+    const cerrarModalTransferencia = () => {
+        setMostrarModalTransferencia(false);
+        const pedidoId = pedidoIdTransferencia;
+        setPedidoIdTransferencia(null);
+        if (pedidoId) {
+            props.navigation.replace('Seguimiento', { pedidoId });
+        }
+    };
+
+    const metodosPago = [
+        { id: 'efectivo', label: 'Efectivo', icono: 'cash-outline' },
+        { id: 'tarjeta', label: 'Tarjeta', icono: 'card-outline' },
+        { id: 'transferencia', label: 'Transferencia', icono: 'swap-horizontal-outline' },
+    ];
+
+    const tiposEntrega = [
+        {
+            id: 'domicilio',
+            label: 'Domicilio',
+            icono: 'home-outline',
+            costo: envioDisponible && costoEnvioCalculado > 0 ? costoEnvioCalculado : 0
+        },
+        {
+            id: 'retiro',
+            label: 'Retiro en local',
+            icono: 'storefront-outline',
+            costo: 0
+        },
+    ];
+
+    const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
+    const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
+    const seccionTituloSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
+    const inputSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
+    const buttonTextSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
 
     const renderLoaderDots = () => {
         const dots = [
@@ -546,9 +713,10 @@ export default function PantallaCheckout(props: any) {
                     paddingBottom: isTablet ? 16 : 12,
                 }
             ]}>
+                {/* ✅ Botón Volver - AHORA GUARDA LA DIRECCIÓN */}
                 <TouchableOpacity
                     style={estilos.botonVolver}
-                    onPress={() => props.navigation.goBack()}
+                    onPress={handleVolverAlCarrito}
                     activeOpacity={0.7}
                 >
                     <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.textoClaro} />
@@ -566,7 +734,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         paddingHorizontal: paddingHorizontal,
                         paddingBottom: insets.bottom + 100,
-                        paddingTop: isTablet ? 18 : 10,  // ✅ ESPACIO ENTRE HEADER Y PRIMERA TARJETA
+                        paddingTop: isTablet ? 18 : 10,
                     }
                 ]}
             >
@@ -577,7 +745,7 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 )}
 
-                {/* ✅ DATOS DE CONTACTO - PRIMERA TARJETA */}
+                {/* ✅ DATOS DE CONTACTO */}
                 <Animated.View style={[
                     estilos.seccion,
                     {
@@ -620,7 +788,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        marginTop: 12,
                     }
                 ]}>
                     <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -677,7 +845,7 @@ export default function PantallaCheckout(props: any) {
                         {
                             opacity: fadeAnim,
                             transform: [{ translateY: slideUpAnim }],
-                            marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                            marginTop: 12,
                         }
                     ]}>
                         <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -853,73 +1021,15 @@ export default function PantallaCheckout(props: any) {
                     </Animated.View>
                 )}
 
-                <Modal
+                {/* ✅ MAPA SELECTOR - COMPONENTE REUTILIZABLE */}
+                <MapaSelector
                     visible={mostrarMapa}
-                    transparent={false}
-                    animationType="slide"
-                    onRequestClose={() => setMostrarMapa(false)}
-                >
-                    <View style={estilos.mapaModal}>
-                        <View style={estilos.mapaHeader}>
-                            <TouchableOpacity
-                                style={estilos.mapaHeaderBoton}
-                                onPress={() => setMostrarMapa(false)}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="arrow-back" size={28} color={Colores.textoClaro} />
-                            </TouchableOpacity>
-                            <Text style={estilos.mapaHeaderTitulo}>Selecciona tu ubicación</Text>
-                            <TouchableOpacity
-                                style={[estilos.mapaHeaderBoton, estilos.mapaHeaderConfirmar]}
-                                onPress={() => setMostrarMapa(false)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={estilos.mapaHeaderConfirmarTexto}>Listo</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <MapView
-                            ref={mapRef}
-                            style={estilos.mapaCompleto}
-                            provider={PROVIDER_GOOGLE}
-                            initialRegion={{
-                                latitude: ubicacionSeleccionada?.latitude || UBICACION_DEFAULT.latitude,
-                                longitude: ubicacionSeleccionada?.longitude || UBICACION_DEFAULT.longitude,
-                                latitudeDelta: 0.01,
-                                longitudeDelta: 0.01,
-                            }}
-                            onPress={seleccionarUbicacionEnMapa}
-                            showsUserLocation={true}
-                            showsMyLocationButton={true}
-                        >
-                            {ubicacionSeleccionada && (
-                                <Marker
-                                    coordinate={ubicacionSeleccionada}
-                                    draggable
-                                    onDragEnd={seleccionarUbicacionEnMapa}
-                                    pinColor={Colores.bartNaranja}
-                                >
-                                    <View style={estilos.marcadorPersonalizado}>
-                                        <View style={estilos.marcadorPunto} />
-                                    </View>
-                                </Marker>
-                            )}
-                        </MapView>
-
-                        <View style={estilos.mapaFooter}>
-                            <Text style={estilos.mapaFooterTexto}>
-                                Toca el mapa o arrastra el marcador para seleccionar tu ubicación
-                            </Text>
-                            <TouchableOpacity
-                                style={estilos.botonMiUbicacion}
-                                onPress={obtenerUbicacionActual}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="locate" size={24} color={Colores.bartNaranja} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Modal>
+                    onClose={() => setMostrarMapa(false)}
+                    onConfirmar={handleConfirmarUbicacion}
+                    ubicacionInicial={ubicacionSeleccionada || undefined}
+                    direccionInicial={direccion}
+                    titulo="📍 Selecciona tu ubicación"
+                />
 
                 {/* ✅ MÉTODO DE PAGO */}
                 <Animated.View style={[
@@ -927,7 +1037,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        marginTop: 12,
                     }
                 ]}>
                     <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -974,7 +1084,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        marginTop: 12,
                     }
                 ]}>
                     <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -1001,7 +1111,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        marginTop: 12,
                     }
                 ]}>
                     <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -1027,7 +1137,7 @@ export default function PantallaCheckout(props: any) {
                         {
                             opacity: fadeAnim,
                             transform: [{ translateY: slideUpAnim }],
-                            marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                            marginTop: 12,
                         }
                     ]}>
                         <Ionicons name="pricetag" size={isTablet ? 24 : 20} color={Colores.bartNaranja} />
@@ -1043,7 +1153,7 @@ export default function PantallaCheckout(props: any) {
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                        marginTop: 12,
                     }
                 ]}>
                     <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
@@ -1086,7 +1196,7 @@ export default function PantallaCheckout(props: any) {
                 <Animated.View style={{
                     opacity: fadeAnim,
                     transform: [{ translateY: slideUpAnim }],
-                    marginTop: 12,  // ✅ ESPACIO ENTRE TARJETAS
+                    marginTop: 12,
                 }}>
                     <TouchableOpacity
                         style={[estilos.botonConfirmar, cargando && { opacity: 0.6 }]}
@@ -1100,10 +1210,16 @@ export default function PantallaCheckout(props: any) {
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
-                            <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={Colores.textoOscuro} />
-                            <Text style={[estilos.botonConfirmarTexto, { fontSize: buttonTextSize }]}>
-                                {cargando ? 'Procesando...' : 'Confirmar Pedido'}
-                            </Text>
+                            {cargando ? (
+                                <ActivityIndicator color={Colores.textoOscuro} size="small" />
+                            ) : (
+                                <>
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={Colores.textoOscuro} />
+                                    <Text style={[estilos.botonConfirmarTexto, { fontSize: buttonTextSize }]}>
+                                        {metodoPago === 'transferencia' ? 'Pagar con Transferencia' : 'Confirmar Pedido'}
+                                    </Text>
+                                </>
+                            )}
                         </LinearGradient>
                     </TouchableOpacity>
                 </Animated.View>
@@ -1111,7 +1227,7 @@ export default function PantallaCheckout(props: any) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ✅ MODAL DE ÉXITO */}
+            {/* ✅ MODAL DE ÉXITO (para efectivo/tarjeta) */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
                 <View style={estilos.modalFondo}>
                     <View style={[
@@ -1138,6 +1254,116 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </View>
             </Modal>
+
+            {/* ============================================================
+            ✅ MODAL PROFESIONAL PARA TRANSFERENCIA
+            ============================================================ */}
+            <Modal
+                visible={mostrarModalTransferencia}
+                transparent={true}
+                animationType="fade"
+                statusBarTranslucent={true}
+                onRequestClose={cerrarModalTransferencia}
+            >
+                <View style={estilos.modalTransferenciaOverlay}>
+                    <View style={[estilos.modalTransferencia, { maxWidth: isTablet ? 500 : width * 0.92 }]}>
+                        <ScrollView
+                            style={estilos.modalTransferenciaBodyScroll}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 10 }}
+                        >
+                            {/* Header con gradiente */}
+                            <LinearGradient
+                                colors={[Colores.bartNaranja, Colores.bartAzul]}
+                                style={estilos.modalTransferenciaHeader}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                            >
+                                <Ionicons name="swap-horizontal-outline" size={isTablet ? 48 : 36} color={Colores.textoOscuro} />
+                                <Text style={[estilos.modalTransferenciaTitulo, { fontSize: isTablet ? 24 : 18 }]}>
+                                    Transferencia Bancaria
+                                </Text>
+                            </LinearGradient>
+
+                            <View style={[estilos.modalTransferenciaBody, { paddingTop: 16 }]}>
+                                <Text style={[estilos.modalTransferenciaMensaje, { fontSize: isTablet ? 16 : 14 }]}>
+                                    Para completar tu pedido, realizá la transferencia a los siguientes datos:
+                                </Text>
+
+                                {/* Alias destacado */}
+                                <View style={estilos.aliasContainer}>
+                                    <Text style={[estilos.aliasLabel, { fontSize: isTablet ? 14 : 12 }]}>Alias</Text>
+                                    <View style={estilos.aliasFila}>
+                                        <Text style={[estilos.aliasTexto, { fontSize: isTablet ? 28 : 20 }]}>
+                                            {ALIAS_TRANSFERENCIA}
+                                        </Text>
+                                        <TouchableOpacity onPress={copiarAlias} style={estilos.aliasBotonCopiar}>
+                                            <Ionicons name="copy-outline" size={isTablet ? 24 : 20} color={Colores.bartNaranja} />
+                                            <Text style={[estilos.aliasBotonCopiarTexto, { fontSize: isTablet ? 15 : 13 }]}>
+                                                Copiar
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* CBU */}
+                                <View style={estilos.cbuContainer}>
+                                    <Text style={[estilos.cbuLabel, { fontSize: isTablet ? 13 : 11 }]}>CBU</Text>
+                                    <Text style={[estilos.cbuTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                        {CUENTA_TRANSFERENCIA}
+                                    </Text>
+                                </View>
+
+                                {/* Monto */}
+                                <View style={estilos.montoContainer}>
+                                    <Text style={[estilos.montoLabel, { fontSize: isTablet ? 15 : 13 }]}>Monto a transferir</Text>
+                                    <Text style={[estilos.montoTexto, { fontSize: isTablet ? 36 : 28 }]}>
+                                        ${totalFinal.toFixed(2)}
+                                    </Text>
+                                </View>
+
+                                <Text style={[estilos.pedidoNumero, { fontSize: isTablet ? 15 : 13 }]}>
+                                    Pedido #{pedidoIdTransferencia}
+                                </Text>
+
+                                {/* Botones */}
+                                <View style={[estilos.botonesTransferencia, { gap: isTablet ? 16 : 12 }]}>
+                                    <TouchableOpacity
+                                        style={[estilos.botonTransferencia, estilos.botonTransferenciaSecundario, { paddingVertical: isTablet ? 18 : 14 }]}
+                                        onPress={cerrarModalTransferencia}
+                                    >
+                                        <Text style={[estilos.botonTransferenciaTexto, { fontSize: isTablet ? 17 : 15 }]}>
+                                            Ya transferí
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[estilos.botonTransferencia, estilos.botonTransferenciaPrincipal, { paddingVertical: isTablet ? 18 : 14 }]}
+                                        onPress={abrirBanco}
+                                    >
+                                        <Ionicons name="open-outline" size={isTablet ? 24 : 20} color={Colores.textoOscuro} />
+                                        <Text style={[estilos.botonTransferenciaTexto, { fontSize: isTablet ? 17 : 15, color: Colores.textoOscuro }]}>
+                                            Ir al banco
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={[estilos.mensajeConfirmacion, { fontSize: isTablet ? 13 : 11 }]}>
+                                    ⏳ Una vez realizada la transferencia, presioná "Ya transferí" y el local confirmará tu pago.
+                                </Text>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ✅ TOAST */}
+            <Toast
+                visible={toast.visible}
+                mensaje={toast.mensaje}
+                tipo={toast.tipo}
+                ocultar={toast.ocultar}
+            />
         </View>
     );
 }
@@ -1232,13 +1458,13 @@ const estilos = StyleSheet.create({
     botonMapa: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colores.bartNaranja + '15',
+        backgroundColor: Colores.primario + '15',
         borderWidth: 1,
-        borderColor: Colores.bartNaranja + '20',
+        borderColor: Colores.primario + '40',
         marginBottom: 10,
     },
     botonMapaTexto: {
-        color: Colores.bartNaranja,
+        color: Colores.primario,
         fontWeight: '600',
         flex: 1,
         marginLeft: 8,
@@ -1280,86 +1506,6 @@ const estilos = StyleSheet.create({
         fontSize: 13,
         fontWeight: '500',
     },
-    mapaModal: {
-        flex: 1,
-        backgroundColor: Colores.textoOscuro,
-    },
-    mapaHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 50,
-        paddingBottom: 12,
-        backgroundColor: Colores.textoOscuro,
-        borderBottomWidth: 1,
-        borderBottomColor: Colores.textoClaro + '10',
-    },
-    mapaHeaderBoton: {
-        padding: 8,
-    },
-    mapaHeaderTitulo: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: Colores.textoClaro,
-    },
-    mapaHeaderConfirmar: {
-        backgroundColor: Colores.bartNaranja,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-    },
-    mapaHeaderConfirmarTexto: {
-        color: Colores.textoOscuro,
-        fontWeight: 'bold',
-    },
-    mapaCompleto: {
-        flex: 1,
-    },
-    mapaFooter: {
-        position: 'absolute',
-        bottom: 30,
-        left: 16,
-        right: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: Colores.textoOscuro + '80',
-        padding: 12,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: Colores.textoClaro + '10',
-    },
-    mapaFooterTexto: {
-        color: Colores.textoGris,
-        fontSize: 12,
-        flex: 1,
-        marginRight: 12,
-    },
-    botonMiUbicacion: {
-        backgroundColor: Colores.bartNaranja + '20',
-        padding: 10,
-        borderRadius: 30,
-        borderWidth: 1,
-        borderColor: Colores.bartNaranja + '30',
-    },
-    marcadorPersonalizado: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    marcadorPunto: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: Colores.bartNaranja,
-        borderWidth: 3,
-        borderColor: Colores.textoClaro,
-        shadowColor: Colores.bartNaranja,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 12,
-        elevation: 6,
-    },
     productoItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1383,10 +1529,10 @@ const estilos = StyleSheet.create({
         padding: 14,
         gap: 10,
         borderWidth: 1,
-        borderColor: Colores.bartNaranja + '20',
+        borderColor: Colores.primario + '40',
     },
     cuponTexto: {
-        color: Colores.bartNaranja,
+        color: Colores.primario,
         fontWeight: 'bold',
         flex: 1,
     },
@@ -1589,5 +1735,161 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         minWidth: 50,
+    },
+    precioUnitario: {
+        fontSize: 12,
+        color: Colores.textoGris + '80',
+    },
+    // ============================================================
+    // ✅ NUEVOS ESTILOS PARA MODAL DE TRANSFERENCIA
+    // ============================================================
+    modalTransferenciaOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    modalTransferencia: {
+        backgroundColor: Colores.fondoOscuro,
+        borderRadius: 24,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: Colores.bartNaranja + '30',
+        maxHeight: '90%',
+        width: '100%',
+    },
+    modalTransferenciaBodyScroll: {
+        maxHeight: '90%',
+    },
+    modalTransferenciaHeader: {
+        padding: isTablet ? 24 : 18,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    modalTransferenciaTitulo: {
+        fontWeight: 'bold',
+        color: Colores.textoOscuro,
+    },
+    modalTransferenciaBody: {
+        padding: isTablet ? 28 : 20,
+    },
+    modalTransferenciaMensaje: {
+        color: Colores.textoGris,
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+    aliasContainer: {
+        backgroundColor: Colores.bartNaranja + '10',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: Colores.bartNaranja + '20',
+        marginBottom: 16,
+    },
+    aliasLabel: {
+        color: Colores.textoGris,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: 6,
+    },
+    aliasFila: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    aliasTexto: {
+        color: Colores.textoClaro,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    aliasBotonCopiar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colores.bartNaranja + '20',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        gap: 4,
+    },
+    aliasBotonCopiarTexto: {
+        color: Colores.bartNaranja,
+        fontWeight: '600',
+    },
+    cbuContainer: {
+        backgroundColor: Colores.textoOscuro + '30',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: Colores.textoClaro + '10',
+    },
+    cbuLabel: {
+        color: Colores.textoGris,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    cbuTexto: {
+        color: Colores.textoClaro,
+        fontWeight: '500',
+        letterSpacing: 0.5,
+    },
+    montoContainer: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: Colores.textoClaro + '10',
+        marginBottom: 12,
+    },
+    montoLabel: {
+        color: Colores.textoGris,
+        marginBottom: 4,
+    },
+    montoTexto: {
+        color: Colores.bartNaranja,
+        fontWeight: 'bold',
+    },
+    pedidoNumero: {
+        color: Colores.textoGris,
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    botonesTransferencia: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    botonTransferencia: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+    },
+    botonTransferenciaPrincipal: {
+        backgroundColor: Colores.bartNaranja,
+    },
+    botonTransferenciaSecundario: {
+        backgroundColor: Colores.textoOscuro + '40',
+        borderWidth: 1,
+        borderColor: Colores.textoClaro + '10',
+    },
+    botonTransferenciaTexto: {
+        fontWeight: '600',
+        color: Colores.textoClaro,
+    },
+    mensajeConfirmacion: {
+        color: Colores.textoGris,
+        textAlign: 'center',
+        marginTop: 14,
+        lineHeight: 18,
+        opacity: 0.7,
+        fontStyle: 'italic',
     },
 });

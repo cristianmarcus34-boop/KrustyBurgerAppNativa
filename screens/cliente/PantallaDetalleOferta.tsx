@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { Colores } from '../../lib/colores';
+import { formatearPrecio } from '../../lib/formateador';
 
 const { width, height } = Dimensions.get('window');
 
@@ -34,14 +35,6 @@ const COLORS = {
     grisOscuro: '#1A1A1A',
     gris: '#333333',
     grisClaro: '#B0B0B0',
-};
-
-// ✅ FUNCIÓN PARA FORMATEAR PRECIOS DE FORMA SEGURA
-const formatearPrecio = (precio: string | number | undefined): string => {
-    if (precio === undefined || precio === null) return '0.00';
-    const numero = typeof precio === 'string' ? parseFloat(precio) : precio;
-    if (isNaN(numero)) return '0.00';
-    return numero.toFixed(2);
 };
 
 // ✅ FUNCIÓN PARA OBTENER COLOR POR ID
@@ -108,31 +101,24 @@ export default function PantallaDetalleOferta(props: any) {
     const colorOferta = getColorPorId(oferta.id);
 
     // ✅ Calcular ahorro
-    const calcularAhorro = () => {
-        const original = typeof oferta.precio_original === 'string'
-            ? parseFloat(oferta.precio_original)
-            : oferta.precio_original;
-        const ofertaPrecio = typeof oferta.precio_oferta === 'string'
-            ? parseFloat(oferta.precio_oferta)
-            : oferta.precio_oferta;
+    const calcularAhorro = (): number => {
+        const original = oferta.precio_original;
+        const ofertaPrecio = oferta.precio_oferta;
 
         if (original && ofertaPrecio && !isNaN(original) && !isNaN(ofertaPrecio)) {
-            return (original - ofertaPrecio).toFixed(2);
+            return original - ofertaPrecio;
         }
-        return '0.00';
+        return 0;
     };
 
     const agregarAlCarrito = () => {
         console.log('🛒 [DetalleOferta] Agregando al carrito:', oferta.titulo);
 
-        // ✅ Convertir oferta a producto para agregar al carrito
         const producto = {
             id: oferta.id,
             nombre: oferta.titulo,
             descripcion: oferta.descripcion || 'Oferta especial',
-            precio: typeof oferta.precio_oferta === 'string'
-                ? parseFloat(oferta.precio_oferta)
-                : oferta.precio_oferta || 0,
+            precio: oferta.precio_oferta || 0,
             categoria: 'ofertas',
             imagen: oferta.imagen || null,
         };
@@ -154,6 +140,12 @@ export default function PantallaDetalleOferta(props: any) {
             ]
         );
     };
+
+    const ahorro = calcularAhorro();
+
+    // ✅ Tamaño de imagen aumentado
+    const imagenHeight = isTablet ? 400 : isSmallPhone ? 220 : 280;
+    const imagenRadius = isTablet ? 24 : isSmallPhone ? 14 : 18;
 
     return (
         <View style={estilos.contenedor}>
@@ -205,12 +197,12 @@ export default function PantallaDetalleOferta(props: any) {
                         transform: [{ translateY: slideUpAnim }],
                     }
                 ]}>
-                    {/* ✅ IMAGEN CON LOADING Y ERROR */}
+                    {/* ✅ IMAGEN MÁS GRANDE */}
                     <View style={[
                         estilos.imagenContenedor,
                         {
-                            height: isTablet ? 300 : isSmallPhone ? 180 : 220,
-                            borderRadius: isTablet ? 20 : isSmallPhone ? 12 : 16,
+                            height: imagenHeight,
+                            borderRadius: imagenRadius,
                             backgroundColor: colorOferta + '20',
                             borderColor: colorOferta + '30',
                         }
@@ -240,7 +232,6 @@ export default function PantallaDetalleOferta(props: any) {
                                     }}
                                     onError={(e) => {
                                         console.log('❌ [DetalleOferta] Error cargando imagen:', e.nativeEvent.error);
-                                        console.log('URL que falló:', oferta.imagen);
                                         setImagenCargando(false);
                                         setImagenError(true);
                                     }}
@@ -293,14 +284,14 @@ export default function PantallaDetalleOferta(props: any) {
                         {oferta.descripcion || 'Oferta especial de Krusty Burger. ¡No te lo pierdas!'}
                     </Text>
 
-                    {/* ✅ Precios con formateo seguro */}
+                    {/* ✅ Precios */}
                     <View style={estilos.preciosContainer}>
                         <View style={estilos.precioOriginalContainer}>
                             <Text style={[estilos.precioOriginalLabel, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>
                                 Precio original
                             </Text>
                             <Text style={[estilos.precioOriginal, { fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18 }]}>
-                                ${formatearPrecio(oferta.precio_original)}
+                                {formatearPrecio(oferta.precio_original)}
                             </Text>
                         </View>
                         <View style={estilos.precioOfertaContainer}>
@@ -311,29 +302,31 @@ export default function PantallaDetalleOferta(props: any) {
                                 fontSize: isTablet ? 38 : isSmallPhone ? 26 : 32,
                                 color: colorOferta,
                             }]}>
-                                ${formatearPrecio(oferta.precio_oferta)}
+                                {formatearPrecio(oferta.precio_oferta)}
                             </Text>
                         </View>
                     </View>
 
                     {/* ✅ Ahorro */}
-                    <View style={[
-                        estilos.ahorroContainer,
-                        {
-                            backgroundColor: colorOferta + '15',
-                            borderColor: colorOferta + '30',
-                            padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                            borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
-                        }
-                    ]}>
-                        <Ionicons name="cash" size={isTablet ? 28 : isSmallPhone ? 18 : 22} color={colorOferta} />
-                        <Text style={[estilos.ahorroTexto, {
-                            fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                            color: colorOferta,
-                        }]}>
-                            ¡Ahorra ${calcularAhorro()}!
-                        </Text>
-                    </View>
+                    {ahorro > 0 && (
+                        <View style={[
+                            estilos.ahorroContainer,
+                            {
+                                backgroundColor: colorOferta + '15',
+                                borderColor: colorOferta + '30',
+                                padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
+                            }
+                        ]}>
+                            <Ionicons name="cash" size={isTablet ? 28 : isSmallPhone ? 18 : 22} color={colorOferta} />
+                            <Text style={[estilos.ahorroTexto, {
+                                fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                                color: colorOferta,
+                            }]}>
+                                ¡Ahorra {formatearPrecio(ahorro)}!
+                            </Text>
+                        </View>
+                    )}
 
                     {/* ✅ Fechas */}
                     {(oferta.fecha_inicio || oferta.fecha_fin) && (
@@ -353,7 +346,7 @@ export default function PantallaDetalleOferta(props: any) {
                 </Animated.View>
             </ScrollView>
 
-            {/* ✅ BOTÓN AGREGAR AL CARRITO (FIXED) */}
+            {/* ✅ BOTÓN AGREGAR AL CARRITO */}
             <Animated.View style={[
                 estilos.footer,
                 {
@@ -380,7 +373,7 @@ export default function PantallaDetalleOferta(props: any) {
                         </Text>
                         <View style={[estilos.precioBoton, { borderRadius: isTablet ? 12 : isSmallPhone ? 6 : 8 }]}>
                             <Text style={[estilos.precioBotonTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>
-                                ${formatearPrecio(oferta.precio_oferta)}
+                                {formatearPrecio(oferta.precio_oferta)}
                             </Text>
                         </View>
                     </LinearGradient>
@@ -497,9 +490,7 @@ const estilos = StyleSheet.create({
         opacity: 0.5,
         marginTop: 8,
     },
-    emojiGrande: {
-        // Tamaño dinámico
-    },
+    emojiGrande: {},
     descuentoBadge: {
         position: 'absolute',
         top: 16,

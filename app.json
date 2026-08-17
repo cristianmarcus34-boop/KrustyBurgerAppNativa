@@ -68,7 +68,10 @@
               "host": "krustyburger.com.ar"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -136,7 +139,10 @@
           }
         }
       ],
-      "./plugins/withAndroidManifest.js"
+      "./plugins/withAndroidManifest.js",
+      "expo-web-browser",
+      "expo-barcode-scanner",
+      "@react-native-community/datetimepicker"
     ],
     "updates": {
       "enabled": true,

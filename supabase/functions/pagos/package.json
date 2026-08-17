@@ -1,0 +1,6 @@
+{
+  "name": "pagos-krusty",
+  "version": "1.0.0",
+  "description": "Funciones de pago para Krusty Burger con Mercado Pago",
+  "dependencies": {}
+}

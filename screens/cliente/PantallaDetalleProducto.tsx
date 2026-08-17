@@ -1,131 +1,149 @@
 ﻿// screens/cliente/PantallaDetalleProducto.tsx
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-  Alert, Dimensions, Animated, ActivityIndicator
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { tiendaCarrito } from '../../stores/tiendaCarrito';
-import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Producto } from '../../lib/tipos';
-import { Colores } from '../../lib/colores';
-import { servicioEnvios } from '../../lib/servicioEnvios';
+import { Colores, getTematica } from '../../lib/colores';
 
 // ============================================================
-// 🎨 PALETA DE COLORES
+// 📐 SISTEMA DE DISEÑO
 // ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
+const DISEÑO = {
+  BREAKPOINTS: {
+    TABLET: 768,
+    DESKTOP: 1024,
+    SMALL_PHONE: 375,
+  },
+  TIPOGRAFIA: {
+    HERO: { tablet: 38, normal: 30, small: 24 },
+    TITULO: { tablet: 26, normal: 22, small: 18 },
+    SUBTITULO: { tablet: 20, normal: 18, small: 16 },
+    CUERPO: { tablet: 17, normal: 15, small: 13 },
+    PEQUENO: { tablet: 15, normal: 13, small: 11 },
+    MICRO: { tablet: 13, normal: 11, small: 9 },
+  },
+  ESPACIADO: {
+    XL: { tablet: 48, normal: 32, small: 20 },
+    LG: { tablet: 36, normal: 24, small: 16 },
+    MD: { tablet: 28, normal: 20, small: 14 },
+    SM: { tablet: 20, normal: 16, small: 12 },
+    XS: { tablet: 14, normal: 10, small: 8 },
+  },
+  RADIO: {
+    LG: { tablet: 28, normal: 20, small: 16 },
+    MD: { tablet: 20, normal: 16, small: 12 },
+    SM: { tablet: 14, normal: 10, small: 8 },
+    XS: { tablet: 10, normal: 8, small: 6 },
+  },
 };
 
-const { width, height } = Dimensions.get('window');
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+  const { width, height } = Dimensions.get('window');
 
-const etiquetasCategoria: Record<string, string> = {
-  'burgers': '🍔 Hamburguesa',
-  'combos': '🍟 Combo',
-  'bebidas': '🥤 Bebida',
-  'postres': '🍦 Postre',
-  'acompanantes': '🍿 Acompañante',
+  const isTablet = width >= DISEÑO.BREAKPOINTS.TABLET;
+  const isDesktop = width >= DISEÑO.BREAKPOINTS.DESKTOP;
+  const isSmallPhone = width < DISEÑO.BREAKPOINTS.SMALL_PHONE;
+
+  const getValor = useCallback((
+    valores: { tablet: any; normal: any; small: any }
+  ) => {
+    if (isDesktop || isTablet) return valores.tablet;
+    if (isSmallPhone) return valores.small;
+    return valores.normal;
+  }, [isDesktop, isTablet, isSmallPhone]);
+
+  const getTexto = useCallback((
+    escala: keyof typeof DISEÑO.TIPOGRAFIA
+  ) => getValor(DISEÑO.TIPOGRAFIA[escala]), [getValor]);
+
+  const getEspaciado = useCallback((
+    escala: keyof typeof DISEÑO.ESPACIADO
+  ) => getValor(DISEÑO.ESPACIADO[escala]), [getValor]);
+
+  const getRadio = useCallback((
+    escala: keyof typeof DISEÑO.RADIO
+  ) => getValor(DISEÑO.RADIO[escala]), [getValor]);
+
+  return {
+    isTablet,
+    isDesktop,
+    isSmallPhone,
+    width,
+    height,
+    getValor,
+    getTexto,
+    getEspaciado,
+    getRadio,
+  };
 };
 
+// ============================================================
+// 📋 ETIQUETAS DE CATEGORÍAS
+// ============================================================
+const CATEGORIAS_ETIQUETAS: Record<string, { label: string; icono: string; color: string }> = {
+  'burgers': { label: 'Hamburguesa', icono: '🍔', color: Colores.acento },
+  'combos': { label: 'Combo', icono: '🍟', color: Colores.primario },
+  'bebidas': { label: 'Bebida', icono: '🥤', color: Colores.azulHomero },
+  'postres': { label: 'Postre', icono: '🍦', color: Colores.rosaMaggie },
+  'acompanantes': { label: 'Acompañante', icono: '🍿', color: Colores.verdeKrusty },
+};
+
+// ============================================================
+// 🏠 PANTALLA DETALLE PRODUCTO - SIN ENVÍO ESTIMADO
+// ============================================================
 export default function PantallaDetalleProducto(props: any) {
-  const producto: Producto = props.route?.params?.producto;
-  const { agregarProducto } = tiendaCarrito();
-  const {
-    ubicacionSeleccionada: ubicacionStore,
-    cargarUbicacionTemporal
-  } = tiendaAutenticacion();
+  // ✅ Hooks
+  const responsive = useResponsive();
   const insets = useSafeAreaInsets();
+  const temaKrusty = getTematica('krusty');
 
-  // ✅ ESTADOS PARA ESTIMADO DE ENVÍO
-  const [costoEnvioEstimado, setCostoEnvioEstimado] = useState<number | null>(null);
-  const [calculandoEnvio, setCalculandoEnvio] = useState(false);
-  const [envioDisponible, setEnvioDisponible] = useState(true);
-  const [ubicacionGuardada, setUbicacionGuardada] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  // ✅ Obtener producto
+  const producto: Producto = props.route?.params?.producto;
 
   // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(40)).current;
-  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const imageScale = useRef(new Animated.Value(0.9)).current;
 
-  // ✅ CARGAR UBICACIÓN AL MONTAR
-  useEffect(() => {
-    cargarUbicacion();
-  }, []);
+  // ✅ Cálculo de precios
+  const precio = useMemo(() =>
+    typeof producto?.precio === 'number' ? producto.precio : Number(producto?.precio || 0)
+    , [producto]);
 
-  // ✅ CALCULAR ENVÍO CUANDO HAY UBICACIÓN
-  useEffect(() => {
-    if (ubicacionGuardada) {
-      calcularEnvioEstimado();
+  // ✅ Información de categoría
+  const categoriaInfo = useMemo(() =>
+    CATEGORIAS_ETIQUETAS[producto?.categoria || ''] || {
+      label: 'Producto',
+      icono: '🍔',
+      color: Colores.secundario
     }
-  }, [ubicacionGuardada]);
+    , [producto]);
 
-  const cargarUbicacion = async () => {
-    try {
-      const ubicacionCargada = await cargarUbicacionTemporal();
-      if (ubicacionCargada) {
-        setUbicacionGuardada({
-          latitude: ubicacionCargada.latitude,
-          longitude: ubicacionCargada.longitude,
-        });
-        return;
-      }
-      if (ubicacionStore) {
-        setUbicacionGuardada({
-          latitude: ubicacionStore.latitude,
-          longitude: ubicacionStore.longitude,
-        });
-        return;
-      }
-      // Fallback a coordenadas del local
-      setUbicacionGuardada({
-        latitude: -34.776484410467525,
-        longitude: -58.29220250409459,
-      });
-    } catch (error) {
-      console.log('Error cargando ubicación:', error);
-    }
-  };
+  // ============================================================
+  // 📦 CÁLCULOS DE TAMAÑOS
+  // ============================================================
+  const tamanos = useMemo(() => ({
+    padding: responsive.getEspaciado('LG'),
+    imagenHeight: responsive.getValor({ tablet: 420, normal: 320, small: 240 }),
+  }), [responsive]);
 
-  const calcularEnvioEstimado = async () => {
-    if (!ubicacionGuardada) return;
-    setCalculandoEnvio(true);
-    try {
-      const resultado = await servicioEnvios.calcularCostoEnvio(
-        ubicacionGuardada.latitude,
-        ubicacionGuardada.longitude
-      );
-      if (resultado.esValido && resultado.dentroCobertura) {
-        setCostoEnvioEstimado(resultado.costo);
-        setEnvioDisponible(true);
-      } else {
-        setEnvioDisponible(false);
-        setCostoEnvioEstimado(null);
-      }
-    } catch (error) {
-      console.log('Error calculando envío:', error);
-      setEnvioDisponible(false);
-    } finally {
-      setCalculandoEnvio(false);
-    }
-  };
-
+  // ============================================================
+  // 🎬 EFECTOS
+  // ============================================================
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -138,281 +156,350 @@ export default function PantallaDetalleProducto(props: any) {
         duration: 500,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
+      Animated.spring(imageScale, {
         toValue: 1,
-        friction: 8,
-        tension: 40,
+        friction: 6,
+        tension: 50,
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
+  // ============================================================
+  // 🚫 VALIDACIÓN DE PRODUCTO
+  // ============================================================
   if (!producto) {
     return (
-      <View style={estilos.contenedor}>
-        <Text style={estilos.errorTexto}>Producto no encontrado</Text>
+      <View style={[styles.contenedor, { backgroundColor: Colores.fondoOscuro, justifyContent: 'center', alignItems: 'center' }]}>
+        <LinearGradient
+          colors={[temaKrusty.primario, Colores.verdeKrusty, Colores.fondoOscuro]}
+          style={styles.fondoGradiente}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <Text style={[styles.errorTexto, { color: Colores.textoClaro, fontSize: responsive.getTexto('TITULO') }]}>
+          Producto no encontrado
+        </Text>
+        <TouchableOpacity
+          style={[styles.botonVolverError, { marginTop: 20 }]}
+          onPress={() => props.navigation.goBack()}
+        >
+          <Text style={{ color: temaKrusty.secundario, fontWeight: 'bold' }}>Volver</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  const manejarAgregar = () => {
-    agregarProducto(producto);
-    Alert.alert(
-      '¡Agregado! 🎉',
-      `${producto.nombre} se agregó al carrito`,
-      [
-        {
-          text: 'Seguir viendo',
-          onPress: () => props.navigation.goBack(),
-          style: 'cancel',
-        },
-        {
-          text: 'Ver carrito',
-          onPress: () => props.navigation.navigate('Carrito'),
-        },
-      ]
-    );
-  };
-
-  const precio = typeof producto.precio === 'number' ? producto.precio : Number(producto.precio);
-  const isTablet = width >= 768;
-  const isSmallPhone = width < 375;
-
-  const imagenHeight = isTablet ? 400 : isSmallPhone ? 220 : 300;
-  const nombreSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
-  const precioSize = isTablet ? 38 : isSmallPhone ? 28 : 32;
-  const descripcionSize = isTablet ? 17 : isSmallPhone ? 14 : 15;
-  const seccionTituloSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
-  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
-
-  const botonPaddingVertical = isTablet ? 14 : isSmallPhone ? 10 : 12;
-  const botonPaddingHorizontal = isTablet ? 20 : isSmallPhone ? 14 : 16;
-  const botonTextSize = isTablet ? 17 : isSmallPhone ? 13 : 15;
-  const botonIconSize = isTablet ? 22 : isSmallPhone ? 18 : 20;
-  const precioBotonSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
-  const botonBorderRadius = isTablet ? 14 : isSmallPhone ? 10 : 12;
+  // ============================================================
+  // 🏗️ RENDER PRINCIPAL
+  // ============================================================
+  const padding = tamanos.padding;
 
   return (
-    <View style={estilos.contenedor}>
+    <View style={[styles.contenedor, { backgroundColor: Colores.fondoOscuro }]}>
+      {/* Gradiente de fondo */}
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
-        style={estilos.fondoGradiente}
+        colors={[temaKrusty.primario, Colores.verdeKrusty, Colores.fondoOscuro]}
+        style={styles.fondoGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
+      {/* ============================================================ */}
+      {/* 🔹 HEADER */}
+      {/* ============================================================ */}
+      <Animated.View style={[
+        styles.header,
+        {
+          paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+          paddingHorizontal: padding,
+          paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
+          opacity: fadeAnim,
+          transform: [{ translateY: slideUpAnim }],
+        }
+      ]}>
+        <TouchableOpacity
+          onPress={() => props.navigation.goBack()}
+          style={styles.botonVolver}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={[Colores.fondoOscuro + '60', Colores.fondoOscuro + '30']}
+            style={styles.botonVolverGradient}
+          >
+            <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 26, normal: 22, small: 18 })} color={Colores.textoClaro} />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <Text style={[
+          styles.headerTitulo,
+          {
+            fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 11 }),
+            color: Colores.textoClaro,
+            opacity: 0.8,
+          }
+        ]}>
+          Detalle del producto
+        </Text>
+
+        <TouchableOpacity
+          onPress={() => props.navigation.navigate('Carrito')}
+          style={styles.botonCarrito}
+          activeOpacity={0.7}
+        >
+          <LinearGradient
+            colors={[temaKrusty.secundario, temaKrusty.primario]}
+            style={styles.botonCarritoGradient}
+          >
+            <Ionicons name="cart" size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })} color={Colores.textoOscuro} />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* ============================================================ */}
+      {/* 🔹 CONTENIDO */}
+      {/* ============================================================ */}
       <ScrollView
-        style={estilos.scroll}
+        style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + responsive.getValor({ tablet: 40, normal: 30, small: 20 }),
+        }}
       >
-        <View style={[estilos.imagenContenedor, { height: imagenHeight }]}>
+        {/* Imagen */}
+        <Animated.View style={[
+          styles.imagenContenedor,
+          {
+            height: tamanos.imagenHeight,
+            transform: [{ scale: imageScale }],
+          }
+        ]}>
           {producto.imagen ? (
             <Image
               source={{ uri: producto.imagen }}
-              style={estilos.imagen}
+              style={styles.imagen}
               resizeMode="cover"
             />
           ) : (
             <View style={[
-              estilos.imagenPlaceholder,
-              { backgroundColor: COLORS.amarillo + '20' }
+              styles.imagenPlaceholder,
+              { backgroundColor: Colores.secundario + '15' }
             ]}>
-              <Text style={[estilos.emojiGrande, { fontSize: isTablet ? 120 : 80 }]}>🍔</Text>
+              <Text style={[styles.emojiGrande, { fontSize: responsive.getValor({ tablet: 100, normal: 80, small: 60 }) }]}>
+                {categoriaInfo.icono}
+              </Text>
             </View>
           )}
 
-          <View style={[
-            estilos.categoriaBadgeImagen,
-            {
-              bottom: 16,
-              right: isTablet ? 24 : 16,
-              paddingHorizontal: isTablet ? 16 : 12,
-              paddingVertical: isTablet ? 8 : 6,
-              borderRadius: isTablet ? 16 : 12,
-            }
-          ]}>
-            <Text style={[estilos.categoriaTextoImagen, { fontSize: isTablet ? 14 : 12 }]}>
-              {etiquetasCategoria[producto.categoria] || producto.categoria}
+          {/* Badge de categoría */}
+          <LinearGradient
+            colors={[categoriaInfo.color + '80', categoriaInfo.color + '40']}
+            style={[
+              styles.categoriaBadge,
+              {
+                bottom: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+                right: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+                paddingHorizontal: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+                paddingVertical: responsive.getValor({ tablet: 8, normal: 6, small: 5 }),
+                borderRadius: responsive.getRadio('SM'),
+                borderColor: Colores.textoClaro + '15',
+              }
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={[
+              styles.categoriaTextoImagen,
+              {
+                fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                color: Colores.textoClaro,
+              }
+            ]}>
+              {categoriaInfo.icono} {categoriaInfo.label}
             </Text>
-          </View>
-        </View>
+          </LinearGradient>
 
+          {/* Badge de disponibilidad */}
+          {producto.disponible === false && (
+            <LinearGradient
+              colors={['#E53935', '#B71C1C']}
+              style={[
+                styles.badgeNoDisponible,
+                {
+                  top: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+                  left: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+                  paddingHorizontal: responsive.getValor({ tablet: 14, normal: 10, small: 8 }),
+                  paddingVertical: responsive.getValor({ tablet: 6, normal: 5, small: 4 }),
+                  borderRadius: responsive.getRadio('XS'),
+                }
+              ]}
+            >
+              <Text style={[
+                styles.badgeNoDisponibleTexto,
+                { fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }) }
+              ]}>
+                No disponible
+              </Text>
+            </LinearGradient>
+          )}
+        </Animated.View>
+
+        {/* Información */}
         <Animated.View
           style={[
-            estilos.info,
+            styles.info,
             {
-              paddingHorizontal: paddingHorizontal,
-              paddingTop: isTablet ? 24 : 20,
+              paddingHorizontal: padding,
+              paddingTop: responsive.getValor({ tablet: 24, normal: 20, small: 16 }),
               opacity: fadeAnim,
               transform: [{ translateY: slideUpAnim }],
             }
           ]}
         >
-          <View style={estilos.encabezado}>
-            <Text style={[estilos.nombre, { fontSize: nombreSize }]}>
-              {producto.nombre}
-            </Text>
-            <Text style={[estilos.precio, { fontSize: precioSize }]}>
-              ${precio.toFixed(2)}
-            </Text>
-          </View>
-
-          {/* ✅ ESTIMADO DE ENVÍO */}
-          {!calculandoEnvio && (
-            <View style={estilos.envioEstimadoContainer}>
-              {costoEnvioEstimado !== null && envioDisponible ? (
-                <Text style={[estilos.envioEstimadoTexto, { fontSize: isTablet ? 14 : 12 }]}>
-                  🚚 Envío estimado: <Text style={estilos.envioEstimadoValor}>${costoEnvioEstimado.toFixed(2)}</Text>
-                </Text>
-              ) : (
-                <Text style={[estilos.envioEstimadoTexto, { fontSize: isTablet ? 14 : 12, color: COLORS.grisClaro }]}>
-                  📍 Selecciona una ubicación para ver el costo de envío
-                </Text>
-              )}
-            </View>
-          )}
-
-          {calculandoEnvio && (
-            <View style={estilos.envioEstimadoContainer}>
-              <ActivityIndicator size="small" color={COLORS.amarillo} />
-              <Text style={[estilos.envioEstimadoTexto, { fontSize: isTablet ? 14 : 12, marginLeft: 8 }]}>
-                Calculando envío...
+          {/* Nombre y precio */}
+          <View style={styles.encabezado}>
+            <View style={styles.encabezadoIzquierdo}>
+              <Text style={[
+                styles.nombre,
+                {
+                  fontSize: responsive.getTexto('TITULO'),
+                  color: Colores.textoClaro,
+                }
+              ]}>
+                {producto.nombre}
+              </Text>
+              <Text style={[
+                styles.precio,
+                {
+                  fontSize: responsive.getTexto('HERO'),
+                  color: temaKrusty.secundario,
+                  marginTop: 4,
+                }
+              ]}>
+                ${precio.toFixed(2)}
               </Text>
             </View>
-          )}
+          </View>
 
-          <View style={estilos.seccion}>
-            <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+          {/* Descripción */}
+          <View style={[
+            styles.seccion,
+            {
+              marginTop: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+            }
+          ]}>
+            <Text style={[
+              styles.seccionTitulo,
+              {
+                fontSize: responsive.getTexto('SUBTITULO'),
+                color: Colores.textoClaro,
+                marginBottom: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+              }
+            ]}>
               📝 Descripción
             </Text>
-            <Text style={[estilos.descripcion, { fontSize: descripcionSize }]}>
-              {producto.descripcion || 'Deliciosa hamburguesa Krusty preparada con ingredientes frescos y la salsa secreta de la casa que la hace única.'}
+            <Text style={[
+              styles.descripcion,
+              {
+                fontSize: responsive.getTexto('CUERPO'),
+                color: Colores.textoGris,
+                lineHeight: responsive.getValor({ tablet: 28, normal: 24, small: 20 }),
+              }
+            ]}>
+              {producto.descripcion || 'Deliciosa hamburguesa Krusty preparada con ingredientes frescos y la salsa secreta de la casa que la hace única. ¡Una experiencia de sabor inolvidable!'}
             </Text>
           </View>
 
-          <View style={estilos.seccion}>
-            <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+          {/* Información Nutricional */}
+          <View style={[
+            styles.seccion,
+            {
+              marginTop: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+              marginBottom: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
+            }
+          ]}>
+            <Text style={[
+              styles.seccionTitulo,
+              {
+                fontSize: responsive.getTexto('SUBTITULO'),
+                color: Colores.textoClaro,
+                marginBottom: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+              }
+            ]}>
               📊 Información Nutricional
             </Text>
             <View style={[
-              estilos.nutricional,
+              styles.nutricional,
               {
-                gap: isTablet ? 16 : isSmallPhone ? 8 : 12,
-                marginTop: isTablet ? 12 : 8,
+                gap: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
               }
             ]}>
-              <View style={[
-                estilos.nutriItem,
-                {
-                  padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  width: isTablet ? '24%' : isSmallPhone ? '22%' : '23%',
-                }
-              ]}>
-                <Text style={[estilos.nutriValor, { fontSize: isTablet ? 28 : isSmallPhone ? 18 : 22 }]}>🔥</Text>
-                <Text style={[estilos.nutriTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>850 Cal</Text>
-              </View>
-              <View style={[
-                estilos.nutriItem,
-                {
-                  padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  width: isTablet ? '24%' : isSmallPhone ? '22%' : '23%',
-                }
-              ]}>
-                <Text style={[estilos.nutriValor, { fontSize: isTablet ? 28 : isSmallPhone ? 18 : 22 }]}>🍗</Text>
-                <Text style={[estilos.nutriTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>35g Prot</Text>
-              </View>
-              <View style={[
-                estilos.nutriItem,
-                {
-                  padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  width: isTablet ? '24%' : isSmallPhone ? '22%' : '23%',
-                }
-              ]}>
-                <Text style={[estilos.nutriValor, { fontSize: isTablet ? 28 : isSmallPhone ? 18 : 22 }]}>🧈</Text>
-                <Text style={[estilos.nutriTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>42g Grasas</Text>
-              </View>
-              <View style={[
-                estilos.nutriItem,
-                {
-                  padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  width: isTablet ? '24%' : isSmallPhone ? '22%' : '23%',
-                }
-              ]}>
-                <Text style={[estilos.nutriValor, { fontSize: isTablet ? 28 : isSmallPhone ? 18 : 22 }]}>🍞</Text>
-                <Text style={[estilos.nutriTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>55g Carb</Text>
-              </View>
+              {[
+                { emoji: '🔥', label: 'Calorías', valor: '850' },
+                { emoji: '🍗', label: 'Proteínas', valor: '35g' },
+                { emoji: '🧈', label: 'Grasas', valor: '42g' },
+                { emoji: '🍞', label: 'Carbohidratos', valor: '55g' },
+              ].map((item, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.nutriItem,
+                    {
+                      padding: responsive.getValor({ tablet: 14, normal: 10, small: 8 }),
+                      borderRadius: responsive.getRadio('SM'),
+                      width: responsive.getValor({ tablet: '24%', normal: '23%', small: '22%' }),
+                      backgroundColor: Colores.fondoOscuro + '30',
+                      borderColor: Colores.textoClaro + '6',
+                      borderWidth: 1,
+                    }
+                  ]}
+                >
+                  <Text style={[
+                    styles.nutriValor,
+                    { fontSize: responsive.getValor({ tablet: 28, normal: 22, small: 18 }) }
+                  ]}>
+                    {item.emoji}
+                  </Text>
+                  <Text style={[
+                    styles.nutriTexto,
+                    {
+                      fontSize: responsive.getValor({ tablet: 13, normal: 11, small: 9 }),
+                      color: Colores.textoGris,
+                      marginTop: 2,
+                      textAlign: 'center',
+                      fontWeight: '600',
+                    }
+                  ]}>
+                    {item.valor}
+                  </Text>
+                  <Text style={[
+                    styles.nutriLabel,
+                    {
+                      fontSize: responsive.getValor({ tablet: 10, normal: 9, small: 8 }),
+                      color: Colores.textoGris,
+                      opacity: 0.5,
+                      textAlign: 'center',
+                      marginTop: 1,
+                    }
+                  ]}>
+                    {item.label}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         </Animated.View>
       </ScrollView>
-
-      <Animated.View
-        style={[
-          estilos.footer,
-          {
-            paddingHorizontal: paddingHorizontal,
-            paddingBottom: insets.bottom + (isTablet ? 20 : 14),
-            paddingTop: isTablet ? 12 : 10,
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          }
-        ]}
-      >
-        <TouchableOpacity
-          style={[
-            estilos.botonAgregar,
-            {
-              borderRadius: botonBorderRadius,
-            }
-          ]}
-          onPress={manejarAgregar}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-            style={[
-              estilos.botonAgregarGradient,
-              {
-                paddingVertical: botonPaddingVertical,
-                paddingHorizontal: botonPaddingHorizontal,
-                borderRadius: botonBorderRadius,
-              }
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Ionicons name="cart" size={botonIconSize} color={COLORS.negro} />
-            <Text style={[estilos.botonAgregarTexto, { fontSize: botonTextSize }]}>
-              Agregar al carrito
-            </Text>
-            <View style={[
-              estilos.precioBoton,
-              {
-                paddingHorizontal: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                paddingVertical: isTablet ? 3 : isSmallPhone ? 2 : 3,
-                borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-              }
-            ]}>
-              <Text style={[estilos.precioBotonTexto, { fontSize: precioBotonSize }]}>
-                ${precio.toFixed(2)}
-              </Text>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
     </View>
   );
 }
 
-const estilos = StyleSheet.create({
+// ============================================================
+// 🎨 ESTILOS
+// ============================================================
+const styles = StyleSheet.create({
   contenedor: {
     flex: 1,
-    backgroundColor: COLORS.negro,
   },
   fondoGradiente: {
     position: 'absolute',
@@ -421,19 +508,64 @@ const estilos = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: Colores.textoClaro + '8',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  botonVolver: {
+    padding: 4,
+  },
+  botonVolverGradient: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  headerTitulo: {
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'center',
+  },
+  botonCarrito: {
+    padding: 4,
+  },
+  botonCarritoGradient: {
+    padding: 8,
+    borderRadius: 20,
+  },
+
+  // Error
+  errorTexto: {
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  botonVolverError: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colores.fondoOscuro + '40',
+    borderWidth: 1,
+    borderColor: Colores.textoClaro + '10',
+  },
+
+  // Scroll
   scroll: {
     flex: 1,
   },
-  errorTexto: {
-    color: COLORS.blanco,
-    fontSize: 18,
-    textAlign: 'center',
-    marginTop: 100,
-  },
+
+  // Imagen
   imagenContenedor: {
     width: '100%',
     position: 'relative',
-    backgroundColor: COLORS.negro + '40',
+    backgroundColor: Colores.fondoOscuro + '40',
   },
   imagen: {
     width: '100%',
@@ -445,122 +577,69 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emojiGrande: {
-    // Tamaño dinámico
-  },
-  categoriaBadgeImagen: {
+  emojiGrande: {},
+  categoriaBadge: {
     position: 'absolute',
-    backgroundColor: COLORS.negro + '75',
     borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
     zIndex: 10,
   },
   categoriaTextoImagen: {
-    color: COLORS.blanco,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
+  badgeNoDisponible: {
+    position: 'absolute',
+    zIndex: 10,
+  },
+  badgeNoDisponibleTexto: {
+    color: Colores.textoClaro,
+    fontWeight: 'bold',
+  },
+
+  // Información
   info: {
     flex: 1,
   },
   encabezado: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  encabezadoIzquierdo: {
+    flex: 1,
   },
   nombre: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
   precio: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
   },
+
+  // Secciones
   seccion: {
     marginTop: 20,
   },
   seccionTitulo: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
-    marginBottom: 8,
     letterSpacing: 0.5,
   },
   descripcion: {
-    color: COLORS.grisClaro,
-    lineHeight: 24,
     opacity: 0.9,
   },
+
+  // Nutricional
   nutricional: {
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
   nutriItem: {
     alignItems: 'center',
-    backgroundColor: COLORS.negro + '40',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
   },
-  nutriValor: {
-    // Tamaño dinámico
-  },
+  nutriValor: {},
   nutriTexto: {
-    color: COLORS.grisClaro,
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  // ✅ NUEVO: Estilo para envío estimado
-  envioEstimadoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.negro + '30',
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
-  },
-  envioEstimadoTexto: {
-    color: COLORS.grisClaro,
-    fontWeight: '500',
-  },
-  envioEstimadoValor: {
-    color: COLORS.verdeClaro,
-    fontWeight: 'bold',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.negro + '80',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '8',
-  },
-  botonAgregar: {
-    overflow: 'hidden',
-    elevation: 6,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  botonAgregarGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  botonAgregarTexto: {
-    color: COLORS.negro,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  precioBoton: {
-    backgroundColor: COLORS.negro + '20',
-  },
-  precioBotonTexto: {
-    color: COLORS.negro,
-    fontWeight: '700',
-  },
+  nutriLabel: {},
 });

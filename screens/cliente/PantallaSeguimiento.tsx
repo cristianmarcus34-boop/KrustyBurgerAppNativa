@@ -14,6 +14,11 @@ import { Colores } from '../../lib/colores';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { obtenerRutaPedido } from '../../lib/directions';
 
+// ✅ IMPORTAR MARCADORES DEL COMPONENTE MAPA
+import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
+import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
+import { MarcadorPersonalizado } from '../../components/Mapa/MarcadorPersonalizado';
+
 const { width } = Dimensions.get('window');
 
 // ✅ COORDENADAS REALES DE KRUSTY BURGER
@@ -200,7 +205,6 @@ export default function PantallaSeguimiento(props: any) {
     }
   };
 
-  // ✅ ACTUALIZAR INFORMACIÓN DE ENVÍO DESDE LA BD
   const actualizarInfoEnvio = (p: Pedido) => {
     if (p.distancia_km !== undefined && p.distancia_km !== null) {
       setDistanciaBD(p.distancia_km);
@@ -296,7 +300,6 @@ export default function PantallaSeguimiento(props: any) {
   const tituloSize = isTablet ? 24 : isSmallPhone ? 18 : 20;
   const estadoTextSize = isTablet ? 28 : isSmallPhone ? 20 : 24;
 
-  // ✅ Preparar coordenadas para el Polyline con validación
   const destinoCliente = {
     latitude: pedido?.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
     longitude: pedido?.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
@@ -421,33 +424,24 @@ export default function PantallaSeguimiento(props: any) {
             }}
             showsUserLocation={false}
           >
-            {/* 📍 Krusty Burger */}
-            <Marker
-              coordinate={UBICACION_KRUSTY}
-              title="Krusty Burger"
-              description="📍 Local"
-              pinColor="#FF5722"
-            />
-
-            {/* 🛵 REPARTIDOR CON MOTO */}
-            {/* 🛵 REPARTIDOR CON MOTO - VERSIÓN MEJORADA */}
-            <Marker coordinate={posRepartidor}>
-              <View style={estilos.motoWrapper}>
-                <View style={estilos.motoCircle}>
-                  <Ionicons name="bicycle" size={isTablet ? 30 : 24} color="#000000" />
-                </View>
-                <View style={estilos.motoPulseOuter} />
-                <View style={estilos.motoPulseInner} />
-              </View>
+            {/* 📍 Krusty Burger - MarcadorPersonalizado */}
+            <Marker coordinate={UBICACION_KRUSTY}>
+              <MarcadorPersonalizado
+                color="#FF5722"
+                size="small"
+                showRing={false}
+              />
             </Marker>
 
-            {/* 📍 DESTINO CLIENTE */}
-            <Marker
-              coordinate={destinoCliente}
-              title="Destino"
-              description="📍 Entrega de pedido"
-              pinColor={COLORS.amarillo}
-            />
+            {/* 🛵 REPARTIDOR CON MOTO - MarcadorMoto */}
+            <Marker coordinate={posRepartidor}>
+              <MarcadorMoto size="normal" animated={true} />
+            </Marker>
+
+            {/* 📍 DESTINO CLIENTE - MarcadorDestino */}
+            <Marker coordinate={destinoCliente}>
+              <MarcadorDestino size="normal" />
+            </Marker>
 
             {/* 🗺️ RUTA */}
             {puntosValidos && (
@@ -941,79 +935,5 @@ const estilos = StyleSheet.create({
     color: COLORS.negro,
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  // ✅ ESTILOS PARA EL MARCADOR DE MOTO
-  motoMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  motoGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  motoGlow: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(245, 197, 24, 0.15)',
-    zIndex: -1,
-  },
-  motoPulse: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(245, 197, 24, 0.08)',
-    zIndex: -2,
-  },
-  // ✅ ESTILOS PARA EL MARCADOR DE MOTO (VERSIÓN MEJORADA)
-  motoWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  motoCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F5C518',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-    zIndex: 2,
-  },
-  motoPulseOuter: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(245, 197, 24, 0.15)',
-    zIndex: 1,
-  },
-  motoPulseInner: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(245, 197, 24, 0.08)',
-    zIndex: 0,
   },
 });

@@ -24,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
+import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
 // 🎨 PALETA DE COLORES
@@ -44,14 +45,6 @@ const COLORS = {
 };
 
 const { width, height } = Dimensions.get('window');
-
-// ✅ FUNCIÓN PARA FORMATEAR PRECIOS DE FORMA SEGURA
-const formatearPrecio = (precio: string | number | undefined): string => {
-    if (precio === undefined || precio === null) return '0.00';
-    const numero = typeof precio === 'string' ? parseFloat(precio) : precio;
-    if (isNaN(numero)) return '0.00';
-    return numero.toFixed(2);
-};
 
 // ✅ INTERFAZ
 interface Oferta {
@@ -166,7 +159,7 @@ export default function PantallaGestionOfertas(props: any) {
         cargarOfertas();
     }, []);
 
-    // ✅ SUBIR IMAGEN - CORREGIDO CON FORCE UPDATE
+    // ✅ SUBIR IMAGEN
     const subirImagen = async (file: File) => {
         if (!file) {
             console.warn('⚠️ [Admin] No se proporcionó archivo para subir');
@@ -226,7 +219,6 @@ export default function PantallaGestionOfertas(props: any) {
 
             console.log('✅ URL pública obtenida:', urlData.publicUrl);
 
-            // ✅ ACTUALIZAR ESTADOS
             const nuevaUrl = urlData.publicUrl;
             setImagen(nuevaUrl);
             setImagenUri(nuevaUrl);
@@ -238,7 +230,6 @@ export default function PantallaGestionOfertas(props: any) {
             console.log('📦 imagen:', nuevaUrl);
             console.log('📦 imagenUri:', nuevaUrl);
 
-            // ✅ FORZAR ACTUALIZACIÓN DE LA PREVIEW
             setModalKey(prev => prev + 1);
 
             Alert.alert('✅ Éxito', 'Imagen subida correctamente');
@@ -250,7 +241,7 @@ export default function PantallaGestionOfertas(props: any) {
         }
     };
 
-    // ✅ SELECCIONAR IMAGEN - CORREGIDO
+    // ✅ SELECCIONAR IMAGEN
     const seleccionarImagen = async () => {
         console.log('📷 [Admin] Iniciando selección de imagen');
         try {
@@ -267,7 +258,6 @@ export default function PantallaGestionOfertas(props: any) {
                     }
                     console.log('📄 [Admin] Archivo seleccionado:', file.name);
 
-                    // ✅ Mostrar preview inmediata
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const base64 = event.target?.result as string;
@@ -300,10 +290,7 @@ export default function PantallaGestionOfertas(props: any) {
                 const asset = result.assets[0];
                 console.log('📄 [Admin] Imagen seleccionada desde galería:', asset.uri);
 
-                // ✅ MOSTRAR PREVIEW INMEDIATA
                 let uriParaPreview = asset.uri;
-
-                // Si tiene base64, usar eso para mejor compatibilidad
                 if (asset.base64) {
                     uriParaPreview = `data:image/jpeg;base64,${asset.base64}`;
                 }
@@ -313,7 +300,6 @@ export default function PantallaGestionOfertas(props: any) {
                 setImagenTimestamp(Date.now());
                 console.log('✅ [Admin] Vista previa establecida inmediatamente');
 
-                // ✅ Intentar subir a Supabase
                 if (asset.uri) {
                     try {
                         const response = await fetch(asset.uri);
@@ -341,7 +327,6 @@ export default function PantallaGestionOfertas(props: any) {
     const abrirFormulario = (oferta?: Oferta) => {
         console.log('📝 [Admin] Abriendo formulario:', oferta ? `Editar oferta ${oferta.id}` : 'Nueva oferta');
 
-        // ✅ RESETEAR ESTADOS
         setTitulo('');
         setDescripcion('');
         setDescuento('');
@@ -357,7 +342,6 @@ export default function PantallaGestionOfertas(props: any) {
 
         if (oferta) {
             setOfertaEditando(oferta);
-            // ✅ Pequeño delay para asegurar que los estados se resetearon
             setTimeout(() => {
                 setTitulo(oferta.titulo);
                 setDescripcion(oferta.descripcion || '');
@@ -383,7 +367,7 @@ export default function PantallaGestionOfertas(props: any) {
         }
     };
 
-    // ✅ GUARDAR OFERTA - CORREGIDO
+    // ✅ GUARDAR OFERTA
     const guardarOferta = async () => {
         console.log('💾 [Admin] Intentando guardar oferta');
 
@@ -393,12 +377,9 @@ export default function PantallaGestionOfertas(props: any) {
             return;
         }
 
-        // ✅ PRIORIDAD: imagenUri (que tiene la URL final de Supabase o la preview)
         const urlImagenFinal = imagenUri || imagen || null;
 
         console.log('📦 [Admin] Guardando oferta con imagen:', urlImagenFinal);
-        console.log('📦 [Admin] imagenUri:', imagenUri);
-        console.log('📦 [Admin] imagen:', imagen);
 
         const datos = {
             titulo,
@@ -443,7 +424,6 @@ export default function PantallaGestionOfertas(props: any) {
             }
 
             setModalVisible(false);
-            // ✅ Resetear estados después de guardar
             setTimeout(() => {
                 setImagen('');
                 setImagenUri(null);
@@ -540,9 +520,7 @@ export default function PantallaGestionOfertas(props: any) {
         });
     };
 
-    // ✅ FUNCIÓN PARA OBTENER LA URL DE LA IMAGEN - PRIORIDAD
     const obtenerUrlImagen = () => {
-        // Prioridad: imagenUri (que puede ser base64 o URL de Supabase)
         if (imagenUri) {
             console.log('🔍 [Admin] Usando imagenUri:', imagenUri.substring(0, 50) + '...');
             return imagenUri;
@@ -557,7 +535,7 @@ export default function PantallaGestionOfertas(props: any) {
 
     const urlImagenPreview = obtenerUrlImagen();
 
-    // ✅ RENDER OFERTA - CORREGIDO
+    // ✅ RENDER OFERTA - CON IMAGEN MÁS GRANDE
     const renderOferta = ({ item, index }: { item: Oferta; index: number }) => {
         console.log(`🖼️ [Render] Oferta ${index + 1} - ${item.titulo}: imagen = ${item.imagen || 'Sin imagen'}`);
 
@@ -570,6 +548,9 @@ export default function PantallaGestionOfertas(props: any) {
             inputRange: [0, 1],
             outputRange: [20 * (index + 1), 0],
         });
+
+        // ✅ Tamaño de imagen aumentado
+        const imagenAltura = isTablet ? 180 : isSmallPhone ? 120 : 150;
 
         return (
             <Animated.View
@@ -594,8 +575,8 @@ export default function PantallaGestionOfertas(props: any) {
                                 style={[
                                     estilos.tarjetaImagen,
                                     {
-                                        height: isTablet ? 120 : isSmallPhone ? 80 : 100,
-                                        borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                                        height: imagenAltura,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                     }
                                 ]}
                                 resizeMode="cover"
@@ -655,10 +636,10 @@ export default function PantallaGestionOfertas(props: any) {
                         </Text>
                         <View style={estilos.tarjetaPrecios}>
                             <Text style={[estilos.tarjetaPrecioOriginal, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
-                                ${formatearPrecio(item.precio_original)}
+                                {formatearPrecio(Number(item.precio_original))}
                             </Text>
                             <Text style={[estilos.tarjetaPrecioOferta, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18 }]}>
-                                ${formatearPrecio(item.precio_oferta)}
+                                {formatearPrecio(Number(item.precio_oferta))}
                             </Text>
                         </View>
 
@@ -783,7 +764,7 @@ export default function PantallaGestionOfertas(props: any) {
                 }
             />
 
-            {/* ✅ MODAL CON PREVIEW DE IMAGEN CORREGIDA */}
+            {/* ✅ MODAL CON PREVIEW DE IMAGEN MÁS GRANDE */}
             <Modal
                 key={modalKey}
                 visible={modalVisible}
@@ -917,7 +898,7 @@ export default function PantallaGestionOfertas(props: any) {
                                 selectionColor={COLORS.amarillo}
                             />
 
-                            {/* ✅ IMAGEN - PREVIEW CORREGIDA */}
+                            {/* ✅ IMAGEN - PREVIEW MÁS GRANDE */}
                             <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
                                 <Ionicons name="image-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Imagen (opcional)
                             </Text>
@@ -945,15 +926,15 @@ export default function PantallaGestionOfertas(props: any) {
                                 </Text>
                             </TouchableOpacity>
 
-                            {/* ✅ PREVIEW DE LA IMAGEN - CON FORCE UPDATE */}
+                            {/* ✅ PREVIEW DE IMAGEN MÁS GRANDE */}
                             {urlImagenPreview ? (
                                 <View style={estilos.previaImagen}>
                                     <Image
                                         key={`preview_${imagenTimestamp}_${Date.now()}`}
                                         source={{ uri: urlImagenPreview }}
                                         style={[estilos.previaFoto, {
-                                            height: isTablet ? 180 : isSmallPhone ? 120 : 150,
-                                            borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
+                                            height: isTablet ? 280 : isSmallPhone ? 180 : 220,
+                                            borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                         }]}
                                         resizeMode="cover"
                                         onError={(e) => {
@@ -999,12 +980,15 @@ export default function PantallaGestionOfertas(props: any) {
                                 </View>
                             ) : (
                                 <View style={[estilos.sinImagen, {
-                                    padding: isTablet ? 20 : isSmallPhone ? 12 : 16,
-                                    borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
+                                    padding: isTablet ? 30 : isSmallPhone ? 20 : 24,
+                                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                    height: isTablet ? 280 : isSmallPhone ? 180 : 220,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
                                 }]}>
-                                    <Ionicons name="image-outline" size={isTablet ? 40 : isSmallPhone ? 28 : 32} color={COLORS.grisClaro + '40'} />
+                                    <Ionicons name="image-outline" size={isTablet ? 60 : isSmallPhone ? 40 : 48} color={COLORS.grisClaro + '40'} />
                                     <Text style={[estilos.sinImagenTexto, {
-                                        fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                                        fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
                                     }]}>
                                         Sin imagen seleccionada
                                     </Text>

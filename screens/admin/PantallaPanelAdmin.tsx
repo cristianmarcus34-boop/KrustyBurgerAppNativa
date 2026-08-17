@@ -2,19 +2,24 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, Dimensions, Animated
+  Modal, Dimensions, Animated, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
+import { notificacionService } from '../../services/notificacionService';
 import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
 
+// ✅ CANAL GLOBAL PARA REUTILIZAR
+let canalActivo: any = null;
+
 export default function PantallaPanelAdmin(props: any) {
   const [mostrarModal, setMostrarModal] = useState(false);
-  const { cerrarSesion } = tiendaAutenticacion();
+  const { cerrarSesion, perfil, esAdministrador } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
 
   // ✅ Animaciones
@@ -36,11 +41,113 @@ export default function PantallaPanelAdmin(props: any) {
     ]).start();
   }, []);
 
+  // ============================================================
+  // ✅ CONFIGURAR NOTIFICACIONES - VERSIÓN CON CONTROL DE EJECUCIÓN
+  // ============================================================
+  const notificacionesInicializadas = useRef(false);
+
+  useEffect(() => {
+    // ✅ EVITAR MÚLTIPLES EJECUCIONES
+    if (notificacionesInicializadas.current) {
+      console.log('⏭️ Notificaciones ya inicializadas, saltando...');
+      return;
+    }
+
+    if (!esAdministrador || !perfil?.id) {
+      console.log('❌ No es admin o no tiene perfil');
+      if (canalActivo) {
+        canalActivo.unsubscribe();
+        canalActivo = null;
+      }
+      return;
+    }
+
+    // ✅ MARCAR COMO INICIALIZADO
+    notificacionesInicializadas.current = true;
+
+    const configurarNotificaciones = async () => {
+      try {
+        await notificacionService.registrarToken(perfil.id);
+        await notificacionService.solicitarPermisos();
+        console.log('✅ Admin notificaciones configuradas');
+      } catch (error) {
+        console.error('❌ Error configurando notificaciones:', error);
+      }
+    };
+
+    configurarNotificaciones();
+
+    // ✅ LIMPIAR CANAL ANTERIOR
+    if (canalActivo) {
+      console.log('🔄 Limpiando canal anterior...');
+      canalActivo.unsubscribe();
+      canalActivo = null;
+    }
+
+    // ✅ CREAR NUEVO CANAL
+    console.log('📡 Creando nuevo canal de notificaciones...');
+    console.log('📡 Usuario ID:', perfil.id);
+
+    canalActivo = supabase
+      .channel('admin_notificaciones')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notificaciones_usuarios',
+          filter: `usuario_id=eq.${perfil.id}`,
+        },
+        (payload) => {
+          console.log('🔔🔔🔔 NUEVA NOTIFICACIÓN RECIBIDA EN REALTIME 🔔🔔🔔');
+          console.log('📦 Payload:', JSON.stringify(payload, null, 2));
+
+          const data = payload.new as any;
+
+          Alert.alert(
+            data.titulo || '🔔 Nueva notificación',
+            data.mensaje || 'Tenés una nueva notificación',
+            [
+              {
+                text: 'Ver',
+                onPress: () => {
+                  props.navigation.navigate('NotificacionesAdmin');
+                }
+              },
+              { text: 'Cerrar', style: 'cancel' }
+            ],
+            { cancelable: true }
+          );
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Estado del canal:', status);
+
+        if (status === 'SUBSCRIBED') {
+          console.log('✅✅✅ CANAL SUSCRIPTO CORRECTAMENTE ✅✅✅');
+        }
+      });
+
+    return () => {
+      console.log('🧹 Limpiando canal...');
+      notificacionesInicializadas.current = false;
+      if (canalActivo) {
+        canalActivo.unsubscribe();
+        canalActivo = null;
+      }
+    };
+  }, [esAdministrador, perfil]);
+
   const confirmarCerrarSesion = useCallback(async () => {
     setMostrarModal(false);
+    // Limpiar canal antes de cerrar sesión
+    if (canalActivo) {
+      canalActivo.unsubscribe();
+      canalActivo = null;
+    }
     try {
       await cerrarSesion();
-      console.log('✅ Sesión cerrada correctamente desde el store');
+      console.log('✅ Sesión cerrada correctamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
@@ -61,11 +168,9 @@ export default function PantallaPanelAdmin(props: any) {
   const borderRadius = isTablet ? 20 : isSmallPhone ? 14 : 16;
   const iconContainerPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
 
-  // ✅ Tamaños del botón cerrar sesión
   const botonSize = isTablet ? 50 : isSmallPhone ? 40 : 44;
   const botonIconSize = isTablet ? 26 : isSmallPhone ? 18 : 22;
 
-  // ✅ Menú de administración
   const menuItems = [
     {
       id: 'notificaciones',
@@ -143,7 +248,6 @@ export default function PantallaPanelAdmin(props: any) {
 
   return (
     <View style={estilos.contenedor}>
-      {/* 👔 GRADIENTE BURNS: Verde lima → Negro */}
       <LinearGradient
         colors={[Colores.burnsVerde, Colores.burnsNegro]}
         style={estilos.fondoGradiente}
@@ -162,7 +266,6 @@ export default function PantallaPanelAdmin(props: any) {
           }
         ]}
       >
-        {/* ✅ HEADER */}
         <Animated.View style={[
           estilos.encabezado,
           {
@@ -207,7 +310,6 @@ export default function PantallaPanelAdmin(props: any) {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* ✅ GRID DE TARJETAS */}
         <Animated.View style={[
           estilos.grid,
           {
@@ -251,7 +353,7 @@ export default function PantallaPanelAdmin(props: any) {
             </TouchableOpacity>
           ))}
 
-          {/* ✅ Tarjeta ancha: Ver Tienda */}
+          {/* Tarjeta ancha: Ver Tienda */}
           <TouchableOpacity
             style={[
               estilos.tarjetaAncha,
@@ -286,7 +388,7 @@ export default function PantallaPanelAdmin(props: any) {
             </View>
           </TouchableOpacity>
 
-          {/* ✅ Tarjeta ancha: Cerrar Sesión */}
+          {/* Tarjeta ancha: Cerrar Sesión */}
           <TouchableOpacity
             style={[
               estilos.tarjetaAncha,
@@ -323,7 +425,6 @@ export default function PantallaPanelAdmin(props: any) {
         </Animated.View>
       </ScrollView>
 
-      {/* ✅ MODAL DE CONFIRMACIÓN */}
       <Modal visible={mostrarModal} transparent animationType="fade">
         <View style={estilos.modalFondo}>
           <View style={[

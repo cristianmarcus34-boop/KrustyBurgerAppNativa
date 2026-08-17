@@ -1,5 +1,5 @@
 // screens/cliente/PantallaPerfil.tsx
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, useWindowDimensions, Animated, RefreshControl,
@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { notificacionService } from '../../services/notificacionService';
 import { Colores } from '../../lib/colores';
+//import { cuponService } from '../../lib/cupones/cuponService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,6 +28,8 @@ export default function PantallaPerfil(props: any) {
   const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
   const [imagenPerfil, setImagenPerfil] = useState<string | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [cuponesDisponibles, setCuponesDisponibles] = useState(0);
+  const [cargandoCupones, setCargandoCupones] = useState(false);
 
   const [telefono, setTelefono] = useState('');
   const [direccionCalle, setDireccionCalle] = useState('');
@@ -45,7 +48,26 @@ export default function PantallaPerfil(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
-  useFocusEffect(
+  /*/ ✅ Cargar cupones disponibles
+  const cargarCuponesDisponibles = useCallback(async () => {
+    if (!perfil?.id) {
+      setCuponesDisponibles(0);
+      return;
+    }
+
+    setCargandoCupones(true);
+    try {
+      const cupones = await cuponService.obtenerCuponesDisponibles(perfil.id);
+      setCuponesDisponibles(cupones.length);
+    } catch (error) {
+      console.error('Error cargando cupones:', error);
+      setCuponesDisponibles(0);
+    } finally {
+      setCargandoCupones(false);
+    }
+  }, [perfil?.id]);*/
+
+  /*useFocusEffect(
     React.useCallback(() => {
       const contarNotificaciones = async () => {
         if (!perfil?.id) return;
@@ -53,8 +75,9 @@ export default function PantallaPerfil(props: any) {
         setNotificacionesNoLeidas(data.length);
       };
       contarNotificaciones();
-    }, [perfil?.id])
-  );
+      cargarCuponesDisponibles();
+    }, [perfil?.id, cargarCuponesDisponibles])
+  );*/
 
   useEffect(() => {
     if (perfil?.id) {
@@ -103,8 +126,11 @@ export default function PantallaPerfil(props: any) {
 
   const manejarRefresh = async () => {
     setRefrescando(true);
-    await cargarTotalPedidos();
-    cargarDatosPerfil();
+    await Promise.all([
+      cargarTotalPedidos(),
+      cargarDatosPerfil(),
+      //cargarCuponesDisponibles()
+    ]);
     setRefrescando(false);
   };
 
@@ -325,6 +351,7 @@ export default function PantallaPerfil(props: any) {
   const labelSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
   const inputSize = isTablet ? 16 : isSmallPhone ? 14 : 15;
 
+  // ✅ Menu items con cupones incluidos
   const menuItems = [
     {
       id: 'pedidos',
@@ -342,6 +369,24 @@ export default function PantallaPerfil(props: any) {
       subtitle: 'Canjear puntos',
       navigate: 'Recompensas',
       show: true
+    },
+    {
+      id: 'cupones',
+      label: 'Mis Cupones',
+      icono: 'ticket-outline',
+      color: Colores.secundario,
+      subtitle: cuponesDisponibles > 0 ? `${cuponesDisponibles} disponibles` : 'Sin cupones',
+      navigate: 'MisCupones',
+      show: perfil?.id ? true : false
+    },
+    {
+      id: 'canjear-cupon',
+      label: 'Canjear Cupón',
+      icono: 'qr-code-outline',
+      color: Colores.primario,
+      subtitle: 'Escanea o ingresa código',
+      navigate: 'CanjearCupon',
+      show: perfil?.id ? true : false
     },
   ];
 
@@ -817,7 +862,7 @@ export default function PantallaPerfil(props: any) {
                   <Text style={[estilos.menuValor, {
                     fontSize: isTablet ? 13 : isSmallPhone ? 10 : 12,
                     marginRight: 8,
-                    color: Colores.margeRosa,
+                    color: item.color,
                   }]}>
                     {item.subtitle}
                   </Text>

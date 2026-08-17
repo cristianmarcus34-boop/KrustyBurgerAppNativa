@@ -9,6 +9,18 @@ export interface Producto {
     precio: number;
     imagen: string | null;
     categoria: string;
+    // ✅ AGREGADO: Campo de disponibilidad
+    disponible?: boolean; // Por defecto true si no existe
+    // ✅ AGREGADO: Campos útiles para gestión de inventario
+    stock?: number;
+    es_vegetariano?: boolean;
+    es_vegano?: boolean;
+    sin_gluten?: boolean;
+    popular?: boolean;
+    destacado?: boolean;
+    // ✅ AGREGADO: Campos de tiempo
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface ElementoPedido {
@@ -53,8 +65,8 @@ export interface Perfil {
     id: string;
     nombre_cliente: string;
     email: string;
-    puntos_acumulados: number; // ✅ Puntos totales ganados
-    puntos_disponibles: number; // ✅ NUEVO: Puntos disponibles para canjear
+    puntos_acumulados: number;
+    puntos_disponibles: number;
     ultimo_acceso: string;
     rol: 'cliente' | 'admin' | 'repartidor';
     telefono?: string | null;
@@ -67,7 +79,6 @@ export interface Perfil {
     direccion_codigo_postal?: string | null;
     preferencias_comida?: string | null;
     metodo_pago?: string | null;
-    // Campos adicionales que pueden existir
     avatar_url?: string | null;
     fcm_token?: string | null;
     lat_cliente?: number | null;
@@ -141,13 +152,11 @@ export interface Canje {
     puntos_usados: number;
     fecha: string;
     usado_en_pedido: boolean;
-    pedido_id?: number | null; // ✅ NUEVO: ID del pedido donde se usó
+    pedido_id?: number | null;
     created_at?: string;
-    // Relaciones
     recompensa?: Recompensa;
 }
 
-// ✅ NUEVO: Tipo para el resultado del canje
 export interface ResultadoCanje {
     exito: boolean;
     mensaje: string;
@@ -155,7 +164,6 @@ export interface ResultadoCanje {
     puntos_restantes: number;
 }
 
-// ✅ NUEVO: Tipo para la vista de canjes completos
 export interface CanjeCompleto extends Canje {
     usuario_nombre: string;
     usuario_email: string;
@@ -226,34 +234,28 @@ export interface Transaccion {
     usuario_id: string;
     pedido_id: number;
 
-    // Datos de Mercado Pago
     mp_preference_id: string;
     mp_payment_id: string | null;
     mp_estado: string | null;
     mp_detalle_estado: string | null;
 
-    // Datos del pago
     monto_total: number;
     metodo_pago: string;
     estado: EstadoTransaccion;
 
-    // Datos del pagador
     email_pagador: string | null;
     nombre_pagador: string | null;
     telefono_pagador: string | null;
 
-    // Fechas
     creado_en: string;
     actualizado_en: string;
     fecha_pago: string | null;
     fecha_expiracion: string | null;
 
-    // Metadata
     metadata: any;
     webhook_recibido: boolean;
 }
 
-// Para crear una transacción
 export interface CrearTransaccionDTO {
     usuario_id: string;
     pedido_id: number;
@@ -266,7 +268,6 @@ export interface CrearTransaccionDTO {
     metadata?: any;
 }
 
-// Respuesta de Mercado Pago
 export interface RespuestaMercadoPago {
     exito: boolean;
     id_preferencia?: string;
@@ -275,7 +276,6 @@ export interface RespuestaMercadoPago {
     error?: string;
 }
 
-// Estado del pago para consultar
 export interface RespuestaEstadoPago {
     exito: boolean;
     datos?: {
@@ -287,7 +287,6 @@ export interface RespuestaEstadoPago {
     error?: string;
 }
 
-// Webhook de Mercado Pago
 export interface WebhookMercadoPago {
     id: string;
     tema: 'payment' | 'merchant_order';
@@ -297,10 +296,9 @@ export interface WebhookMercadoPago {
     version_api?: string;
 }
 
-// Pago de Mercado Pago
 export interface PagoMP {
     id: string;
-    referencia_externa: string; // pedido_id
+    referencia_externa: string;
     id_preferencia: string;
     estado: string;
     detalle_estado: string;
@@ -315,7 +313,6 @@ export interface PagoMP {
     monto: number;
 }
 
-// Item para el pago
 export interface ItemPago {
     producto_id: number;
     nombre: string;
@@ -326,7 +323,6 @@ export interface ItemPago {
     imagen?: string;
 }
 
-// Datos para iniciar un pago
 export interface DatosPago {
     items: ItemPago[];
     pedidoId: number;

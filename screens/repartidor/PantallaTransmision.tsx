@@ -15,6 +15,10 @@ import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 import { obtenerRuta, guardarRutaPedido, obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 
+// ✅ IMPORTAR MARCADORES DEL COMPONENTE MAPA
+import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
+import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
+
 const { width, height } = Dimensions.get('window');
 
 // ✅ COORDENADAS REALES DE KRUSTY BURGER
@@ -136,7 +140,6 @@ export default function PantallaTransmision(props: any) {
   const coordenadasPolyline = obtenerCoordenadasPolyline();
   const puntosValidos = validarCoordenadas(coordenadasPolyline);
 
-  // ✅ LOGS DE DEPURACIÓN PARA POLYLINE (fuera del JSX)
   useEffect(() => {
     if (transmitiendo && pedidoSeleccionado) {
       console.log('🔍 ========== DEPURACIÓN POLYLINE ==========');
@@ -242,9 +245,7 @@ export default function PantallaTransmision(props: any) {
   // ✅ ZOOM MEJORADO - Mostrar toda la ruta
   useEffect(() => {
     if (transmitiendo && ubicacionActual && mapRef.current) {
-      // ✅ Calcular el zoom para mostrar toda la ruta
       if (rutaPuntos.length > 1) {
-        // Encontrar los límites de la ruta
         const lats = rutaPuntos.map(p => p.latitude);
         const lngs = rutaPuntos.map(p => p.longitude);
         const minLat = Math.min(...lats);
@@ -262,7 +263,6 @@ export default function PantallaTransmision(props: any) {
           longitudeDelta: Math.max(lngDelta, 0.02),
         }, 1000);
       } else {
-        // Fallback: centrar en el repartidor con zoom más amplio
         mapRef.current.animateToRegion({
           latitude: ubicacionActual.lat,
           longitude: ubicacionActual.lng,
@@ -350,26 +350,22 @@ export default function PantallaTransmision(props: any) {
     setPedidoSeleccionado(pedido);
     setTransmitiendo(true);
 
-    // ✅ OBTENER RUTA AL INICIAR
     const origenLat = ubicacionActual.lat;
     const origenLng = ubicacionActual.lng;
     const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
     const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
 
-    // ✅ 1. Intentar cargar ruta guardada en la DB
     const rutaGuardada = await obtenerRutaPedido(pedido.id);
     if (rutaGuardada && rutaGuardada.length > 1) {
       console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
       setRutaPuntos(rutaGuardada);
 
-      // Cargar distancia y tiempo desde la DB
       const infoRuta = await obtenerInfoRutaPedido(pedido.id);
       if (infoRuta) {
         setDistanciaReal(infoRuta.distancia);
         setTiempoReal(infoRuta.duracion);
       }
     } else {
-      // ✅ 2. Obtener nueva ruta de Google Maps
       console.log('🔄 Obteniendo nueva ruta...');
       const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
 
@@ -377,12 +373,9 @@ export default function PantallaTransmision(props: any) {
         setRutaPuntos(ruta.points);
         setDistanciaReal(ruta.distance);
         setTiempoReal(ruta.duration);
-
-        // ✅ Guardar en la DB
         await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
         console.log('💾 Ruta guardada en la DB');
       } else {
-        // ✅ 3. Fallback: línea recta
         console.warn('⚠️ Usando línea recta como fallback');
         setRutaPuntos([
           { latitude: origenLat, longitude: origenLng },
@@ -391,7 +384,6 @@ export default function PantallaTransmision(props: any) {
       }
     }
 
-    // ✅ ACTUALIZAR ESTADO DEL PEDIDO
     try {
       const { error } = await supabase
         .from('pedidos')
@@ -409,7 +401,6 @@ export default function PantallaTransmision(props: any) {
       console.error('❌ Error en actualización de estado:', error);
     }
 
-    // ✅ INICIAR SEGUIMIENTO DE UBICACIÓN
     const { status } = await Location.requestForegroundPermissionsAsync();
 
     if (status === 'granted') {
@@ -833,7 +824,7 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ MAPA EN TRANSMISIÓN - VERSIÓN MEJORADA TIPO UBER */}
+        {/* ✅ MAPA EN TRANSMISIÓN - CON MARCADORES ACTUALIZADOS */}
         {transmitiendo && pedidoSeleccionado && (
           <Animated.View style={[
             estilos.mapaContenedor,
@@ -859,18 +850,16 @@ export default function PantallaTransmision(props: any) {
               showsUserLocation={true}
               showsMyLocationButton={true}
             >
-              {/* 🛵 REPARTIDOR CON MOTO ANIMADA */}
+              {/* 🛵 REPARTIDOR CON MOTO ANIMADA - MarcadorMoto */}
               <Marker coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}>
-                <Animated.View style={[estilos.motoMarker, { transform: [{ scale: pulseAnim }] }]}>
-                  <View style={estilos.motoCircle}>
-                    <Ionicons name="bicycle" size={isTablet ? 32 : 24} color="#000000" />
-                  </View>
-                  <View style={estilos.motoPulseOuter} />
-                  <View style={estilos.motoPulseInner} />
-                </Animated.View>
+                <MarcadorMoto
+                  size="normal"
+                  animated={true}
+                  scale={pulseAnim}
+                />
               </Marker>
 
-              {/* 📍 DESTINO CLIENTE CON BANDERA */}
+              {/* 📍 DESTINO CLIENTE CON BANDERA - MarcadorDestino */}
               {pedidoSeleccionado && (
                 <Marker
                   coordinate={{
@@ -878,16 +867,13 @@ export default function PantallaTransmision(props: any) {
                     longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
                   }}
                 >
-                  <View style={estilos.destinoMarker}>
-                    <Ionicons name="flag" size={isTablet ? 28 : 22} color="#FFFFFF" />
-                  </View>
+                  <MarcadorDestino size="normal" />
                 </Marker>
               )}
 
               {/* 🗺️ RUTA TIPO UBER - CON SOMBRA Y DEGRADADO */}
               {puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1 && (
                 <>
-                  {/* Sombra de la ruta */}
                   <Polyline
                     coordinates={rutaPuntos}
                     strokeColor="rgba(0,0,0,0.3)"
@@ -895,15 +881,13 @@ export default function PantallaTransmision(props: any) {
                     lineCap="round"
                     lineJoin="round"
                   />
-                  {/* Línea principal - ROJA PARA DEPURAR */}
                   <Polyline
                     coordinates={rutaPuntos}
-                    strokeColor="red"
+                    strokeColor={COLORS.amarillo}
                     strokeWidth={5}
                     lineCap="round"
                     lineJoin="round"
                   />
-                  {/* Línea interior (brillo) */}
                   <Polyline
                     coordinates={rutaPuntos}
                     strokeColor={COLORS.amarilloClaro}
@@ -1071,7 +1055,6 @@ export default function PantallaTransmision(props: any) {
           )}
         </View>
 
-        {/* ✅ Espacio extra al final */}
         <View style={{ height: 40 }} />
       </ScrollView>
 
@@ -1585,58 +1568,5 @@ const estilos = StyleSheet.create({
   modalConfirmarTexto: {
     color: COLORS.blanco,
     fontWeight: 'bold',
-  },
-  // ✅ ESTILOS PARA MARCADORES MEJORADOS
-  motoMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  motoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F5C518',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-    zIndex: 2,
-  },
-  motoPulseOuter: {
-    position: 'absolute',
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(245, 197, 24, 0.2)',
-    zIndex: 1,
-  },
-  motoPulseInner: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(245, 197, 24, 0.08)',
-    zIndex: 0,
-  },
-  destinoMarker: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.rojo,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
 });

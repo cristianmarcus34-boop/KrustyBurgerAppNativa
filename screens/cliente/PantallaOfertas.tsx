@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { Colores } from '../../lib/colores';
+import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
 // 🎨 PALETA DE COLORES
@@ -38,22 +39,14 @@ const COLORS = {
 
 const { width, height } = Dimensions.get('window');
 
-// ✅ FUNCIÓN PARA FORMATEAR PRECIOS DE FORMA SEGURA
-const formatearPrecio = (precio: string | number | undefined): string => {
-  if (precio === undefined || precio === null) return '0.00';
-  const numero = typeof precio === 'string' ? parseFloat(precio) : precio;
-  if (isNaN(numero)) return '0.00';
-  return numero.toFixed(2);
-};
-
 // ✅ INTERFAZ DE OFERTA
 interface Oferta {
   id: number;
   titulo: string;
   descripcion: string;
   descuento: string;
-  precio_original: number | string;
-  precio_oferta: number | string;
+  precio_original: number;
+  precio_oferta: number;
   activa: boolean;
   imagen?: string;
   fecha_inicio?: string;
@@ -100,10 +93,6 @@ export default function PantallaOfertas(props: any) {
         setOfertas([]);
       } else {
         console.log(`📦 [PantallaOfertas] Ofertas cargadas: ${data?.length || 0}`);
-        // ✅ Verificar imágenes
-        data?.forEach((item, index) => {
-          console.log(`🖼️ [PantallaOfertas] Oferta ${index + 1} - ${item.titulo}: imagen = ${item.imagen || 'Sin imagen'}`);
-        });
         setOfertas(data as Oferta[] || []);
       }
     } catch (error) {
@@ -148,7 +137,6 @@ export default function PantallaOfertas(props: any) {
   };
 
   const renderOferta = ({ item, index }: { item: Oferta; index: number }) => {
-    const delay = index * 100;
     const itemFade = fadeAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [0.2, 1],
@@ -158,6 +146,10 @@ export default function PantallaOfertas(props: any) {
       outputRange: [20 * (index + 1), 0],
     });
     const colorOferta = getColorPorId(item.id);
+
+    // ✅ Tamaño de imagen aumentado
+    const imagenSize = isTablet ? 100 : isSmallPhone ? 70 : 80;
+    const imagenRadius = isTablet ? 16 : isSmallPhone ? 10 : 12;
 
     return (
       <Animated.View
@@ -202,38 +194,36 @@ export default function PantallaOfertas(props: any) {
           </View>
 
           <View style={estilos.tarjetaContenido}>
-            {/* ✅ IMAGEN O PLACEHOLDER */}
+            {/* ✅ IMAGEN MÁS GRANDE */}
             {item.imagen ? (
               <Image
                 source={{ uri: item.imagen }}
                 style={[
                   estilos.imagenOferta,
                   {
-                    width: isTablet ? 70 : isSmallPhone ? 50 : 60,
-                    height: isTablet ? 70 : isSmallPhone ? 50 : 60,
-                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                    marginRight: 14,
+                    width: imagenSize,
+                    height: imagenSize,
+                    borderRadius: imagenRadius,
+                    marginRight: 16,
                   }
                 ]}
                 resizeMode="cover"
                 onError={(e) => {
-                  console.log('❌ Error cargando imagen en PantallaOfertas:', e.nativeEvent.error);
-                  console.log('URL que falló:', item.imagen);
+                  console.log('❌ Error cargando imagen:', e.nativeEvent.error);
                 }}
-                onLoad={() => console.log('✅ Imagen cargada en PantallaOfertas:', item.imagen)}
               />
             ) : (
               <View style={[
                 estilos.emojiContenedor,
                 {
-                  width: isTablet ? 70 : isSmallPhone ? 50 : 60,
-                  height: isTablet ? 70 : isSmallPhone ? 50 : 60,
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                  width: imagenSize,
+                  height: imagenSize,
+                  borderRadius: imagenRadius,
                   backgroundColor: colorOferta + '20',
-                  marginRight: 14,
+                  marginRight: 16,
                 }
               ]}>
-                <Text style={[estilos.emoji, { fontSize: isTablet ? 36 : isSmallPhone ? 24 : 30 }]}>🏷️</Text>
+                <Text style={[estilos.emoji, { fontSize: imagenSize * 0.5 }]}>🏷️</Text>
               </View>
             )}
 
@@ -263,7 +253,7 @@ export default function PantallaOfertas(props: any) {
                     fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
                   }
                 ]}>
-                  ${formatearPrecio(item.precio_original)}
+                  {formatearPrecio(item.precio_original)}
                 </Text>
                 <Text style={[
                   estilos.precioOferta,
@@ -272,7 +262,7 @@ export default function PantallaOfertas(props: any) {
                     color: colorOferta,
                   }
                 ]}>
-                  ${formatearPrecio(item.precio_oferta)}
+                  {formatearPrecio(item.precio_oferta)}
                 </Text>
               </View>
             </View>
@@ -451,9 +441,7 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emoji: {
-    // Tamaño dinámico
-  },
+  emoji: {},
   info: {
     flex: 1,
   },

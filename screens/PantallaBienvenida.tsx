@@ -1,42 +1,58 @@
+// screens/PantallaBienvenida.tsx - CORREGIDO
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView, Animated, Dimensions, Image, Linking } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    useWindowDimensions,
+    ScrollView,
+    Animated,
+    Dimensions,
+    Image,
+    Linking,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colores } from '../lib/colores';
+import { Colores, Sizes, getTematica } from '../lib/colores';
 
 const { width, height } = Dimensions.get('window');
 const logoImage = require('../assets/logo-krusty.png');
 
 export default function PantallaBienvenida({ navigation }: any) {
-    const { width: winWidth, height: winHeight } = useWindowDimensions();
+    const { width: winWidth } = useWindowDimensions();
     const insets = useSafeAreaInsets();
+    const temaClaro = getTematica('claro');
 
-    // ✅ ESTADO PARA CONTROLAR QUÉ FEATURE ESTÁ EXPANDIDO
     const [featureExpandido, setFeatureExpandido] = useState<number | null>(null);
 
+    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.9)).current;
-    const translateY = useRef(new Animated.Value(60)).current;
-    const glowAnim = useRef(new Animated.Value(0)).current;
-    const particulaAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.92)).current;
+    const translateY = useRef(new Animated.Value(50)).current;
 
-    // ✅ DATOS DE FEATURES CON DESCRIPCIONES
     const featuresData = [
         {
             icon: 'restaurant',
             text: 'Hamburguesas premium',
-            desc: 'Nuestras hamburguesas están hechas con carne 100% de primera calidad y los mejores ingredientes de Springfield. ¡La receta secreta de Krusty te va a encantar! 🍔'
+            desc: 'Nuestras hamburguesas están hechas con carne 100% de primera calidad y los mejores ingredientes de Springfield. ¡La receta secreta de Krusty te va a encantar! 🍔',
+            color: Colores.secundario,
+            iconBg: Colores.secundario + '20',
         },
         {
             icon: 'star',
             text: 'Ganá puntos Krusty',
-            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos, productos gratis y envíos sin costo. ⭐'
+            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos, productos gratis y envíos sin costo. ⭐',
+            color: Colores.primario,
+            iconBg: Colores.primario + '20',
         },
         {
             icon: 'bicycle',
             text: 'Delivery en tiempo real',
-            desc: 'Seguí tu pedido en vivo desde que sale del local hasta que llega a tu puerta. ¡Nunca más esperar sin saber! 🚲'
+            desc: 'Seguí tu pedido en vivo desde que sale del local hasta que llega a tu puerta. ¡Nunca más esperar sin saber! 🚲',
+            color: Colores.verdeKrusty,
+            iconBg: Colores.verdeKrusty + '20',
         },
     ];
 
@@ -44,7 +60,7 @@ export default function PantallaBienvenida({ navigation }: any) {
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 1,
-                duration: 1000,
+                duration: 800,
                 useNativeDriver: true,
             }),
             Animated.spring(scaleAnim, {
@@ -55,64 +71,21 @@ export default function PantallaBienvenida({ navigation }: any) {
             }),
             Animated.timing(translateY, {
                 toValue: 0,
-                duration: 800,
+                duration: 700,
                 useNativeDriver: true,
             }),
         ]).start();
-
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(glowAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(glowAnim, {
-                    toValue: 0,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(particulaAnim, {
-                    toValue: 1,
-                    duration: 3000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(particulaAnim, {
-                    toValue: 0,
-                    duration: 3000,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
     }, []);
 
     const isTablet = winWidth >= 768;
     const isSmallPhone = winWidth < 375;
 
-    const logoSize = isTablet ? 200 : isSmallPhone ? 140 : 170;
-    const buttonTextSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
-    const buttonPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
-    const featureIconSize = isTablet ? 24 : isSmallPhone ? 20 : 22;
-    const logoMarginBottom = isTablet ? 30 : isSmallPhone ? 20 : 24;
-    const featuresMarginBottom = isTablet ? 24 : isSmallPhone ? 16 : 20;
-    const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 20 : 24;
-    const paddingTop = isTablet ? 40 : isSmallPhone ? 20 : 30;
-    const paddingBottom = (isTablet ? 30 : isSmallPhone ? 16 : 20) + insets.bottom;
-
-    const glowOpacity = glowAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.1, 0.3],
-    });
-
-    const particulaY = particulaAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-50, 50],
-    });
+    const logoSize = isTablet ? 180 : isSmallPhone ? 120 : 150;
+    const buttonTextSize = isTablet ? 17 : isSmallPhone ? 13 : 15;
+    const buttonPadding = isTablet ? 16 : isSmallPhone ? 12 : 14;
+    const featureIconSize = isTablet ? 22 : isSmallPhone ? 18 : 20;
+    const paddingHorizontal = isTablet ? 48 : isSmallPhone ? 20 : 24;
+    const paddingTop = isTablet ? 48 : isSmallPhone ? 24 : 32;
 
     const abrirWebAgencia = async () => {
         const url = 'https://agencia-powa.vercel.app';
@@ -129,57 +102,19 @@ export default function PantallaBienvenida({ navigation }: any) {
     };
 
     return (
-        <LinearGradient
-            colors={Colores.gradientKrusty}
-            style={estilos.contenedor}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-        >
-            {/* ✅ PARTÍCULAS DE FONDO */}
-            <Animated.View
-                style={[
-                    estilos.particula,
-                    {
-                        transform: [{ translateY: particulaY }],
-                        opacity: glowOpacity,
-                        top: '10%',
-                        left: '10%',
-                    }
-                ]}
-            >
-                <Ionicons name="star" size={24} color={Colores.textoClaro + '20'} />
-            </Animated.View>
-            <Animated.View
-                style={[
-                    estilos.particula,
-                    {
-                        transform: [{ translateY: particulaY }],
-                        opacity: glowOpacity,
-                        bottom: '20%',
-                        right: '10%',
-                    }
-                ]}
-            >
-                <Ionicons name="restaurant" size={20} color={Colores.textoClaro + '15'} />
-            </Animated.View>
-            <Animated.View
-                style={[
-                    estilos.particula,
-                    {
-                        transform: [{ translateY: particulaY }],
-                        opacity: glowOpacity,
-                        top: '30%',
-                        right: '5%',
-                    }
-                ]}
-            >
-                <Ionicons name="bicycle" size={18} color={Colores.textoClaro + '15'} />
-            </Animated.View>
+        <View style={estilos.contenedor}>
+            {/* ✅ Fondo con gradiente suave */}
+            <LinearGradient
+                colors={[Colores.fondoClaro || '#F5F2ED', '#FFFFFF', Colores.fondoClaro || '#F5F2ED']}
+                style={estilos.fondoGradiente}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            />
 
             {/* ✅ SELECTOR DE IDIOMA */}
-            <TouchableOpacity style={estilos.idiomaSelector}>
-                <Ionicons name="language" size={20} color={Colores.textoClaro} />
-                <Text style={estilos.idiomaTexto}>ES</Text>
+            <TouchableOpacity style={[estilos.idiomaSelector, { top: insets.top + 16 }]}>
+                <Ionicons name="language" size={18} color={Colores.textoOscuro} />
+                <Text style={estilos.idiomaSelectorTexto}>ES</Text>
             </TouchableOpacity>
 
             <ScrollView
@@ -188,7 +123,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                     {
                         paddingHorizontal: paddingHorizontal,
                         paddingTop: paddingTop,
-                        paddingBottom: paddingBottom,
+                        paddingBottom: insets.bottom + 24,
                     }
                 ]}
                 showsVerticalScrollIndicator={false}
@@ -199,9 +134,9 @@ export default function PantallaBienvenida({ navigation }: any) {
                     style={[
                         estilos.logo,
                         {
-                            marginBottom: logoMarginBottom,
+                            marginBottom: isTablet ? 32 : 24,
                             opacity: fadeAnim,
-                            transform: [{ scale: scaleAnim }],
+                            transform: [{ scale: scaleAnim }, { translateY: translateY }],
                         }
                     ]}
                 >
@@ -216,15 +151,14 @@ export default function PantallaBienvenida({ navigation }: any) {
                         ]}
                         resizeMode="contain"
                     />
+                    <Text style={[estilos.logoSubtext, { fontSize: isTablet ? 14 : 11 }]}>
+                        🍔 Desde Springfield para el mundo
+                    </Text>
                 </Animated.View>
 
                 {/* ✅ FEATURES EXPANDIBLES */}
-                <View style={[estilos.features, { marginBottom: featuresMarginBottom, gap: isTablet ? 12 : 10 }]}>
+                <View style={[estilos.features, { marginBottom: isTablet ? 28 : 20 }]}>
                     {featuresData.map((item, index) => {
-                        const itemTranslateY = translateY.interpolate({
-                            inputRange: [0, 60],
-                            outputRange: [0, 20 + index * 10],
-                        });
                         const expandido = featureExpandido === index;
 
                         return (
@@ -232,57 +166,69 @@ export default function PantallaBienvenida({ navigation }: any) {
                                 key={index}
                                 activeOpacity={0.9}
                                 onPress={() => setFeatureExpandido(expandido ? null : index)}
+                                style={styles.featureTouch}
                             >
                                 <Animated.View
                                     style={[
                                         estilos.featureItem,
                                         {
                                             opacity: fadeAnim,
-                                            transform: [{ translateY: itemTranslateY }],
+                                            transform: [{ translateY: translateY }],
                                             backgroundColor: expandido
-                                                ? Colores.secundario + '15'
-                                                : Colores.textoOscuro + '50',
+                                                ? item.color + '15'
+                                                : Colores.fondoBlanco,
                                             borderColor: expandido
-                                                ? Colores.secundario
-                                                : Colores.textoClaro + '15',
-                                            paddingVertical: expandido ? 14 : 10,
+                                                ? item.color + '40'
+                                                : Colores.fondoClaro,
+                                            paddingVertical: expandido ? 16 : 12,
                                         }
                                     ]}
                                 >
                                     <View style={estilos.featureHeader}>
-                                        <View style={estilos.featureIconWrapper}>
-                                            <LinearGradient
-                                                colors={expandido ? [Colores.secundario, Colores.secundarioOscuro] : [Colores.primario, Colores.primarioOscuro]}
-                                                style={estilos.featureIconGradient}
-                                            >
-                                                <Ionicons name={item.icon as any} size={featureIconSize} color={expandido ? Colores.textoClaro : Colores.textoOscuro} />
-                                            </LinearGradient>
+                                        <View style={[estilos.featureIconWrapper, { backgroundColor: item.iconBg }]}>
+                                            <Ionicons
+                                                name={item.icon as any}
+                                                size={featureIconSize}
+                                                color={item.color}
+                                            />
                                         </View>
-                                        <Text style={[estilos.featureTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                        <Text style={[estilos.featureTexto, {
+                                            fontSize: isTablet ? 15 : 13,
+                                            color: Colores.textoOscuro,
+                                        }]}>
                                             {item.text}
                                         </Text>
                                         <Ionicons
                                             name={expandido ? "chevron-up" : "chevron-down"}
-                                            size={20}
-                                            color={expandido ? Colores.secundario : Colores.textoGris}
+                                            size={18}
+                                            color={expandido ? item.color : Colores.textoGris}
                                         />
                                     </View>
 
-                                    {/* ✅ DESCRIPCIÓN EXPANDIDA */}
                                     {expandido && (
-                                        <Animated.View style={estilos.featureDescContainer}>
-                                            <Text style={[estilos.featureDesc, { fontSize: isTablet ? 14 : 12 }]}>
+                                        <View style={estilos.featureDescContainer}>
+                                            <Text style={[estilos.featureDesc, {
+                                                fontSize: isTablet ? 14 : 12,
+                                                color: Colores.textoOscuro,
+                                            }]}>
                                                 {item.desc}
                                             </Text>
                                             <TouchableOpacity
-                                                style={[estilos.featureDescBoton, { paddingHorizontal: isTablet ? 20 : 14, paddingVertical: isTablet ? 8 : 6 }]}
+                                                style={[
+                                                    estilos.featureDescBoton,
+                                                    {
+                                                        backgroundColor: item.color,
+                                                        paddingHorizontal: isTablet ? 20 : 14,
+                                                        paddingVertical: isTablet ? 8 : 6,
+                                                    }
+                                                ]}
                                                 onPress={() => setFeatureExpandido(null)}
                                             >
                                                 <Text style={[estilos.featureDescBotonTexto, { fontSize: isTablet ? 13 : 11 }]}>
                                                     Entendido
                                                 </Text>
                                             </TouchableOpacity>
-                                        </Animated.View>
+                                        </View>
                                     )}
                                 </Animated.View>
                             </TouchableOpacity>
@@ -295,20 +241,15 @@ export default function PantallaBienvenida({ navigation }: any) {
                     style={[
                         estilos.botones,
                         {
-                            gap: isTablet ? 12 : 10,
-                            marginBottom: isTablet ? 30 : 20,
                             opacity: fadeAnim,
+                            transform: [{ translateY: translateY }],
+                            gap: isTablet ? 12 : 10,
+                            marginBottom: isTablet ? 28 : 20,
                         }
                     ]}
                 >
                     <TouchableOpacity
-                        style={[
-                            estilos.botonIngresar,
-                            {
-                                padding: 0,
-                                borderRadius: isTablet ? 14 : 12,
-                            }
-                        ]}
+                        style={estilos.botonIngresar}
                         onPress={() => navigation.navigate('Login')}
                         activeOpacity={0.8}
                     >
@@ -317,16 +258,15 @@ export default function PantallaBienvenida({ navigation }: any) {
                             style={[
                                 estilos.botonGradient,
                                 {
-                                    borderRadius: isTablet ? 14 : 12,
+                                    borderRadius: Sizes.radius.md,
                                     paddingVertical: buttonPadding,
-                                    paddingHorizontal: buttonPadding * 1.5,
                                 }
                             ]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
                             <Ionicons name="log-in" size={buttonTextSize} color={Colores.textoClaro} />
-                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize, color: Colores.textoClaro }]}>
+                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize }]}>
                                 Iniciar Sesión
                             </Text>
                         </LinearGradient>
@@ -337,8 +277,9 @@ export default function PantallaBienvenida({ navigation }: any) {
                             estilos.botonRegistro,
                             {
                                 padding: buttonPadding,
-                                borderRadius: isTablet ? 14 : 12,
+                                borderRadius: Sizes.radius.md,
                                 borderWidth: isTablet ? 2 : 1.5,
+                                borderColor: Colores.primario,
                             }
                         ]}
                         onPress={() => navigation.navigate('Registro')}
@@ -351,7 +292,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[estilos.botonInvitado, { paddingVertical: isTablet ? 12 : 10 }]}
+                        style={estilos.botonInvitado}
                         onPress={() => navigation.navigate('Principal')}
                         activeOpacity={0.6}
                     >
@@ -363,23 +304,23 @@ export default function PantallaBienvenida({ navigation }: any) {
 
                 {/* ✅ FOOTER */}
                 <Animated.View style={[estilos.footerContainer, { opacity: fadeAnim }]}>
-                    <LinearGradient
-                        colors={[Colores.textoClaro + '30', 'transparent']}
-                        style={estilos.footerDivider}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                    />
+                    <View style={estilos.footerDivider} />
 
-                    <Text style={[estilos.footer, { fontSize: isTablet ? 12 : 10 }]}>
+                    <Text style={[estilos.footer, {
+                        fontSize: isTablet ? 12 : 10,
+                        color: Colores.textoGris,
+                    }]}>
                         © 2026 Krusty Burger
                     </Text>
 
-                    <Text style={[estilos.version, { fontSize: isTablet ? 10 : 8 }]}>
+                    <Text style={[estilos.version, {
+                        fontSize: isTablet ? 10 : 8,
+                        color: Colores.textoGris + '60',
+                    }]}>
                         v1.0.0
                     </Text>
 
                     <View style={estilos.agenciaContainer}>
-                        <View style={estilos.agenciaDivider} />
                         <TouchableOpacity
                             style={estilos.agenciaContent}
                             onPress={abrirWebAgencia}
@@ -393,7 +334,10 @@ export default function PantallaBienvenida({ navigation }: any) {
                                     resizeMode: 'contain',
                                 }}
                             />
-                            <Text style={[estilos.agenciaTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                            <Text style={[estilos.agenciaTexto, {
+                                fontSize: isTablet ? 12 : 10,
+                                color: Colores.textoGris,
+                            }]}>
                                 Desarrollo Digital Powa
                             </Text>
                             <Ionicons
@@ -405,44 +349,68 @@ export default function PantallaBienvenida({ navigation }: any) {
                     </View>
                 </Animated.View>
             </ScrollView>
-        </LinearGradient>
+        </View>
     );
 }
+
+// ============================================================
+// 🎨 ESTILOS - CORREGIDOS
+// ============================================================
+const styles = StyleSheet.create({
+    featureTouch: {
+        width: '100%',
+    },
+});
 
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
+        backgroundColor: Colores.fondoClaro,
+    },
+    fondoGradiente: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
     scroll: {
         flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '100%',
     },
+
+    // ============================================================
+    // IDIOMA SELECTOR
+    // ============================================================
     idiomaSelector: {
         position: 'absolute',
-        top: 40,
         right: 20,
+        zIndex: 10,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: Colores.textoOscuro + '50',
+        backgroundColor: Colores.fondoBlanco,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 20,
+        borderRadius: Sizes.radius.full,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '20',
-        zIndex: 10,
+        borderColor: Colores.fondoClaro,
+        shadowColor: Colores.textoOscuro + '06',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    idiomaTexto: {
-        color: Colores.textoClaro,
+    idiomaSelectorTexto: {
+        color: Colores.textoOscuro,
         fontSize: 12,
         fontWeight: '600',
     },
-    particula: {
-        position: 'absolute',
-        zIndex: 0,
-    },
+
+    // ============================================================
+    // LOGO
+    // ============================================================
     logo: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -450,88 +418,91 @@ const estilos = StyleSheet.create({
     },
     logoImage: {
         backgroundColor: 'transparent',
-        borderRadius: 100,
+        borderRadius: 999,
     },
+    logoSubtext: {
+        color: Colores.textoGris,
+        fontWeight: '400',
+        letterSpacing: 0.5,
+        marginTop: 4,
+    },
+
+    // ============================================================
+    // FEATURES
+    // ============================================================
     features: {
         width: '100%',
         gap: 10,
     },
     featureItem: {
-        borderRadius: 12,
+        borderRadius: Sizes.radius.md,
         borderWidth: 1,
         position: 'relative',
         overflow: 'hidden',
+        paddingHorizontal: 14,
+        backgroundColor: Colores.fondoBlanco,
+        shadowColor: Colores.textoOscuro + '06',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 6,
+        elevation: 2,
     },
     featureHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        paddingHorizontal: 14,
     },
     featureIconWrapper: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        overflow: 'hidden',
-        flexShrink: 0,
-    },
-    featureIconGradient: {
-        width: '100%',
-        height: '100%',
+        width: 40,
+        height: 40,
+        borderRadius: Sizes.radius.md,
         justifyContent: 'center',
         alignItems: 'center',
+        flexShrink: 0,
     },
     featureTexto: {
         flex: 1,
         fontWeight: '600',
-        letterSpacing: 0.3,
-    },
-    featureNeon: {
-        position: 'absolute',
-        right: -10,
-        top: -10,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: Colores.primario + '10',
-        borderWidth: 1,
-        borderColor: Colores.primario + '20',
+        color: Colores.textoOscuro,
+        letterSpacing: 0.2,
     },
     featureDescContainer: {
         marginTop: 10,
         paddingTop: 10,
-        paddingHorizontal: 14,
-        paddingBottom: 4,
         borderTopWidth: 1,
-        borderTopColor: Colores.textoClaro + '15',
+        borderTopColor: Colores.fondoClaro,
     },
     featureDesc: {
-        color: Colores.textoClaro,
+        color: Colores.textoOscuro,
         lineHeight: 22,
-        opacity: 0.9,
+        opacity: 0.85,
     },
     featureDescBoton: {
         alignSelf: 'flex-end',
         marginTop: 10,
-        marginBottom: 4,
-        backgroundColor: Colores.secundario,
-        borderRadius: 20,
+        marginBottom: 2,
+        borderRadius: Sizes.radius.full,
     },
     featureDescBotonTexto: {
         color: Colores.textoClaro,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
+
+    // ============================================================
+    // BOTONES
+    // ============================================================
     botones: {
         width: '100%',
         gap: 10,
     },
     botonIngresar: {
         overflow: 'hidden',
-        elevation: 8,
+        borderRadius: Sizes.radius.md,
         shadowColor: Colores.secundario,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
+        elevation: 8,
     },
     botonGradient: {
         flexDirection: 'row',
@@ -539,36 +510,46 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         width: '100%',
+        paddingHorizontal: 20,
     },
     botonIngresarTexto: {
+        color: Colores.textoClaro,
         fontWeight: '700',
-        letterSpacing: 1,
+        letterSpacing: 0.5,
     },
     botonRegistro: {
         flexDirection: 'row',
-        backgroundColor: 'transparent',
-        borderRadius: 12,
-        padding: 14,
+        backgroundColor: Colores.fondoBlanco,
+        borderRadius: Sizes.radius.md,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
         borderWidth: 1.5,
         borderColor: Colores.primario,
+        shadowColor: Colores.textoOscuro + '06',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     botonRegistroTexto: {
         color: Colores.primario,
         fontWeight: '600',
-        letterSpacing: 1,
+        letterSpacing: 0.5,
     },
     botonInvitado: {
         alignItems: 'center',
         paddingVertical: 10,
     },
     botonInvitadoTexto: {
-        color: Colores.textoClaro + '60',
-        fontSize: 12,
+        color: Colores.textoGris,
         textDecorationLine: 'underline',
+        fontWeight: '400',
     },
+
+    // ============================================================
+    // FOOTER
+    // ============================================================
     footerContainer: {
         width: '100%',
         alignItems: 'center',
@@ -579,43 +560,46 @@ const estilos = StyleSheet.create({
         width: '60%',
         height: 1,
         marginBottom: 12,
+        backgroundColor: Colores.fondoClaro,
     },
     footer: {
-        color: Colores.textoClaro + '50',
+        color: Colores.textoGris,
         textAlign: 'center',
         fontWeight: '500',
     },
     version: {
-        color: Colores.textoClaro + '30',
+        color: Colores.textoGris + '60',
         textAlign: 'center',
         marginTop: 4,
     },
+
+    // ============================================================
+    // AGENCIA
+    // ============================================================
     agenciaContainer: {
         marginTop: 12,
         alignItems: 'center',
         width: '100%',
     },
-    agenciaDivider: {
-        width: '100%',
-        height: 1,
-        backgroundColor: Colores.textoClaro + '15',
-        marginBottom: 8,
-    },
     agenciaContent: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: Colores.textoOscuro + '50',
+        backgroundColor: Colores.fondoBlanco,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        borderRadius: 12,
+        borderRadius: Sizes.radius.full,
         borderWidth: 1,
-        marginTop: 20,
-        borderColor: Colores.primario + '20',
+        borderColor: Colores.fondoClaro,
+        shadowColor: Colores.textoOscuro + '06',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     agenciaTexto: {
-        color: Colores.textoClaro + '70',
+        color: Colores.textoGris,
         fontWeight: '500',
-        letterSpacing: 0.5,
+        letterSpacing: 0.3,
     },
 });

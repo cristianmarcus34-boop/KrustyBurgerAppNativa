@@ -29,17 +29,21 @@ import React, { useEffect, useRef } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, View, Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
 import { tiendaAutenticacion } from './stores/tiendaAutenticacion';
 import { tiendaCarrito } from './stores/tiendaCarrito';
 import { Colores } from './lib/colores';
 
-// ✅ IMPORTACIONES DE PANTALLAS
+// ✅ IMPORTACIÓN DE LA BARRA INFERIOR PROFESIONAL
+import BarraInferiorProfesional from './components/BarraInferiorProfesional';
+
+// ✅ IMPORTAR setNavigationRef DEL SERVICIO
+import { notificacionService, setNavigationRef } from './services/notificacionService';
+
+// ✅ IMPORTACIONES DE PANTALLAS EXISTENTES
 import PantallaBienvenida from './screens/PantallaBienvenida';
 import PantallaLogin from './screens/auth/PantallaLogin';
 import PantallaRegistro from './screens/auth/PantallaRegistro';
@@ -68,12 +72,43 @@ import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEn
 import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
 import PantallaDashboardAdmin from './screens/admin/PantallaDashboardAdmin';
 import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
-import { notificacionService } from './services/notificacionService';
+
+// ✅ IMPORTACIONES DE PANTALLAS DE CUPONES
+//import PantallaCanjearCupon from './screens/cliente/PantallaCanjearCupon';
+//import PantallaMisCupones from './screens/cliente/PantallaMisCupones';
+//import PantallaGestionCupones from './screens/admin/PantallaGestionCupones';
+//import PantallaDetalleCuponAdmin from './screens/admin/PantallaDetalleCuponAdmin';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ✅ CONFIGURACIÓN DE DEEP LINKING - MEJORADA
+// ✅ TEMÁTICA KRUSTY PARA LA APP
+const temaApp = {
+  primario: '#E53935',
+  secundario: '#F5C518',
+  verde: '#43A047',
+  fondo: '#1A1A1A',
+  texto: '#FFFFFF',
+  textoGris: '#B0B0B0',
+  gradiente: ['#E53935', '#F5C518'] as const,
+};
+
+// ✅ HEADER CONFIGURACIÓN
+const HEADER_OPTIONS = {
+  headerStyle: {
+    backgroundColor: temaApp.fondo,
+  },
+  headerTintColor: temaApp.texto,
+  headerTitleStyle: {
+    fontWeight: 'bold' as const,
+    fontSize: 18,
+    color: temaApp.secundario,
+  },
+  headerBackTitle: '',
+  headerShadowVisible: false,
+};
+
+// ✅ CONFIGURACIÓN DE DEEP LINKING (con soporte para cupones)
 const linking = {
   prefixes: ['krustyburger://', 'https://www.krustyburger.com.ar', 'https://krustyburger.com'],
   config: {
@@ -88,6 +123,13 @@ const linking = {
       Login: 'login',
       Registro: 'registro',
       Bienvenida: 'bienvenida',
+      // ✅ Deep linking para cupones
+      CanjearCupon: {
+        path: 'canjear-cupon',
+        parse: {
+          codigo: (codigo: string) => codigo,
+        },
+      },
       Principal: {
         screens: {
           Inicio: 'inicio',
@@ -96,123 +138,30 @@ const linking = {
           Pedidos: 'pedidos',
           Perfil: 'perfil',
         }
-      }
+      },
+      NotificacionesUsuario: 'notificaciones',
+      Recompensas: 'recompensas',
+      Seguimiento: 'seguimiento',
+      Carrito: 'carrito',
     }
   }
 };
 
-// ✅ HEADER CONFIGURACIÓN CONSISTENTE (AHORA CON COLORES SIMPSONS)
-const HEADER_OPTIONS = {
-  headerStyle: {
-    backgroundColor: Colores.fondoOscuro,
-  },
-  headerTintColor: Colores.textoClaro,
-  headerTitleStyle: {
-    fontWeight: 'bold' as const,
-    fontSize: 18,
-    color: Colores.primario,
-  },
-  headerBackTitle: '',
-  headerShadowVisible: false,
-};
-
-// ✅ ICONO CON BADGE PARA LA BARRA INFERIOR
-const TabIcon = ({ focused, color, size, routeName, badge }: any) => {
-  let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
-
-  if (routeName === 'Inicio') iconName = focused ? 'home' : 'home-outline';
-  else if (routeName === 'Menu') iconName = focused ? 'restaurant' : 'restaurant-outline';
-  else if (routeName === 'Ofertas') iconName = focused ? 'pricetag' : 'pricetag-outline';
-  else if (routeName === 'Pedidos') iconName = focused ? 'receipt' : 'receipt-outline';
-  else if (routeName === 'Perfil') iconName = focused ? 'person' : 'person-outline';
-
-  return (
-    <View style={estilos.iconoContainer}>
-      <Ionicons name={iconName} size={size} color={color} />
-      {badge && badge > 0 && routeName === 'Perfil' && (
-        <View style={estilos.badgeContainer}>
-          <Text style={estilos.badgeTexto}>{badge > 99 ? '99+' : badge}</Text>
-        </View>
-      )}
-    </View>
-  );
-};
-
-// ✅ BOTÓN PERSONALIZADO PARA LA BARRA INFERIOR
-const TabBarButton = (props: any) => {
-  const { children, onPress, accessibilityState } = props;
-  const isFocused = accessibilityState?.selected;
-
-  return (
-    <TouchableOpacity
-      {...props}
-      activeOpacity={0.7}
-      style={[
-        estilos.tabButton,
-        isFocused && estilos.tabButtonActivo,
-      ]}
-    >
-      <View style={estilos.tabButtonContent}>
-        {children}
-        {isFocused && (
-          <View style={estilos.tabIndicator}>
-            <LinearGradient
-              colors={Colores.gradientKrusty}
-              style={estilos.tabIndicatorLine}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+// ✅ FUNCIÓN QUE RENDERIZA LA BARRA INFERIOR
+const renderTabBar = (props: any) => {
+  return <BarraInferiorProfesional {...props} />;
 };
 
 function PestanasCliente() {
   const { cantidadTotal } = tiendaCarrito();
-  const insets = useSafeAreaInsets();
-
   const cantidad = cantidadTotal();
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }: any) => ({
-        tabBarIcon: ({ focused, color, size }: any) => {
-          return (
-            <TabIcon
-              focused={focused}
-              color={color}
-              size={size}
-              routeName={route.name}
-              badge={cantidad}
-            />
-          );
-        },
-        tabBarActiveTintColor: Colores.primario,
-        tabBarInactiveTintColor: Colores.textoGris,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-          marginTop: 2,
-          letterSpacing: 0.3,
-        },
-        tabBarStyle: {
-          backgroundColor: Colores.fondoOscuro,
-          borderTopWidth: 0,
-          height: Platform.OS === 'android' ? 60 + insets.bottom : 60 + insets.bottom,
-          paddingBottom: Platform.OS === 'android' ? insets.bottom + 6 : insets.bottom + 6,
-          paddingTop: 6,
-          elevation: 20,
-          shadowColor: Colores.primario,
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 12,
-        },
+      tabBar={renderTabBar}
+      screenOptions={{
         headerShown: false,
-        tabBarButton: (props: any) => <TabBarButton {...props} />,
-      })}
+      }}
     >
       <Tab.Screen name="Inicio" component={PantallaInicio} />
       <Tab.Screen name="Menu" component={PantallaMenu} />
@@ -228,7 +177,30 @@ export default function App() {
   const { cargarCarrito } = tiendaCarrito();
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
-  // ✅ CONFIGURACIÓN DE NOTIFICACIONES
+  // ✅ CONFIGURAR NAVIGATION REF PARA NOTIFICACIONES
+  useEffect(() => {
+    if (navigationRef.current) {
+      setNavigationRef(navigationRef.current);
+      console.log('✅ NavigationRef conectado a notificacionService');
+
+      // ✅ Procesar notificación que abrió la app
+      notificacionService.procesarNotificacionInicial();
+    }
+  }, [navigationRef.current]);
+
+  // ✅ CONFIGURAR ESCUCHA DE NOTIFICACIONES
+  useEffect(() => {
+    const { subscription, responseSubscription } = notificacionService.escucharNotificaciones();
+    console.log('✅ Escucha de notificaciones activada');
+
+    return () => {
+      subscription.remove();
+      responseSubscription.remove();
+      console.log('✅ Escucha de notificaciones desactivada');
+    };
+  }, []);
+
+  // ✅ CONFIGURACIÓN DE NOTIFICACIONES (registro de token)
   useEffect(() => {
     const configurarNotificaciones = async () => {
       try {
@@ -250,39 +222,28 @@ export default function App() {
     configurarNotificaciones();
   }, [sesion, perfil]);
 
-  // ✅ NAVIGATIONBAR
+  // ✅ NAVIGATIONBAR - CONFIGURACIÓN ANDROID
   useEffect(() => {
     const setupNavigationBar = async () => {
       if (Platform.OS === 'android') {
         try {
-          console.log('📋 Métodos disponibles en NavigationBar:', Object.keys(NavigationBar));
-
           const navBar = NavigationBar as any;
 
-          if (typeof navBar.setStyle === 'function') {
-            await navBar.setStyle('dark');
-            console.log('✅ NavigationBar configurada con setStyle');
-          } else if (typeof navBar.setBackgroundColorAsync === 'function') {
-            await navBar.setBackgroundColorAsync(Colores.fondoOscuro);
+          if (typeof navBar.setBackgroundColorAsync === 'function') {
+            await navBar.setBackgroundColorAsync(temaApp.fondo);
             await navBar.setButtonStyleAsync('light');
-            console.log('✅ NavigationBar configurada (versión Async)');
+            console.log('✅ NavigationBar configurada (Async)');
           } else if (typeof navBar.setBackgroundColor === 'function') {
-            await navBar.setBackgroundColor(Colores.fondoOscuro);
+            await navBar.setBackgroundColor(temaApp.fondo);
             if (typeof navBar.setButtonStyle === 'function') {
               await navBar.setButtonStyle('light');
-            } else if (typeof navBar.setBarStyle === 'function') {
-              await navBar.setBarStyle('light');
             }
-            console.log('✅ NavigationBar configurada (versión estándar)');
-          } else if (typeof navBar.setNavigationBarColors === 'function') {
-            await navBar.setNavigationBarColors({
-              backgroundColor: Colores.fondoOscuro,
-              buttonStyle: 'light',
-            });
-            console.log('✅ NavigationBar configurada (versión antigua)');
+            console.log('✅ NavigationBar configurada (estándar)');
+          } else if (typeof navBar.setStyle === 'function') {
+            await navBar.setStyle('dark');
+            console.log('✅ NavigationBar configurada (setStyle)');
           } else {
-            console.warn('⚠️ No se encontró ningún método compatible para NavigationBar');
-            console.log('📋 Métodos disponibles:', Object.keys(navBar));
+            console.warn('⚠️ No se encontró método compatible para NavigationBar');
           }
         } catch (error) {
           console.warn('⚠️ Error configurando barra de navegación:', error);
@@ -295,45 +256,60 @@ export default function App() {
     cargarCarrito();
   }, []);
 
-  // ✅ MANEJO DE DEEP LINKING - MEJORADO
+  /*/ ✅ MANEJO DE DEEP LINKING (con soporte para cupones)
   useEffect(() => {
-    // ✅ Función para procesar el deep link correctamente
     const procesarDeepLink = (url: string) => {
       console.log('🔗 Procesando Deep Link:', url);
 
       if (!url) return;
 
-      // Buscar token en la URL
       const tokenMatch = url.match(/token=([^&]+)/);
+      const codigoMatch = url.match(/codigo=([^&]+)/);
 
+      / ✅ Deep link para reset-password
       if (url.includes('reset-password')) {
         console.log('🔑 Deep Link de reset-password detectado');
 
-        // Si hay token, pasarlo como parámetro
         if (tokenMatch) {
           const token = decodeURIComponent(tokenMatch[1]);
-          console.log('🔑 Token extraído:', token.substring(0, 30) + '...');
+          console.log('🔑 Token extraído');
 
           setTimeout(() => {
             navigationRef.current?.navigate('NuevaContrasena', { token });
           }, 500);
         } else {
-          // Si no hay token, navegar sin él
           console.log('⚠️ No se encontró token en el deep link');
           setTimeout(() => {
             navigationRef.current?.navigate('NuevaContrasena');
           }, 500);
         }
       }
+
+      // ✅ Deep link para cupones
+      if (url.includes('canjear-cupon') || url.includes('cupon')) {
+        console.log('🎫 Deep Link de cupón detectado');
+
+        if (codigoMatch) {
+          const codigo = decodeURIComponent(codigoMatch[1]);
+          console.log('🎫 Código de cupón extraído:', codigo);
+
+          setTimeout(() => {
+            navigationRef.current?.navigate('CanjearCupon', { codigo });
+          }, 500);
+        } else {
+          console.log('⚠️ No se encontró código en el deep link');
+          setTimeout(() => {
+            navigationRef.current?.navigate('CanjearCupon');
+          }, 500);
+        }
+      }
     };
 
-    // ✅ Escuchar eventos de deep link cuando la app está abierta
     const subscription = Linking.addEventListener('url', (event) => {
       console.log('🔗 Evento de Deep Link recibido:', event.url);
       procesarDeepLink(event.url);
     });
 
-    // ✅ Obtener URL inicial si la app se abrió con un deep link
     Linking.getInitialURL().then((url) => {
       if (url) {
         console.log('🔗 App abierta con deep link inicial:', url);
@@ -346,8 +322,9 @@ export default function App() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, []);*/
 
+  // ✅ REDIRECCIÓN POR SESIÓN
   useEffect(() => {
     if (!sesion && !cargando && navigationRef.current) {
       console.log('🔄 Redirigiendo a login (sesión cerrada)');
@@ -360,8 +337,8 @@ export default function App() {
 
   if (cargando) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colores.fondoOscuro }}>
-        <ActivityIndicator size="large" color={Colores.primario} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: temaApp.fondo }}>
+        <ActivityIndicator size="large" color={temaApp.secundario} />
       </View>
     );
   }
@@ -391,6 +368,14 @@ export default function App() {
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="NotificacionesUsuario"
+              component={PantallaNotificacionesUsuario}
+              options={{ headerShown: false }}
+            />
+            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES */}
+            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
+            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
           </>
         ) : esAdministrador ? (
           // ============================================================
@@ -406,7 +391,14 @@ export default function App() {
             <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
             <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
             <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
-            <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="NotificacionesAdmin"
+              component={PantallaNotificacionesAdmin}
+              options={{ headerShown: false }}
+            />
+            {/* ✅ PANTALLAS DE GESTIÓN DE CUPONES PARA ADMIN */}
+            {/* <Stack.Screen name="GestionCupones" component={PantallaGestionCupones} options={{ headerShown: false }} /> */}
+            {/* <Stack.Screen name="DetalleCuponAdmin" component={PantallaDetalleCuponAdmin} options={{ headerShown: false }} /> */}
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
             <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
@@ -414,7 +406,14 @@ export default function App() {
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="NotificacionesUsuario"
+              component={PantallaNotificacionesUsuario}
+              options={{ headerShown: false }}
+            />
+            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES (también en admin) */}
+            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
+            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
           </>
         ) : esRepartidor ? (
           // ============================================================
@@ -433,72 +432,17 @@ export default function App() {
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="NotificacionesUsuario"
+              component={PantallaNotificacionesUsuario}
+              options={{ headerShown: false }}
+            />
+            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES */}
+            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
+            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
-
-// ============================================================
-// 🎨 ESTILOS DE LA BARRA INFERIOR
-// ============================================================
-const estilos = StyleSheet.create({
-  iconoContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  badgeContainer: {
-    position: 'absolute',
-    top: -6,
-    right: -10,
-    backgroundColor: Colores.secundario,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: Colores.textoOscuro,
-    elevation: 3,
-    shadowColor: Colores.textoOscuro,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-  },
-  badgeTexto: {
-    color: Colores.textoClaro,
-    fontSize: 9,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    includeFontPadding: false,
-  },
-  tabButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  tabButtonActivo: {},
-  tabButtonContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -10,
-    left: '50%',
-    transform: [{ translateX: -15 }],
-    width: 30,
-    height: 3,
-  },
-  tabIndicatorLine: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 2,
-  },
-});

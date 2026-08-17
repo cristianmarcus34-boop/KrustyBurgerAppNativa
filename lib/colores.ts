@@ -1,5 +1,200 @@
 // lib/colores.ts
 
+// ============================================================
+// 🎨 SISTEMA DE DISEÑO COMPLETO
+// ============================================================
+
+// ============================================================
+// 📐 TAMAÑOS Y ESPACIADOS
+// ============================================================
+export const Sizes = {
+  // Espaciados
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    '2xl': 48,
+    '3xl': 64,
+  },
+  // Radios de borde
+  radius: {
+    xs: 4,
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    '2xl': 28,
+    full: 999,
+  },
+  // Tamaños de iconos
+  icon: {
+    xs: 12,
+    sm: 16,
+    md: 20,
+    lg: 24,
+    xl: 28,
+    '2xl': 32,
+    '3xl': 40,
+  },
+  // Tamaños de avatar
+  avatar: {
+    sm: 32,
+    md: 44,
+    lg: 56,
+    xl: 72,
+    '2xl': 96,
+  },
+  // Altura de componentes
+  height: {
+    input: 48,
+    button: 50,
+    buttonLarge: 56,
+    header: 64,
+    tabBar: 72,
+  },
+  // Anchos máximos
+  maxWidth: {
+    container: 480,
+    card: 360,
+    modal: 400,
+  },
+};
+
+// ============================================================
+// 📝 TIPOGRAFÍA
+// ============================================================
+export const Typography = {
+  fontFamily: {
+    regular: 'System',
+    medium: 'System',
+    bold: 'System',
+  },
+  fontSize: {
+    xs: 10,
+    sm: 12,
+    md: 14,
+    lg: 16,
+    xl: 18,
+    '2xl': 22,
+    '3xl': 26,
+    '4xl': 32,
+    '5xl': 40,
+  },
+  lineHeight: {
+    xs: 14,
+    sm: 16,
+    md: 20,
+    lg: 22,
+    xl: 26,
+    '2xl': 30,
+    '3xl': 34,
+    '4xl': 42,
+    '5xl': 50,
+  },
+  fontWeight: {
+    thin: '100' as const,
+    light: '300' as const,
+    regular: '400' as const,
+    medium: '500' as const,
+    semibold: '600' as const,
+    bold: '700' as const,
+    extrabold: '800' as const,
+  },
+  letterSpacing: {
+    tight: -0.5,
+    normal: 0,
+    wide: 0.5,
+    wider: 1,
+  },
+};
+
+// ============================================================
+// 🌓 SOMBRAS
+// ============================================================
+export const Shadows = {
+  // Sombras claras (modo claro)
+  light: {
+    xs: {
+      shadowColor: 'rgba(0,0,0,0.04)',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 1,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    sm: {
+      shadowColor: 'rgba(0,0,0,0.06)',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    md: {
+      shadowColor: 'rgba(0,0,0,0.08)',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    lg: {
+      shadowColor: 'rgba(0,0,0,0.10)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    xl: {
+      shadowColor: 'rgba(0,0,0,0.12)',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+  },
+  // Sombras oscuras (modo oscuro)
+  dark: {
+    xs: {
+      shadowColor: 'rgba(0,0,0,0.2)',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 1,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    sm: {
+      shadowColor: 'rgba(0,0,0,0.3)',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    md: {
+      shadowColor: 'rgba(0,0,0,0.4)',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    lg: {
+      shadowColor: 'rgba(0,0,0,0.5)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    xl: {
+      shadowColor: 'rgba(0,0,0,0.6)',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+  },
+};
+
+// ============================================================
+// 🎨 COLORES COMPLETOS
+// ============================================================
 export const Colores = {
   // ============================================================
   // 🟡 COLORES PRINCIPALES - SIMPSONS
@@ -138,28 +333,31 @@ export const Colores = {
   fondoOscuro: '#1A1A1A',
   fondoOscuroClaro: '#2A2A2A',
   fondoTarjeta: '#2A2A2A',
-  fondoClaro: '#FFF8E1',
+  fondoClaro: '#F5F2ED',
   fondoBlanco: '#FFFFFF',
 
   // ============================================================
   // ✏️ TEXTOS
   // ============================================================
-  textoOscuro: '#0A0A0A',
+  textoOscuro: '#1A1A1A',
   textoClaro: '#FFFFFF',
   textoGris: '#B0B0B0',
+  textoGrisOscuro: '#6B6B6B',
   textoAmarillo: '#F5C518',
   textoRojo: '#E53935',
 
   // ============================================================
   // 🎯 ESTADOS DE PEDIDOS
   // ============================================================
-  pendiente: '#F5C518',
-  confirmado: '#3949AB',
-  preparando: '#FF6F00',
-  listo: '#43A047',
-  enCamino: '#7B1FA2',
-  entregado: '#43A047',
-  cancelado: '#E53935',
+  estado: {
+    pendiente: '#F5C518',
+    confirmado: '#3949AB',
+    preparando: '#FF6F00',
+    listo: '#43A047',
+    enCamino: '#7B1FA2',
+    entregado: '#43A047',
+    cancelado: '#E53935',
+  },
 
   // ============================================================
   // 🏅 RECOMPENSAS
@@ -182,11 +380,148 @@ export const Colores = {
   // ============================================================
   // 🎨 GRADIENTES DE PERSONAJES
   // ============================================================
-  gradientGorgory: ['#1A237E', '#78909C'] as const,    // Azul → Gris
-  gradientFrink: ['#F5F5F5', '#9E9E9E'] as const,      // Blanco → Gris
-  gradientHomero: ['#1A237E', '#F5C518'] as const,     // Azul → Amarillo
-  gradientMarge: ['#43A047', '#F48FB1'] as const,      // Verde → Rosa
-  gradientBart: ['#FF6F00', '#E53935'] as const,       // Naranja → Rojo
-  gradientLisa: ['#7B1FA2', '#F48FB1'] as const,       // Morado → Rosa
-  gradientBurns: ['#43A047', '#FFD700'] as const,      // Verde → Dorado
+  gradientGorgory: ['#1A237E', '#78909C'] as const,
+  gradientFrink: ['#F5F5F5', '#9E9E9E'] as const,
+  gradientHomero: ['#1A237E', '#F5C518'] as const,
+  gradientMarge: ['#43A047', '#F48FB1'] as const,
+  gradientBart: ['#FF6F00', '#E53935'] as const,
+  gradientLisa: ['#7B1FA2', '#F48FB1'] as const,
+  gradientBurns: ['#43A047', '#FFD700'] as const,
+  gradientKrustyCompleto: ['#E53935', '#F5C518', '#FF6F00'] as const,
+
+  // ============================================================
+  // 🆕 TEMÁTICAS UNIFICADAS
+  // ============================================================
+  tematicas: {
+    bart: {
+      primario: '#FF6F00',
+      secundario: '#E53935',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#FF6F00', '#E53935'] as const,
+    },
+    lisa: {
+      primario: '#7B1FA2',
+      secundario: '#F48FB1',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#7B1FA2', '#F48FB1'] as const,
+    },
+    burns: {
+      primario: '#43A047',
+      secundario: '#FFD700',
+      fondo: '#0A0A0A',
+      texto: '#F5F5F5',
+      gradiente: ['#43A047', '#FFD700'] as const,
+    },
+    homero: {
+      primario: '#F5C518',
+      secundario: '#1A237E',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#1A237E', '#F5C518'] as const,
+    },
+    marge: {
+      primario: '#43A047',
+      secundario: '#F48FB1',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#43A047', '#F48FB1'] as const,
+    },
+    krusty: {
+      primario: '#E53935',
+      secundario: '#F5C518',
+      verde: '#43A047',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#E53935', '#43A047'] as const,
+    },
+    frink: {
+      primario: '#42A5F5',
+      secundario: '#FDD835',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#42A5F5', '#FDD835'] as const,
+    },
+    springfield: {
+      primario: '#43A047',
+      secundario: '#42A5F5',
+      fondo: '#1A1A1A',
+      texto: '#FFFFFF',
+      gradiente: ['#43A047', '#42A5F5'] as const,
+    },
+    // ✅ NUEVA TEMÁTICA CLARA
+    claro: {
+      primario: '#E53935',
+      secundario: '#F5C518',
+      fondo: '#F5F2ED',
+      fondoCard: '#FFFFFF',
+      texto: '#1A1A1A',
+      textoSecundario: 'rgba(0,0,0,0.55)',
+      textoTerciario: 'rgba(0,0,0,0.30)',
+      gradiente: ['#E53935', '#F5C518'] as const,
+      sombra: 'rgba(0,0,0,0.06)',
+      borde: 'rgba(0,0,0,0.06)',
+    },
+    // ✅ NUEVA TEMÁTICA OSCURA
+    oscuro: {
+      primario: '#E53935',
+      secundario: '#F5C518',
+      fondo: '#0D0D0D',
+      fondoCard: 'rgba(255,255,255,0.04)',
+      texto: '#FFFFFF',
+      textoSecundario: 'rgba(255,255,255,0.6)',
+      textoTerciario: 'rgba(255,255,255,0.3)',
+      gradiente: ['#E53935', '#F5C518'] as const,
+      sombra: 'rgba(0,0,0,0.3)',
+      borde: 'rgba(255,255,255,0.06)',
+    },
+  },
 };
+
+// ============================================================
+// 🎯 TIPOS Y FUNCIONES
+// ============================================================
+
+// ✅ TIPO: Claves válidas para las temáticas
+export type PersonajeKey = keyof typeof Colores.tematicas;
+
+// ✅ TIPO: Una temática (con propiedades adicionales permitidas)
+export type Tematica = {
+  primario: string;
+  secundario: string;
+  fondo: string;
+  texto: string;
+  gradiente: readonly [string, string];
+  // ✅ Permite propiedades adicionales sin errores
+  [key: string]: any;
+};
+
+// ✅ FUNCIÓN: Obtener temática por personaje
+export const getTematica = (personaje: PersonajeKey): Tematica => {
+  return Colores.tematicas[personaje] || Colores.tematicas.krusty;
+};
+
+// ✅ FUNCIÓN: Obtener temática con fallback seguro
+export const getTematicaConFallback = (personaje: string): Tematica => {
+  if (personaje in Colores.tematicas) {
+    return Colores.tematicas[personaje as PersonajeKey];
+  }
+  return Colores.tematicas.krusty;
+};
+
+// ✅ FUNCIÓN: Obtener temática clara
+export const getTematicaClara = (): Tematica => {
+  return Colores.tematicas.claro;
+};
+
+// ✅ FUNCIÓN: Obtener temática oscura
+export const getTematicaOscura = (): Tematica => {
+  return Colores.tematicas.oscuro;
+};
+
+// ✅ TIPOS EXISTENTES
+export type ColorKey = keyof typeof Colores;
+export type EstadoColor = keyof typeof Colores.estado;
+
+export default Colores;
