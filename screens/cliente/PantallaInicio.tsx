@@ -279,11 +279,7 @@ export default function PantallaInicio(props: any) {
       >
         <View style={styles.categoriaImageContainer}>
           <Image source={item.imagen} style={styles.categoriaImagen} resizeMode="cover" />
-          {cantidadMostrar > 0 && (
-            <View style={[styles.categoriaBadge, { backgroundColor: item.color }]}>
-              <Text style={styles.categoriaBadgeText}>{cantidadMostrar}</Text>
-            </View>
-          )}
+
         </View>
         <View style={styles.categoriaInfo}>
           <Text style={[styles.categoriaNombre, { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }]} numberOfLines={1}>
