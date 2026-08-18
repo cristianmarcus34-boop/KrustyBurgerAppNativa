@@ -1,4 +1,4 @@
-// screens/admin/PantallaGestionOfertas.tsx
+// screens/admin/PantallaGestionOfertas.tsx - ESTILO BLANCO Y ELEGANTE
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View,
@@ -16,37 +16,95 @@ import {
     Switch,
     Image,
     Platform,
-    ActivityIndicator
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
+import { Colores, getTematica } from '../../lib/colores';
 import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
-// 🎨 PALETA DE COLORES
+// 🎨 SISTEMA DE DISEÑO - BLANCO Y ELEGANTE
 // ============================================================
-const COLORS = {
-    amarillo: '#F5C518',
-    amarilloClaro: '#FFE066',
-    amarilloOscuro: '#D4A800',
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
+const DESIGN = {
+    colors: {
+        fondo: '#F5F2ED',
+        surface: '#FFFFFF',
+        surfaceHover: '#F8F6F2',
+        card: '#FFFFFF',
+        cardShadow: 'rgba(0,0,0,0.06)',
+        cardShadowHeavy: 'rgba(0,0,0,0.08)',
+        border: 'rgba(0,0,0,0.06)',
+        borderLight: 'rgba(0,0,0,0.04)',
+        text: '#1A1A1A',
+        textSecondary: 'rgba(0,0,0,0.55)',
+        textTertiary: 'rgba(0,0,0,0.30)',
+        accent: '#E53935',
+        accentLight: '#FF6B6B',
+        accentSecondary: '#F5C518',
+        accentSecondaryLight: '#FFE135',
+        gradientStart: '#E53935',
+        gradientEnd: '#F5C518',
+        verde: '#43A047',
+        verdeClaro: '#66BB6A',
+        rosa: '#EC407A',
+        azul: '#1A237E',
+        platino: '#78909C',
+        oro: '#F9A825',
+        plata: '#BDBDBD',
+        bronce: '#A1887F',
+    },
+    spacing: {
+        xs: 4,
+        sm: 8,
+        md: 16,
+        lg: 24,
+        xl: 32,
+        '2xl': 48,
+    },
+    radius: {
+        sm: 8,
+        md: 12,
+        lg: 16,
+        xl: 20,
+        full: 999,
+    },
 };
 
 const { width, height } = Dimensions.get('window');
 
-// ✅ INTERFAZ
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+    const { width, height } = useWindowDimensions();
+    const isTablet = width >= 768;
+    const isDesktop = width >= 1024;
+    const isSmallPhone = width < 375;
+
+    const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+        if (isDesktop || isTablet) return valores.tablet;
+        if (isSmallPhone) return valores.small;
+        return valores.normal;
+    }, [isDesktop, isTablet, isSmallPhone]);
+
+    const spacing = (base: number) => {
+        if (isTablet) return base * 1.5;
+        if (isSmallPhone) return base * 0.75;
+        return base;
+    };
+
+    return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+};
+
+// ============================================================
+// 📋 INTERFAZ
+// ============================================================
 interface Oferta {
     id: number;
     titulo: string;
@@ -61,9 +119,16 @@ interface Oferta {
     created_at?: string;
 }
 
+// ============================================================
+// 🏠 COMPONENTE PRINCIPAL
+// ============================================================
 export default function PantallaGestionOfertas(props: any) {
-    console.log('🔄 [PantallaGestionOfertas] Componente montado');
+    const responsive = useResponsive();
+    const insets = useSafeAreaInsets();
 
+    // ============================================================
+    // 📦 ESTADOS
+    // ============================================================
     const [ofertas, setOfertas] = useState<Oferta[]>([]);
     const [cargando, setCargando] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
@@ -86,14 +151,14 @@ export default function PantallaGestionOfertas(props: any) {
     const [imagenCargando, setImagenCargando] = useState(false);
     const [imagenTimestamp, setImagenTimestamp] = useState(0);
 
-    const insets = useSafeAreaInsets();
-
     // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
 
+    // ============================================================
+    // 🎬 EFECTOS
+    // ============================================================
     useEffect(() => {
-        console.log('📱 [PantallaGestionOfertas] useEffect ejecutado');
         cargarOfertas();
         Animated.parallel([
             Animated.timing(fadeAnim, {
@@ -108,24 +173,15 @@ export default function PantallaGestionOfertas(props: any) {
             }),
         ]).start();
 
-        solicitarPermisos();
+        if (Platform.OS !== 'web') {
+            ImagePicker.requestMediaLibraryPermissionsAsync();
+        }
     }, []);
 
-    const solicitarPermisos = async () => {
-        console.log('📷 [PantallaGestionOfertas] Solicitando permisos de galería');
-        if (Platform.OS !== 'web') {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                console.warn('⚠️ [PantallaGestionOfertas] Permisos de galería denegados');
-                Alert.alert('Permisos', 'Se necesitan permisos para acceder a la galería');
-            } else {
-                console.log('✅ [PantallaGestionOfertas] Permisos de galería concedidos');
-            }
-        }
-    };
-
+    // ============================================================
+    // 🔄 FUNCIONES CRUD
+    // ============================================================
     const cargarOfertas = async () => {
-        console.log('🔄 [Admin] Cargando ofertas...');
         try {
             const { data, error } = await supabase
                 .from('ofertas')
@@ -136,11 +192,6 @@ export default function PantallaGestionOfertas(props: any) {
                 console.error('❌ Error cargando ofertas:', error);
                 setOfertas([]);
             } else {
-                console.log(`📦 [Admin] Ofertas cargadas: ${data?.length || 0}`);
-                data?.forEach((item, index) => {
-                    console.log(`🖼️ [Admin] Oferta ${index + 1} - ${item.titulo}: imagen = ${item.imagen || 'Sin imagen'}`);
-                    console.log(`💰 [Admin] Precios: original=${item.precio_original}, oferta=${item.precio_oferta}`);
-                });
                 setOfertas(data as Oferta[] || []);
             }
         } catch (error) {
@@ -149,30 +200,25 @@ export default function PantallaGestionOfertas(props: any) {
         } finally {
             setCargando(false);
             setRefrescando(false);
-            console.log('🏁 [Admin] Carga de ofertas finalizada');
         }
     };
 
     const manejarRefresh = useCallback(() => {
-        console.log('🔄 [Admin] Refrescando ofertas (pull-to-refresh)');
         setRefrescando(true);
         cargarOfertas();
     }, []);
 
-    // ✅ SUBIR IMAGEN
+    // ============================================================
+    // 📷 SUBIR IMAGEN
+    // ============================================================
     const subirImagen = async (file: File) => {
-        if (!file) {
-            console.warn('⚠️ [Admin] No se proporcionó archivo para subir');
-            return;
-        }
+        if (!file) return;
 
         setSubiendoImagen(true);
         setImagenCargando(true);
-        console.log('📤 [Admin] Iniciando subida de imagen:', file.name);
 
         try {
             const nombreArchivo = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-            console.log(`📤 [Admin] Nombre de archivo generado: ${nombreArchivo}`);
 
             const { error } = await supabase.storage
                 .from('ofertas_imagenes')
@@ -186,30 +232,7 @@ export default function PantallaGestionOfertas(props: any) {
                 console.error('❌ Error subiendo imagen:', error);
                 setSubiendoImagen(false);
                 setImagenCargando(false);
-
-                if (error.message && error.message.includes('row-level security')) {
-                    Alert.alert(
-                        '❌ Error de permisos (RLS)',
-                        'Las políticas de seguridad están bloqueando la subida.\n\n' +
-                        '📌 SOLUCIÓN RÁPIDA:\n' +
-                        '1. Ve a Supabase → Storage → Buckets\n' +
-                        '2. Haz clic en "ofertas_imagenes"\n' +
-                        '3. Ve a "Settings" (Configuración)\n' +
-                        '4. Desactiva "Row Level Security (RLS)"',
-                        [{ text: 'OK' }]
-                    );
-                } else if (error.message && error.message.includes('bucket')) {
-                    Alert.alert(
-                        '❌ Bucket no encontrado',
-                        'El bucket "ofertas_imagenes" no existe.\n\n' +
-                        '1. Ve a Supabase → Storage → Buckets\n' +
-                        '2. Crea un bucket llamado "ofertas_imagenes"\n' +
-                        '3. Activa "Public bucket"',
-                        [{ text: 'OK' }]
-                    );
-                } else {
-                    Alert.alert('Error', 'No se pudo subir la imagen: ' + error.message);
-                }
+                Alert.alert('Error', 'No se pudo subir la imagen: ' + error.message);
                 return;
             }
 
@@ -217,19 +240,12 @@ export default function PantallaGestionOfertas(props: any) {
                 .from('ofertas_imagenes')
                 .getPublicUrl(nombreArchivo);
 
-            console.log('✅ URL pública obtenida:', urlData.publicUrl);
-
             const nuevaUrl = urlData.publicUrl;
             setImagen(nuevaUrl);
             setImagenUri(nuevaUrl);
             setImagenTimestamp(Date.now());
             setImagenCargando(false);
             setSubiendoImagen(false);
-
-            console.log('✅ Imagen subida correctamente. URL guardada en estado.');
-            console.log('📦 imagen:', nuevaUrl);
-            console.log('📦 imagenUri:', nuevaUrl);
-
             setModalKey(prev => prev + 1);
 
             Alert.alert('✅ Éxito', 'Imagen subida correctamente');
@@ -241,22 +257,18 @@ export default function PantallaGestionOfertas(props: any) {
         }
     };
 
-    // ✅ SELECCIONAR IMAGEN
+    // ============================================================
+    // 📷 SELECCIONAR IMAGEN
+    // ============================================================
     const seleccionarImagen = async () => {
-        console.log('📷 [Admin] Iniciando selección de imagen');
         try {
             if (Platform.OS === 'web') {
-                console.log('🌐 [Admin] Modo web - usando input file');
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = 'image/*';
                 input.onchange = async (e: any) => {
                     const file = e.target.files[0];
-                    if (!file) {
-                        console.warn('⚠️ [Admin] No se seleccionó ningún archivo');
-                        return;
-                    }
-                    console.log('📄 [Admin] Archivo seleccionado:', file.name);
+                    if (!file) return;
 
                     const reader = new FileReader();
                     reader.onload = (event) => {
@@ -264,14 +276,13 @@ export default function PantallaGestionOfertas(props: any) {
                         setImagenUri(base64);
                         setImagen(base64);
                         setImagenTimestamp(Date.now());
-                        console.log('✅ [Admin] Vista previa generada en base64');
                     };
                     reader.readAsDataURL(file);
 
                     try {
                         await subirImagen(file);
                     } catch (error) {
-                        console.log('⚠️ No se pudo subir a Supabase, pero la preview local está visible');
+                        console.log('⚠️ No se pudo subir a Supabase');
                     }
                 };
                 input.click();
@@ -288,7 +299,6 @@ export default function PantallaGestionOfertas(props: any) {
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const asset = result.assets[0];
-                console.log('📄 [Admin] Imagen seleccionada desde galería:', asset.uri);
 
                 let uriParaPreview = asset.uri;
                 if (asset.base64) {
@@ -298,7 +308,6 @@ export default function PantallaGestionOfertas(props: any) {
                 setImagenUri(uriParaPreview);
                 setImagen(uriParaPreview);
                 setImagenTimestamp(Date.now());
-                console.log('✅ [Admin] Vista previa establecida inmediatamente');
 
                 if (asset.uri) {
                     try {
@@ -307,7 +316,6 @@ export default function PantallaGestionOfertas(props: any) {
                         const fileType = asset.mimeType || 'image/jpeg';
                         const extension = fileType.split('/')[1] || 'jpg';
                         const file = new File([blob], `oferta_${Date.now()}.${extension}`, { type: fileType });
-                        console.log('📤 [Admin] Subiendo archivo:', file.name);
                         await subirImagen(file);
                     } catch (error) {
                         console.log('⚠️ No se pudo subir a Supabase, usando vista previa local');
@@ -315,8 +323,6 @@ export default function PantallaGestionOfertas(props: any) {
                         setSubiendoImagen(false);
                     }
                 }
-            } else {
-                console.log('ℹ️ [Admin] Selección de imagen cancelada por el usuario');
             }
         } catch (error) {
             console.error('❌ Error seleccionando imagen:', error);
@@ -324,9 +330,10 @@ export default function PantallaGestionOfertas(props: any) {
         }
     };
 
+    // ============================================================
+    // 📝 FORMULARIO
+    // ============================================================
     const abrirFormulario = (oferta?: Oferta) => {
-        console.log('📝 [Admin] Abriendo formulario:', oferta ? `Editar oferta ${oferta.id}` : 'Nueva oferta');
-
         setTitulo('');
         setDescripcion('');
         setDescuento('');
@@ -356,30 +363,24 @@ export default function PantallaGestionOfertas(props: any) {
                 setImagenTimestamp(Date.now());
                 setModalKey(prev => prev + 1);
                 setModalVisible(true);
-                console.log('✅ [Admin] Datos de oferta cargados en formulario');
-                console.log('🖼️ [Admin] Imagen de oferta:', oferta.imagen || 'Sin imagen');
             }, 100);
         } else {
             setOfertaEditando(null);
             setModalKey(prev => prev + 1);
             setModalVisible(true);
-            console.log('✅ [Admin] Formulario de nueva oferta listo');
         }
     };
 
-    // ✅ GUARDAR OFERTA
+    // ============================================================
+    // 💾 GUARDAR OFERTA
+    // ============================================================
     const guardarOferta = async () => {
-        console.log('💾 [Admin] Intentando guardar oferta');
-
         if (!titulo || !descuento || !precioOriginal || !precioOferta) {
-            console.warn('⚠️ [Admin] Campos obligatorios faltantes');
             Alert.alert('Error', 'Completa todos los campos obligatorios');
             return;
         }
 
         const urlImagenFinal = imagenUri || imagen || null;
-
-        console.log('📦 [Admin] Guardando oferta con imagen:', urlImagenFinal);
 
         const datos = {
             titulo,
@@ -393,33 +394,25 @@ export default function PantallaGestionOfertas(props: any) {
             imagen: urlImagenFinal,
         };
 
-        console.log('📦 [Admin] Datos completos a guardar:', datos);
-
         try {
             if (ofertaEditando) {
-                console.log(`🔄 [Admin] Actualizando oferta ID: ${ofertaEditando.id}`);
                 const { error } = await supabase
                     .from('ofertas')
                     .update(datos)
                     .eq('id', ofertaEditando.id);
                 if (error) {
-                    console.error('❌ Error actualizando oferta:', error);
                     Alert.alert('Error', 'No se pudo actualizar la oferta: ' + error.message);
                     return;
                 }
-                console.log('✅ [Admin] Oferta actualizada correctamente');
                 Alert.alert('Éxito', 'Oferta actualizada correctamente');
             } else {
-                console.log('➕ [Admin] Creando nueva oferta');
                 const { error } = await supabase
                     .from('ofertas')
                     .insert(datos);
                 if (error) {
-                    console.error('❌ Error creando oferta:', error);
                     Alert.alert('Error', 'No se pudo crear la oferta: ' + error.message);
                     return;
                 }
-                console.log('✅ [Admin] Oferta creada correctamente');
                 Alert.alert('Éxito', 'Oferta creada correctamente');
             }
 
@@ -437,8 +430,10 @@ export default function PantallaGestionOfertas(props: any) {
         }
     };
 
+    // ============================================================
+    // 🗑️ ELIMINAR OFERTA
+    // ============================================================
     const eliminarOferta = (id: number, titulo: string) => {
-        console.log(`🗑️ [Admin] Intentando eliminar oferta ID: ${id}, Título: "${titulo}"`);
         Alert.alert(
             'Eliminar oferta',
             `¿Estás seguro de eliminar "${titulo}"?`,
@@ -448,17 +443,14 @@ export default function PantallaGestionOfertas(props: any) {
                     text: 'Eliminar',
                     style: 'destructive',
                     onPress: async () => {
-                        console.log(`🗑️ [Admin] Confirmada eliminación de oferta ID: ${id}`);
                         const { error } = await supabase
                             .from('ofertas')
                             .delete()
                             .eq('id', id);
                         if (error) {
-                            console.error('❌ Error eliminando oferta:', error);
                             Alert.alert('Error', 'No se pudo eliminar la oferta');
                             return;
                         }
-                        console.log('✅ [Admin] Oferta eliminada correctamente');
                         cargarOfertas();
                         Alert.alert('Éxito', 'Oferta eliminada correctamente');
                     }
@@ -467,23 +459,26 @@ export default function PantallaGestionOfertas(props: any) {
         );
     };
 
+    // ============================================================
+    // 🔄 TOGGLE ACTIVA
+    // ============================================================
     const toggleActiva = async (id: number, estadoActual: boolean) => {
         const nuevoEstado = !estadoActual;
-        console.log(`🔄 [Admin] Cambiando estado de oferta ID: ${id} de ${estadoActual} a ${nuevoEstado}`);
         const { error } = await supabase
             .from('ofertas')
             .update({ activa: nuevoEstado })
             .eq('id', id);
         if (!error) {
-            console.log('✅ [Admin] Estado actualizado correctamente');
             cargarOfertas();
         } else {
             console.error('❌ Error cambiando estado:', error);
         }
     };
 
+    // ============================================================
+    // ❌ CERRAR MODAL
+    // ============================================================
     const cerrarModal = () => {
-        console.log('❌ [Admin] Cerrando modal');
         setModalVisible(false);
         setTimeout(() => {
             setTitulo('');
@@ -499,12 +494,14 @@ export default function PantallaGestionOfertas(props: any) {
             setImagenCargando(false);
             setSubiendoImagen(false);
             setOfertaEditando(null);
-            console.log('🧹 [Admin] Formulario limpiado');
         }, 300);
     };
 
-    const isTablet = width >= 768;
-    const isSmallPhone = width < 375;
+    // ============================================================
+    // 📐 RESPONSIVE
+    // ============================================================
+    const isTablet = responsive.isTablet;
+    const isSmallPhone = responsive.isSmallPhone;
 
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
@@ -521,25 +518,17 @@ export default function PantallaGestionOfertas(props: any) {
     };
 
     const obtenerUrlImagen = () => {
-        if (imagenUri) {
-            console.log('🔍 [Admin] Usando imagenUri:', imagenUri.substring(0, 50) + '...');
-            return imagenUri;
-        }
-        if (imagen) {
-            console.log('🔍 [Admin] Usando imagen:', imagen.substring(0, 50) + '...');
-            return imagen;
-        }
-        console.log('🔍 [Admin] Sin imagen disponible');
+        if (imagenUri) return imagenUri;
+        if (imagen) return imagen;
         return null;
     };
 
     const urlImagenPreview = obtenerUrlImagen();
 
-    // ✅ RENDER OFERTA - CON IMAGEN MÁS GRANDE
+    // ============================================================
+    // 🖼️ RENDER DE OFERTA
+    // ============================================================
     const renderOferta = ({ item, index }: { item: Oferta; index: number }) => {
-        console.log(`🖼️ [Render] Oferta ${index + 1} - ${item.titulo}: imagen = ${item.imagen || 'Sin imagen'}`);
-
-        const delay = index * 100;
         const itemFade = fadeAnim.interpolate({
             inputRange: [0, 1],
             outputRange: [0.2, 1],
@@ -549,7 +538,6 @@ export default function PantallaGestionOfertas(props: any) {
             outputRange: [20 * (index + 1), 0],
         });
 
-        // ✅ Tamaño de imagen aumentado
         const imagenAltura = isTablet ? 180 : isSmallPhone ? 120 : 150;
 
         return (
@@ -564,13 +552,15 @@ export default function PantallaGestionOfertas(props: any) {
                     {
                         padding: tarjetaPadding,
                         borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
-                        borderColor: item.activa ? COLORS.verdeClaro + '40' : COLORS.grisClaro + '30',
+                        borderColor: item.activa ? DESIGN.colors.verde + '30' : DESIGN.colors.border,
+                        backgroundColor: DESIGN.colors.surface,
                     }
                 ]}>
+                    {/* IMAGEN */}
                     {item.imagen && (
                         <View style={estilos.tarjetaImagenContainer}>
                             <Image
-                                key={item.id + '_' + item.imagen + '_' + Date.now()}
+                                key={item.id + '_' + item.imagen}
                                 source={{ uri: item.imagen }}
                                 style={[
                                     estilos.tarjetaImagen,
@@ -580,15 +570,11 @@ export default function PantallaGestionOfertas(props: any) {
                                     }
                                 ]}
                                 resizeMode="cover"
-                                onError={(e) => {
-                                    console.log('❌ Error cargando imagen en tarjeta:', e.nativeEvent.error);
-                                    console.log('URL que falló:', item.imagen);
-                                }}
-                                onLoad={() => console.log('✅ Imagen cargada en tarjeta:', item.imagen)}
                             />
                         </View>
                     )}
 
+                    {/* HEADER */}
                     <View style={estilos.tarjetaHeader}>
                         <View style={estilos.tarjetaInfo}>
                             <Text style={[estilos.tarjetaTitulo, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
@@ -602,34 +588,35 @@ export default function PantallaGestionOfertas(props: any) {
                             <Switch
                                 value={item.activa}
                                 onValueChange={() => toggleActiva(item.id, item.activa)}
-                                trackColor={{ false: COLORS.gris, true: COLORS.verdeClaro }}
-                                thumbColor={item.activa ? COLORS.blanco : COLORS.blanco}
+                                trackColor={{ false: DESIGN.colors.border, true: DESIGN.colors.verde }}
+                                thumbColor={item.activa ? DESIGN.colors.surface : DESIGN.colors.surface}
                             />
                             <TouchableOpacity
                                 style={[estilos.botonAccion, {
-                                    backgroundColor: COLORS.amarillo + '20',
+                                    backgroundColor: DESIGN.colors.accentSecondary + '15',
                                     padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                     borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                 }]}
                                 onPress={() => abrirFormulario(item)}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="create" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.amarillo} />
+                                <Ionicons name="create" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.accentSecondary} />
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[estilos.botonAccion, {
-                                    backgroundColor: COLORS.rojo + '20',
+                                    backgroundColor: DESIGN.colors.accent + '15',
                                     padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                     borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                 }]}
                                 onPress={() => eliminarOferta(item.id, item.titulo)}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="trash" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.rojo} />
+                                <Ionicons name="trash" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.accent} />
                             </TouchableOpacity>
                         </View>
                     </View>
 
+                    {/* DETALLES */}
                     <View style={estilos.tarjetaDetalles}>
                         <Text style={[estilos.tarjetaDesc, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                             {item.descripcion || 'Sin descripción'}
@@ -661,7 +648,7 @@ export default function PantallaGestionOfertas(props: any) {
                         <View style={[
                             estilos.estadoBadge,
                             {
-                                backgroundColor: item.activa ? COLORS.verdeClaro + '20' : COLORS.grisClaro + '20',
+                                backgroundColor: item.activa ? DESIGN.colors.verde + '12' : DESIGN.colors.surfaceHover,
                                 paddingHorizontal: isTablet ? 12 : isSmallPhone ? 8 : 10,
                                 paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
                                 borderRadius: isTablet ? 12 : isSmallPhone ? 6 : 8,
@@ -673,7 +660,7 @@ export default function PantallaGestionOfertas(props: any) {
                                 estilos.estadoBadgeTexto,
                                 {
                                     fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
-                                    color: item.activa ? COLORS.verdeClaro : COLORS.grisClaro,
+                                    color: item.activa ? DESIGN.colors.verde : DESIGN.colors.textTertiary,
                                 }
                             ]}>
                                 {item.activa ? '✅ Activa' : '❌ Inactiva'}
@@ -685,51 +672,62 @@ export default function PantallaGestionOfertas(props: any) {
         );
     };
 
+    // ============================================================
+    // 🏗️ RENDER PRINCIPAL
+    // ============================================================
+    const conteoActivas = ofertas.filter(o => o.activa).length;
+
     return (
         <View style={estilos.contenedor}>
+            {/* Fondo blanco/crema suave */}
+            <View style={estilos.background} />
+
+            {/* HEADER CON GRADIENTE SUTIL */}
             <LinearGradient
-                colors={[COLORS.verde, COLORS.negro]}
-                style={estilos.fondoGradiente}
+                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                style={estilos.headerGradiente}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-            />
+            >
+                <View style={[
+                    estilos.header,
+                    {
+                        paddingTop: insets.top + (isTablet ? 20 : 10),
+                        paddingHorizontal: paddingHorizontal,
+                        paddingBottom: isTablet ? 16 : 12,
+                    }
+                ]}>
+                    <TouchableOpacity
+                        style={estilos.botonVolver}
+                        onPress={() => props.navigation.goBack()}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
+                    </TouchableOpacity>
 
-            <View style={[
-                estilos.header,
-                {
-                    paddingTop: insets.top + (isTablet ? 20 : 10),
-                    paddingHorizontal: paddingHorizontal,
-                    paddingBottom: isTablet ? 16 : 12,
-                }
-            ]}>
-                <TouchableOpacity
-                    style={estilos.botonVolver}
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
-                </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-                    🎫 Gestionar Ofertas
-                </Text>
-                <TouchableOpacity
-                    style={[estilos.botonAgregar, {
-                        paddingHorizontal: isTablet ? 18 : isSmallPhone ? 12 : 16,
-                        paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                    }]}
-                    onPress={() => abrirFormulario()}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={COLORS.negro} />
-                </TouchableOpacity>
-            </View>
+                    <View style={estilos.headerCentro}>
+                        <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                            🎫 Gestionar Ofertas
+                        </Text>
+                        <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                            {ofertas.length} ofertas · {conteoActivas} activas
+                        </Text>
+                    </View>
 
-            <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal }]}>
-                <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
-                    {ofertas.length} {ofertas.length === 1 ? 'oferta' : 'ofertas'}
-                </Text>
-            </View>
+                    <TouchableOpacity
+                        style={[estilos.botonAgregar, {
+                            paddingHorizontal: isTablet ? 18 : isSmallPhone ? 12 : 16,
+                            paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                        }]}
+                        onPress={() => abrirFormulario()}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={DESIGN.colors.text} />
+                    </TouchableOpacity>
+                </View>
+            </LinearGradient>
 
+            {/* LISTA */}
             <FlatList
                 data={ofertas}
                 keyExtractor={item => item.id.toString()}
@@ -747,13 +745,13 @@ export default function PantallaGestionOfertas(props: any) {
                     <RefreshControl
                         refreshing={refrescando}
                         onRefresh={manejarRefresh}
-                        tintColor={COLORS.amarillo}
-                        colors={[COLORS.amarillo]}
+                        tintColor={DESIGN.colors.accent}
+                        colors={[DESIGN.colors.accent]}
                     />
                 }
                 ListEmptyComponent={
                     <View style={estilos.vacioContenedor}>
-                        <Ionicons name="pricetag-outline" size={isTablet ? 80 : 60} color={COLORS.grisClaro + '30'} />
+                        <Ionicons name="pricetag-outline" size={isTablet ? 80 : 60} color={DESIGN.colors.textTertiary} />
                         <Text style={[estilos.vacio, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
                             No hay ofertas
                         </Text>
@@ -764,7 +762,9 @@ export default function PantallaGestionOfertas(props: any) {
                 }
             />
 
-            {/* ✅ MODAL CON PREVIEW DE IMAGEN MÁS GRANDE */}
+            {/* ============================================================
+            MODAL - FORMULARIO
+            ============================================================ */}
             <Modal
                 key={modalKey}
                 visible={modalVisible}
@@ -773,364 +773,408 @@ export default function PantallaGestionOfertas(props: any) {
                 onRequestClose={cerrarModal}
             >
                 <View style={estilos.modalFondo}>
-                    <LinearGradient
-                        colors={[COLORS.verde, COLORS.negro]}
-                        style={estilos.modalGradiente}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    />
+                    <View style={estilos.modalBackdrop} />
 
-                    <View style={[
-                        estilos.modal,
-                        {
-                            padding: isTablet ? 32 : isSmallPhone ? 16 : 24,
-                            borderRadius: isTablet ? 28 : 24,
-                            width: modalWidth,
-                            maxHeight: isTablet ? '80%' : '85%',
-                            borderColor: COLORS.amarillo + '30',
-                        }
-                    ]}>
-                        <View style={estilos.modalHeader}>
-                            <LinearGradient
-                                colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-                                style={estilos.modalHeaderGradiente}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                            >
-                                <Ionicons name="pricetag" size={isTablet ? 32 : isSmallPhone ? 24 : 28} color={COLORS.negro} />
-                                <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
-                                    {ofertaEditando ? '✏️ Editar Oferta' : '➕ Nueva Oferta'}
-                                </Text>
-                            </LinearGradient>
-                        </View>
-
-                        <ScrollView
-                            style={estilos.modalScroll}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 10 }}
-                        >
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
-                                <Ionicons name="pricetag-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Título *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={titulo}
-                                onChangeText={setTitulo}
-                                placeholder="Ej: 2x1 en Hamburguesas"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Descripción
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, estilos.textArea, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={descripcion}
-                                onChangeText={setDescripcion}
-                                placeholder="Descripción de la oferta"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                multiline
-                                numberOfLines={3}
-                                textAlignVertical="top"
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="flame-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Descuento *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={descuento}
-                                onChangeText={setDescuento}
-                                placeholder="Ej: 20% OFF, 2x1"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="cash-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Precio Original *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={precioOriginal}
-                                onChangeText={setPrecioOriginal}
-                                placeholder="Ej: 9990"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                keyboardType="numeric"
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Precio Oferta *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={precioOferta}
-                                onChangeText={setPrecioOferta}
-                                placeholder="Ej: 7990"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                keyboardType="numeric"
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="calendar-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Fecha Inicio (opcional)
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={fechaInicio}
-                                onChangeText={setFechaInicio}
-                                placeholder="YYYY-MM-DD"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="calendar-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Fecha Fin (opcional)
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={fechaFin}
-                                onChangeText={setFechaFin}
-                                placeholder="YYYY-MM-DD"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            {/* ✅ IMAGEN - PREVIEW MÁS GRANDE */}
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
-                                <Ionicons name="image-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Imagen (opcional)
-                            </Text>
-
-                            <TouchableOpacity
-                                style={[estilos.botonImagen, {
-                                    padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    marginBottom: 10,
-                                }]}
-                                onPress={seleccionarImagen}
-                                activeOpacity={0.7}
-                                disabled={subiendoImagen}
-                            >
-                                {subiendoImagen ? (
-                                    <ActivityIndicator size="small" color={COLORS.amarillo} />
-                                ) : (
-                                    <Ionicons name="images-outline" size={isTablet ? 28 : isSmallPhone ? 20 : 24} color={COLORS.amarillo} />
-                                )}
-                                <Text style={[estilos.botonImagenTexto, {
-                                    fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13,
-                                    color: subiendoImagen ? COLORS.grisClaro : COLORS.amarillo,
-                                }]}>
-                                    {subiendoImagen ? '⏳ Subiendo...' : '📷 Seleccionar imagen de la galería'}
-                                </Text>
-                            </TouchableOpacity>
-
-                            {/* ✅ PREVIEW DE IMAGEN MÁS GRANDE */}
-                            {urlImagenPreview ? (
-                                <View style={estilos.previaImagen}>
-                                    <Image
-                                        key={`preview_${imagenTimestamp}_${Date.now()}`}
-                                        source={{ uri: urlImagenPreview }}
-                                        style={[estilos.previaFoto, {
-                                            height: isTablet ? 280 : isSmallPhone ? 180 : 220,
-                                            borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        }]}
-                                        resizeMode="cover"
-                                        onError={(e) => {
-                                            console.log('❌ Error cargando imagen en preview:', e.nativeEvent.error);
-                                            console.log('URL que falló:', urlImagenPreview);
-                                            setImagenCargando(false);
-                                        }}
-                                        onLoad={() => {
-                                            console.log('✅ Imagen cargada correctamente en preview');
-                                            setImagenCargando(false);
-                                        }}
-                                        onLoadStart={() => {
-                                            console.log('⏳ Comenzando a cargar imagen en preview...');
-                                            setImagenCargando(true);
-                                        }}
-                                        onLoadEnd={() => {
-                                            console.log('🏁 Carga de imagen en preview finalizada');
-                                            setImagenCargando(false);
-                                        }}
-                                    />
-                                    {imagenCargando && (
-                                        <View style={estilos.loadingOverlay}>
-                                            <ActivityIndicator size="large" color={COLORS.amarillo} />
-                                        </View>
-                                    )}
-                                    <TouchableOpacity
-                                        style={[estilos.botonQuitarImagen, {
-                                            width: isTablet ? 34 : isSmallPhone ? 24 : 28,
-                                            height: isTablet ? 34 : isSmallPhone ? 24 : 28,
-                                            borderRadius: isTablet ? 17 : isSmallPhone ? 12 : 14,
-                                        }]}
-                                        onPress={() => {
-                                            console.log('🗑️ [Admin] Eliminando imagen seleccionada');
-                                            setImagen('');
-                                            setImagenUri(null);
-                                            setImagenCargando(false);
-                                            setImagenTimestamp(Date.now());
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Ionicons name="close" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.blanco} />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <View style={[estilos.sinImagen, {
-                                    padding: isTablet ? 30 : isSmallPhone ? 20 : 24,
-                                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                    height: isTablet ? 280 : isSmallPhone ? 180 : 220,
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                }]}>
-                                    <Ionicons name="image-outline" size={isTablet ? 60 : isSmallPhone ? 40 : 48} color={COLORS.grisClaro + '40'} />
-                                    <Text style={[estilos.sinImagenTexto, {
-                                        fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                                    }]}>
-                                        Sin imagen seleccionada
-                                    </Text>
-                                </View>
-                            )}
-
-                            <Text style={[estilos.label, {
-                                fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
-                                marginTop: 10,
-                                opacity: 0.6,
-                            }]}>
-                                O pega la URL manualmente:
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
-                                value={imagen}
-                                onChangeText={(text) => {
-                                    console.log('📝 [Admin] URL de imagen manual:', text);
-                                    setImagen(text);
-                                    setImagenUri(text);
-                                    setImagenTimestamp(Date.now());
-                                }}
-                                placeholder="https://ejemplo.com/oferta.jpg"
-                                placeholderTextColor={COLORS.grisClaro + '60'}
-                                autoCapitalize="none"
-                                selectionColor={COLORS.amarillo}
-                            />
-
-                            <View style={estilos.switchContainer}>
-                                <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginBottom: 0 }]}>
-                                    <Ionicons name="checkmark-circle-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={COLORS.amarillo} /> Activa
-                                </Text>
-                                <Switch
-                                    value={activa}
-                                    onValueChange={setActiva}
-                                    trackColor={{ false: COLORS.gris, true: COLORS.verdeClaro }}
-                                    thumbColor={activa ? COLORS.blanco : COLORS.blanco}
-                                />
-                            </View>
-                        </ScrollView>
-
-                        <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
-                            <TouchableOpacity
-                                style={[estilos.modalBoton, estilos.modalCancelar, { paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14 }]}
-                                onPress={cerrarModal}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.blanco} />
-                                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-                                    Cancelar
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[estilos.modalBoton, estilos.modalGuardar, { paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14 }]}
-                                onPress={guardarOferta}
-                                activeOpacity={0.7}
-                            >
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        style={estilos.modalKeyboard}
+                    >
+                        <View style={[
+                            estilos.modal,
+                            {
+                                padding: isTablet ? 32 : isSmallPhone ? 16 : 24,
+                                borderRadius: isTablet ? 28 : 24,
+                                width: modalWidth,
+                                maxHeight: isTablet ? '85%' : '90%',
+                                borderColor: DESIGN.colors.border,
+                                backgroundColor: DESIGN.colors.surface,
+                            }
+                        ]}>
+                            {/* HEADER DEL MODAL */}
+                            <View style={estilos.modalHeader}>
                                 <LinearGradient
-                                    colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-                                    style={estilos.modalGuardarGradient}
+                                    colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                                    style={estilos.modalHeaderGradiente}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 0 }}
                                 >
-                                    <Ionicons name="save" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={COLORS.negro} />
-                                    <Text style={[estilos.modalGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-                                        {ofertaEditando ? 'Actualizar' : 'Crear'}
+                                    <Ionicons name="pricetag" size={isTablet ? 32 : isSmallPhone ? 24 : 28} color={DESIGN.colors.surface} />
+                                    <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
+                                        {ofertaEditando ? '✏️ Editar Oferta' : '➕ Nueva Oferta'}
                                     </Text>
                                 </LinearGradient>
-                            </TouchableOpacity>
+                            </View>
+
+                            {/* FORMULARIO */}
+                            <ScrollView
+                                style={estilos.modalScroll}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 10 }}
+                            >
+                                {/* Título */}
+                                <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                                    <Ionicons name="pricetag-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Título *
+                                </Text>
+                                <TextInput
+                                    style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                    value={titulo}
+                                    onChangeText={setTitulo}
+                                    placeholder="Ej: 2x1 en Hamburguesas"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    selectionColor={DESIGN.colors.accent}
+                                />
+
+                                {/* Descripción */}
+                                <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                    <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Descripción
+                                </Text>
+                                <TextInput
+                                    style={[estilos.input, estilos.textArea, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                    value={descripcion}
+                                    onChangeText={setDescripcion}
+                                    placeholder="Descripción de la oferta"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                    selectionColor={DESIGN.colors.accent}
+                                />
+
+                                {/* Descuento */}
+                                <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                    <Ionicons name="flame-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Descuento *
+                                </Text>
+                                <TextInput
+                                    style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                    value={descuento}
+                                    onChangeText={setDescuento}
+                                    placeholder="Ej: 20% OFF, 2x1"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    selectionColor={DESIGN.colors.accent}
+                                />
+
+                                {/* Precios - Fila */}
+                                <View style={estilos.filaPrecios}>
+                                    <View style={estilos.filaPrecioItem}>
+                                        <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                            <Ionicons name="cash-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Original *
+                                        </Text>
+                                        <TextInput
+                                            style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                            value={precioOriginal}
+                                            onChangeText={setPrecioOriginal}
+                                            placeholder="$"
+                                            placeholderTextColor={DESIGN.colors.textTertiary}
+                                            keyboardType="numeric"
+                                            selectionColor={DESIGN.colors.accent}
+                                        />
+                                    </View>
+                                    <View style={estilos.filaPrecioItem}>
+                                        <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                            <Ionicons name="pricetag" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Oferta *
+                                        </Text>
+                                        <TextInput
+                                            style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                            value={precioOferta}
+                                            onChangeText={setPrecioOferta}
+                                            placeholder="$"
+                                            placeholderTextColor={DESIGN.colors.textTertiary}
+                                            keyboardType="numeric"
+                                            selectionColor={DESIGN.colors.accent}
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* Fechas - Fila */}
+                                <View style={estilos.filaFechas}>
+                                    <View style={estilos.filaFechaItem}>
+                                        <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                            <Ionicons name="calendar-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Inicio
+                                        </Text>
+                                        <TextInput
+                                            style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                            value={fechaInicio}
+                                            onChangeText={setFechaInicio}
+                                            placeholder="YYYY-MM-DD"
+                                            placeholderTextColor={DESIGN.colors.textTertiary}
+                                            selectionColor={DESIGN.colors.accent}
+                                        />
+                                    </View>
+                                    <View style={estilos.filaFechaItem}>
+                                        <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                            <Ionicons name="calendar-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Fin
+                                        </Text>
+                                        <TextInput
+                                            style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                            value={fechaFin}
+                                            onChangeText={setFechaFin}
+                                            placeholder="YYYY-MM-DD"
+                                            placeholderTextColor={DESIGN.colors.textTertiary}
+                                            selectionColor={DESIGN.colors.accent}
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* IMAGEN */}
+                                <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
+                                    <Ionicons name="image-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Imagen (opcional)
+                                </Text>
+
+                                <TouchableOpacity
+                                    style={[estilos.botonImagen, {
+                                        padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                        marginBottom: 10,
+                                        borderColor: DESIGN.colors.border,
+                                        backgroundColor: DESIGN.colors.surfaceHover,
+                                    }]}
+                                    onPress={seleccionarImagen}
+                                    activeOpacity={0.7}
+                                    disabled={subiendoImagen}
+                                >
+                                    {subiendoImagen ? (
+                                        <ActivityIndicator size="small" color={DESIGN.colors.accent} />
+                                    ) : (
+                                        <Ionicons name="images-outline" size={isTablet ? 28 : isSmallPhone ? 20 : 24} color={DESIGN.colors.accent} />
+                                    )}
+                                    <Text style={[estilos.botonImagenTexto, {
+                                        fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13,
+                                        color: subiendoImagen ? DESIGN.colors.textTertiary : DESIGN.colors.accent,
+                                    }]}>
+                                        {subiendoImagen ? '⏳ Subiendo...' : '📷 Seleccionar imagen de la galería'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {/* PREVIEW DE IMAGEN */}
+                                {urlImagenPreview ? (
+                                    <View style={estilos.previaImagen}>
+                                        <Image
+                                            key={`preview_${imagenTimestamp}`}
+                                            source={{ uri: urlImagenPreview }}
+                                            style={[estilos.previaFoto, {
+                                                height: isTablet ? 280 : isSmallPhone ? 180 : 220,
+                                                borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                            }]}
+                                            resizeMode="cover"
+                                            onError={() => setImagenCargando(false)}
+                                            onLoad={() => setImagenCargando(false)}
+                                            onLoadStart={() => setImagenCargando(true)}
+                                            onLoadEnd={() => setImagenCargando(false)}
+                                        />
+                                        {imagenCargando && (
+                                            <View style={estilos.loadingOverlay}>
+                                                <ActivityIndicator size="large" color={DESIGN.colors.accent} />
+                                            </View>
+                                        )}
+                                        <TouchableOpacity
+                                            style={[estilos.botonQuitarImagen, {
+                                                width: isTablet ? 34 : isSmallPhone ? 24 : 28,
+                                                height: isTablet ? 34 : isSmallPhone ? 24 : 28,
+                                                borderRadius: isTablet ? 17 : isSmallPhone ? 12 : 14,
+                                                backgroundColor: DESIGN.colors.accent + '90',
+                                            }]}
+                                            onPress={() => {
+                                                setImagen('');
+                                                setImagenUri(null);
+                                                setImagenCargando(false);
+                                                setImagenTimestamp(Date.now());
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="close" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={DESIGN.colors.surface} />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <View style={[estilos.sinImagen, {
+                                        padding: isTablet ? 30 : isSmallPhone ? 20 : 24,
+                                        borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                        height: isTablet ? 280 : isSmallPhone ? 180 : 220,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        backgroundColor: DESIGN.colors.surfaceHover,
+                                        borderColor: DESIGN.colors.border,
+                                    }]}>
+                                        <Ionicons name="image-outline" size={isTablet ? 60 : isSmallPhone ? 40 : 48} color={DESIGN.colors.textTertiary} />
+                                        <Text style={[estilos.sinImagenTexto, {
+                                            fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                                            color: DESIGN.colors.textTertiary,
+                                        }]}>
+                                            Sin imagen seleccionada
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {/* URL manual */}
+                                <Text style={[estilos.label, {
+                                    fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
+                                    marginTop: 10,
+                                    color: DESIGN.colors.textSecondary,
+                                }]}>
+                                    O pega la URL manualmente:
+                                </Text>
+                                <TextInput
+                                    style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}
+                                    value={imagen}
+                                    onChangeText={(text) => {
+                                        setImagen(text);
+                                        setImagenUri(text);
+                                        setImagenTimestamp(Date.now());
+                                    }}
+                                    placeholder="https://ejemplo.com/oferta.jpg"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    autoCapitalize="none"
+                                    selectionColor={DESIGN.colors.accent}
+                                />
+
+                                {/* SWITCH ACTIVA */}
+                                <View style={estilos.switchContainer}>
+                                    <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginBottom: 0 }]}>
+                                        <Ionicons name="checkmark-circle-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Activa
+                                    </Text>
+                                    <Switch
+                                        value={activa}
+                                        onValueChange={setActiva}
+                                        trackColor={{ false: DESIGN.colors.border, true: DESIGN.colors.verde }}
+                                        thumbColor={activa ? DESIGN.colors.surface : DESIGN.colors.surface}
+                                    />
+                                </View>
+                            </ScrollView>
+
+                            {/* BOTONES */}
+                            <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
+                                <TouchableOpacity
+                                    style={[estilos.modalBoton, estilos.modalCancelar, {
+                                        paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                        borderColor: DESIGN.colors.border,
+                                        backgroundColor: DESIGN.colors.surfaceHover,
+                                    }]}
+                                    onPress={cerrarModal}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.textSecondary} />
+                                    <Text style={[estilos.modalCancelarTexto, {
+                                        fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+                                        color: DESIGN.colors.textSecondary,
+                                    }]}>
+                                        Cancelar
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[estilos.modalBoton, estilos.modalGuardar, {
+                                        paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                        overflow: 'hidden',
+                                    }]}
+                                    onPress={guardarOferta}
+                                    activeOpacity={0.7}
+                                >
+                                    <LinearGradient
+                                        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                                        style={estilos.modalGuardarGradient}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                    >
+                                        <Ionicons name="save" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.surface} />
+                                        <Text style={[estilos.modalGuardarTexto, {
+                                            fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+                                            color: DESIGN.colors.surface,
+                                        }]}>
+                                            {ofertaEditando ? 'Actualizar' : 'Crear'}
+                                        </Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </View>
             </Modal>
         </View>
     );
 }
 
+// ============================================================
+// 🎨 ESTILOS - BLANCOS Y ELEGANTES
+// ============================================================
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
-        backgroundColor: COLORS.negro,
+        backgroundColor: DESIGN.colors.fondo,
     },
-    fondoGradiente: {
+    background: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
+        backgroundColor: DESIGN.colors.fondo,
+    },
+    headerGradiente: {
+        borderBottomWidth: 1,
+        borderBottomColor: DESIGN.colors.border,
+        shadowColor: DESIGN.colors.cardShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 12,
+        elevation: 4,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '10',
+    },
+    headerCentro: {
+        flex: 1,
+        alignItems: 'center',
     },
     botonVolver: {
         padding: 4,
     },
     titulo: {
-        fontWeight: 'bold',
-        color: COLORS.blanco,
-        letterSpacing: 1,
-        flex: 1,
-        textAlign: 'center',
+        fontWeight: '700',
+        color: DESIGN.colors.surface,
+        letterSpacing: -0.3,
+    },
+    contador: {
+        color: DESIGN.colors.surface + '80',
+        fontWeight: '400',
+        marginTop: 2,
     },
     botonAgregar: {
-        backgroundColor: COLORS.amarillo,
+        backgroundColor: DESIGN.colors.surface,
         borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 4,
-        shadowColor: COLORS.amarillo,
+        shadowColor: DESIGN.colors.cardShadow,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-    },
-    contadorContainer: {
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '5',
-    },
-    contador: {
-        color: COLORS.grisClaro,
-        fontWeight: '500',
-        opacity: 0.6,
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     lista: {
         flexGrow: 1,
     },
+
+    // ============================================================
+    // TARJETA
+    // ============================================================
     tarjeta: {
-        backgroundColor: COLORS.negro + '60',
         marginBottom: 10,
         borderWidth: 1,
+        backgroundColor: DESIGN.colors.surface,
+        shadowColor: DESIGN.colors.cardShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 12,
+        elevation: 4,
     },
     tarjetaImagenContainer: {
         marginBottom: 8,
     },
     tarjetaImagen: {
         width: '100%',
-        backgroundColor: COLORS.negro + '30',
+        backgroundColor: DESIGN.colors.surfaceHover,
     },
     tarjetaHeader: {
         flexDirection: 'row',
@@ -1142,11 +1186,11 @@ const estilos = StyleSheet.create({
         flex: 1,
     },
     tarjetaTitulo: {
-        fontWeight: 'bold',
-        color: COLORS.blanco,
+        fontWeight: '600',
+        color: DESIGN.colors.text,
     },
     tarjetaDescuento: {
-        color: COLORS.amarillo,
+        color: DESIGN.colors.accentSecondary,
         fontWeight: '600',
         marginTop: 2,
     },
@@ -1161,11 +1205,11 @@ const estilos = StyleSheet.create({
     },
     tarjetaDetalles: {
         borderTopWidth: 1,
-        borderTopColor: COLORS.blanco + '8',
+        borderTopColor: DESIGN.colors.border,
         paddingTop: 8,
     },
     tarjetaDesc: {
-        color: COLORS.grisClaro,
+        color: DESIGN.colors.textSecondary,
         opacity: 0.7,
         marginBottom: 6,
     },
@@ -1175,64 +1219,77 @@ const estilos = StyleSheet.create({
         gap: 10,
     },
     tarjetaPrecioOriginal: {
-        color: COLORS.grisClaro,
+        color: DESIGN.colors.textTertiary,
         textDecorationLine: 'line-through',
-        opacity: 0.5,
     },
     tarjetaPrecioOferta: {
-        fontWeight: 'bold',
-        color: COLORS.amarillo,
+        fontWeight: '700',
+        color: DESIGN.colors.accent,
     },
     tarjetaFechas: {
         marginTop: 4,
     },
     tarjetaFecha: {
-        color: COLORS.grisClaro,
-        opacity: 0.6,
+        color: DESIGN.colors.textTertiary,
     },
     estadoBadge: {
         alignSelf: 'flex-start',
         marginTop: 6,
     },
     estadoBadgeTexto: {
-        fontWeight: '600',
+        fontWeight: '500',
     },
+
+    // ============================================================
+    // VACÍO
+    // ============================================================
     vacioContenedor: {
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 80,
     },
     vacio: {
-        color: COLORS.blanco,
-        fontWeight: 'bold',
+        color: DESIGN.colors.text,
+        fontWeight: '600',
         marginTop: 16,
         textAlign: 'center',
     },
     vacioSubtexto: {
-        color: COLORS.grisClaro,
+        color: DESIGN.colors.textSecondary,
         textAlign: 'center',
         marginTop: 4,
         opacity: 0.6,
     },
+
+    // ============================================================
+    // MODAL
+    // ============================================================
     modalFondo: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.85)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
     },
-    modalGradiente: {
+    modalBackdrop: {
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        borderRadius: 28,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalKeyboard: {
+        width: '100%',
+        alignItems: 'center',
     },
     modal: {
-        backgroundColor: 'transparent',
-        borderWidth: 2,
+        borderWidth: 1,
         overflow: 'hidden',
+        shadowColor: DESIGN.colors.cardShadowHeavy,
+        shadowOffset: { width: 0, height: 20 },
+        shadowOpacity: 1,
+        shadowRadius: 40,
+        elevation: 20,
     },
     modalHeader: {
         marginBottom: 16,
@@ -1247,8 +1304,8 @@ const estilos = StyleSheet.create({
         borderRadius: 12,
     },
     modalTitulo: {
-        fontWeight: 'bold',
-        color: COLORS.negro,
+        fontWeight: '700',
+        color: DESIGN.colors.surface,
     },
     modalScroll: {
         maxHeight: '70%',
@@ -1256,22 +1313,36 @@ const estilos = StyleSheet.create({
     },
     label: {
         fontWeight: '600',
-        color: COLORS.blanco,
+        color: DESIGN.colors.text,
         marginBottom: 6,
         marginTop: 14,
     },
     input: {
-        backgroundColor: COLORS.negro + '40',
+        backgroundColor: DESIGN.colors.surfaceHover,
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
-        color: COLORS.blanco,
+        borderColor: DESIGN.colors.border,
+        color: DESIGN.colors.text,
     },
     textArea: {
         minHeight: 80,
         textAlignVertical: 'top',
+    },
+    filaPrecios: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    filaPrecioItem: {
+        flex: 1,
+    },
+    filaFechas: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    filaFechaItem: {
+        flex: 1,
     },
     switchContainer: {
         flexDirection: 'row',
@@ -1282,9 +1353,7 @@ const estilos = StyleSheet.create({
     botonImagen: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.amarillo + '10',
         borderWidth: 2,
-        borderColor: COLORS.amarillo + '20',
         borderStyle: 'dashed',
         justifyContent: 'center',
         gap: 10,
@@ -1299,7 +1368,7 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
-        backgroundColor: COLORS.negro + '40',
+        backgroundColor: DESIGN.colors.surfaceHover,
     },
     previaFoto: {
         width: '100%',
@@ -1310,7 +1379,7 @@ const estilos = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.3)',
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 12,
@@ -1319,23 +1388,19 @@ const estilos = StyleSheet.create({
         position: 'absolute',
         top: 8,
         right: 8,
-        backgroundColor: COLORS.negro + '75',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: COLORS.blanco + '15',
+        borderColor: DESIGN.colors.surface,
     },
     sinImagen: {
-        backgroundColor: COLORS.negro + '30',
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 10,
     },
     sinImagenTexto: {
-        color: COLORS.grisClaro,
-        opacity: 0.5,
         marginTop: 6,
     },
     modalBotones: {
@@ -1344,20 +1409,17 @@ const estilos = StyleSheet.create({
     },
     modalBoton: {
         flex: 1,
-        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
         gap: 6,
         overflow: 'hidden',
+        borderWidth: 1,
     },
     modalCancelar: {
-        backgroundColor: COLORS.negro + '50',
         borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
     },
     modalCancelarTexto: {
-        color: COLORS.blanco,
         fontWeight: '600',
     },
     modalGuardar: {
@@ -1374,7 +1436,6 @@ const estilos = StyleSheet.create({
         height: '100%',
     },
     modalGuardarTexto: {
-        color: COLORS.negro,
-        fontWeight: 'bold',
+        fontWeight: '700',
     },
 });

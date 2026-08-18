@@ -35,38 +35,42 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
     }
   },
 
+  // ✅ OPTIMIZADO: Actualiza estado primero, luego persistencia en background
   agregarProducto: async (producto) => {
+    // ✅ 1. OBTENER ID DEL PRODUCTO
+    const idProducto = producto.id || (producto as any).identificacion;
+
+    // ✅ 2. ACTUALIZAR ESTADO INMEDIATAMENTE (SIN ESPERAR)
+    const nuevosElementos = [...get().elementos];
+    const indice = nuevosElementos.findIndex(e => {
+      const id = e.producto.id || (e.producto as any).identificacion;
+      return id === idProducto;
+    });
+
+    if (indice !== -1) {
+      nuevosElementos[indice].cantidad += 1;
+    } else {
+      nuevosElementos.push({ producto, cantidad: 1 });
+    }
+
+    // ✅ 3. SETEAR ESTADO - ESTO NOTIFICA A LA BARRA INFERIOR INSTANTÁNEAMENTE
+    set({ elementos: nuevosElementos });
+    console.log('🛒 [Store] Producto agregado, cantidad total:', get().cantidadTotal());
+
+    // ✅ 4. PERSISTIR EN BACKGROUND (SIN BLOQUEAR)
+    AsyncStorage.setItem('carrito_krusty', JSON.stringify(nuevosElementos))
+      .catch(error => console.error('Error guardando carrito:', error));
+
+    // ✅ 5. REGISTRAR FAVORITO EN BACKGROUND (SIN BLOQUEAR)
     try {
-      const elementos = [...get().elementos];
-      const idProducto = producto.id || (producto as any).identificacion;
-      const indice = elementos.findIndex(e => {
-        const id = e.producto.id || (e.producto as any).identificacion;
-        return id === idProducto;
-      });
-
-      if (indice !== -1) {
-        elementos[indice].cantidad += 1;
-      } else {
-        elementos.push({ producto, cantidad: 1 });
+      const { perfil } = tiendaAutenticacion.getState();
+      if (perfil?.id) {
+        // No esperar a que termine
+        tiendaFavoritos.getState().agregarFavorito(perfil.id, producto)
+          .catch(favError => console.log('⚠️ Error registrando favorito:', favError));
       }
-
-      set({ elementos });
-      await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
-
-      // ✅ REGISTRAR FAVORITO (si el usuario está autenticado)
-      try {
-        const { perfil } = tiendaAutenticacion.getState();
-        if (perfil?.id) {
-          // Esperar a que se registre el favorito
-          await tiendaFavoritos.getState().agregarFavorito(perfil.id, producto);
-        }
-      } catch (favError) {
-        console.log('⚠️ Error registrando favorito:', favError);
-        // No interrumpir el flujo del carrito
-      }
-
-    } catch (error) {
-      console.error('Error agregando producto:', error);
+    } catch (favError) {
+      console.log('⚠️ Error registrando favorito:', favError);
     }
   },
 
@@ -76,8 +80,14 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
         const id = e.producto.id || (e.producto as any).identificacion;
         return id !== idProducto;
       });
+
+      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
       set({ elementos });
-      await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
+      console.log('🛒 [Store] Producto quitado, cantidad total:', get().cantidadTotal());
+
+      // ✅ PERSISTIR EN BACKGROUND
+      AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
+        .catch(error => console.error('Error guardando carrito:', error));
     } catch (error) {
       console.error('Error quitando producto:', error);
     }
@@ -92,27 +102,32 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
         }
         return e;
       });
-      set({ elementos });
-      await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
 
-      // ✅ AL AUMENTAR CANTIDAD, TAMBIÉN INCREMENTAR FAVORITO
+      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
+      set({ elementos });
+      console.log('🛒 [Store] Cantidad aumentada, total:', get().cantidadTotal());
+
+      // ✅ PERSISTIR EN BACKGROUND
+      AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
+        .catch(error => console.error('Error guardando carrito:', error));
+
+      // ✅ FAVORITO EN BACKGROUND
       try {
         const { perfil } = tiendaAutenticacion.getState();
         if (perfil?.id) {
-          // Buscar el producto para obtener sus datos
           const producto = get().elementos.find(e => {
             const id = e.producto.id || (e.producto as any).identificacion;
             return id === idProducto;
           })?.producto;
 
           if (producto) {
-            await tiendaFavoritos.getState().agregarFavorito(perfil.id, producto);
+            tiendaFavoritos.getState().agregarFavorito(perfil.id, producto)
+              .catch(favError => console.log('⚠️ Error incrementando favorito:', favError));
           }
         }
       } catch (favError) {
         console.log('⚠️ Error incrementando favorito:', favError);
       }
-
     } catch (error) {
       console.error('Error aumentando cantidad:', error);
     }
@@ -130,8 +145,13 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
         })
         .filter(e => e.cantidad > 0);
 
+      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
       set({ elementos });
-      await AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos));
+      console.log('🛒 [Store] Cantidad disminuida, total:', get().cantidadTotal());
+
+      // ✅ PERSISTIR EN BACKGROUND
+      AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
+        .catch(error => console.error('Error guardando carrito:', error));
     } catch (error) {
       console.error('Error disminuyendo cantidad:', error);
     }
@@ -139,8 +159,13 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
 
   vaciarCarrito: async () => {
     try {
+      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
       set({ elementos: [] });
-      await AsyncStorage.removeItem('carrito_krusty');
+      console.log('🛒 [Store] Carrito vaciado');
+
+      // ✅ PERSISTIR EN BACKGROUND
+      AsyncStorage.removeItem('carrito_krusty')
+        .catch(error => console.error('Error eliminando carrito:', error));
     } catch (error) {
       console.error('Error vaciando carrito:', error);
     }

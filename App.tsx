@@ -1,7 +1,7 @@
-// App.tsx
+// App.tsx - COMPLETO CON STACK.GROUP
 import './setup.js';
 
-// ✅ FILTRO DE ERRORES DE TEXTO - MEJORADO CON FILTRO DE RATE LIMIT
+// ✅ FILTRO DE ERRORES DE TEXTO
 const originalConsoleError = console.error;
 console.error = (...args: any[]) => {
   const message = args[0] || '';
@@ -29,8 +29,7 @@ import React, { useEffect, useRef } from 'react';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, Platform, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, View, Platform } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as Linking from 'expo-linking';
 import { tiendaAutenticacion } from './stores/tiendaAutenticacion';
@@ -43,7 +42,7 @@ import BarraInferiorProfesional from './components/BarraInferiorProfesional';
 // ✅ IMPORTAR setNavigationRef DEL SERVICIO
 import { notificacionService, setNavigationRef } from './services/notificacionService';
 
-// ✅ IMPORTACIONES DE PANTALLAS EXISTENTES
+// ✅ IMPORTACIONES DE PANTALLAS
 import PantallaBienvenida from './screens/PantallaBienvenida';
 import PantallaLogin from './screens/auth/PantallaLogin';
 import PantallaRegistro from './screens/auth/PantallaRegistro';
@@ -70,19 +69,13 @@ import PantallaGestionOfertas from './screens/admin/PantallaGestionOfertas';
 import PantallaDetalleOferta from './screens/cliente/PantallaDetalleOferta';
 import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEnvios';
 import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
-import PantallaDashboardAdmin from './screens/admin/PantallaDashboardAdmin';
-import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
 
-// ✅ IMPORTACIONES DE PANTALLAS DE CUPONES
-//import PantallaCanjearCupon from './screens/cliente/PantallaCanjearCupon';
-//import PantallaMisCupones from './screens/cliente/PantallaMisCupones';
-//import PantallaGestionCupones from './screens/admin/PantallaGestionCupones';
-//import PantallaDetalleCuponAdmin from './screens/admin/PantallaDetalleCuponAdmin';
+import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ✅ TEMÁTICA KRUSTY PARA LA APP
+// ✅ TEMÁTICA KRUSTY
 const temaApp = {
   primario: '#E53935',
   secundario: '#F5C518',
@@ -108,7 +101,7 @@ const HEADER_OPTIONS = {
   headerShadowVisible: false,
 };
 
-// ✅ CONFIGURACIÓN DE DEEP LINKING (con soporte para cupones)
+// ✅ CONFIGURACIÓN DE DEEP LINKING
 const linking = {
   prefixes: ['krustyburger://', 'https://www.krustyburger.com.ar', 'https://krustyburger.com'],
   config: {
@@ -123,18 +116,12 @@ const linking = {
       Login: 'login',
       Registro: 'registro',
       Bienvenida: 'bienvenida',
-      // ✅ Deep linking para cupones
-      CanjearCupon: {
-        path: 'canjear-cupon',
-        parse: {
-          codigo: (codigo: string) => codigo,
-        },
-      },
+      Ofertas: 'ofertas',
       Principal: {
         screens: {
           Inicio: 'inicio',
           Menu: 'menu',
-          Ofertas: 'ofertas',
+          Carrito: 'carrito',
           Pedidos: 'pedidos',
           Perfil: 'perfil',
         }
@@ -142,7 +129,6 @@ const linking = {
       NotificacionesUsuario: 'notificaciones',
       Recompensas: 'recompensas',
       Seguimiento: 'seguimiento',
-      Carrito: 'carrito',
     }
   }
 };
@@ -152,6 +138,7 @@ const renderTabBar = (props: any) => {
   return <BarraInferiorProfesional {...props} />;
 };
 
+// ✅ PESTAÑAS DEL CLIENTE - CON CARRITO
 function PestanasCliente() {
   const { cantidadTotal } = tiendaCarrito();
   const cantidad = cantidadTotal();
@@ -165,7 +152,7 @@ function PestanasCliente() {
     >
       <Tab.Screen name="Inicio" component={PantallaInicio} />
       <Tab.Screen name="Menu" component={PantallaMenu} />
-      <Tab.Screen name="Ofertas" component={PantallaOfertas} />
+      <Tab.Screen name="Carrito" component={PantallaCarrito} />
       <Tab.Screen name="Pedidos" component={PantallaPedidos} />
       <Tab.Screen name="Perfil" component={PantallaPerfil} />
     </Tab.Navigator>
@@ -177,18 +164,16 @@ export default function App() {
   const { cargarCarrito } = tiendaCarrito();
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
-  // ✅ CONFIGURAR NAVIGATION REF PARA NOTIFICACIONES
+  // ✅ CONFIGURAR NAVIGATION REF
   useEffect(() => {
     if (navigationRef.current) {
       setNavigationRef(navigationRef.current);
       console.log('✅ NavigationRef conectado a notificacionService');
-
-      // ✅ Procesar notificación que abrió la app
       notificacionService.procesarNotificacionInicial();
     }
   }, [navigationRef.current]);
 
-  // ✅ CONFIGURAR ESCUCHA DE NOTIFICACIONES
+  // ✅ ESCUCHA DE NOTIFICACIONES
   useEffect(() => {
     const { subscription, responseSubscription } = notificacionService.escucharNotificaciones();
     console.log('✅ Escucha de notificaciones activada');
@@ -200,7 +185,7 @@ export default function App() {
     };
   }, []);
 
-  // ✅ CONFIGURACIÓN DE NOTIFICACIONES (registro de token)
+  // ✅ REGISTRO DE TOKEN
   useEffect(() => {
     const configurarNotificaciones = async () => {
       try {
@@ -222,7 +207,7 @@ export default function App() {
     configurarNotificaciones();
   }, [sesion, perfil]);
 
-  // ✅ NAVIGATIONBAR - CONFIGURACIÓN ANDROID
+  // ✅ NAVIGATIONBAR
   useEffect(() => {
     const setupNavigationBar = async () => {
       if (Platform.OS === 'android') {
@@ -256,74 +241,6 @@ export default function App() {
     cargarCarrito();
   }, []);
 
-  /*/ ✅ MANEJO DE DEEP LINKING (con soporte para cupones)
-  useEffect(() => {
-    const procesarDeepLink = (url: string) => {
-      console.log('🔗 Procesando Deep Link:', url);
-
-      if (!url) return;
-
-      const tokenMatch = url.match(/token=([^&]+)/);
-      const codigoMatch = url.match(/codigo=([^&]+)/);
-
-      / ✅ Deep link para reset-password
-      if (url.includes('reset-password')) {
-        console.log('🔑 Deep Link de reset-password detectado');
-
-        if (tokenMatch) {
-          const token = decodeURIComponent(tokenMatch[1]);
-          console.log('🔑 Token extraído');
-
-          setTimeout(() => {
-            navigationRef.current?.navigate('NuevaContrasena', { token });
-          }, 500);
-        } else {
-          console.log('⚠️ No se encontró token en el deep link');
-          setTimeout(() => {
-            navigationRef.current?.navigate('NuevaContrasena');
-          }, 500);
-        }
-      }
-
-      // ✅ Deep link para cupones
-      if (url.includes('canjear-cupon') || url.includes('cupon')) {
-        console.log('🎫 Deep Link de cupón detectado');
-
-        if (codigoMatch) {
-          const codigo = decodeURIComponent(codigoMatch[1]);
-          console.log('🎫 Código de cupón extraído:', codigo);
-
-          setTimeout(() => {
-            navigationRef.current?.navigate('CanjearCupon', { codigo });
-          }, 500);
-        } else {
-          console.log('⚠️ No se encontró código en el deep link');
-          setTimeout(() => {
-            navigationRef.current?.navigate('CanjearCupon');
-          }, 500);
-        }
-      }
-    };
-
-    const subscription = Linking.addEventListener('url', (event) => {
-      console.log('🔗 Evento de Deep Link recibido:', event.url);
-      procesarDeepLink(event.url);
-    });
-
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('🔗 App abierta con deep link inicial:', url);
-        procesarDeepLink(url);
-      } else {
-        console.log('ℹ️ App abierta normalmente (sin deep link)');
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);*/
-
   // ✅ REDIRECCIÓN POR SESIÓN
   useEffect(() => {
     if (!sesion && !cargando && navigationRef.current) {
@@ -347,43 +264,30 @@ export default function App() {
     <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!sesion ? (
-          // ============================================================
-          // 🔹 SECCIÓN: PANTALLAS PÚBLICAS (SIN SESIÓN)
-          // ============================================================
-          <>
+          <Stack.Group>
             <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
             <Stack.Screen name="Login" component={PantallaLogin} />
             <Stack.Screen name="Registro" component={PantallaRegistro} />
-            <Stack.Screen name="ResetPassword" component={PantallaResetPassword} options={{ headerShown: false }} />
+            <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
             <Stack.Screen
               name="NuevaContrasena"
               component={PantallaNuevaContrasena}
-              options={{ headerShown: false }}
               initialParams={{ token: null }}
             />
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
             <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES */}
-            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
-            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
-          </>
+            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+          </Stack.Group>
         ) : esAdministrador ? (
-          // ============================================================
-          // 🔹 SECCIÓN: PANTALLAS DE ADMINISTRADOR
-          // ============================================================
-          <>
+          <Stack.Group>
             <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
-            <Stack.Screen name="DashboardAdmin" component={PantallaDashboardAdmin} options={{ headerShown: false }} />
+
             <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
             <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
             <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
@@ -391,56 +295,33 @@ export default function App() {
             <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
             <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
             <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
-            <Stack.Screen
-              name="NotificacionesAdmin"
-              component={PantallaNotificacionesAdmin}
-              options={{ headerShown: false }}
-            />
-            {/* ✅ PANTALLAS DE GESTIÓN DE CUPONES PARA ADMIN */}
-            {/* <Stack.Screen name="GestionCupones" component={PantallaGestionCupones} options={{ headerShown: false }} /> */}
-            {/* <Stack.Screen name="DetalleCuponAdmin" component={PantallaDetalleCuponAdmin} options={{ headerShown: false }} /> */}
+            <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
             <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES (también en admin) */}
-            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
-            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
-          </>
+            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+          </Stack.Group>
         ) : esRepartidor ? (
-          // ============================================================
-          // 🔹 SECCIÓN: PANTALLAS DE REPARTIDOR
-          // ============================================================
-          <Stack.Screen name="Transmision" component={PantallaTransmision} />
+          <Stack.Group>
+            <Stack.Screen name="Transmision" component={PantallaTransmision} />
+          </Stack.Group>
         ) : (
-          // ============================================================
-          // 🔹 SECCIÓN: PANTALLAS DE CLIENTE (CON SESIÓN)
-          // ============================================================
-          <>
+          <Stack.Group>
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+            <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
             <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
             <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-            {/* ✅ PANTALLAS DE CUPONES PARA CLIENTES */}
-            {/* <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} /> */}
-            {/* <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} /> */}
-          </>
+            <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+          </Stack.Group>
         )}
       </Stack.Navigator>
     </NavigationContainer>

@@ -8,11 +8,12 @@ import {
   TouchableOpacity,
   Image,
   Modal,
-  Dimensions,
   Animated,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,36 +21,80 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { supabase } from '../../lib/supabase';
-import { Colores, getTematica } from '../../lib/colores';
+import { Colores } from '../../lib/colores';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 import { UbicacionGuardada } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
 
-const { width, height } = Dimensions.get('window');
+// ============================================================
+// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
+// ============================================================
+const DESIGN = {
+  colors: {
+    fondo: '#F5F2ED',
+    surface: '#FFFFFF',
+    surfaceHover: '#F8F6F2',
+    card: '#FFFFFF',
+    cardShadow: 'rgba(0,0,0,0.06)',
+    border: 'rgba(0,0,0,0.06)',
+    borderLight: 'rgba(0,0,0,0.04)',
+    text: '#1A1A1A',
+    textSecondary: 'rgba(0,0,0,0.55)',
+    textTertiary: 'rgba(0,0,0,0.30)',
+    accent: '#E53935',
+    accentLight: '#FF6B6B',
+    accentSecondary: '#F5C518',
+    accentSecondaryLight: '#FFE135',
+    gradientStart: '#E53935',
+    gradientEnd: '#F5C518',
+    verde: '#43A047',
+    verdeClaro: '#66BB6A',
+    rosa: '#EC407A',
+    azul: '#1A237E',
+    azulClaro: '#3949AB',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    '2xl': 48,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    full: 999,
+  },
+};
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
 // ============================================================
 const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
   const isSmallPhone = width < 375;
 
-  return {
-    isTablet,
-    isSmallPhone,
-    width,
-    height,
-    padding: isTablet ? 32 : isSmallPhone ? 14 : 20,
-    getValor: (valores: { tablet: any; normal: any; small: any }) => {
-      if (isTablet) return valores.tablet;
-      if (isSmallPhone) return valores.small;
-      return valores.normal;
-    },
+  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+    if (isDesktop || isTablet) return valores.tablet;
+    if (isSmallPhone) return valores.small;
+    return valores.normal;
+  }, [isDesktop, isTablet, isSmallPhone]);
+
+  const spacing = (base: number) => {
+    if (isTablet) return base * 1.5;
+    if (isSmallPhone) return base * 0.75;
+    return base;
   };
+
+  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
 };
 
 export default function PantallaCarrito(props: any) {
-  // ✅ Hooks
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { elementos, aumentarCantidad, disminuirCantidad, quitarProducto, vaciarCarrito, calcularTotal } = tiendaCarrito();
@@ -60,17 +105,17 @@ export default function PantallaCarrito(props: any) {
     guardarUbicacionTemporal,
     limpiarUbicacionTemporal
   } = tiendaAutenticacion();
-  const temaKrusty = getTematica('krusty');
 
   // ✅ Estados
-  const [cupones, setCupones] = useState<any[]>([]);
-  const [cuponAplicado, setCuponAplicado] = useState<any>(null);
-  const [mostrarCupones, setMostrarCupones] = useState(false);
   const [mostrarModalLogin, setMostrarModalLogin] = useState(false);
   const [mostrarModalPuntos, setMostrarModalPuntos] = useState(false);
   const [puntosSeleccionados, setPuntosSeleccionados] = useState(0);
   const [puntosMaximos, setPuntosMaximos] = useState(0);
+  const [puntosOriginales, setPuntosOriginales] = useState(0);
+  const [puntosOriginalesAntesCanje, setPuntosOriginalesAntesCanje] = useState(0);
   const [canjeandoPuntos, setCanjeandoPuntos] = useState(false);
+  const [cuponPuntosAplicado, setCuponPuntosAplicado] = useState<any>(null);
+  const [inputPuntos, setInputPuntos] = useState('');
 
   const [costoEnvioEstimado, setCostoEnvioEstimado] = useState(0);
   const [distanciaEstimada, setDistanciaEstimada] = useState<number | null>(null);
@@ -107,7 +152,6 @@ export default function PantallaCarrito(props: any) {
   }, []);
 
   useEffect(() => {
-    cargarCupones();
     if (perfil) {
       cargarPuntosUsuario();
     }
@@ -205,29 +249,6 @@ export default function PantallaCarrito(props: any) {
     }
   };
 
-  const cargarCupones = async () => {
-    if (!perfil?.id) {
-      setCupones([]);
-      return;
-    }
-    const { data: canjesData } = await supabase
-      .from('canjes')
-      .select('id, recompensa_id, puntos_usados, fecha')
-      .eq('usuario_id', perfil.id)
-      .eq('usado_en_pedido', false);
-    if (!canjesData || canjesData.length === 0) {
-      setCupones([]);
-      return;
-    }
-    const ids = canjesData.map((c: any) => c.recompensa_id);
-    const { data: recompensasData } = await supabase.from('recompensas').select('*').in('id', ids);
-    const cuponesCombinados = canjesData.map((canje: any) => ({
-      ...canje,
-      recompensas: recompensasData?.find((r: any) => r.id === canje.recompensa_id),
-    }));
-    setCupones(cuponesCombinados);
-  };
-
   const cargarPuntosUsuario = async () => {
     if (!perfil?.id) return;
     try {
@@ -237,16 +258,75 @@ export default function PantallaCarrito(props: any) {
         .eq('id', perfil.id)
         .single();
       if (error) throw error;
-      setPuntosMaximos(data?.puntos_acumulados || 0);
+      const puntos = data?.puntos_acumulados || 0;
+      setPuntosMaximos(puntos);
+      setPuntosOriginales(puntos);
+      setPuntosOriginalesAntesCanje(0);
+      setInputPuntos('');
     } catch (error) {
       console.error('Error cargando puntos:', error);
       setPuntosMaximos(0);
+      setPuntosOriginales(0);
+      setPuntosOriginalesAntesCanje(0);
     }
   };
 
   // ============================================================
   // 🎯 MANEJADORES DE PUNTOS
   // ============================================================
+
+  // ✅ Función para restaurar puntos - SILENCIOSA
+  const restaurarPuntos = async () => {
+    if (!perfil?.id) return;
+
+    const puntosARestaurar = cuponPuntosAplicado?.puntos_antes_canje || puntosOriginalesAntesCanje || puntosOriginales;
+
+    if (puntosARestaurar === 0) return;
+
+    console.log('🔄 Restaurando puntos a:', puntosARestaurar);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('perfiles')
+        .update({
+          puntos_acumulados: puntosARestaurar,
+        })
+        .eq('id', perfil.id);
+
+      if (updateError) {
+        console.error('❌ Error restaurando puntos:', updateError);
+        return;
+      }
+
+      setPuntosMaximos(puntosARestaurar);
+      setPuntosOriginales(puntosARestaurar);
+      setPuntosOriginalesAntesCanje(0);
+      setCuponPuntosAplicado(null);
+      setPuntosSeleccionados(0);
+      setInputPuntos('');
+
+      await cargarPuntosUsuario();
+      console.log('✅ Puntos restaurados correctamente');
+
+    } catch (error) {
+      console.error('❌ Error restaurando puntos:', error);
+    }
+  };
+
+  // ✅ Función para quitar el descuento - SIN ALERTA
+  const quitarDescuento = () => {
+    restaurarPuntos();
+  };
+
+  // ✅ Función para validar y seleccionar puntos desde el input
+  const handleInputPuntos = (text: string) => {
+    const num = parseInt(text) || 0;
+    if (num < 0) return;
+    setInputPuntos(text);
+    setPuntosSeleccionados(num);
+  };
+
+  // ✅ Función de canje mejorada
   const canjearPuntos = async () => {
     if (puntosSeleccionados < 100) {
       Alert.alert('Mínimo 100 puntos', 'Necesitas al menos 100 puntos para canjear ($100 de descuento)');
@@ -259,6 +339,7 @@ export default function PantallaCarrito(props: any) {
     }
 
     const descuentoEnPesos = Math.floor(puntosSeleccionados / 100) * 100;
+    const puntosAntesCanje = puntosMaximos;
 
     setCanjeandoPuntos(true);
     try {
@@ -291,6 +372,10 @@ export default function PantallaCarrito(props: any) {
 
       if (canjeError) throw canjeError;
 
+      setPuntosOriginalesAntesCanje(puntosAntesCanje);
+      setPuntosMaximos(puntosMaximos - puntosSeleccionados);
+      setPuntosOriginales(puntosOriginales - puntosSeleccionados);
+
       const cuponVirtual = {
         id: Date.now(),
         recompensas: {
@@ -300,32 +385,43 @@ export default function PantallaCarrito(props: any) {
           valor_descuento: descuentoEnPesos,
         },
         puntos_usados: puntosSeleccionados,
+        puntos_antes_canje: puntosAntesCanje,
       };
 
-      setCuponAplicado(cuponVirtual);
-      setPuntosMaximos(puntosMaximos - puntosSeleccionados);
+      setCuponPuntosAplicado(cuponVirtual);
       setMostrarModalPuntos(false);
       setPuntosSeleccionados(0);
+      setInputPuntos('');
 
       Alert.alert(
-        '¡Éxito! 🎉',
+        '🎉 ¡Éxito!',
         `Canjeaste ${puntosSeleccionados} puntos por ${formatearPrecio(descuentoEnPesos)} de descuento`,
         [{ text: '¡Genial!' }]
       );
+
+      await cargarPuntosUsuario();
+
     } catch (error) {
       console.error('Error canjeando puntos:', error);
-      Alert.alert('Error', 'No se pudo canjear los puntos. Intentá de nuevo.');
+      Alert.alert('❌ Error', 'No se pudo canjear los puntos. Intentá de nuevo.');
     } finally {
       setCanjeandoPuntos(false);
     }
+  };
+
+  // ✅ Función para cancelar el modal
+  const cancelarCanje = () => {
+    setPuntosSeleccionados(0);
+    setInputPuntos('');
+    setMostrarModalPuntos(false);
   };
 
   // ============================================================
   // 📊 CÁLCULOS DE PRECIOS
   // ============================================================
   const calcularDescuento = useCallback(() => {
-    if (!cuponAplicado || !cuponAplicado.recompensas) return 0;
-    const r = cuponAplicado.recompensas;
+    if (!cuponPuntosAplicado || !cuponPuntosAplicado.recompensas) return 0;
+    const r = cuponPuntosAplicado.recompensas;
 
     if (r.tipo === 'DESCUENTO_FIJO') {
       return Math.min(r.valor_descuento || 0, total);
@@ -335,14 +431,19 @@ export default function PantallaCarrito(props: any) {
     }
     if (r.tipo === 'ENVIO_GRATIS') return costoEnvioEstimado;
     return 0;
-  }, [cuponAplicado, total, costoEnvioEstimado]);
+  }, [cuponPuntosAplicado, total, costoEnvioEstimado]);
 
-  const costoEnvioFinal = cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
+  const costoEnvioFinal = cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
     ? 0
     : (envioDisponible ? costoEnvioEstimado : 0);
 
   const descuento = calcularDescuento();
   const totalFinal = total + costoEnvioFinal - descuento;
+
+  const isTablet = responsive.isTablet;
+  const isSmallPhone = responsive.isSmallPhone;
+  const padding = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
+  const tituloSize = responsive.getValor({ tablet: 28, normal: 22, small: 18 });
 
   // ============================================================
   // 🖼️ RENDER DE PRODUCTOS
@@ -363,10 +464,17 @@ export default function PantallaCarrito(props: any) {
         }}
       >
         <View style={[
-          estilos.item,
+          styles.item,
           {
             padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
             borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+            backgroundColor: DESIGN.colors.surface,
+            borderColor: DESIGN.colors.border,
+            shadowColor: DESIGN.colors.cardShadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 1,
+            shadowRadius: 4,
+            elevation: 2,
           }
         ]}>
           {/* Imagen */}
@@ -374,7 +482,7 @@ export default function PantallaCarrito(props: any) {
             <Image
               source={{ uri: item.producto.imagen }}
               style={[
-                estilos.imagen,
+                styles.imagen,
                 {
                   width: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
                   height: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
@@ -385,55 +493,57 @@ export default function PantallaCarrito(props: any) {
             />
           ) : (
             <View style={[
-              estilos.imagenPlaceholder,
+              styles.imagenPlaceholder,
               {
                 width: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
                 height: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
                 borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                backgroundColor: DESIGN.colors.surfaceHover,
               }
             ]}>
-              <Text style={[estilos.emoji, { fontSize: responsive.getValor({ tablet: 32, normal: 28, small: 24 }) }]}>
+              <Text style={[styles.emoji, { fontSize: responsive.getValor({ tablet: 32, normal: 28, small: 24 }) }]}>
                 🍔
               </Text>
             </View>
           )}
 
           {/* Info */}
-          <View style={estilos.itemInfo}>
+          <View style={styles.itemInfo}>
             <Text style={[
-              estilos.itemNombre,
-              { fontSize: responsive.getValor({ tablet: 16, normal: 15, small: 13 }) }
+              styles.itemNombre,
+              { fontSize: responsive.getValor({ tablet: 16, normal: 15, small: 13 }), color: DESIGN.colors.text }
             ]} numberOfLines={1}>
               {item.producto.nombre}
             </Text>
             <Text style={[
-              estilos.itemPrecioTotal,
-              { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }) }
+              styles.itemPrecioTotal,
+              { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }), color: DESIGN.colors.accentSecondary }
             ]}>
               {formatearPrecio(precioUnitario(item.producto.precio) * item.cantidad)}
             </Text>
           </View>
 
           {/* Controles */}
-          <View style={estilos.controles}>
+          <View style={styles.controles}>
             <TouchableOpacity
               onPress={() => disminuirCantidad(item.producto.id)}
               style={[
-                estilos.botonControl,
+                styles.botonControl,
                 {
                   width: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   height: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                  backgroundColor: DESIGN.colors.accentSecondary,
                 }
               ]}
               activeOpacity={0.7}
             >
-              <Ionicons name="remove" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={Colores.textoOscuro} />
+              <Ionicons name="remove" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.text} />
             </TouchableOpacity>
 
             <Text style={[
-              estilos.cantidad,
-              { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }) }
+              styles.cantidad,
+              { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.text }
             ]}>
               {item.cantidad}
             </Text>
@@ -441,24 +551,25 @@ export default function PantallaCarrito(props: any) {
             <TouchableOpacity
               onPress={() => aumentarCantidad(item.producto.id)}
               style={[
-                estilos.botonControl,
+                styles.botonControl,
                 {
                   width: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   height: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                  backgroundColor: DESIGN.colors.accentSecondary,
                 }
               ]}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={Colores.textoOscuro} />
+              <Ionicons name="add" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.text} />
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => quitarProducto(item.producto.id)}
-              style={estilos.botonEliminar}
+              style={styles.botonEliminar}
               activeOpacity={0.7}
             >
-              <Ionicons name="trash-outline" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={Colores.secundario} />
+              <Ionicons name="trash-outline" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.accent} />
             </TouchableOpacity>
           </View>
         </View>
@@ -469,44 +580,44 @@ export default function PantallaCarrito(props: any) {
   // ============================================================
   // 🏗️ RENDER PRINCIPAL
   // ============================================================
-  const padding = responsive.padding;
 
   if (elementos.length === 0) {
     return (
-      <View style={estilos.contenedor}>
+      <View style={styles.container}>
         <LinearGradient
-          colors={[temaKrusty.primario, Colores.verdeKrusty, Colores.fondoOscuro]}
-          style={estilos.fondoGradiente}
+          colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+          style={styles.backgroundGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-        <View style={estilos.vacio}>
-          <Ionicons name="cart-outline" size={responsive.getValor({ tablet: 100, normal: 80, small: 60 })} color={Colores.textoClaro + '30'} />
+        <View style={styles.emptyContainer}>
+          <Ionicons name="cart-outline" size={responsive.getValor({ tablet: 100, normal: 80, small: 60 })} color={DESIGN.colors.surface + '30'} />
           <Text style={[
-            estilos.vacioTexto,
-            { fontSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }) }
+            styles.emptyText,
+            { fontSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }), color: DESIGN.colors.surface }
           ]}>
             Tu carrito está vacío
           </Text>
           <Text style={[
-            estilos.vacioSubtexto,
-            { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }) }
+            styles.emptySubtext,
+            { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.surface + '60' }
           ]}>
             Agrega productos del menú 🍔
           </Text>
           <TouchableOpacity
-            style={estilos.botonVolver}
-            onPress={() => props.navigation.goBack()}
+            style={styles.emptyButton}
+            // ✅ CORREGIDO: navega a Menu en lugar de Inicio
+            onPress={() => props.navigation.navigate('Principal', { screen: 'Menu' })}
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={[temaKrusty.secundario, temaKrusty.primario]}
-              style={estilos.botonVolverGradient}
+              colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+              style={styles.emptyButtonGradient}
             >
-              <Ionicons name="restaurant" size={responsive.getValor({ tablet: 24, normal: 20, small: 18 })} color={Colores.textoOscuro} />
+              <Ionicons name="restaurant" size={responsive.getValor({ tablet: 24, normal: 20, small: 18 })} color={DESIGN.colors.text} />
               <Text style={[
-                estilos.botonVolverTexto,
-                { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }) }
+                styles.emptyButtonText,
+                { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }), color: DESIGN.colors.text }
               ]}>
                 Ir al Menú
               </Text>
@@ -518,110 +629,143 @@ export default function PantallaCarrito(props: any) {
   }
 
   return (
-    <View style={estilos.contenedor}>
+    <View style={styles.container}>
       <LinearGradient
-        colors={[temaKrusty.primario, Colores.verdeKrusty, Colores.fondoOscuro]}
-        style={estilos.fondoGradiente}
+        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        style={styles.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
       {/* ✅ HEADER */}
       <View style={[
-        estilos.header,
+        styles.header,
         {
           paddingTop: insets.top + responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
           paddingHorizontal: padding,
           paddingBottom: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+          borderBottomColor: DESIGN.colors.surface + '10',
         }
       ]}>
         <TouchableOpacity
           onPress={() => props.navigation.goBack()}
-          style={estilos.botonAtras}
+          style={styles.backButton}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 28, normal: 24, small: 20 })} color={Colores.textoClaro} />
+          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 28, normal: 24, small: 20 })} color={DESIGN.colors.surface} />
         </TouchableOpacity>
         <Text style={[
-          estilos.headerTitulo,
-          { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }) }
+          styles.headerTitle,
+          { fontSize: tituloSize, color: DESIGN.colors.surface }
         ]}>
           🛒 Carrito
         </Text>
         <View style={{ width: 30 }} />
       </View>
 
-      {/* ✅ LISTA DE PRODUCTOS CON ESPACIO PARA EL FOOTER */}
+      {/* ✅ LISTA DE PRODUCTOS */}
       <FlatList
         data={elementos}
         keyExtractor={item => item.producto.id?.toString() || Math.random().toString()}
         contentContainerStyle={[
-          estilos.lista,
+          styles.list,
           {
             paddingHorizontal: padding,
             paddingTop: responsive.getValor({ tablet: 8, normal: 6, small: 4 }),
-            // ✅ ESPACIO SUFICIENTE PARA EL FOOTER
             paddingBottom: responsive.getValor({ tablet: 240, normal: 220, small: 200 }),
           }
         ]}
         showsVerticalScrollIndicator={true}
         renderItem={renderItem}
         ListFooterComponent={
-          // ✅ FOOTER COMO PARTE DEL FLATLIST (SCROLLABLE)
           <View style={[
-            estilos.footerContainer,
+            styles.footerContainer,
             {
               marginTop: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
               padding: responsive.getValor({ tablet: 20, normal: 16, small: 14 }),
               borderRadius: responsive.getValor({ tablet: 18, normal: 14, small: 12 }),
+              backgroundColor: DESIGN.colors.surface + '90',
+              borderColor: DESIGN.colors.border,
+              shadowColor: DESIGN.colors.cardShadow,
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 1,
+              shadowRadius: 8,
+              elevation: 5,
             }
           ]}>
-            {/* FILA DE PUNTOS Y CUPONES */}
-            <View style={estilos.filaAcciones}>
-              {perfil && puntosMaximos > 0 && (
-                <TouchableOpacity
-                  style={estilos.botonPuntos}
-                  onPress={() => setMostrarModalPuntos(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="star" size={16} color={temaKrusty.secundario} />
-                  <Text style={estilos.botonPuntosTexto}>
+            {/* ✅ BOTÓN DE PUNTOS */}
+            <TouchableOpacity
+              style={[
+                styles.puntosButton,
+                {
+                  backgroundColor: DESIGN.colors.accentSecondary + '15',
+                  borderColor: DESIGN.colors.accent,
+                  borderWidth: 2.5,
+                  paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                  paddingHorizontal: responsive.getValor({ tablet: 20, normal: 16, small: 16 }),
+                  borderRadius: 14,
+                  flex: 1,
+                  shadowColor: DESIGN.colors.accent,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  elevation: 3,
+                }
+              ]}
+              onPress={() => {
+                if (cuponPuntosAplicado) {
+                  setPuntosMaximos(puntosOriginalesAntesCanje || puntosOriginales);
+                }
+                setPuntosSeleccionados(0);
+                setInputPuntos('');
+                setMostrarModalPuntos(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.puntosButtonContent}>
+                <View style={styles.puntosButtonLeft}>
+                  <Text style={[styles.actionButtonText, {
+                    color: DESIGN.colors.text,
+                    fontWeight: '700',
+                    fontSize: responsive.getValor({ tablet: 16, normal: 12, small: 13 }),
+                  }]}>
                     {puntosMaximos} pts
                   </Text>
-                </TouchableOpacity>
-              )}
-
-              {cupones.length > 0 && !cuponAplicado && (
-                <TouchableOpacity
-                  style={estilos.botonCupones}
-                  onPress={() => setMostrarCupones(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="pricetag" size={16} color={temaKrusty.secundario} />
-                  <Text style={estilos.botonCuponesTexto}>
-                    {cupones.length} cupones
+                </View>
+                <View style={styles.puntosButtonRight}>
+                  <Text style={[styles.puntosButtonLabel, {
+                    color: DESIGN.colors.accent,
+                    fontWeight: '700',
+                    fontSize: responsive.getValor({ tablet: 13, normal: 10, small: 11 }),
+                    backgroundColor: DESIGN.colors.accent + '10',
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                  }]}>
+                    💰 Canjear por descuento
                   </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                  <Ionicons name="chevron-forward" size={responsive.getValor({ tablet: 20, normal: 16, small: 14 })} color={DESIGN.colors.accent} />
+                </View>
+              </View>
+            </TouchableOpacity>
 
             {/* RESUMEN */}
-            <View style={estilos.resumenCompacto}>
-              <View style={estilos.resumenFila}>
-                <Text style={estilos.resumenLabel}>Productos ({totalProductos})</Text>
-                <Text style={estilos.resumenValor}>{formatearPrecio(total)}</Text>
+            <View style={[styles.summary, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { color: DESIGN.colors.textSecondary }]}>Productos ({totalProductos})</Text>
+                <Text style={[styles.summaryValue, { color: DESIGN.colors.text }]}>{formatearPrecio(total)}</Text>
               </View>
 
               {!calculandoEnvio && (
-                <View style={estilos.resumenFila}>
-                  <Text style={estilos.resumenLabel}>
-                    {cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? '🚚 Envío (gratis)' : '🚚 Envío'}
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: DESIGN.colors.textSecondary }]}>
+                    {cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? '🚚 Envío (gratis)' : '🚚 Envío'}
                   </Text>
                   <Text style={[
-                    estilos.resumenValor,
-                    cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' && { color: Colores.verdeClaro }
+                    styles.summaryValue,
+                    cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' && { color: DESIGN.colors.verde }
                   ]}>
-                    {cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
+                    {cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
                       ? 'GRATIS'
                       : (envioDisponible ? formatearPrecio(costoEnvioEstimado) : mensajeEnvio || '$0')
                     }
@@ -630,42 +774,42 @@ export default function PantallaCarrito(props: any) {
               )}
 
               {descuento > 0 && (
-                <View style={estilos.resumenFila}>
-                  <Text style={[estilos.resumenLabel, { color: Colores.verdeClaro }]}>🎯 Descuento</Text>
-                  <Text style={[estilos.resumenValor, { color: Colores.verdeClaro }]}>-{formatearPrecio(descuento)}</Text>
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: DESIGN.colors.verde }]}>🎯 Descuento</Text>
+                  <Text style={[styles.summaryValue, { color: DESIGN.colors.verde }]}>-{formatearPrecio(descuento)}</Text>
                 </View>
               )}
 
-              {cuponAplicado && (
-                <View style={estilos.cuponAplicadoCompacto}>
-                  <Text style={estilos.cuponAplicadoTexto} numberOfLines={1}>
-                    {cuponAplicado.recompensas?.nombre}
+              {cuponPuntosAplicado && (
+                <View style={[styles.cuponAplicado, { backgroundColor: DESIGN.colors.verde + '15', borderColor: DESIGN.colors.verde + '20' }]}>
+                  <Text style={[styles.cuponAplicadoText, { color: DESIGN.colors.verde }]} numberOfLines={1}>
+                    {cuponPuntosAplicado.recompensas?.nombre}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setCuponAplicado(null)}
+                    onPress={quitarDescuento}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="close-circle" size={18} color={Colores.secundario} />
+                    <Ionicons name="close-circle" size={18} color={DESIGN.colors.accent} />
                   </TouchableOpacity>
                 </View>
               )}
 
-              <View style={[estilos.resumenFila, estilos.resumenTotal]}>
-                <Text style={estilos.totalLabel}>Total</Text>
-                <Text style={estilos.totalPrecio}>{formatearPrecio(totalFinal)}</Text>
+              <View style={[styles.summaryRow, styles.summaryTotal]}>
+                <Text style={[styles.totalLabel, { color: DESIGN.colors.text }]}>Total</Text>
+                <Text style={[styles.totalPrice, { color: DESIGN.colors.accentSecondary }]}>{formatearPrecio(totalFinal)}</Text>
               </View>
             </View>
 
             {/* BOTÓN CHECKOUT */}
             <TouchableOpacity
-              style={estilos.botonCheckout}
+              style={styles.checkoutButton}
               onPress={() => {
                 if (!perfil || !perfil.id) {
                   setMostrarModalLogin(true);
                   return;
                 }
                 props.navigation.navigate('Checkout', {
-                  cuponAplicado,
+                  cuponPuntosAplicado,
                   descuento,
                   costoEnvio: costoEnvioFinal,
                   totalFinal,
@@ -675,22 +819,22 @@ export default function PantallaCarrito(props: any) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[temaKrusty.secundario, temaKrusty.primario]}
-                style={estilos.botonCheckoutGradient}
+                colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                style={styles.checkoutButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Ionicons name="cart" size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })} color={Colores.textoOscuro} />
+                <Ionicons name="cart" size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })} color={DESIGN.colors.text} />
                 <Text style={[
-                  estilos.botonCheckoutTexto,
-                  { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }) }
+                  styles.checkoutButtonText,
+                  { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.text }
                 ]}>
-                  Ir al Checkout
+                  Finalizar compra
                 </Text>
-                <View style={estilos.botonCheckoutPrecio}>
+                <View style={[styles.checkoutPrice, { backgroundColor: DESIGN.colors.text + '15' }]}>
                   <Text style={[
-                    estilos.botonCheckoutPrecioTexto,
-                    { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }
+                    styles.checkoutPriceText,
+                    { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }), color: DESIGN.colors.text }
                   ]}>
                     {formatearPrecio(totalFinal)}
                   </Text>
@@ -700,13 +844,13 @@ export default function PantallaCarrito(props: any) {
 
             {/* VACIAR CARRITO */}
             <TouchableOpacity
-              style={estilos.botonVaciar}
+              style={styles.emptyCartButton}
               onPress={vaciarCarrito}
               activeOpacity={0.6}
             >
               <Text style={[
-                estilos.botonVaciarTexto,
-                { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }) }
+                styles.emptyCartText,
+                { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }), color: DESIGN.colors.textTertiary }
               ]}>
                 Vaciar carrito
               </Text>
@@ -721,151 +865,278 @@ export default function PantallaCarrito(props: any) {
 
       {/* Modal de Login */}
       <Modal visible={mostrarModalLogin} transparent animationType="fade">
-        <View style={estilos.modalFondo}>
-          <View style={estilos.modal}>
-            <Text style={estilos.modalIcono}>🔐</Text>
-            <Text style={estilos.modalTitulo}>Inicia sesión</Text>
-            <Text style={estilos.modalTexto}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modal, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.accent + '30' }]}>
+            <Text style={[styles.modalIcon, { fontSize: 60 }]}>🔐</Text>
+            <Text style={[styles.modalTitle, { fontSize: 22, color: DESIGN.colors.text }]}>Inicia sesión</Text>
+            <Text style={[styles.modalText, { color: DESIGN.colors.textSecondary }]}>
               Debes iniciar sesión para realizar pedidos
             </Text>
-            <View style={estilos.modalBotones}>
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalCancelar]}
+                style={[styles.modalButton, styles.modalCancel, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}
                 onPress={() => setMostrarModalLogin(false)}
                 activeOpacity={0.7}
               >
-                <Text style={estilos.modalCancelarTexto}>Cancelar</Text>
+                <Text style={[styles.modalCancelText, { color: DESIGN.colors.textSecondary }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalConfirmar]}
+                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: DESIGN.colors.accentSecondary }]}
                 onPress={() => {
                   setMostrarModalLogin(false);
                   props.navigation.navigate('Login');
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-in" size={18} color={Colores.textoOscuro} />
-                <Text style={estilos.modalConfirmarTexto}>Iniciar sesión</Text>
+                <Ionicons name="log-in" size={18} color={DESIGN.colors.text} />
+                <Text style={[styles.modalConfirmText, { color: DESIGN.colors.text }]}>Iniciar sesión</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Modal de Cupones */}
-      <Modal visible={mostrarCupones} transparent animationType="slide">
-        <View style={estilos.modalFondo}>
-          <View style={estilos.modalCupones}>
-            <Text style={estilos.modalCuponTitulo}>🎫 Tus Cupones</Text>
-            {cupones.length === 0 ? (
-              <Text style={estilos.vacioTexto}>No tenés cupones disponibles</Text>
-            ) : (
-              cupones.map((c: any) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={estilos.cuponItem}
-                  onPress={() => {
-                    setCuponAplicado(c);
-                    setMostrarCupones(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={estilos.cuponIcono}>🎫</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={estilos.cuponNombre}>{c.recompensas?.nombre}</Text>
-                    <Text style={estilos.cuponDesc}>{c.recompensas?.descripcion}</Text>
-                  </View>
-                  <Text style={estilos.cuponAplicar}>Usar →</Text>
-                </TouchableOpacity>
-              ))
-            )}
-            <TouchableOpacity
-              style={estilos.botonCerrarCupones}
-              onPress={() => setMostrarCupones(false)}
-              activeOpacity={0.7}
-            >
-              <Text style={estilos.botonCerrarCuponesTexto}>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal de Canje de Puntos */}
+      {/* ✅ MODAL DE PUNTOS SIMPLIFICADO Y CORREGIDO */}
       <Modal visible={mostrarModalPuntos} transparent animationType="slide">
-        <View style={estilos.modalFondo}>
-          <View style={estilos.modalPuntos}>
-            <Text style={estilos.modalPuntosTitulo}>⭐ Canjear Puntos</Text>
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.modalPuntos,
+            {
+              backgroundColor: DESIGN.colors.surface,
+              borderColor: DESIGN.colors.accent + '20',
+              borderRadius: 24,
+              width: responsive.getValor({ tablet: '60%', normal: '92%', small: '95%' }),
+              maxWidth: 450,
+              padding: responsive.getValor({ tablet: 28, normal: 20, small: 16 }),
+              borderWidth: 2,
+              alignSelf: 'center',
+            }
+          ]}>
 
-            <Text style={estilos.modalPuntosInfo}>
-              Tenés <Text style={{ fontWeight: 'bold', color: temaKrusty.secundario }}>{puntosMaximos}</Text> puntos disponibles
-            </Text>
-
-            <View style={estilos.modalPuntosRegla}>
-              <Text style={estilos.modalPuntosReglaTexto}>
-                💰 100 puntos = $100 de descuento
+            {/* HEADER */}
+            <View style={styles.modalPuntosHeader}>
+              <Text style={[styles.modalPuntosTitle, {
+                fontSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }),
+                fontWeight: 'bold',
+                color: DESIGN.colors.text,
+                textAlign: 'center',
+              }]}>
+                ⭐ Canjear Puntos
+              </Text>
+              <Text style={[styles.modalPuntosSubtitle, {
+                fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                color: DESIGN.colors.textSecondary,
+                textAlign: 'center',
+                marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+              }]}>
+                Ingresá cuántos puntos querés canjear
               </Text>
             </View>
 
-            <View style={estilos.selectorPuntos}>
-              <TouchableOpacity
-                style={estilos.botonPuntosControl}
-                onPress={() => setPuntosSeleccionados(Math.max(0, puntosSeleccionados - 100))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="remove" size={24} color={Colores.textoClaro} />
-              </TouchableOpacity>
-
-              <View style={estilos.puntosDisplay}>
-                <Text style={estilos.puntosSeleccionados}>
-                  {puntosSeleccionados}
+            {/* INFO DE PUNTOS DISPONIBLES */}
+            <View style={[styles.modalPuntosInfoContainer, {
+              backgroundColor: DESIGN.colors.accentSecondary + '08',
+              borderRadius: 12,
+              padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+              marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+              borderWidth: 1,
+              borderColor: DESIGN.colors.accentSecondary + '20',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }]}>
+              <View>
+                <Text style={[styles.modalPuntosInfoLabel, {
+                  fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
+                  color: DESIGN.colors.textSecondary,
+                  fontWeight: '500',
+                }]}>
+                  Puntos disponibles
                 </Text>
-                <Text style={estilos.puntosLabel}>puntos</Text>
+                <Text style={[styles.modalPuntosInfoValue, {
+                  fontSize: responsive.getValor({ tablet: 26, normal: 22, small: 20 }),
+                  fontWeight: 'bold',
+                  color: DESIGN.colors.accentSecondary,
+                }]}>
+                  {puntosMaximos} pts
+                </Text>
               </View>
 
-              <TouchableOpacity
-                style={estilos.botonPuntosControl}
-                onPress={() => setPuntosSeleccionados(Math.min(puntosMaximos, puntosSeleccionados + 100))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={24} color={Colores.textoClaro} />
-              </TouchableOpacity>
             </View>
 
+            {/* INPUT DE PUNTOS */}
+            <View style={[styles.inputContainer, {
+              marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+            }]}>
+              <Text style={[styles.inputLabel, {
+                fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                color: DESIGN.colors.textSecondary,
+                marginBottom: 6,
+              }]}>
+                Cantidad de puntos
+              </Text>
+              <View style={[styles.inputWrapper, {
+                borderColor: DESIGN.colors.border,
+                backgroundColor: DESIGN.colors.surfaceHover,
+                borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                borderWidth: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                overflow: 'hidden',
+              }]}>
+                <TouchableOpacity
+                  style={[styles.inputButton, {
+                    paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                    paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                    backgroundColor: DESIGN.colors.surface,
+                    borderRightWidth: 1,
+                    borderRightColor: DESIGN.colors.border,
+                  }]}
+                  onPress={() => {
+                    const nuevo = Math.max(0, puntosSeleccionados - 100);
+                    setPuntosSeleccionados(nuevo);
+                    setInputPuntos(nuevo.toString());
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="remove" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DESIGN.colors.text} />
+                </TouchableOpacity>
+
+                <TextInput
+                  style={[styles.inputField, {
+                    fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
+                    color: DESIGN.colors.text,
+                    paddingHorizontal: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                    paddingVertical: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                    flex: 1,
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    minWidth: 60,
+                  }]}
+                  value={inputPuntos}
+                  onChangeText={handleInputPuntos}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={DESIGN.colors.textTertiary}
+                  selectionColor={DESIGN.colors.accent}
+                />
+
+                <TouchableOpacity
+                  style={[styles.inputButton, {
+                    paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                    paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                    backgroundColor: DESIGN.colors.surface,
+                    borderLeftWidth: 1,
+                    borderLeftColor: DESIGN.colors.border,
+                  }]}
+                  onPress={() => {
+                    const nuevo = Math.min(puntosMaximos, puntosSeleccionados + 100);
+                    setPuntosSeleccionados(nuevo);
+                    setInputPuntos(nuevo.toString());
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DESIGN.colors.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* RESUMEN DEL DESCUENTO */}
             {puntosSeleccionados > 0 && (
-              <View style={estilos.modalPuntosDescuentoContainer}>
-                <Text style={estilos.modalPuntosDescuentoLabel}>Descuento a aplicar:</Text>
-                <Text style={estilos.modalPuntosDescuento}>
+              <View style={[styles.modalPuntosDescuentoContainer, {
+                backgroundColor: DESIGN.colors.accentSecondary + '08',
+                borderRadius: 12,
+                padding: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+                borderWidth: 1,
+                borderColor: DESIGN.colors.accentSecondary + '20',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }]}>
+                <Text style={[styles.modalPuntosDescuentoLabel, {
+                  fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                  color: DESIGN.colors.text,
+                  fontWeight: '500',
+                }]}>
+                  💰 Descuento:
+                </Text>
+                <Text style={[styles.modalPuntosDescuento, {
+                  fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
+                  fontWeight: 'bold',
+                  color: DESIGN.colors.accentSecondary,
+                }]}>
                   {formatearPrecio(Math.floor(puntosSeleccionados / 100) * 100)}
                 </Text>
               </View>
             )}
 
-            <View style={estilos.modalPuntosBotones}>
+            {/* BOTONES DE ACCIÓN */}
+            <View style={[styles.modalPuntosBotones, {
+              flexDirection: 'row',
+              gap: 12,
+            }]}>
               <TouchableOpacity
-                style={[estilos.botonPuntosAccion, estilos.botonPuntosCancelar]}
-                onPress={() => {
-                  setMostrarModalPuntos(false);
-                  setPuntosSeleccionados(0);
-                }}
+                style={[styles.puntosAction, styles.puntosCancel, {
+                  flex: 1,
+                  paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  backgroundColor: DESIGN.colors.surfaceHover,
+                  borderWidth: 1,
+                  borderColor: DESIGN.colors.border,
+                }]}
+                onPress={cancelarCanje}
                 activeOpacity={0.7}
               >
-                <Text style={estilos.botonPuntosCancelarTexto}>Cancelar</Text>
+                <Text style={[styles.puntosCancelText, {
+                  color: DESIGN.colors.textSecondary,
+                  fontWeight: '600',
+                  fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                }]}>
+                  Cancelar
+                </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={[estilos.botonPuntosAccion, estilos.botonPuntosConfirmar]}
+                style={[styles.puntosAction, styles.puntosConfirm, {
+                  flex: 1,
+                  paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  backgroundColor: puntosSeleccionados >= 100 ? DESIGN.colors.accentSecondary : DESIGN.colors.surfaceHover,
+                  borderWidth: 1,
+                  borderColor: puntosSeleccionados >= 100 ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
+                }]}
                 onPress={canjearPuntos}
                 disabled={canjeandoPuntos || puntosSeleccionados < 100}
                 activeOpacity={0.7}
               >
                 {canjeandoPuntos ? (
-                  <ActivityIndicator size="small" color={Colores.textoOscuro} />
+                  <ActivityIndicator size="small" color={DESIGN.colors.text} />
                 ) : (
-                  <Text style={estilos.botonPuntosConfirmarTexto}>
-                    {puntosSeleccionados < 100 ? 'Mínimo 100 pts' : 'Canjear'}
+                  <Text style={[styles.puntosConfirmText, {
+                    color: puntosSeleccionados >= 100 ? DESIGN.colors.text : DESIGN.colors.textTertiary,
+                    fontWeight: 'bold',
+                    fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                  }]}>
+                    {puntosSeleccionados < 100 ? 'Mínimo 100 pts' : '✅ Canjear'}
                   </Text>
                 )}
               </TouchableOpacity>
             </View>
+
+            {/* MENSAJE INFORMATIVO */}
+            {puntosSeleccionados < 100 && puntosSeleccionados > 0 && (
+              <Text style={[styles.modalPuntosMinimo, {
+                fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }),
+                color: DESIGN.colors.accent,
+                textAlign: 'center',
+                marginTop: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+              }]}>
+                ⚠️ Mínimo 100 puntos (${formatearPrecio(100)} de descuento)
+              </Text>
+            )}
           </View>
         </View>
       </Modal>
@@ -874,104 +1145,90 @@ export default function PantallaCarrito(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - PROFESIONALES
+// 🎨 ESTILOS - CLAROS Y ELEGANTES
 // ============================================================
-const estilos = StyleSheet.create({
-  contenedor: {
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
-    backgroundColor: Colores.fondoOscuro,
+    backgroundColor: DESIGN.colors.fondo,
   },
-  fondoGradiente: {
+  backgroundGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
-
-  // ============================================================
-  // HEADER
-  // ============================================================
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: Colores.textoClaro + '8',
-    backgroundColor: Colores.fondoOscuro + '50',
+    backgroundColor: DESIGN.colors.surface + '10',
   },
-  botonAtras: {
+  backButton: {
     padding: 4,
   },
-  headerTitulo: {
+  headerTitle: {
     fontWeight: 'bold',
-    color: Colores.textoClaro,
+    letterSpacing: 0.5,
   },
-
-  // ============================================================
-  // VACÍO
-  // ============================================================
-  vacio: {
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  vacioTexto: {
+  emptyText: {
     fontWeight: 'bold',
-    color: Colores.textoClaro,
     marginTop: 16,
     textAlign: 'center',
+    opacity: 0.8,
   },
-  vacioSubtexto: {
-    color: Colores.textoGris,
+  emptySubtext: {
     marginTop: 8,
     textAlign: 'center',
+    opacity: 0.5,
   },
-  botonVolver: {
+  emptyButton: {
     marginTop: 24,
     overflow: 'hidden',
     borderRadius: 12,
     elevation: 4,
-    shadowColor: Colores.secundario,
+    shadowColor: DESIGN.colors.accentSecondary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
   },
-  botonVolverGradient: {
+  emptyButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  botonVolverTexto: {
-    color: Colores.textoOscuro,
+  emptyButtonText: {
     fontWeight: 'bold',
   },
-
-  // ============================================================
-  // LISTA DE PRODUCTOS
-  // ============================================================
-  lista: {
+  list: {
     flexGrow: 1,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colores.fondoOscuro + '60',
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '6',
   },
   imagen: {
     marginRight: 10,
+    backgroundColor: DESIGN.colors.surfaceHover,
   },
   imagenPlaceholder: {
-    backgroundColor: Colores.secundario + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
   emoji: {},
   itemInfo: {
@@ -979,12 +1236,10 @@ const estilos = StyleSheet.create({
   },
   itemNombre: {
     fontWeight: 'bold',
-    color: Colores.textoClaro,
     letterSpacing: 0.3,
   },
   itemPrecioTotal: {
     fontWeight: 'bold',
-    color: '#F5C518',
     marginTop: 2,
   },
   controles: {
@@ -994,12 +1249,12 @@ const estilos = StyleSheet.create({
     marginLeft: 6,
   },
   botonControl: {
-    backgroundColor: '#F5C518',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
   cantidad: {
-    color: Colores.textoClaro,
     fontWeight: 'bold',
     minWidth: 24,
     textAlign: 'center',
@@ -1008,127 +1263,85 @@ const estilos = StyleSheet.create({
     padding: 4,
     marginLeft: 2,
   },
-
-  // ============================================================
-  // FOOTER - DENTRO DEL FLATLIST
-  // ============================================================
   footerContainer: {
-    backgroundColor: Colores.fondoOscuro + '85',
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '8',
     marginBottom: 20,
   },
-  filaAcciones: {
+  actionRow: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 8,
   },
-  botonPuntos: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colores.fondoOscuro + '40',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '8',
   },
-  botonPuntosTexto: {
+  actionButtonText: {
     fontSize: 12,
-    color: Colores.textoClaro,
     fontWeight: '500',
   },
-  botonCupones: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colores.fondoOscuro + '40',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colores.textoClaro + '8',
-  },
-  botonCuponesTexto: {
-    fontSize: 12,
-    color: Colores.textoClaro,
-    fontWeight: '500',
-  },
-
-  // ============================================================
-  // RESUMEN
-  // ============================================================
-  resumenCompacto: {
-    backgroundColor: Colores.fondoOscuro + '30',
+  summary: {
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '5',
   },
-  resumenFila: {
+  summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 3,
   },
-  resumenLabel: {
+  summaryLabel: {
     fontSize: 13,
-    color: Colores.textoGris,
   },
-  resumenValor: {
+  summaryValue: {
     fontSize: 13,
-    color: Colores.textoClaro,
     fontWeight: '500',
   },
-  resumenTotal: {
+  summaryTotal: {
     borderTopWidth: 1,
-    borderTopColor: Colores.textoClaro + '10',
+    borderTopColor: DESIGN.colors.border,
     paddingTop: 6,
     marginTop: 4,
   },
   totalLabel: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: Colores.textoClaro,
   },
-  totalPrecio: {
+  totalPrice: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#F5C518',
   },
-  cuponAplicadoCompacto: {
+  cuponAplicado: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colores.verdeClaro + '15',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     marginVertical: 4,
     borderWidth: 1,
-    borderColor: Colores.verdeClaro + '20',
   },
-  cuponAplicadoTexto: {
+  cuponAplicadoText: {
     fontSize: 12,
-    color: Colores.verdeClaro,
     fontWeight: '500',
     flex: 1,
   },
-
-  // ============================================================
-  // BOTÓN CHECKOUT
-  // ============================================================
-  botonCheckout: {
+  checkoutButton: {
     overflow: 'hidden',
     elevation: 6,
-    shadowColor: '#F5C518',
+    shadowColor: DESIGN.colors.accentSecondary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     marginBottom: 6,
   },
-  botonCheckoutGradient: {
+  checkoutButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1136,236 +1349,105 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
   },
-  botonCheckoutTexto: {
-    color: Colores.textoOscuro,
+  checkoutButtonText: {
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  botonCheckoutPrecio: {
-    backgroundColor: Colores.textoOscuro + '15',
+  checkoutPrice: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colores.textoOscuro + '10',
+    borderColor: DESIGN.colors.text + '10',
   },
-  botonCheckoutPrecioTexto: {
-    color: Colores.textoOscuro,
+  checkoutPriceText: {
     fontWeight: '800',
   },
-  botonVaciar: {
+  emptyCartButton: {
     alignItems: 'center',
     paddingVertical: 6,
   },
-  botonVaciarTexto: {
-    color: Colores.secundario,
+  emptyCartText: {
     fontWeight: '500',
     opacity: 0.5,
-    fontSize: 12,
   },
-
-  // ============================================================
-  // MODALES
-  // ============================================================
-  modalFondo: {
+  puntosButton: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
-  modal: {
-    backgroundColor: Colores.fondoOscuro,
-    borderRadius: 24,
-    width: '90%',
-    maxWidth: 400,
-    padding: 30,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#F5C518' + '30',
-  },
-  modalIcono: {
-    fontSize: 60,
-    marginBottom: 12,
-  },
-  modalTitulo: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colores.textoClaro,
-    marginBottom: 8,
-  },
-  modalTexto: {
-    fontSize: 14,
-    color: Colores.textoGris,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modalBotones: {
+  puntosButtonContent: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     width: '100%',
   },
-  modalBoton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+  puntosButtonLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  puntosButtonRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  puntosButtonLabel: {
+    fontWeight: '600',
+  },
+  // ✅ ESTILOS DEL INPUT
+  inputContainer: {
+    width: '100%',
+  },
+  inputLabel: {
+    fontWeight: '500',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  inputButton: {
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  modalCancelar: {
-    backgroundColor: Colores.fondoOscuro + '60',
-    borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
-  },
-  modalCancelarTexto: {
-    color: Colores.textoClaro,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  modalConfirmar: {
-    backgroundColor: '#F5C518',
-  },
-  modalConfirmarTexto: {
-    color: Colores.textoOscuro,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-
-  // ============================================================
-  // MODAL CUPONES
-  // ============================================================
-  modalCupones: {
-    backgroundColor: Colores.fondoOscuro,
-    borderRadius: 24,
-    width: '92%',
-    maxWidth: 500,
-    maxHeight: '75%',
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#F5C518' + '20',
-  },
-  modalCuponTitulo: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colores.textoClaro,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  cuponItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colores.fondoOscuro + '40',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: Colores.textoClaro + '8',
   },
-  cuponIcono: {
-    fontSize: 32,
-  },
-  cuponNombre: {
-    fontSize: 14,
+  inputField: {
     fontWeight: 'bold',
-    color: Colores.textoClaro,
+    minWidth: 60,
   },
-  cuponDesc: {
-    fontSize: 11,
-    color: Colores.textoGris,
-    marginTop: 2,
-    opacity: 0.7,
-  },
-  cuponAplicar: {
-    fontSize: 13,
-    color: '#F5C518',
-    fontWeight: '600',
-  },
-  botonCerrarCupones: {
-    backgroundColor: '#F5C518',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  botonCerrarCuponesTexto: {
-    color: Colores.textoOscuro,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-
-  // ============================================================
-  // MODAL PUNTOS
-  // ============================================================
+  // ✅ ESTILOS DEL MODAL PUNTOS
   modalPuntos: {
-    backgroundColor: Colores.fondoOscuro,
-    borderRadius: 24,
-    width: '90%',
-    maxWidth: 400,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#F5C518' + '20',
+    alignSelf: 'center',
   },
-  modalPuntosTitulo: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: Colores.textoClaro,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  modalPuntosInfo: {
-    fontSize: 14,
-    color: Colores.textoGris,
-    textAlign: 'center',
+  modalPuntosHeader: {
     marginBottom: 4,
   },
-  modalPuntosRegla: {
-    backgroundColor: '#F5C518' + '15',
-    padding: 8,
-    borderRadius: 10,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#F5C518' + '30',
-  },
-  modalPuntosReglaTexto: {
-    fontSize: 14,
-    color: '#F5C518',
+  modalPuntosTitle: {
     fontWeight: 'bold',
-    textAlign: 'center',
   },
-  selectorPuntos: {
+  modalPuntosSubtitle: {
+    fontWeight: '400',
+  },
+  modalPuntosInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    marginVertical: 16,
+    justifyContent: 'space-between',
   },
-  botonPuntosControl: {
-    backgroundColor: Colores.fondoOscuro + '40',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
+  modalPuntosInfoLabel: {
+    fontWeight: '500',
   },
-  puntosDisplay: {
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  puntosSeleccionados: {
-    fontSize: 24,
+  modalPuntosInfoValue: {
     fontWeight: 'bold',
-    color: Colores.textoClaro,
-    textAlign: 'center',
   },
-  puntosLabel: {
-    fontSize: 12,
-    color: Colores.textoGris,
-    marginTop: 2,
+  modalPuntosEquivalencia: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  modalPuntosEquivalenciaText: {
+    fontWeight: '600',
+  },
+  modalPuntosMinimo: {
+    fontWeight: '500',
+    marginTop: 8,
   },
   modalPuntosDescuentoContainer: {
     flexDirection: 'row',
@@ -1375,39 +1457,87 @@ const estilos = StyleSheet.create({
     marginBottom: 16,
   },
   modalPuntosDescuentoLabel: {
-    fontSize: 14,
-    color: Colores.textoClaro,
+    fontWeight: '500',
   },
   modalPuntosDescuento: {
-    fontSize: 18,
     fontWeight: 'bold',
-    color: '#F5C518',
   },
   modalPuntosBotones: {
     flexDirection: 'row',
     gap: 12,
   },
-  botonPuntosAccion: {
+  puntosAction: {
     flex: 1,
-    paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
-  botonPuntosCancelar: {
-    backgroundColor: Colores.fondoOscuro + '40',
+  puntosCancel: {
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
   },
-  botonPuntosCancelarTexto: {
-    color: Colores.textoClaro,
+  puntosCancelText: {
+    fontWeight: '600',
+  },
+  puntosConfirm: {
+    borderWidth: 1,
+    borderColor: DESIGN.colors.accentSecondary,
+  },
+  puntosConfirmText: {
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modal: {
+    borderRadius: 24,
+    width: '90%',
+    maxWidth: 400,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  modalIcon: {
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    opacity: 0.8,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  modalCancel: {
+    borderWidth: 1,
+  },
+  modalCancelText: {
     fontWeight: '600',
     fontSize: 14,
   },
-  botonPuntosConfirmar: {
-    backgroundColor: '#F5C518',
+  modalConfirm: {
+    borderWidth: 1,
+    borderColor: DESIGN.colors.accentSecondary,
   },
-  botonPuntosConfirmarTexto: {
-    color: Colores.textoOscuro,
+  modalConfirmText: {
     fontWeight: 'bold',
     fontSize: 14,
   },

@@ -39,6 +39,9 @@ export const estilos = StyleSheet.create({
         fontSize: 16,
         paddingVertical: 4,
     },
+    botonLimpiar: {
+        padding: 4,
+    },
     botonConfirmar: {
         overflow: 'hidden',
         borderRadius: 12,

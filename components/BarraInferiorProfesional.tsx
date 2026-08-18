@@ -1,5 +1,5 @@
-// components/BarraInferiorProfesional.tsx
-import React, { useRef, useEffect } from 'react';
+// components/BarraInferiorProfesional.tsx - VERSIÓN ULTRA RÁPIDA
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,9 +12,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colores } from '../lib/colores';
-import { IconProps } from '@expo/vector-icons/build/createIconSet';
+import { tiendaCarrito } from '../stores/tiendaCarrito';
 
-// ✅ TEMÁTICA KRUSTY - VERSIÓN SOFISTICADA
+// ✅ TEMÁTICA KRUSTY
 const temaApp = {
     primario: '#E53935',
     secundario: '#F5C518',
@@ -32,7 +32,6 @@ const temaApp = {
     },
 };
 
-// ✅ TIPO CORRECTO PARA LOS ICONOS DE IONICONS
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface TabItem {
@@ -46,15 +45,49 @@ interface Props {
     state?: any;
     descriptors?: any;
     navigation?: any;
-    badge?: number;
 }
 
-export default function BarraInferiorProfesional({ state, descriptors, navigation, badge = 0 }: Props) {
+export default function BarraInferiorProfesional({ state, descriptors, navigation }: Props) {
     const insets = useSafeAreaInsets();
     const translateY = useRef(new Animated.Value(50)).current;
     const opacity = useRef(new Animated.Value(0)).current;
 
-    // ✅ Animación de entrada
+    // ✅ ESTADO LOCAL CON VALOR INICIAL
+    const [cantidadCarrito, setCantidadCarrito] = useState(0);
+
+    // ✅ FUNCIÓN PARA OBTENER LA CANTIDAD DIRECTAMENTE DEL STORE
+    const obtenerCantidad = useCallback(() => {
+        return tiendaCarrito.getState().cantidadTotal();
+    }, []);
+
+    // ✅ ACTUALIZAR EL BADGE INMEDIATAMENTE
+    const actualizarBadge = useCallback(() => {
+        const nuevaCantidad = obtenerCantidad();
+        if (nuevaCantidad !== cantidadCarrito) {
+            console.log('🛒 [Barra] Badge actualizado:', nuevaCantidad);
+            setCantidadCarrito(nuevaCantidad);
+        }
+    }, [cantidadCarrito, obtenerCantidad]);
+
+    // ✅ SUSCRIPCIÓN AL STORE - REACCIONA INMEDIATAMENTE
+    useEffect(() => {
+        // ✅ VALOR INICIAL
+        actualizarBadge();
+
+        // ✅ SUSCRIBIRSE A CAMBIOS DEL STORE
+        const unsubscribe = tiendaCarrito.subscribe(
+            () => {
+
+                actualizarBadge();
+            }
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [actualizarBadge]);
+
+    // ✅ ANIMACIÓN DE ENTRADA
     useEffect(() => {
         Animated.parallel([
             Animated.spring(translateY, {
@@ -71,16 +104,15 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
         ]).start();
     }, []);
 
-    // ✅ TABS CON TIPADO CORRECTO
+    // ✅ TABS
     const tabs: TabItem[] = [
         { name: 'Inicio', label: 'Inicio', icon: 'home-outline', iconFocused: 'home' },
         { name: 'Menu', label: 'Menú', icon: 'restaurant-outline', iconFocused: 'restaurant' },
-        { name: 'Ofertas', label: 'Ofertas', icon: 'pricetag-outline', iconFocused: 'pricetag' },
+        { name: 'Carrito', label: 'Carrito', icon: 'cart-outline', iconFocused: 'cart' },
         { name: 'Pedidos', label: 'Pedidos', icon: 'receipt-outline', iconFocused: 'receipt' },
         { name: 'Perfil', label: 'Perfil', icon: 'person-outline', iconFocused: 'person' },
     ];
 
-    // ✅ MANEJO DE SEGURIDAD PARA STATE
     const isFocused = (routeName: string) => {
         if (!state || !state.routes || state.routes.length === 0) {
             return routeName === 'Inicio';
@@ -102,12 +134,10 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
         }
     };
 
-    // ✅ SI NO HAY STATE, NO RENDERIZAR
     if (!state || !state.routes) {
         return null;
     }
 
-    // ✅ Colores de la temática
     const tabColors = temaApp.tabBar;
 
     return (
@@ -127,7 +157,6 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                 },
             ]}
         >
-            {/* ✅ Fondo con gradiente sutil */}
             <LinearGradient
                 colors={tabColors.gradiente}
                 style={styles.fondoGradiente}
@@ -135,7 +164,6 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                 end={{ x: 1, y: 0 }}
             />
 
-            {/* ✅ Borde superior con gradiente elegante */}
             <LinearGradient
                 colors={['transparent', tabColors.activo + '30', 'transparent']}
                 style={styles.bordeSuperior}
@@ -143,10 +171,10 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                 end={{ x: 1, y: 0 }}
             />
 
-            {/* ✅ Botones */}
             <View style={styles.botonesContainer}>
                 {tabs.map((tab) => {
                     const focused = isFocused(tab.name);
+                    const mostrarBadge = tab.name === 'Carrito' && cantidadCarrito > 0;
 
                     return (
                         <TouchableOpacity
@@ -156,7 +184,6 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                             onPress={() => onPress(tab.name)}
                         >
                             <View style={styles.botonContenido}>
-                                {/* ✅ Icono con efecto de escala */}
                                 <Animated.View
                                     style={[
                                         styles.iconoWrapper,
@@ -170,7 +197,6 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                                     />
                                 </Animated.View>
 
-                                {/* ✅ Etiqueta */}
                                 <Text
                                     style={[
                                         styles.etiqueta,
@@ -185,19 +211,19 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
                                     {tab.label}
                                 </Text>
 
-                                {/* ✅ Badge en Perfil */}
-                                {tab.name === 'Perfil' && badge > 0 && (
+                                {mostrarBadge && (
                                     <View style={styles.badgeContainer}>
                                         <LinearGradient
                                             colors={['#FF6B6B', temaApp.primario]}
                                             style={styles.badgeGradiente}
                                         >
-                                            <Text style={styles.badgeTexto}>{badge > 99 ? '99+' : badge}</Text>
+                                            <Text style={styles.badgeTexto}>
+                                                {cantidadCarrito > 99 ? '99+' : cantidadCarrito}
+                                            </Text>
                                         </LinearGradient>
                                     </View>
                                 )}
 
-                                {/* ✅ Indicador de foco */}
                                 {focused && (
                                     <View style={styles.indicadorContainer}>
                                         <LinearGradient
@@ -217,9 +243,7 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
     );
 }
 
-// ============================================================
-// 🎨 ESTILOS - SOFISTICADOS Y ELEGANTES
-// ============================================================
+// ✅ ESTILOS
 const styles = StyleSheet.create({
     contenedor: {
         position: 'absolute',
@@ -270,9 +294,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    iconoWrapperActivo: {
-        // Espacio para el indicador
-    },
+    iconoWrapperActivo: {},
     etiqueta: {
         marginTop: 2,
         textAlign: 'center',

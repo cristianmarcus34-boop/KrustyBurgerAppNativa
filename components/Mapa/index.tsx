@@ -7,6 +7,8 @@ import {
     TextInput,
     Modal,
     ActivityIndicator,
+    Keyboard,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -42,9 +44,11 @@ export default function MapaSelector({
     const [cargandoUbicacion, setCargandoUbicacion] = useState(false);
     const mapRef = useRef<MapView>(null);
 
+    // ✅ Sincronizar cuando cambia la ubicación inicial
     useEffect(() => {
-        if (ubicacionInicial) {
+        if (ubicacionInicial && visible) {
             setUbicacionSeleccionada(ubicacionInicial);
+            setDireccion(direccionInicial);
             if (mapRef.current) {
                 mapRef.current.animateToRegion({
                     latitude: ubicacionInicial.latitude,
@@ -54,7 +58,7 @@ export default function MapaSelector({
                 }, 500);
             }
         }
-    }, [ubicacionInicial]);
+    }, [ubicacionInicial, direccionInicial, visible]);
 
     // ✅ Obtener dirección desde coordenadas
     const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
@@ -114,22 +118,43 @@ export default function MapaSelector({
         }
     };
 
-    // ✅ Buscar dirección manual
+    // ✅ Buscar dirección manual - CORREGIDO (sin cerrar el modal)
     const buscarDireccionManual = async () => {
-        if (busquedaManual.length < 3) return;
+        if (busquedaManual.length < 3) {
+            return;
+        }
 
         setBuscando(true);
+
+        // ✅ Ocultar teclado sin cerrar el modal
+        if (Platform.OS === 'ios') {
+            Keyboard.dismiss();
+        } else {
+            Keyboard.dismiss();
+        }
+
         try {
+            console.log('🔍 Buscando dirección:', busquedaManual);
             const resultados = await Location.geocodeAsync(busquedaManual);
+
             if (resultados && resultados.length > 0) {
                 const { latitude, longitude } = resultados[0];
+                console.log('📍 Ubicación encontrada:', latitude, longitude);
+
+                // ✅ Actualizar ubicación
                 setUbicacionSeleccionada({ latitude, longitude });
 
+                // ✅ Obtener dirección formateada
                 const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
+                console.log('📌 Dirección obtenida:', direccionObtenida);
+
                 if (direccionObtenida) {
                     setDireccion(direccionObtenida);
+                } else {
+                    setDireccion(busquedaManual);
                 }
 
+                // ✅ Mover el mapa a la ubicación encontrada
                 if (mapRef.current) {
                     mapRef.current.animateToRegion({
                         latitude,
@@ -138,10 +163,15 @@ export default function MapaSelector({
                         longitudeDelta: 0.01,
                     }, 1000);
                 }
+
+                // ✅ Limpiar el campo de búsqueda
                 setBusquedaManual('');
+            } else {
+                console.log('⚠️ No se encontraron resultados para:', busquedaManual);
+                // ✅ Mostrar un mensaje visual o toast
             }
         } catch (error) {
-            console.log('Error buscando dirección:', error);
+            console.log('❌ Error buscando dirección:', error);
         } finally {
             setBuscando(false);
         }
@@ -169,20 +199,30 @@ export default function MapaSelector({
         }
     };
 
+    // ✅ Prevenir que el modal se cierre al tocar fuera
+    const handleClose = () => {
+        // ✅ Solo cerrar si no hay una búsqueda en curso
+        if (!buscando) {
+            onClose();
+        }
+    };
+
     return (
         <Modal
             visible={visible}
             transparent={false}
             animationType="slide"
-            onRequestClose={onClose}
+            onRequestClose={handleClose}
+            statusBarTranslucent={true}
         >
             <View style={estilos.contenedor}>
                 {/* ✅ HEADER */}
                 <View style={estilos.header}>
                     <TouchableOpacity
                         style={estilos.botonVolver}
-                        onPress={onClose}
+                        onPress={handleClose}
                         activeOpacity={0.7}
+                        disabled={buscando}
                     >
                         <Ionicons name="arrow-back" size={28} color={Colores.textoClaro} />
                     </TouchableOpacity>
@@ -198,7 +238,18 @@ export default function MapaSelector({
                             onChangeText={setBusquedaManual}
                             onSubmitEditing={buscarDireccionManual}
                             returnKeyType="search"
+                            autoCapitalize="words"
+                            editable={!buscando}
                         />
+                        {busquedaManual.length > 0 && !buscando && (
+                            <TouchableOpacity
+                                onPress={() => setBusquedaManual('')}
+                                style={estilos.botonLimpiar}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close-circle" size={20} color={Colores.textoGris} />
+                            </TouchableOpacity>
+                        )}
                         {buscando && (
                             <ActivityIndicator size="small" color={Colores.bartNaranja} />
                         )}
@@ -208,6 +259,7 @@ export default function MapaSelector({
                         style={estilos.botonConfirmar}
                         onPress={handleConfirmar}
                         activeOpacity={0.7}
+                        disabled={buscando}
                     >
                         <LinearGradient
                             colors={[Colores.bartNaranja, Colores.bartAzul]}
@@ -262,7 +314,7 @@ export default function MapaSelector({
                         style={estilos.botonMiUbicacion}
                         onPress={obtenerUbicacionActual}
                         activeOpacity={0.7}
-                        disabled={cargandoUbicacion}
+                        disabled={cargandoUbicacion || buscando}
                     >
                         {cargandoUbicacion ? (
                             <ActivityIndicator size="small" color={Colores.bartNaranja} />

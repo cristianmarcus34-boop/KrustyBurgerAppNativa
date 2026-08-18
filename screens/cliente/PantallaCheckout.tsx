@@ -1,5 +1,5 @@
 // screens/cliente/PantallaCheckout.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,25 +8,18 @@ import {
     TouchableOpacity,
     TextInput,
     Modal,
-    Dimensions,
     Animated,
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     Clipboard,
     Linking,
+    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-
-// ============================================================
-// 🚫 COMENTADO TEMPORALMENTE - MERCADO PAGO (expo-web-browser)
-// ============================================================
-// import * as WebBrowser from 'expo-web-browser';
-// import { tiendaPago } from '../../stores/tiendaPago';
-// import { servicioPagos } from '../../services/servicioPagos';
 
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
@@ -40,22 +33,85 @@ import { UbicacionGuardada } from '../../lib/tipos';
 // ✅ IMPORTAR MAPA SELECTOR
 import MapaSelector from '../../components/Mapa';
 
-const { width, height } = Dimensions.get('window');
-
-const UBICACION_DEFAULT = {
-    latitude: -34.776484410467525,
-    longitude: -58.29220250409459,
+// ============================================================
+// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
+// ============================================================
+const DESIGN = {
+    colors: {
+        fondo: '#F5F2ED',
+        surface: '#FFFFFF',
+        surfaceHover: '#F8F6F2',
+        card: '#FFFFFF',
+        cardShadow: 'rgba(0,0,0,0.06)',
+        border: 'rgba(0,0,0,0.06)',
+        borderLight: 'rgba(0,0,0,0.04)',
+        text: '#1A1A1A',
+        textSecondary: 'rgba(0,0,0,0.55)',
+        textTertiary: 'rgba(0,0,0,0.30)',
+        accent: '#E53935',
+        accentLight: '#FF6B6B',
+        accentSecondary: '#F5C518',
+        accentSecondaryLight: '#FFE135',
+        gradientStart: '#E53935',
+        gradientEnd: '#F5C518',
+        verde: '#43A047',
+        verdeClaro: '#66BB6A',
+        rosa: '#EC407A',
+        azul: '#1A237E',
+        azulClaro: '#3949AB',
+        platino: '#78909C',
+        oro: '#F9A825',
+        plata: '#BDBDBD',
+        bronce: '#A1887F',
+    },
+    spacing: {
+        xs: 4,
+        sm: 8,
+        md: 16,
+        lg: 24,
+        xl: 32,
+        '2xl': 48,
+    },
+    radius: {
+        sm: 8,
+        md: 12,
+        lg: 16,
+        xl: 20,
+        full: 999,
+    },
 };
 
-// ✅ DECLARADAS FUERA DEL COMPONENTE PARA QUE LOS ESTILOS PUEDAN USARLAS
-const isTablet = width >= 768;
-const isSmallPhone = width < 375;
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+    const { width, height } = useWindowDimensions();
+    const isTablet = width >= 768;
+    const isDesktop = width >= 1024;
+    const isSmallPhone = width < 375;
+
+    const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+        if (isDesktop || isTablet) return valores.tablet;
+        if (isSmallPhone) return valores.small;
+        return valores.normal;
+    }, [isDesktop, isTablet, isSmallPhone]);
+
+    const spacing = (base: number) => {
+        if (isTablet) return base * 1.5;
+        if (isSmallPhone) return base * 0.75;
+        return base;
+    };
+
+    return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+};
 
 // ✅ ALIAS DE TRANSFERENCIA
 const ALIAS_TRANSFERENCIA = 'krustyburger2025';
 const CUENTA_TRANSFERENCIA = 'CBU: 1234567890123456789012';
 
 export default function PantallaCheckout(props: any) {
+    const responsive = useResponsive();
+    const insets = useSafeAreaInsets();
     const { elementos, vaciarCarrito, calcularTotal } = tiendaCarrito();
     const { crearPedido } = tiendaPedidos();
     const {
@@ -67,7 +123,6 @@ export default function PantallaCheckout(props: any) {
         limpiarUbicacionTemporal
     } = tiendaAutenticacion();
 
-    const insets = useSafeAreaInsets();
     const toast = useToast();
 
     const total = calcularTotal();
@@ -90,6 +145,11 @@ export default function PantallaCheckout(props: any) {
     const [pedidoCreadoId, setPedidoCreadoId] = useState<number | null>(null);
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
     const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
+
+    // ✅ ESTADO PARA PAGO EN EFECTIVO
+    const [montoConQuePaga, setMontoConQuePaga] = useState<string>('');
+    const [vueltoCalculado, setVueltoCalculado] = useState<number>(0);
+    const [mostrarVuelto, setMostrarVuelto] = useState(false);
 
     // ✅ ESTADO PARA MODAL DE TRANSFERENCIA
     const [mostrarModalTransferencia, setMostrarModalTransferencia] = useState(false);
@@ -124,8 +184,32 @@ export default function PantallaCheckout(props: any) {
     const dot2Anim = useRef(new Animated.Value(0)).current;
     const dot3Anim = useRef(new Animated.Value(0)).current;
 
+    const isTablet = responsive.isTablet;
+    const isSmallPhone = responsive.isSmallPhone;
+
     // ✅ FUNCIÓN PARA OBTENER PRECIO UNITARIO
     const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
+
+    // ✅ CALCULAR VUELTO
+    const calcularVuelto = (montoPago: string) => {
+        const pago = parseFloat(montoPago.replace(',', '.'));
+        if (isNaN(pago) || pago <= 0) {
+            setVueltoCalculado(0);
+            setMostrarVuelto(false);
+            return;
+        }
+
+        const totalAPagar = totalFinal;
+        const vuelto = pago - totalAPagar;
+
+        if (vuelto >= 0) {
+            setVueltoCalculado(vuelto);
+            setMostrarVuelto(true);
+        } else {
+            setVueltoCalculado(0);
+            setMostrarVuelto(false);
+        }
+    };
 
     // ✅ EFECTO PARA MOSTRAR MODAL CUANDO SE SETEA EL ID
     useEffect(() => {
@@ -164,12 +248,10 @@ export default function PantallaCheckout(props: any) {
             setDireccionDelPerfil(false);
             calcularCostoEnvio(ubicacionRecibida.latitude, ubicacionRecibida.longitude);
             setCargandoUbicacion(false);
-            // Guardar en el store para persistencia
             if (ubicacionRecibida.direccion) {
                 guardarUbicacionTemporal(ubicacionRecibida);
             }
         } else {
-            // Si no hay ubicación recibida, cargar desde store
             cargarUbicacionDesdeStore();
         }
     }, []);
@@ -454,7 +536,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ seleccionarUbicacionEnMapa - ACTUALIZADO con guardado en store
     const seleccionarUbicacionEnMapa = async (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setUbicacionSeleccionada({ latitude, longitude });
@@ -465,7 +546,6 @@ export default function PantallaCheckout(props: any) {
             setDireccion(direccionObtenida);
             setDireccionDelPerfil(false);
 
-            // ✅ GUARDAR EN EL STORE
             await guardarUbicacionTemporal({
                 latitude,
                 longitude,
@@ -475,7 +555,6 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ FUNCIÓN PARA VOLVER AL CARRITO GUARDANDO LA DIRECCIÓN
     const handleVolverAlCarrito = async () => {
         if (ubicacionSeleccionada) {
             await guardarDireccionEnStore(ubicacionSeleccionada);
@@ -483,50 +562,46 @@ export default function PantallaCheckout(props: any) {
         props.navigation.goBack();
     };
 
-    // ✅ FUNCIÓN PARA CONFIRMAR UBICACIÓN DESDE EL MAPA
+    // ✅ FUNCIÓN PARA CONFIRMAR UBICACIÓN DESDE EL MAPA - GUARDA DIRECCIÓN COMPLETA
     const handleConfirmarUbicacion = async (ubicacion: { latitude: number; longitude: number; direccion: string }) => {
+        console.log('📍 Ubicación confirmada desde el mapa:', ubicacion);
+
+        // ✅ Guardar ubicación seleccionada
         setUbicacionSeleccionada({
             latitude: ubicacion.latitude,
             longitude: ubicacion.longitude,
         });
+
+        // ✅ Guardar dirección COMPLETA (no solo la calle)
         setDireccion(ubicacion.direccion);
         setDireccionCompleta(ubicacion.direccion);
         setDireccionDelPerfil(false);
 
-        // ✅ Guardar en el store
+        // ✅ Guardar en el store para persistencia
         await guardarUbicacionTemporal({
             latitude: ubicacion.latitude,
             longitude: ubicacion.longitude,
             direccion: ubicacion.direccion,
         });
 
-        // ✅ Calcular envío
+        // ✅ Calcular envío con la nueva ubicación
         calcularCostoEnvio(ubicacion.latitude, ubicacion.longitude);
 
         setMostrarMapa(false);
         toast.exito('📍 Ubicación seleccionada correctamente');
     };
 
-    // ============================================================
-    // ✅ FUNCIÓN PARA COPIAR ALIAS
-    // ============================================================
     const copiarAlias = async () => {
         await Clipboard.setString(ALIAS_TRANSFERENCIA);
         toast.exito('¡Alias copiado!');
     };
 
-    // ============================================================
-    // ✅ FUNCIÓN PARA ABRIR LA APP DEL BANCO
-    // ============================================================
     const abrirBanco = () => {
         Linking.openURL('https://www.mercadopago.com.ar/').catch(() => {
             toast.info('Abrí tu app bancaria y transferí al alias');
         });
     };
 
-    // ============================================================
-    // CONFIRMAR PEDIDO - ACTUALIZADO CON MODAL DE TRANSFERENCIA
-    // ============================================================
     const confirmarPedido = async () => {
         if (!direccion && tipoEntrega === 'domicilio') {
             toast.advertencia('Ingresa una dirección de entrega');
@@ -536,6 +611,15 @@ export default function PantallaCheckout(props: any) {
         if (!telefono) {
             toast.advertencia('Ingresa un número de teléfono');
             return;
+        }
+
+        // ✅ Validar pago en efectivo
+        if (metodoPago === 'efectivo') {
+            const pago = parseFloat(montoConQuePaga.replace(',', '.'));
+            if (isNaN(pago) || pago < totalFinal) {
+                toast.advertencia('El monto ingresado es insuficiente');
+                return;
+            }
         }
 
         setCargando(true);
@@ -555,11 +639,14 @@ export default function PantallaCheckout(props: any) {
             ? 0
             : (envioDisponible && tipoEntrega === 'domicilio' ? costoEnvioCalculado : 0);
 
+        // ✅ Asegurar que se guarda la dirección completa
         const datosPedido: any = {
             id_de_usuario: perfil?.id,
             cliente_nombre: perfil?.nombre_cliente,
             telefono: telefono,
-            direccion: tipoEntrega === 'retiro' ? 'Retiro en local' : direccionCompleta || direccion,
+            direccion: tipoEntrega === 'retiro'
+                ? 'Retiro en local'
+                : direccionCompleta || direccion || 'Sin dirección',
             estado: 'pendiente',
             total_parcial: total,
             total: totalFinal,
@@ -575,13 +662,16 @@ export default function PantallaCheckout(props: any) {
             tiempo_estimado: tiempoEstimado,
         };
 
+        // ✅ Si es efectivo, guardar el vuelto
+        if (metodoPago === 'efectivo' && montoConQuePaga && mostrarVuelto) {
+            datosPedido.monto_pago = parseFloat(montoConQuePaga.replace(',', '.'));
+            datosPedido.vuelto = vueltoCalculado;
+        }
+
         if (cuponAplicado) {
             await supabase.from('canjes').update({ usado_en_pedido: true }).eq('id', cuponAplicado.id);
         }
 
-        // ============================================================
-        // 1. CREAR EL PEDIDO
-        // ============================================================
         const resultado = await crearPedido(datosPedido);
 
         if (resultado.error) {
@@ -599,14 +689,12 @@ export default function PantallaCheckout(props: any) {
         }
 
         console.log(`✅ Pedido creado con ID: ${pedidoId}`);
+        console.log(`📍 Dirección guardada en pedido: ${datosPedido.direccion}`);
+        console.log(`📍 Coordenadas: lat=${datosPedido.lat_cliente}, lng=${datosPedido.lng_cliente}`);
 
-        // ✅ VACIAR CARRITO Y LIMPIAR UBICACIÓN
         vaciarCarrito();
         await limpiarUbicacionTemporal();
 
-        // ============================================================
-        // 2. SI ES TRANSFERENCIA → MOSTRAR MODAL CON ALIAS
-        // ============================================================
         if (metodoPago === 'transferencia') {
             console.log('🔴 TRANSFERENCIA SELECCIONADA - Pedido ID:', pedidoId);
             setCargando(false);
@@ -614,9 +702,6 @@ export default function PantallaCheckout(props: any) {
             return;
         }
 
-        // ============================================================
-        // 3. OTROS MÉTODOS DE PAGO (efectivo, tarjeta)
-        // ============================================================
         setCargando(false);
 
         setMostrarModalExito(true);
@@ -626,9 +711,6 @@ export default function PantallaCheckout(props: any) {
         }, 2500);
     };
 
-    // ============================================================
-    // ✅ CERRAR MODAL DE TRANSFERENCIA Y NAVEGAR A SEGUIMIENTO
-    // ============================================================
     const cerrarModalTransferencia = () => {
         setMostrarModalTransferencia(false);
         const pedidoId = pedidoIdTransferencia;
@@ -659,11 +741,11 @@ export default function PantallaCheckout(props: any) {
         },
     ];
 
-    const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
-    const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
-    const seccionTituloSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
-    const inputSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
-    const buttonTextSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
+    const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
+    const tituloSize = responsive.getValor({ tablet: 28, normal: 24, small: 18 });
+    const seccionTituloSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
+    const inputSize = responsive.getValor({ tablet: 16, normal: 14, small: 13 });
+    const buttonTextSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
 
     const renderLoaderDots = () => {
         const dots = [
@@ -684,7 +766,7 @@ export default function PantallaCheckout(props: any) {
                 <Animated.View
                     key={index}
                     style={[
-                        estilos.modalLoaderDot,
+                        styles.modalLoaderDot,
                         {
                             opacity,
                             transform: [{ scale }],
@@ -696,33 +778,31 @@ export default function PantallaCheckout(props: any) {
     };
 
     return (
-        <View style={estilos.contenedor}>
-            {/* 🛹 GRADIENTE BART: Naranja → Rojo */}
+        <View style={styles.container}>
             <LinearGradient
-                colors={[Colores.bartNaranja, Colores.bartRojo]}
-                style={estilos.fondoGradiente}
+                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                style={styles.backgroundGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
             />
 
             <View style={[
-                estilos.header,
+                styles.header,
                 {
                     paddingTop: insets.top + (isTablet ? 20 : 10),
                     paddingHorizontal: paddingHorizontal,
                     paddingBottom: isTablet ? 16 : 12,
                 }
             ]}>
-                {/* ✅ Botón Volver - AHORA GUARDA LA DIRECCIÓN */}
                 <TouchableOpacity
-                    style={estilos.botonVolver}
+                    style={styles.backButton}
                     onPress={handleVolverAlCarrito}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.textoClaro} />
+                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
                 </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.bartNaranja }]}>
-                    Checkout
+                <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+                    Confirmar Pedido
                 </Text>
                 <View style={{ width: isTablet ? 28 : 24 }} />
             </View>
@@ -730,7 +810,7 @@ export default function PantallaCheckout(props: any) {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[
-                    estilos.scroll,
+                    styles.scroll,
                     {
                         paddingHorizontal: paddingHorizontal,
                         paddingBottom: insets.bottom + 100,
@@ -739,72 +819,76 @@ export default function PantallaCheckout(props: any) {
                 ]}
             >
                 {cargandoUbicacion && (
-                    <View style={estilos.cargandoUbicacion}>
-                        <ActivityIndicator size="small" color={Colores.bartNaranja} />
-                        <Text style={estilos.cargandoUbicacionTexto}>Cargando ubicación...</Text>
+                    <View style={styles.loadingUbicacion}>
+                        <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
+                        <Text style={[styles.loadingUbicacionText, { color: DESIGN.colors.textSecondary }]}>
+                            Cargando ubicación...
+                        </Text>
                     </View>
                 )}
 
                 {/* ✅ DATOS DE CONTACTO */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         📞 Datos de contacto
                     </Text>
-                    <View style={estilos.inputContainer}>
-                        <Ionicons name="call-outline" size={22} color={Colores.bartNaranja} style={estilos.inputIcon} />
+                    <View style={[styles.inputContainer, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}>
+                        <Ionicons name="call-outline" size={22} color={DESIGN.colors.accent} style={styles.inputIcon} />
                         <TextInput
-                            style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
+                            style={[styles.input, { fontSize: inputSize, color: DESIGN.colors.text }]}
                             value={telefono}
                             onChangeText={setTelefono}
                             placeholder="Teléfono"
-                            placeholderTextColor={Colores.textoClaro + '40'}
+                            placeholderTextColor={DESIGN.colors.textTertiary}
                             keyboardType="phone-pad"
-                            selectionColor={Colores.bartNaranja}
+                            selectionColor={DESIGN.colors.accent}
                         />
                     </View>
                     {perfil?.telefono && (
-                        <Text style={estilos.datosGuardados}>
+                        <Text style={[styles.datosGuardados, { color: DESIGN.colors.verde }]}>
                             📌 Cargado desde tu perfil
                         </Text>
                     )}
                 </Animated.View>
 
                 {guardandoPerfil && (
-                    <View style={estilos.guardandoPerfilContainer}>
-                        <ActivityIndicator size="small" color={Colores.bartNaranja} />
-                        <Text style={estilos.guardandoPerfilTexto}>Guardando en tu perfil...</Text>
+                    <View style={[styles.guardandoPerfilContainer, { backgroundColor: DESIGN.colors.accentSecondary + '15', borderColor: DESIGN.colors.accentSecondary + '20' }]}>
+                        <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
+                        <Text style={[styles.guardandoPerfilText, { color: DESIGN.colors.accentSecondary }]}>
+                            Guardando en tu perfil...
+                        </Text>
                     </View>
                 )}
 
                 {/* ✅ TIPO DE ENTREGA */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                         marginTop: 12,
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         🚚 Tipo de entrega
                     </Text>
-                    <View style={[estilos.opciones, { gap: isTablet ? 12 : 8 }]}>
+                    <View style={[styles.options, { gap: isTablet ? 12 : 8 }]}>
                         {tiposEntrega.map(t => (
                             <TouchableOpacity
                                 key={t.id}
                                 style={[
-                                    estilos.opcion,
+                                    styles.option,
                                     {
                                         padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
                                         borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: tipoEntrega === t.id ? Colores.bartNaranja : Colores.textoOscuro + '40',
-                                        borderColor: tipoEntrega === t.id ? Colores.bartNaranja : Colores.textoClaro + '10',
+                                        backgroundColor: tipoEntrega === t.id ? DESIGN.colors.accentSecondary : DESIGN.colors.surface + '80',
+                                        borderColor: tipoEntrega === t.id ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
                                     }
                                 ]}
                                 onPress={() => setTipoEntrega(t.id)}
@@ -813,22 +897,22 @@ export default function PantallaCheckout(props: any) {
                                 <Ionicons
                                     name={t.icono as any}
                                     size={isTablet ? 28 : 22}
-                                    color={tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoGris}
+                                    color={tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary}
                                 />
                                 <Text style={[
-                                    estilos.opcionTexto,
+                                    styles.optionText,
                                     {
                                         fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                                        color: tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoClaro,
+                                        color: tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
                                     }
                                 ]}>
                                     {t.label}
                                 </Text>
                                 <Text style={[
-                                    estilos.opcionPrecio,
+                                    styles.optionPrice,
                                     {
                                         fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: tipoEntrega === t.id ? Colores.textoOscuro : Colores.textoGris,
+                                        color: tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
                                     }
                                 ]}>
                                     {t.costo === 0 ? 'GRATIS' : `$${t.costo.toFixed(2)}`}
@@ -841,64 +925,65 @@ export default function PantallaCheckout(props: any) {
                 {/* ✅ DIRECCIÓN DE ENTREGA */}
                 {tipoEntrega === 'domicilio' && (
                     <Animated.View style={[
-                        estilos.seccion,
+                        styles.section,
                         {
                             opacity: fadeAnim,
                             transform: [{ translateY: slideUpAnim }],
                             marginTop: 12,
                         }
                     ]}>
-                        <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                        <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                             📍 Dirección de entrega
                         </Text>
 
                         <View style={[
-                            estilos.direccionPerfilContainer,
+                            styles.direccionPerfilContainer,
                             {
                                 padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                 borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                backgroundColor: direccionDelPerfil ? Colores.verdeClaro + '15' : Colores.textoOscuro + '40',
-                                borderColor: direccionDelPerfil ? Colores.verdeClaro + '30' : Colores.textoClaro + '10',
+                                backgroundColor: direccionDelPerfil ? DESIGN.colors.verde + '15' : DESIGN.colors.surface + '80',
+                                borderColor: direccionDelPerfil ? DESIGN.colors.verde + '30' : DESIGN.colors.border,
                             }
                         ]}>
-                            <View style={estilos.direccionPerfilHeader}>
+                            <View style={styles.direccionPerfilHeader}>
                                 <Ionicons
                                     name={direccionDelPerfil ? "checkmark-circle" : "location-outline"}
                                     size={isTablet ? 22 : 18}
-                                    color={direccionDelPerfil ? Colores.verdeClaro : Colores.bartNaranja}
+                                    color={direccionDelPerfil ? DESIGN.colors.verde : DESIGN.colors.accent}
                                 />
                                 <Text style={[
-                                    estilos.direccionPerfilLabel,
+                                    styles.direccionPerfilLabel,
                                     {
                                         fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                        color: direccionDelPerfil ? Colores.verdeClaro : Colores.bartNaranja,
+                                        color: direccionDelPerfil ? DESIGN.colors.verde : DESIGN.colors.accent,
                                     }
                                 ]}>
                                     {direccionDelPerfil ? 'Dirección de tu perfil' : 'Dirección personalizada'}
                                 </Text>
                                 {ubicacionSeleccionada && !direccionDelPerfil && (
-                                    <View style={estilos.ubicacionConfirmada}>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={Colores.verdeClaro} />
-                                        <Text style={[estilos.ubicacionConfirmadaTexto, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9 }]}>
+                                    <View style={[styles.ubicacionConfirmada, { backgroundColor: DESIGN.colors.verde + '15' }]}>
+                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={DESIGN.colors.verde} />
+                                        <Text style={[styles.ubicacionConfirmadaText, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DESIGN.colors.verde }]}>
                                             Confirmada
                                         </Text>
                                     </View>
                                 )}
                             </View>
                             <Text style={[
-                                estilos.direccionPerfilTexto,
+                                styles.direccionPerfilTexto,
                                 {
                                     fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
-                                    color: Colores.textoClaro,
+                                    color: DESIGN.colors.text,
                                 }
                             ]}>
                                 {direccion || 'No hay dirección cargada'}
                             </Text>
                             {direccionDelPerfil && (
                                 <Text style={[
-                                    estilos.direccionPerfilSubtexto,
+                                    styles.direccionPerfilSubtexto,
                                     {
                                         fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
+                                        color: DESIGN.colors.textSecondary,
                                     }
                                 ]}>
                                     💡 Para cambiar, usa el buscador o el mapa
@@ -907,33 +992,33 @@ export default function PantallaCheckout(props: any) {
                         </View>
 
                         {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={estilos.infoEnvioContainer}>
-                                <View style={estilos.infoEnvioFila}>
-                                    <Ionicons name="navigate" size={18} color={Colores.bartNaranja} />
-                                    <Text style={estilos.infoEnvioTexto}>
+                            <View style={[styles.infoEnvioContainer, { backgroundColor: DESIGN.colors.surface + '80', borderColor: DESIGN.colors.border }]}>
+                                <View style={styles.infoEnvioFila}>
+                                    <Ionicons name="navigate" size={18} color={DESIGN.colors.accent} />
+                                    <Text style={[styles.infoEnvioText, { color: DESIGN.colors.textSecondary }]}>
                                         📏 Distancia: {distanciaFormateada || 'Calculando...'}
                                     </Text>
                                 </View>
 
                                 {envioDisponible ? (
                                     <>
-                                        <View style={estilos.infoEnvioFila}>
-                                            <Ionicons name="cash" size={18} color={Colores.verdeClaro} />
-                                            <Text style={[estilos.infoEnvioTexto, { color: Colores.verdeClaro }]}>
+                                        <View style={styles.infoEnvioFila}>
+                                            <Ionicons name="cash" size={18} color={DESIGN.colors.verde} />
+                                            <Text style={[styles.infoEnvioText, { color: DESIGN.colors.verde }]}>
                                                 💰 Costo de envío: ${costoEnvioCalculado.toFixed(2)}
                                             </Text>
                                         </View>
-                                        <View style={estilos.infoEnvioFila}>
-                                            <Ionicons name="time-outline" size={18} color={Colores.bartNaranja} />
-                                            <Text style={[estilos.infoEnvioTexto, { color: Colores.bartNaranja }]}>
+                                        <View style={styles.infoEnvioFila}>
+                                            <Ionicons name="time-outline" size={18} color={DESIGN.colors.accent} />
+                                            <Text style={[styles.infoEnvioText, { color: DESIGN.colors.accent }]}>
                                                 ⏱️ Tiempo estimado: {tiempoEstimado} min
                                             </Text>
                                         </View>
                                     </>
                                 ) : (
-                                    <View style={estilos.infoEnvioFila}>
-                                        <Ionicons name="warning" size={18} color={Colores.bartRojo} />
-                                        <Text style={[estilos.infoEnvioTexto, { color: Colores.bartRojo }]}>
+                                    <View style={styles.infoEnvioFila}>
+                                        <Ionicons name="warning" size={18} color={DESIGN.colors.accent} />
+                                        <Text style={[styles.infoEnvioText, { color: DESIGN.colors.accent }]}>
                                             ⚠️ {mensajeEnvio}
                                         </Text>
                                     </View>
@@ -942,66 +1027,71 @@ export default function PantallaCheckout(props: any) {
                         )}
 
                         {calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={estilos.infoEnvioContainer}>
-                                <View style={estilos.infoEnvioFila}>
-                                    <ActivityIndicator size="small" color={Colores.bartNaranja} />
-                                    <Text style={estilos.infoEnvioTexto}>Calculando envío...</Text>
+                            <View style={[styles.infoEnvioContainer, { backgroundColor: DESIGN.colors.surface + '80', borderColor: DESIGN.colors.border }]}>
+                                <View style={styles.infoEnvioFila}>
+                                    <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
+                                    <Text style={[styles.infoEnvioText, { color: DESIGN.colors.textSecondary }]}>Calculando envío...</Text>
                                 </View>
                             </View>
                         )}
 
-                        <View style={estilos.buscadorManualContainer}>
-                            <Text style={[estilos.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12 }]}>
+                        <View style={styles.buscadorManualContainer}>
+                            <Text style={[styles.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
                                 🔍 Buscar dirección en el mapa
                             </Text>
-                            <View style={estilos.buscadorManualFila}>
+                            <View style={styles.buscadorManualFila}>
                                 <TextInput
-                                    style={[estilos.buscadorManualInput, { fontSize: inputSize, color: Colores.textoClaro }]}
+                                    style={[styles.buscadorManualInput, { fontSize: inputSize, color: DESIGN.colors.text, backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}
                                     value={busquedaManual}
                                     onChangeText={setBusquedaManual}
                                     placeholder="Ej: Av. Corrientes 1234, CABA"
-                                    placeholderTextColor={Colores.textoClaro + '40'}
-                                    selectionColor={Colores.bartNaranja}
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    selectionColor={DESIGN.colors.accent}
                                 />
                                 <TouchableOpacity
-                                    style={[estilos.botonBuscar, {
+                                    style={[styles.botonBuscar, {
                                         padding: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                         borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                                        backgroundColor: DESIGN.colors.accentSecondary,
                                     }]}
                                     onPress={buscarDireccionManual}
                                     activeOpacity={0.7}
                                     disabled={buscandoDireccion}
                                 >
                                     {buscandoDireccion ? (
-                                        <ActivityIndicator size="small" color={Colores.textoOscuro} />
+                                        <ActivityIndicator size="small" color={DESIGN.colors.text} />
                                     ) : (
-                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={Colores.textoOscuro} />
+                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={DESIGN.colors.text} />
                                     )}
                                 </TouchableOpacity>
                             </View>
                         </View>
 
                         <TouchableOpacity
-                            style={[estilos.botonMapa, {
+                            style={[styles.botonMapa, {
                                 padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                 borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                 marginTop: 8,
+                                backgroundColor: DESIGN.colors.accent + '10',
+                                borderColor: DESIGN.colors.accent + '30',
                             }]}
                             onPress={() => setMostrarMapa(true)}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={Colores.bartNaranja} />
-                            <Text style={[estilos.botonMapaTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={DESIGN.colors.accent} />
+                            <Text style={[styles.botonMapaText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.accent }]}>
                                 📍 Seleccionar ubicación en el mapa
                             </Text>
-                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={Colores.textoGris} />
+                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={DESIGN.colors.textTertiary} />
                         </TouchableOpacity>
 
                         {direccionSugerida !== '' && direccion !== direccionSugerida && (
                             <TouchableOpacity
-                                style={[estilos.sugerenciaContainer, {
+                                style={[styles.sugerenciaContainer, {
                                     padding: isTablet ? 14 : isSmallPhone ? 8 : 10,
                                     borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                                    backgroundColor: DESIGN.colors.verde + '15',
+                                    borderColor: DESIGN.colors.verde + '20',
                                 }]}
                                 onPress={() => {
                                     setDireccion(direccionSugerida);
@@ -1012,8 +1102,8 @@ export default function PantallaCheckout(props: any) {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="location" size={isTablet ? 20 : 16} color={Colores.verdeClaro} />
-                                <Text style={[estilos.sugerenciaTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                                <Ionicons name="location" size={isTablet ? 20 : 16} color={DESIGN.colors.verde} />
+                                <Text style={[styles.sugerenciaText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
                                     {direccionSugerida}
                                 </Text>
                             </TouchableOpacity>
@@ -1021,7 +1111,7 @@ export default function PantallaCheckout(props: any) {
                     </Animated.View>
                 )}
 
-                {/* ✅ MAPA SELECTOR - COMPONENTE REUTILIZABLE */}
+                {/* ✅ MAPA SELECTOR */}
                 <MapaSelector
                     visible={mostrarMapa}
                     onClose={() => setMostrarMapa(false)}
@@ -1031,141 +1121,296 @@ export default function PantallaCheckout(props: any) {
                     titulo="📍 Selecciona tu ubicación"
                 />
 
-                {/* ✅ MÉTODO DE PAGO */}
+                {/* ✅ MÉTODO DE PAGO CON EFECTIVO Y VUELTO */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                         marginTop: 12,
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         💳 Método de pago
                     </Text>
-                    <View style={[estilos.opciones, { flexDirection: 'row', gap: isTablet ? 12 : 8 }]}>
+                    <View style={[styles.options, { flexDirection: 'row', gap: isTablet ? 12 : 8 }]}>
                         {metodosPago.map(m => (
                             <TouchableOpacity
                                 key={m.id}
                                 style={[
-                                    estilos.opcionPago,
+                                    styles.optionPago,
                                     {
                                         padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                         borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: metodoPago === m.id ? Colores.bartNaranja : Colores.textoOscuro + '40',
-                                        borderColor: metodoPago === m.id ? Colores.bartNaranja : Colores.textoClaro + '10',
+                                        backgroundColor: metodoPago === m.id ? DESIGN.colors.accentSecondary : DESIGN.colors.surface + '80',
+                                        borderColor: metodoPago === m.id ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
                                     }
                                 ]}
-                                onPress={() => setMetodoPago(m.id)}
+                                onPress={() => {
+                                    setMetodoPago(m.id);
+                                    // ✅ Reiniciar campos de efectivo al cambiar
+                                    if (m.id !== 'efectivo') {
+                                        setMontoConQuePaga('');
+                                        setVueltoCalculado(0);
+                                        setMostrarVuelto(false);
+                                    }
+                                }}
                                 activeOpacity={0.7}
                             >
                                 <Ionicons
                                     name={m.icono as any}
                                     size={isTablet ? 26 : 20}
-                                    color={metodoPago === m.id ? Colores.textoOscuro : Colores.textoGris}
+                                    color={metodoPago === m.id ? DESIGN.colors.text : DESIGN.colors.textSecondary}
                                 />
                                 <Text style={[
-                                    estilos.opcionTexto,
+                                    styles.optionText,
                                     {
                                         fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: metodoPago === m.id ? Colores.textoOscuro : Colores.textoClaro,
+                                        color: metodoPago === m.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
                                     }
                                 ]}>
                                     {m.label}
                                 </Text>
+                                {metodoPago === m.id && (
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 20 : 16} color={DESIGN.colors.text} />
+                                )}
                             </TouchableOpacity>
                         ))}
                     </View>
+
+                    {/* ✅ SECCIÓN DE PAGO EN EFECTIVO CON VUELTO */}
+                    {metodoPago === 'efectivo' && (
+                        <View style={[styles.efectivoContainer, {
+                            marginTop: 12,
+                            padding: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                            borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                            backgroundColor: DESIGN.colors.surface + '90',
+                            borderWidth: 1,
+                            borderColor: DESIGN.colors.accentSecondary + '30',
+                        }]}>
+                            <Text style={[styles.efectivoTitle, {
+                                fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14,
+                                color: DESIGN.colors.text,
+                                fontWeight: '600',
+                                marginBottom: 8,
+                            }]}>
+                                💰 Pago en efectivo
+                            </Text>
+
+                            <Text style={[styles.efectivoSubtitle, {
+                                fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                color: DESIGN.colors.textSecondary,
+                                marginBottom: 6,
+                            }]}>
+                                Total a pagar: <Text style={{ fontWeight: 'bold', color: DESIGN.colors.accentSecondary }}>
+                                    ${totalFinal.toFixed(2)}
+                                </Text>
+                            </Text>
+
+                            {/* ✅ Campo para ingresar el monto con el que paga */}
+                            <View style={[styles.efectivoInputContainer, {
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                backgroundColor: DESIGN.colors.surfaceHover,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: DESIGN.colors.border,
+                                paddingHorizontal: 12,
+                                paddingVertical: 4,
+                                marginTop: 4,
+                            }]}>
+                                <Text style={[styles.efectivoInputPrefix, {
+                                    fontSize: isTablet ? 18 : isSmallPhone ? 16 : 17,
+                                    color: DESIGN.colors.textSecondary,
+                                    fontWeight: 'bold',
+                                    marginRight: 4,
+                                }]}>
+                                    $
+                                </Text>
+                                <TextInput
+                                    style={[styles.efectivoInput, {
+                                        flex: 1,
+                                        fontSize: isTablet ? 18 : isSmallPhone ? 16 : 17,
+                                        color: DESIGN.colors.text,
+                                        paddingVertical: 10,
+                                        fontWeight: '600',
+                                    }]}
+                                    value={montoConQuePaga}
+                                    onChangeText={(text) => {
+                                        const cleaned = text.replace(/[^0-9.]/g, '');
+                                        setMontoConQuePaga(cleaned);
+                                        calcularVuelto(cleaned);
+                                    }}
+                                    placeholder="0.00"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    keyboardType="decimal-pad"
+                                    selectionColor={DESIGN.colors.accent}
+                                />
+                                <Text style={[styles.efectivoInputSuffix, {
+                                    fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                    color: DESIGN.colors.textSecondary,
+                                }]}>
+                                    {montoConQuePaga ? `(${montoConQuePaga})` : '(ingresá el monto)'}
+                                </Text>
+                            </View>
+
+                            {/* ✅ Mostrar el vuelto calculado */}
+                            {mostrarVuelto && vueltoCalculado > 0 && (
+                                <View style={[styles.vueltoContainer, {
+                                    marginTop: 10,
+                                    padding: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                    borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
+                                    backgroundColor: DESIGN.colors.verde + '15',
+                                    borderWidth: 1,
+                                    borderColor: DESIGN.colors.verde + '30',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                }]}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Ionicons name="cash-outline" size={isTablet ? 24 : 20} color={DESIGN.colors.verde} />
+                                        <Text style={[styles.vueltoLabel, {
+                                            fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13,
+                                            color: DESIGN.colors.text,
+                                            fontWeight: '500',
+                                        }]}>
+                                            💵 Vuelto:
+                                        </Text>
+                                    </View>
+                                    <Text style={[styles.vueltoMonto, {
+                                        fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20,
+                                        fontWeight: 'bold',
+                                        color: DESIGN.colors.verde,
+                                    }]}>
+                                        ${vueltoCalculado.toFixed(2)}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* ✅ Mensaje de error si el monto es insuficiente */}
+                            {montoConQuePaga && !mostrarVuelto && parseFloat(montoConQuePaga) > 0 && (
+                                <View style={[styles.efectivoError, {
+                                    marginTop: 8,
+                                    padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                                    backgroundColor: DESIGN.colors.accent + '15',
+                                    borderWidth: 1,
+                                    borderColor: DESIGN.colors.accent + '30',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }]}>
+                                    <Ionicons name="warning" size={isTablet ? 18 : 14} color={DESIGN.colors.accent} />
+                                    <Text style={[styles.efectivoErrorText, {
+                                        fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                        color: DESIGN.colors.accent,
+                                        fontWeight: '500',
+                                    }]}>
+                                        El monto es insuficiente. El total es ${totalFinal.toFixed(2)}
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* ✅ Botón de sugerencia para monto exacto */}
+                            {(!montoConQuePaga || (montoConQuePaga && !mostrarVuelto)) && (
+                                <TouchableOpacity
+                                    style={[styles.efectivoSugerencia, {
+                                        marginTop: 8,
+                                        padding: isTablet ? 8 : isSmallPhone ? 6 : 8,
+                                        borderRadius: isTablet ? 8 : isSmallPhone ? 6 : 8,
+                                        backgroundColor: DESIGN.colors.accentSecondary + '15',
+                                        alignSelf: 'flex-start',
+                                    }]}
+                                    onPress={() => {
+                                        const totalStr = totalFinal.toFixed(2);
+                                        setMontoConQuePaga(totalStr);
+                                        calcularVuelto(totalStr);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.efectivoSugerenciaText, {
+                                        fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
+                                        color: DESIGN.colors.accentSecondary,
+                                        fontWeight: '500',
+                                    }]}>
+                                        💡 Pagar con el monto exacto
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
                 </Animated.View>
 
                 {/* ✅ NOTAS */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                         marginTop: 12,
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         📝 Notas (opcional)
                     </Text>
-                    <View style={estilos.inputContainer}>
-                        <Ionicons name="create-outline" size={22} color={Colores.bartNaranja} style={estilos.inputIcon} />
+                    <View style={[styles.inputContainer, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}>
+                        <Ionicons name="create-outline" size={22} color={DESIGN.colors.accent} style={styles.inputIcon} />
                         <TextInput
-                            style={[estilos.input, estilos.textArea, { fontSize: inputSize, color: Colores.textoClaro }]}
+                            style={[styles.input, styles.textArea, { fontSize: inputSize, color: DESIGN.colors.text }]}
                             value={notas}
                             onChangeText={setNotas}
                             placeholder="Sin cebolla, extra queso..."
-                            placeholderTextColor={Colores.textoClaro + '40'}
+                            placeholderTextColor={DESIGN.colors.textTertiary}
                             multiline
                             numberOfLines={2}
-                            selectionColor={Colores.bartNaranja}
+                            selectionColor={DESIGN.colors.accent}
                         />
                     </View>
                 </Animated.View>
 
                 {/* ✅ PRODUCTOS */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                         marginTop: 12,
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         🛒 Productos ({elementos.length})
                     </Text>
                     {elementos.map((e, i) => (
-                        <View key={i} style={estilos.productoItem}>
-                            <Text style={[estilos.productoNombre, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                        <View key={i} style={[styles.productoItem, { borderBottomColor: DESIGN.colors.border }]}>
+                            <Text style={[styles.productoNombre, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
                                 {e.cantidad}x {e.producto.nombre}
                             </Text>
-                            <Text style={[estilos.productoPrecio, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                            <Text style={[styles.productoPrecio, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.accentSecondary }]}>
                                 ${(precioUnitario(e.producto.precio) * e.cantidad).toFixed(2)}
                             </Text>
                         </View>
                     ))}
                 </Animated.View>
 
-                {/* ✅ CUPÓN */}
-                {cuponAplicado && (
-                    <Animated.View style={[
-                        estilos.seccion,
-                        estilos.cuponSeccion,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideUpAnim }],
-                            marginTop: 12,
-                        }
-                    ]}>
-                        <Ionicons name="pricetag" size={isTablet ? 24 : 20} color={Colores.bartNaranja} />
-                        <Text style={[estilos.cuponTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
-                            Cupón: {cuponAplicado.recompensas?.nombre} (-${descuento.toFixed(2)})
-                        </Text>
-                    </Animated.View>
-                )}
-
                 {/* ✅ RESUMEN */}
                 <Animated.View style={[
-                    estilos.seccion,
+                    styles.section,
                     {
                         opacity: fadeAnim,
                         transform: [{ translateY: slideUpAnim }],
                         marginTop: 12,
                     }
                 ]}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize, color: Colores.textoClaro }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
                         📊 Resumen
                     </Text>
-                    <View style={estilos.resumenFila}>
-                        <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Subtotal</Text>
-                        <Text style={[estilos.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>${total.toFixed(2)}</Text>
+                    <View style={styles.resumenFila}>
+                        <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>Subtotal</Text>
+                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>${total.toFixed(2)}</Text>
                     </View>
-                    <View style={estilos.resumenFila}>
-                        <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Costo de envío</Text>
-                        <Text style={[estilos.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+                    <View style={styles.resumenFila}>
+                        <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>Costo de envío</Text>
+                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
                             {tipoEntrega === 'retiro' ? 'GRATIS' :
                                 (ubicacionSeleccionada ?
                                     (envioDisponible ? `$${costoEnvioCalculado.toFixed(2)}` : 'No disponible') :
@@ -1175,21 +1420,33 @@ export default function PantallaCheckout(props: any) {
                         </Text>
                     </View>
                     {descuento > 0 && (
-                        <View style={estilos.resumenFila}>
-                            <Text style={[estilos.resumenTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.verdeClaro }]}>
+                        <View style={styles.resumenFila}>
+                            <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
                                 Descuento
                             </Text>
-                            <Text style={[estilos.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.verdeClaro }]}>
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
                                 -${descuento.toFixed(2)}
                             </Text>
                         </View>
                     )}
-                    <View style={[estilos.resumenFila, estilos.resumenTotal]}>
-                        <Text style={[estilos.totalTexto, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18 }]}>Total</Text>
-                        <Text style={[estilos.totalPrecio, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 24 }]}>
+                    <View style={[styles.resumenFila, styles.resumenTotal, { borderTopColor: DESIGN.colors.border }]}>
+                        <Text style={[styles.totalText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.text }]}>Total</Text>
+                        <Text style={[styles.totalPrice, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 24, color: DESIGN.colors.accentSecondary }]}>
                             ${totalFinal.toFixed(2)}
                         </Text>
                     </View>
+
+                    {/* ✅ Mostrar vuelto en el resumen si está seleccionado */}
+                    {metodoPago === 'efectivo' && mostrarVuelto && vueltoCalculado > 0 && (
+                        <View style={[styles.resumenFila, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: DESIGN.colors.border }]}>
+                            <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde, fontWeight: '600' }]}>
+                                💵 Vuelto
+                            </Text>
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde, fontWeight: 'bold' }]}>
+                                ${vueltoCalculado.toFixed(2)}
+                            </Text>
+                        </View>
+                    )}
                 </Animated.View>
 
                 {/* ✅ BOTÓN CONFIRMAR */}
@@ -1199,23 +1456,23 @@ export default function PantallaCheckout(props: any) {
                     marginTop: 12,
                 }}>
                     <TouchableOpacity
-                        style={[estilos.botonConfirmar, cargando && { opacity: 0.6 }]}
+                        style={[styles.botonConfirmar, cargando && { opacity: 0.6 }]}
                         onPress={confirmarPedido}
                         disabled={cargando}
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={[Colores.bartNaranja, Colores.bartAzul]}
-                            style={estilos.botonConfirmarGradient}
+                            colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                            style={styles.botonConfirmarGradient}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
                             {cargando ? (
-                                <ActivityIndicator color={Colores.textoOscuro} size="small" />
+                                <ActivityIndicator color={DESIGN.colors.text} size="small" />
                             ) : (
                                 <>
-                                    <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={Colores.textoOscuro} />
-                                    <Text style={[estilos.botonConfirmarTexto, { fontSize: buttonTextSize }]}>
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={DESIGN.colors.text} />
+                                    <Text style={[styles.botonConfirmarText, { fontSize: buttonTextSize, color: DESIGN.colors.text }]}>
                                         {metodoPago === 'transferencia' ? 'Pagar con Transferencia' : 'Confirmar Pedido'}
                                     </Text>
                                 </>
@@ -1229,35 +1486,36 @@ export default function PantallaCheckout(props: any) {
 
             {/* ✅ MODAL DE ÉXITO (para efectivo/tarjeta) */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
-                <View style={estilos.modalFondo}>
+                <View style={styles.modalOverlay}>
                     <View style={[
-                        estilos.modal,
+                        styles.modal,
                         {
                             padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
                             borderRadius: isTablet ? 28 : 24,
-                            borderColor: Colores.bartNaranja,
+                            borderColor: DESIGN.colors.accentSecondary,
+                            backgroundColor: DESIGN.colors.surface,
                         }
                     ]}>
-                        <Text style={[estilos.modalIcono, { fontSize: isTablet ? 80 : 60 }]}>✅</Text>
-                        <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: Colores.bartNaranja }]}>
+                        <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>✅</Text>
+                        <Text style={[styles.modalTitle, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: DESIGN.colors.accentSecondary }]}>
                             ¡Pedido confirmado!
                         </Text>
-                        <Text style={[estilos.modalTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.textoGris }]}>
-                            Tu pedido está siendo preparado
+                        <Text style={[styles.modalText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.textSecondary }]}>
+                            {metodoPago === 'efectivo' && mostrarVuelto
+                                ? `💰 Pagás con $${parseFloat(montoConQuePaga.replace(',', '.')).toFixed(2)}. Tu vuelto es $${vueltoCalculado.toFixed(2)}`
+                                : 'Tu pedido está siendo preparado'}
                         </Text>
-                        <Text style={[estilos.modalSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+                        <Text style={[styles.modalSubtext, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.accent }]}>
                             Redirigiendo al seguimiento...
                         </Text>
-                        <View style={estilos.modalLoader}>
+                        <View style={styles.modalLoader}>
                             {renderLoaderDots()}
                         </View>
                     </View>
                 </View>
             </Modal>
 
-            {/* ============================================================
-            ✅ MODAL PROFESIONAL PARA TRANSFERENCIA
-            ============================================================ */}
+            {/* ✅ MODAL PROFESIONAL PARA TRANSFERENCIA */}
             <Modal
                 visible={mostrarModalTransferencia}
                 transparent={true}
@@ -1265,41 +1523,41 @@ export default function PantallaCheckout(props: any) {
                 statusBarTranslucent={true}
                 onRequestClose={cerrarModalTransferencia}
             >
-                <View style={estilos.modalTransferenciaOverlay}>
-                    <View style={[estilos.modalTransferencia, { maxWidth: isTablet ? 500 : width * 0.92 }]}>
+                <View style={styles.modalTransferenciaOverlay}>
+                    <View style={[styles.modalTransferencia, { maxWidth: isTablet ? 500 : responsive.width * 0.92, backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.accentSecondary + '30' }]}>
                         <ScrollView
-                            style={estilos.modalTransferenciaBodyScroll}
+                            style={styles.modalTransferenciaBodyScroll}
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ paddingBottom: 10 }}
                         >
                             {/* Header con gradiente */}
                             <LinearGradient
-                                colors={[Colores.bartNaranja, Colores.bartAzul]}
-                                style={estilos.modalTransferenciaHeader}
+                                colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                                style={[styles.modalTransferenciaHeader, { padding: isTablet ? 24 : 18 }]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                             >
-                                <Ionicons name="swap-horizontal-outline" size={isTablet ? 48 : 36} color={Colores.textoOscuro} />
-                                <Text style={[estilos.modalTransferenciaTitulo, { fontSize: isTablet ? 24 : 18 }]}>
+                                <Ionicons name="swap-horizontal-outline" size={isTablet ? 48 : 36} color={DESIGN.colors.text} />
+                                <Text style={[styles.modalTransferenciaTitulo, { fontSize: isTablet ? 24 : 18, color: DESIGN.colors.text }]}>
                                     Transferencia Bancaria
                                 </Text>
                             </LinearGradient>
 
-                            <View style={[estilos.modalTransferenciaBody, { paddingTop: 16 }]}>
-                                <Text style={[estilos.modalTransferenciaMensaje, { fontSize: isTablet ? 16 : 14 }]}>
+                            <View style={[styles.modalTransferenciaBody, { padding: isTablet ? 28 : 20 }]}>
+                                <Text style={[styles.modalTransferenciaMensaje, { fontSize: isTablet ? 16 : 14, color: DESIGN.colors.textSecondary }]}>
                                     Para completar tu pedido, realizá la transferencia a los siguientes datos:
                                 </Text>
 
                                 {/* Alias destacado */}
-                                <View style={estilos.aliasContainer}>
-                                    <Text style={[estilos.aliasLabel, { fontSize: isTablet ? 14 : 12 }]}>Alias</Text>
-                                    <View style={estilos.aliasFila}>
-                                        <Text style={[estilos.aliasTexto, { fontSize: isTablet ? 28 : 20 }]}>
+                                <View style={[styles.aliasContainer, { backgroundColor: DESIGN.colors.accentSecondary + '10', borderColor: DESIGN.colors.accentSecondary + '20' }]}>
+                                    <Text style={[styles.aliasLabel, { fontSize: isTablet ? 14 : 12, color: DESIGN.colors.textSecondary }]}>Alias</Text>
+                                    <View style={styles.aliasFila}>
+                                        <Text style={[styles.aliasTexto, { fontSize: isTablet ? 28 : 20, color: DESIGN.colors.text }]}>
                                             {ALIAS_TRANSFERENCIA}
                                         </Text>
-                                        <TouchableOpacity onPress={copiarAlias} style={estilos.aliasBotonCopiar}>
-                                            <Ionicons name="copy-outline" size={isTablet ? 24 : 20} color={Colores.bartNaranja} />
-                                            <Text style={[estilos.aliasBotonCopiarTexto, { fontSize: isTablet ? 15 : 13 }]}>
+                                        <TouchableOpacity onPress={copiarAlias} style={[styles.aliasBotonCopiar, { backgroundColor: DESIGN.colors.accentSecondary + '20' }]}>
+                                            <Ionicons name="copy-outline" size={isTablet ? 24 : 20} color={DESIGN.colors.accentSecondary} />
+                                            <Text style={[styles.aliasBotonCopiarText, { fontSize: isTablet ? 15 : 13, color: DESIGN.colors.accentSecondary }]}>
                                                 Copiar
                                             </Text>
                                         </TouchableOpacity>
@@ -1307,48 +1565,48 @@ export default function PantallaCheckout(props: any) {
                                 </View>
 
                                 {/* CBU */}
-                                <View style={estilos.cbuContainer}>
-                                    <Text style={[estilos.cbuLabel, { fontSize: isTablet ? 13 : 11 }]}>CBU</Text>
-                                    <Text style={[estilos.cbuTexto, { fontSize: isTablet ? 16 : 14 }]}>
+                                <View style={[styles.cbuContainer, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
+                                    <Text style={[styles.cbuLabel, { fontSize: isTablet ? 13 : 11, color: DESIGN.colors.textSecondary }]}>CBU</Text>
+                                    <Text style={[styles.cbuTexto, { fontSize: isTablet ? 16 : 14, color: DESIGN.colors.text }]}>
                                         {CUENTA_TRANSFERENCIA}
                                     </Text>
                                 </View>
 
                                 {/* Monto */}
-                                <View style={estilos.montoContainer}>
-                                    <Text style={[estilos.montoLabel, { fontSize: isTablet ? 15 : 13 }]}>Monto a transferir</Text>
-                                    <Text style={[estilos.montoTexto, { fontSize: isTablet ? 36 : 28 }]}>
+                                <View style={[styles.montoContainer, { borderColor: DESIGN.colors.border }]}>
+                                    <Text style={[styles.montoLabel, { fontSize: isTablet ? 15 : 13, color: DESIGN.colors.textSecondary }]}>Monto a transferir</Text>
+                                    <Text style={[styles.montoTexto, { fontSize: isTablet ? 36 : 28, color: DESIGN.colors.accentSecondary }]}>
                                         ${totalFinal.toFixed(2)}
                                     </Text>
                                 </View>
 
-                                <Text style={[estilos.pedidoNumero, { fontSize: isTablet ? 15 : 13 }]}>
+                                <Text style={[styles.pedidoNumero, { fontSize: isTablet ? 15 : 13, color: DESIGN.colors.textSecondary }]}>
                                     Pedido #{pedidoIdTransferencia}
                                 </Text>
 
                                 {/* Botones */}
-                                <View style={[estilos.botonesTransferencia, { gap: isTablet ? 16 : 12 }]}>
+                                <View style={[styles.botonesTransferencia, { gap: isTablet ? 16 : 12 }]}>
                                     <TouchableOpacity
-                                        style={[estilos.botonTransferencia, estilos.botonTransferenciaSecundario, { paddingVertical: isTablet ? 18 : 14 }]}
+                                        style={[styles.botonTransferencia, styles.botonTransferenciaSecundario, { paddingVertical: isTablet ? 18 : 14, backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}
                                         onPress={cerrarModalTransferencia}
                                     >
-                                        <Text style={[estilos.botonTransferenciaTexto, { fontSize: isTablet ? 17 : 15 }]}>
+                                        <Text style={[styles.botonTransferenciaText, { fontSize: isTablet ? 17 : 15, color: DESIGN.colors.textSecondary }]}>
                                             Ya transferí
                                         </Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
-                                        style={[estilos.botonTransferencia, estilos.botonTransferenciaPrincipal, { paddingVertical: isTablet ? 18 : 14 }]}
+                                        style={[styles.botonTransferencia, styles.botonTransferenciaPrincipal, { paddingVertical: isTablet ? 18 : 14, backgroundColor: DESIGN.colors.accentSecondary }]}
                                         onPress={abrirBanco}
                                     >
-                                        <Ionicons name="open-outline" size={isTablet ? 24 : 20} color={Colores.textoOscuro} />
-                                        <Text style={[estilos.botonTransferenciaTexto, { fontSize: isTablet ? 17 : 15, color: Colores.textoOscuro }]}>
+                                        <Ionicons name="open-outline" size={isTablet ? 24 : 20} color={DESIGN.colors.text} />
+                                        <Text style={[styles.botonTransferenciaText, { fontSize: isTablet ? 17 : 15, color: DESIGN.colors.text }]}>
                                             Ir al banco
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={[estilos.mensajeConfirmacion, { fontSize: isTablet ? 13 : 11 }]}>
+                                <Text style={[styles.mensajeConfirmacion, { fontSize: isTablet ? 13 : 11, color: DESIGN.colors.textSecondary }]}>
                                     ⏳ Una vez realizada la transferencia, presioná "Ya transferí" y el local confirmará tu pago.
                                 </Text>
                             </View>
@@ -1369,14 +1627,14 @@ export default function PantallaCheckout(props: any) {
 }
 
 // ============================================================
-// 📋 ESTILOS
+// 🎨 ESTILOS - CLAROS Y ELEGANTES
 // ============================================================
-const estilos = StyleSheet.create({
-    contenedor: {
+const styles = StyleSheet.create({
+    container: {
         flex: 1,
-        backgroundColor: Colores.textoOscuro,
+        backgroundColor: DESIGN.colors.fondo,
     },
-    fondoGradiente: {
+    backgroundGradient: {
         position: 'absolute',
         top: 0,
         left: 0,
@@ -1388,22 +1646,22 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottomWidth: 1,
-        borderBottomColor: Colores.textoClaro + '10',
+        borderBottomColor: DESIGN.colors.surface + '10',
     },
-    botonVolver: {
+    backButton: {
         padding: 4,
     },
-    titulo: {
+    title: {
         fontWeight: 'bold',
         letterSpacing: 1,
     },
     scroll: {
         flexGrow: 1,
     },
-    seccion: {
+    section: {
         marginBottom: 20,
     },
-    seccionTitulo: {
+    sectionTitle: {
         fontWeight: 'bold',
         marginBottom: 10,
         letterSpacing: 0.5,
@@ -1411,10 +1669,8 @@ const estilos = StyleSheet.create({
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: Colores.textoOscuro + '50',
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '10',
         paddingHorizontal: 14,
         paddingVertical: 4,
     },
@@ -1431,16 +1687,16 @@ const estilos = StyleSheet.create({
         minHeight: 70,
         textAlignVertical: 'top',
     },
-    opciones: {
+    options: {
         gap: 8,
     },
-    opcion: {
+    option: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
         gap: 10,
     },
-    opcionPago: {
+    optionPago: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1448,52 +1704,41 @@ const estilos = StyleSheet.create({
         borderWidth: 1,
         gap: 8,
     },
-    opcionTexto: {
+    optionText: {
         fontWeight: '600',
         flex: 1,
     },
-    opcionPrecio: {
+    optionPrice: {
         fontWeight: '600',
     },
     botonMapa: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colores.primario + '15',
         borderWidth: 1,
-        borderColor: Colores.primario + '40',
         marginBottom: 10,
     },
-    botonMapaTexto: {
-        color: Colores.primario,
+    botonMapaText: {
         fontWeight: '600',
         flex: 1,
         marginLeft: 8,
     },
-    buscandoContainer: {
-        padding: 8,
-    },
     sugerenciaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colores.verdeClaro + '15',
         borderWidth: 1,
-        borderColor: Colores.verdeClaro + '20',
         marginTop: 8,
         gap: 8,
     },
-    sugerenciaTexto: {
-        color: Colores.verdeClaro,
+    sugerenciaText: {
         fontWeight: '500',
         flex: 1,
     },
     infoEnvioContainer: {
-        backgroundColor: Colores.textoOscuro + '30',
         borderRadius: 12,
         padding: 14,
         marginTop: 8,
         marginBottom: 4,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '8',
     },
     infoEnvioFila: {
         flexDirection: 'row',
@@ -1501,8 +1746,7 @@ const estilos = StyleSheet.create({
         gap: 8,
         paddingVertical: 3,
     },
-    infoEnvioTexto: {
-        color: Colores.textoGris,
+    infoEnvioText: {
         fontSize: 13,
         fontWeight: '500',
     },
@@ -1511,62 +1755,40 @@ const estilos = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderBottomColor: Colores.textoClaro + '5',
     },
     productoNombre: {
-        color: Colores.textoGris,
         fontWeight: '500',
     },
     productoPrecio: {
         fontWeight: 'bold',
-        color: Colores.bartNaranja,
-    },
-    cuponSeccion: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colores.bartNaranja + '15',
-        borderRadius: 12,
-        padding: 14,
-        gap: 10,
-        borderWidth: 1,
-        borderColor: Colores.primario + '40',
-    },
-    cuponTexto: {
-        color: Colores.primario,
-        fontWeight: 'bold',
-        flex: 1,
     },
     resumenFila: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 6,
     },
-    resumenTexto: {
-        color: Colores.textoGris,
+    resumenText: {
+        opacity: 0.8,
     },
     resumenValor: {
-        color: Colores.textoClaro,
         fontWeight: '600',
     },
     resumenTotal: {
         borderTopWidth: 1,
-        borderTopColor: Colores.textoClaro + '15',
         paddingTop: 10,
         marginTop: 4,
     },
-    totalTexto: {
+    totalText: {
         fontWeight: 'bold',
-        color: Colores.textoClaro,
     },
-    totalPrecio: {
+    totalPrice: {
         fontWeight: 'bold',
-        color: Colores.bartNaranja,
     },
     botonConfirmar: {
         borderRadius: 16,
         overflow: 'hidden',
         elevation: 8,
-        shadowColor: Colores.bartNaranja,
+        shadowColor: DESIGN.colors.accentSecondary,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.4,
         shadowRadius: 20,
@@ -1580,12 +1802,11 @@ const estilos = StyleSheet.create({
         paddingVertical: 18,
         paddingHorizontal: 24,
     },
-    botonConfirmarTexto: {
-        color: Colores.textoOscuro,
+    botonConfirmarText: {
         fontWeight: 'bold',
         letterSpacing: 0.5,
     },
-    modalFondo: {
+    modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.85)',
         justifyContent: 'center',
@@ -1593,24 +1814,23 @@ const estilos = StyleSheet.create({
         padding: 20,
     },
     modal: {
-        backgroundColor: Colores.fondoOscuro,
         width: '90%',
         maxWidth: 400,
         alignItems: 'center',
         borderWidth: 2,
     },
-    modalIcono: {
+    modalIcon: {
         marginBottom: 12,
     },
-    modalTitulo: {
+    modalTitle: {
         fontWeight: 'bold',
         marginBottom: 8,
     },
-    modalTexto: {
+    modalText: {
         textAlign: 'center',
+        opacity: 0.8,
     },
-    modalSubtexto: {
-        color: Colores.bartNaranja,
+    modalSubtext: {
         marginTop: 12,
         fontWeight: '500',
     },
@@ -1623,22 +1843,21 @@ const estilos = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: Colores.bartNaranja,
+        backgroundColor: DESIGN.colors.accentSecondary,
     },
-    cargandoUbicacion: {
+    loadingUbicacion: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: Colores.textoOscuro + '30',
         paddingVertical: 10,
         marginBottom: 12,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '5',
+        borderColor: DESIGN.colors.border,
         gap: 10,
+        backgroundColor: DESIGN.colors.surface + '80',
     },
-    cargandoUbicacionTexto: {
-        color: Colores.textoGris,
+    loadingUbicacionText: {
         fontSize: 13,
         fontWeight: '500',
     },
@@ -1662,7 +1881,6 @@ const estilos = StyleSheet.create({
         lineHeight: 20,
     },
     direccionPerfilSubtexto: {
-        color: Colores.textoGris,
         marginTop: 6,
         opacity: 0.6,
         fontStyle: 'italic',
@@ -1671,7 +1889,6 @@ const estilos = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: Colores.bartNaranja + '15',
         paddingVertical: 8,
         paddingHorizontal: 16,
         borderRadius: 8,
@@ -1679,29 +1896,24 @@ const estilos = StyleSheet.create({
         marginBottom: 12,
         gap: 10,
         borderWidth: 1,
-        borderColor: Colores.bartNaranja + '20',
     },
-    guardandoPerfilTexto: {
-        color: Colores.bartNaranja,
+    guardandoPerfilText: {
         fontSize: 13,
         fontWeight: '500',
     },
     ubicacionConfirmada: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colores.verdeClaro + '15',
         paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 12,
         gap: 4,
         marginLeft: 8,
     },
-    ubicacionConfirmadaTexto: {
-        color: Colores.verdeClaro,
+    ubicacionConfirmadaText: {
         fontWeight: '500',
     },
     datosGuardados: {
-        color: Colores.verdeClaro,
         fontSize: 11,
         marginTop: 4,
         opacity: 0.7,
@@ -1712,7 +1924,6 @@ const estilos = StyleSheet.create({
         marginBottom: 4,
     },
     buscadorManualLabel: {
-        color: Colores.textoGris,
         fontWeight: '500',
         marginBottom: 6,
         opacity: 0.7,
@@ -1723,26 +1934,60 @@ const estilos = StyleSheet.create({
     },
     buscadorManualInput: {
         flex: 1,
-        backgroundColor: Colores.textoOscuro + '40',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '10',
     },
     botonBuscar: {
-        backgroundColor: Colores.bartNaranja,
         justifyContent: 'center',
         alignItems: 'center',
         minWidth: 50,
     },
-    precioUnitario: {
-        fontSize: 12,
-        color: Colores.textoGris + '80',
+    // ✅ ESTILOS PARA PAGO EN EFECTIVO
+    efectivoContainer: {
+        // Estilos aplicados dinámicamente
     },
-    // ============================================================
-    // ✅ NUEVOS ESTILOS PARA MODAL DE TRANSFERENCIA
-    // ============================================================
+    efectivoTitle: {
+        fontWeight: '600',
+    },
+    efectivoSubtitle: {
+        opacity: 0.8,
+    },
+    efectivoInputContainer: {
+        // Estilos aplicados dinámicamente
+    },
+    efectivoInputPrefix: {
+        fontWeight: 'bold',
+    },
+    efectivoInput: {
+        fontWeight: '600',
+    },
+    efectivoInputSuffix: {
+        opacity: 0.6,
+    },
+    vueltoContainer: {
+        // Estilos aplicados dinámicamente
+    },
+    vueltoLabel: {
+        fontWeight: '500',
+    },
+    vueltoMonto: {
+        fontWeight: 'bold',
+    },
+    efectivoError: {
+        // Estilos aplicados dinámicamente
+    },
+    efectivoErrorText: {
+        fontWeight: '500',
+    },
+    efectivoSugerencia: {
+        // Estilos aplicados dinámicamente
+    },
+    efectivoSugerenciaText: {
+        fontWeight: '500',
+    },
+    // ✅ MODAL TRANSFERENCIA
     modalTransferenciaOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.7)',
@@ -1751,11 +1996,9 @@ const estilos = StyleSheet.create({
         padding: 16,
     },
     modalTransferencia: {
-        backgroundColor: Colores.fondoOscuro,
         borderRadius: 24,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: Colores.bartNaranja + '30',
         maxHeight: '90%',
         width: '100%',
     },
@@ -1763,7 +2006,6 @@ const estilos = StyleSheet.create({
         maxHeight: '90%',
     },
     modalTransferenciaHeader: {
-        padding: isTablet ? 24 : 18,
         alignItems: 'center',
         flexDirection: 'row',
         justifyContent: 'center',
@@ -1771,27 +2013,21 @@ const estilos = StyleSheet.create({
     },
     modalTransferenciaTitulo: {
         fontWeight: 'bold',
-        color: Colores.textoOscuro,
     },
-    modalTransferenciaBody: {
-        padding: isTablet ? 28 : 20,
-    },
+    modalTransferenciaBody: {},
     modalTransferenciaMensaje: {
-        color: Colores.textoGris,
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 20,
+        opacity: 0.8,
     },
     aliasContainer: {
-        backgroundColor: Colores.bartNaranja + '10',
         borderRadius: 16,
         padding: 16,
         borderWidth: 1,
-        borderColor: Colores.bartNaranja + '20',
         marginBottom: 16,
     },
     aliasLabel: {
-        color: Colores.textoGris,
         textTransform: 'uppercase',
         letterSpacing: 1,
         marginBottom: 6,
@@ -1802,39 +2038,32 @@ const estilos = StyleSheet.create({
         justifyContent: 'space-between',
     },
     aliasTexto: {
-        color: Colores.textoClaro,
         fontWeight: 'bold',
         letterSpacing: 0.5,
     },
     aliasBotonCopiar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colores.bartNaranja + '20',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 8,
         gap: 4,
     },
-    aliasBotonCopiarTexto: {
-        color: Colores.bartNaranja,
+    aliasBotonCopiarText: {
         fontWeight: '600',
     },
     cbuContainer: {
-        backgroundColor: Colores.textoOscuro + '30',
         borderRadius: 12,
         padding: 12,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '10',
     },
     cbuLabel: {
-        color: Colores.textoGris,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         marginBottom: 4,
     },
     cbuTexto: {
-        color: Colores.textoClaro,
         fontWeight: '500',
         letterSpacing: 0.5,
     },
@@ -1843,21 +2072,18 @@ const estilos = StyleSheet.create({
         paddingVertical: 12,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: Colores.textoClaro + '10',
         marginBottom: 12,
     },
     montoLabel: {
-        color: Colores.textoGris,
         marginBottom: 4,
     },
     montoTexto: {
-        color: Colores.bartNaranja,
         fontWeight: 'bold',
     },
     pedidoNumero: {
-        color: Colores.textoGris,
         textAlign: 'center',
         marginBottom: 20,
+        opacity: 0.7,
     },
     botonesTransferencia: {
         flexDirection: 'row',
@@ -1873,19 +2099,16 @@ const estilos = StyleSheet.create({
         gap: 8,
     },
     botonTransferenciaPrincipal: {
-        backgroundColor: Colores.bartNaranja,
+        borderWidth: 1,
+        borderColor: DESIGN.colors.accentSecondary,
     },
     botonTransferenciaSecundario: {
-        backgroundColor: Colores.textoOscuro + '40',
         borderWidth: 1,
-        borderColor: Colores.textoClaro + '10',
     },
-    botonTransferenciaTexto: {
+    botonTransferenciaText: {
         fontWeight: '600',
-        color: Colores.textoClaro,
     },
     mensajeConfirmacion: {
-        color: Colores.textoGris,
         textAlign: 'center',
         marginTop: 14,
         lineHeight: 18,

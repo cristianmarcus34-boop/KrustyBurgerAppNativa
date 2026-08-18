@@ -216,7 +216,7 @@ function decodePolyline(encoded: string): { latitude: number; longitude: number 
     return points;
 }
 
-// ✅ GUARDAR RUTA EN SUPABASE (usando las columnas correctas de tu DB)
+// ✅ GUARDAR RUTA EN SUPABASE
 export async function guardarRutaPedido(
     pedidoId: number,
     puntos: { latitude: number; longitude: number }[],
@@ -241,22 +241,20 @@ export async function guardarRutaPedido(
 
         // ✅ Construir objeto con las columnas correctas de tu DB
         const updateData: any = {
-            ruta_puntos: puntosValidos, // ✅ Columna JSONB
+            ruta_puntos: puntosValidos,
         };
 
-        // ✅ Guardar distancia si viene
         if (distancia) {
             const distanciaNum = parseFloat(distancia.replace(' km', '').replace(',', '.').trim());
             if (!isNaN(distanciaNum) && distanciaNum > 0) {
-                updateData.distancia_km = distanciaNum; // ✅ Columna numeric
+                updateData.distancia_km = distanciaNum;
             }
         }
 
-        // ✅ Guardar tiempo si viene
         if (duracion) {
             const tiempoNum = parseInt(duracion.replace(' min', '').trim());
             if (!isNaN(tiempoNum) && tiempoNum > 0) {
-                updateData.tiempo_estimado = tiempoNum; // ✅ Columna numeric
+                updateData.tiempo_estimado = tiempoNum;
             }
         }
 

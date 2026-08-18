@@ -1,3 +1,4 @@
+// stores/tiendaFavoritos.ts - VERSIÓN CON ELIMINAR
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Producto } from '../lib/tipos';
@@ -12,7 +13,7 @@ interface Favorito {
     fecha: string;
 }
 
-// ✅ INTERFAZ PARA DATOS PARCIALES (cuando solo necesitamos algunas columnas)
+// ✅ INTERFAZ PARA DATOS PARCIALES
 interface FavoritoResumen {
     producto_id: number;
     contador: number;
@@ -21,11 +22,12 @@ interface FavoritoResumen {
 
 interface EstadoFavoritos {
     favoritos: Producto[];
-    favoritosData: FavoritoResumen[]; // ✅ Tipo corregido
+    favoritosData: FavoritoResumen[];
     cargando: boolean;
     cargarFavoritos: (usuarioId: string) => Promise<void>;
     agregarFavorito: (usuarioId: string, producto: Producto) => Promise<void>;
     incrementarContador: (usuarioId: string, productoId: number) => Promise<void>;
+    eliminarFavorito: (usuarioId: string, productoId: number) => Promise<void>; // ✅ NUEVA FUNCIÓN
     limpiarFavoritos: () => void;
 }
 
@@ -38,7 +40,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
         try {
             set({ cargando: true });
 
-            // ✅ Tipado correcto para la consulta
             const { data: favoritosData, error } = await supabase
                 .from('favoritos')
                 .select('producto_id, contador, ultima_vez')
@@ -57,7 +58,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                 return;
             }
 
-            // ✅ Ahora favoritosData tiene el tipo correcto (FavoritoResumen[])
             const productoIds = favoritosData.map((f) => f.producto_id);
             const { data: productosData, error: productosError } = await supabase
                 .from('productos')
@@ -70,7 +70,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                 return;
             }
 
-            // Ordenar los productos según el contador
             const productosOrdenados = productosData?.sort((a, b) => {
                 const contadorA = favoritosData.find((f) => f.producto_id === a.id)?.contador || 0;
                 const contadorB = favoritosData.find((f) => f.producto_id === b.id)?.contador || 0;
@@ -79,7 +78,7 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
 
             set({
                 favoritos: productosOrdenados || [],
-                favoritosData: favoritosData, // ✅ Ahora coincide con el tipo
+                favoritosData: favoritosData,
                 cargando: false
             });
         } catch (error) {
@@ -90,7 +89,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
 
     agregarFavorito: async (usuarioId, producto) => {
         try {
-            // Verificar si ya existe
             const { data: existente, error: checkError } = await supabase
                 .from('favoritos')
                 .select('id, contador')
@@ -104,7 +102,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
             }
 
             if (existente) {
-                // Si existe, incrementar contador
                 await supabase
                     .from('favoritos')
                     .update({
@@ -113,7 +110,6 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                     })
                     .eq('id', existente.id);
             } else {
-                // Si no existe, crear nuevo
                 await supabase
                     .from('favoritos')
                     .insert({
@@ -125,10 +121,30 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                     });
             }
 
-            // Recargar favoritos
             await get().cargarFavoritos(usuarioId);
         } catch (error) {
             console.error('Error agregando favorito:', error);
+        }
+    },
+
+    // ✅ NUEVA FUNCIÓN: ELIMINAR FAVORITO
+    eliminarFavorito: async (usuarioId: string, productoId: number) => {
+        try {
+            const { error } = await supabase
+                .from('favoritos')
+                .delete()
+                .eq('usuario_id', usuarioId)
+                .eq('producto_id', productoId);
+
+            if (error) {
+                console.error('Error eliminando favorito:', error);
+                return;
+            }
+
+            // Recargar favoritos
+            await get().cargarFavoritos(usuarioId);
+        } catch (error) {
+            console.error('Error eliminando favorito:', error);
         }
     },
 

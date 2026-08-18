@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaSeguimiento.tsx
+﻿// screens/cliente/PantallaSeguimiento.tsx - COMPLETO
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
@@ -12,9 +12,9 @@ import { supabase } from '../../lib/supabase';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { obtenerRutaPedido } from '../../lib/directions';
+import { obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 
-// ✅ IMPORTAR MARCADORES DEL COMPONENTE MAPA
+// ✅ IMPORTAR MARCADORES
 import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
 import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
 import { MarcadorPersonalizado } from '../../components/Mapa/MarcadorPersonalizado';
@@ -27,7 +27,7 @@ const UBICACION_KRUSTY = {
   longitude: -58.29220250409459
 };
 
-// ✅ PALETA DE COLORES CONSISTENTE
+// ✅ PALETA DE COLORES
 const COLORS = {
   amarillo: '#F5C518',
   amarilloClaro: '#FFE066',
@@ -50,7 +50,7 @@ const COLORS = {
   cancelado: '#F44336',
 };
 
-// ✅ FUNCIÓN PARA VALIDAR COORDENADAS
+// ✅ FUNCIONES AUXILIARES
 const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) => {
   if (!coords || coords.length < 2) return false;
   return coords.every(coord =>
@@ -63,7 +63,6 @@ const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) =
   );
 };
 
-// ✅ FUNCIÓN PARA CALCULAR DISTANCIA (Haversine)
 const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: number) => {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -76,6 +75,9 @@ const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// ============================================================
+// 🏠 COMPONENTE PRINCIPAL
+// ============================================================
 export default function PantallaSeguimiento(props: any) {
   const { perfil, esAdministrador } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
@@ -93,6 +95,10 @@ export default function PantallaSeguimiento(props: any) {
   const [costoEnvio, setCostoEnvio] = useState(0);
   const [distanciaBD, setDistanciaBD] = useState<number | null>(null);
   const [tiempoBD, setTiempoBD] = useState<number | null>(null);
+  const [montoPago, setMontoPago] = useState<number | null>(null);
+  const [vuelto, setVuelto] = useState<number | null>(null);
+  const [direccionCliente, setDireccionCliente] = useState<string>('');
+  const [rutaCargada, setRutaCargada] = useState(false);
 
   const mapRef = useRef<MapView>(null);
   const channelRef = useRef<any>(null);
@@ -101,6 +107,9 @@ export default function PantallaSeguimiento(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
+  // ============================================================
+  // 🎬 EFECTOS
+  // ============================================================
   useEffect(() => {
     const pedidoId = props.route?.params?.pedidoId;
 
@@ -117,16 +126,8 @@ export default function PantallaSeguimiento(props: any) {
     }
 
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
 
     return () => {
@@ -134,33 +135,53 @@ export default function PantallaSeguimiento(props: any) {
     };
   }, []);
 
-  // ✅ Cargar ruta guardada
+  // ✅ CARGAR RUTA DESDE LA BASE DE DATOS
   useEffect(() => {
     if (pedido && pedido.id) {
       const cargarRuta = async () => {
+        console.log('🔍 Cargando ruta para pedido:', pedido.id);
+
+        // ✅ Intentar cargar ruta guardada en la DB
         const ruta = await obtenerRutaPedido(pedido.id);
-        if (ruta && ruta.length > 0) {
+
+        if (ruta && ruta.length > 1) {
+          console.log('✅ Ruta cargada de la DB:', ruta.length, 'puntos');
           setRutaPuntos(ruta);
+          setRutaCargada(true);
+
+          // ✅ Cargar info de distancia y tiempo
+          const infoRuta = await obtenerInfoRutaPedido(pedido.id);
+          if (infoRuta) {
+            setDistancia(parseFloat(infoRuta.distancia) || 0);
+            setTiempoEstimado(infoRuta.duracion);
+            setDistanciaBD(parseFloat(infoRuta.distancia) || 0);
+            setTiempoBD(parseInt(infoRuta.duracion) || 0);
+          }
+        } else {
+          console.log('⚠️ No hay ruta guardada en la DB, usando línea recta');
+
+          // ✅ FALLBACK: Línea recta desde Krusty hasta el cliente
+          const destinoCliente = {
+            latitude: pedido.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
+            longitude: pedido.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
+          };
+
+          const puntosLineaRecta = [
+            { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude },
+            { latitude: destinoCliente.latitude, longitude: destinoCliente.longitude }
+          ];
+          setRutaPuntos(puntosLineaRecta);
+          setRutaCargada(true);
+          console.log('📏 Usando línea recta como fallback');
         }
       };
       cargarRuta();
     }
   }, [pedido]);
 
-  useEffect(() => {
-    if (mapRef.current && ubicacionRepartidor && pedido) {
-      const destinoCliente = {
-        latitude: pedido.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
-        longitude: pedido.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
-      };
-
-      mapRef.current.fitToCoordinates([ubicacionRepartidor, destinoCliente], {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
-      });
-    }
-  }, [ubicacionRepartidor, pedido]);
-
+  // ============================================================
+  // 🔄 FUNCIONES
+  // ============================================================
   const limpiarSuscripcion = () => {
     if (channelRef.current) {
       try {
@@ -187,8 +208,10 @@ export default function PantallaSeguimiento(props: any) {
 
       if (data) {
         setPedido(data as Pedido);
+        setDireccionCliente(data.direccion || '');
         actualizarUbicacion(data as Pedido);
         actualizarInfoEnvio(data as Pedido);
+        actualizarPagoEfectivo(data as Pedido);
       }
     } catch (err) {
       setError('Error al cargar el pedido');
@@ -210,14 +233,23 @@ export default function PantallaSeguimiento(props: any) {
       setDistanciaBD(p.distancia_km);
       setDistancia(p.distancia_km);
     }
-
     if (p.tiempo_estimado !== undefined && p.tiempo_estimado !== null) {
       setTiempoBD(p.tiempo_estimado);
       setTiempoEstimado(p.tiempo_estimado + ' min');
     }
-
     if (p.costo_envio !== undefined && p.costo_envio !== null) {
       setCostoEnvio(p.costo_envio);
+    }
+  };
+
+  const actualizarPagoEfectivo = (p: Pedido) => {
+    if (p.metodo_pago === 'efectivo') {
+      if (p.monto_pago !== undefined && p.monto_pago !== null) {
+        setMontoPago(p.monto_pago);
+      }
+      if (p.vuelto !== undefined && p.vuelto !== null) {
+        setVuelto(p.vuelto);
+      }
     }
   };
 
@@ -237,8 +269,16 @@ export default function PantallaSeguimiento(props: any) {
         (payload) => {
           const nuevoPedido = payload.new as Pedido;
           setPedido(nuevoPedido);
+          setDireccionCliente(nuevoPedido.direccion || '');
           actualizarUbicacion(nuevoPedido);
           actualizarInfoEnvio(nuevoPedido);
+          actualizarPagoEfectivo(nuevoPedido);
+
+          // ✅ Si cambia la ruta, recargarla
+          if (nuevoPedido.ruta_puntos) {
+            setRutaPuntos(nuevoPedido.ruta_puntos);
+            setRutaCargada(true);
+          }
         }
       )
       .subscribe();
@@ -252,7 +292,6 @@ export default function PantallaSeguimiento(props: any) {
         latitude: Number(p.lat_repartidor),
         longitude: Number(p.repartidor_de_lng),
       };
-
       setUbicacionRepartidor(posRepartidor);
 
       if (!p.distancia_km && p.lat_cliente && p.lng_cliente) {
@@ -267,6 +306,9 @@ export default function PantallaSeguimiento(props: any) {
     }
   };
 
+  // ============================================================
+  // 📋 ESTADOS
+  // ============================================================
   const estados = [
     { key: 'pendiente', label: 'Pedido Recibido', icono: 'receipt-outline' },
     { key: 'confirmado', label: 'Confirmado', icono: 'checkmark-circle-outline' },
@@ -292,6 +334,9 @@ export default function PantallaSeguimiento(props: any) {
     return c[estado] || COLORS.grisClaro;
   };
 
+  // ============================================================
+  // 📐 RESPONSIVE
+  // ============================================================
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
@@ -306,9 +351,14 @@ export default function PantallaSeguimiento(props: any) {
   };
 
   const posRepartidor = ubicacionRepartidor || UBICACION_KRUSTY;
-  const coordenadasRuta = rutaPuntos.length > 0 ? rutaPuntos : [posRepartidor, destinoCliente];
+
+  // ✅ Usar la ruta cargada de la DB o la línea recta
+  const coordenadasRuta = rutaPuntos.length > 1 ? rutaPuntos : [posRepartidor, destinoCliente];
   const puntosValidos = validarCoordenadas(coordenadasRuta);
 
+  // ============================================================
+  // ⚠️ PANTALLAS DE ESTADO
+  // ============================================================
   if (error) {
     return (
       <View style={estilos.centrado}>
@@ -351,6 +401,9 @@ export default function PantallaSeguimiento(props: any) {
     );
   }
 
+  // ============================================================
+  // 🏗️ RENDER PRINCIPAL
+  // ============================================================
   return (
     <View style={estilos.contenedor}>
       <LinearGradient
@@ -364,9 +417,7 @@ export default function PantallaSeguimiento(props: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           estilos.scroll,
-          {
-            paddingBottom: insets.bottom + 20,
-          }
+          { paddingBottom: insets.bottom + 20 }
         ]}
         refreshControl={
           <RefreshControl
@@ -377,7 +428,7 @@ export default function PantallaSeguimiento(props: any) {
           />
         }
       >
-        {/* ✅ TÍTULO */}
+        {/* ✅ HEADER */}
         <Animated.View style={[
           estilos.header,
           {
@@ -401,7 +452,7 @@ export default function PantallaSeguimiento(props: any) {
           <View style={{ width: isTablet ? 28 : 24 }} />
         </Animated.View>
 
-        {/* ✅ MAPA CON MOTO DEL REPARTIDOR */}
+        {/* ✅ MAPA CON RUTA */}
         <Animated.View style={[
           estilos.mapaContenedor,
           {
@@ -424,40 +475,35 @@ export default function PantallaSeguimiento(props: any) {
             }}
             showsUserLocation={false}
           >
-            {/* 📍 Krusty Burger - MarcadorPersonalizado */}
+            {/* 📍 Krusty Burger */}
             <Marker coordinate={UBICACION_KRUSTY}>
-              <MarcadorPersonalizado
-                color="#FF5722"
-                size="small"
-                showRing={false}
-              />
+              <MarcadorPersonalizado color="#FF5722" size="small" showRing={false} />
             </Marker>
 
-            {/* 🛵 REPARTIDOR CON MOTO - MarcadorMoto */}
+            {/* 🛵 REPARTIDOR CON MOTO */}
             <Marker coordinate={posRepartidor}>
               <MarcadorMoto size="normal" animated={true} />
             </Marker>
 
-            {/* 📍 DESTINO CLIENTE - MarcadorDestino */}
+            {/* 📍 DESTINO CLIENTE */}
             <Marker coordinate={destinoCliente}>
               <MarcadorDestino size="normal" />
             </Marker>
 
             {/* 🗺️ RUTA */}
-            {puntosValidos && (
+            {puntosValidos && rutaCargada && (
               <Polyline
                 coordinates={coordenadasRuta}
-                strokeColor={COLORS.amarillo}
-                strokeWidth={rutaPuntos.length > 0 ? 5 : 4}
-                lineDashPattern={rutaPuntos.length > 0 ? [] : [5, 5]}
+                strokeColor={rutaPuntos.length > 2 ? COLORS.amarillo : COLORS.amarillo + '80'}
+                strokeWidth={rutaPuntos.length > 2 ? 5 : 3}
+                lineDashPattern={rutaPuntos.length > 2 ? [] : [8, 6]}
                 lineCap="round"
                 lineJoin="round"
-                strokeColors={[COLORS.amarillo, COLORS.amarilloOscuro, COLORS.amarillo]}
               />
             )}
           </MapView>
 
-          {/* ✅ INFORMACIÓN DE ENVÍO EN EL MAPA */}
+          {/* ✅ INFO DE ENVÍO */}
           <View style={estilos.mapaInfo}>
             <View style={estilos.mapaInfoItem}>
               <Ionicons name="navigate" size={isTablet ? 22 : 18} color={COLORS.amarillo} />
@@ -610,6 +656,22 @@ export default function PantallaSeguimiento(props: any) {
             📋 Detalles del Pedido
           </Text>
 
+          {/* Dirección */}
+          <View style={estilos.infoFila}>
+            <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+              📍 Dirección
+            </Text>
+            <Text style={[estilos.infoValor, {
+              fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+              flex: 1,
+              textAlign: 'right',
+              flexWrap: 'wrap',
+            }]}>
+              {direccionCliente || pedido.direccion || 'No especificada'}
+            </Text>
+          </View>
+
+          {/* Total */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Total</Text>
             <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
@@ -617,6 +679,7 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
+          {/* Envío */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Envío</Text>
             <Text style={[
@@ -630,6 +693,7 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
+          {/* Distancia */}
           {distanciaBD !== null && (
             <View style={estilos.infoFila}>
               <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Distancia</Text>
@@ -639,6 +703,7 @@ export default function PantallaSeguimiento(props: any) {
             </View>
           )}
 
+          {/* Tiempo estimado */}
           {tiempoBD !== null && (
             <View style={estilos.infoFila}>
               <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Tiempo estimado</Text>
@@ -648,13 +713,39 @@ export default function PantallaSeguimiento(props: any) {
             </View>
           )}
 
+          {/* Pago */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Pago</Text>
             <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-              {pedido.metodo_pago || 'Efectivo'}
+              {pedido.metodo_pago === 'efectivo' ? '💰 Efectivo' : pedido.metodo_pago || 'Efectivo'}
             </Text>
           </View>
 
+          {/* Monto pagado y vuelto */}
+          {pedido.metodo_pago === 'efectivo' && montoPago !== null && (
+            <>
+              <View style={[estilos.infoFila, { marginTop: 4, borderTopWidth: 1, borderTopColor: COLORS.blanco + '10', paddingTop: 8 }]}>
+                <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: COLORS.amarillo }]}>
+                  💰 Pagó con
+                </Text>
+                <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.amarillo, fontWeight: 'bold' }]}>
+                  ${montoPago.toFixed(2)}
+                </Text>
+              </View>
+              {vuelto !== null && vuelto > 0 && (
+                <View style={estilos.infoFila}>
+                  <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: COLORS.verdeClaro }]}>
+                    💵 Vuelto
+                  </Text>
+                  <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.verdeClaro, fontWeight: 'bold' }]}>
+                    ${vuelto.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Tipo de entrega */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Entrega</Text>
             <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
@@ -662,6 +753,7 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
+          {/* Productos */}
           {pedido.items_json && (
             <View style={estilos.productos}>
               <Text style={[estilos.productosTitulo, { fontSize: isTablet ? 17 : isSmallPhone ? 14 : 15 }]}>
@@ -701,239 +793,52 @@ export default function PantallaSeguimiento(props: any) {
   );
 }
 
+// ============================================================
+// 🎨 ESTILOS
+// ============================================================
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: COLORS.negro,
-  },
-  fondoGradiente: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  centrado: {
-    flex: 1,
-    backgroundColor: COLORS.negro,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.blanco + '10',
-  },
-  botonVolverHeader: {
-    padding: 4,
-  },
-  titulo: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    letterSpacing: 1,
-    flex: 1,
-    textAlign: 'center',
-  },
-  scroll: {
-    flexGrow: 1,
-  },
-  cargandoTexto: {
-    color: COLORS.grisClaro,
-    marginTop: 16,
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  errorTexto: {
-    fontSize: 20,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  mapaContenedor: {
-    backgroundColor: COLORS.negro + '60',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-    marginTop: 12,
-  },
-  mapa: {
-    width: '100%',
-  },
-  mapaInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 12,
-    paddingHorizontal: 8,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  mapaInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mapaInfoTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-  },
-  repartidorInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.enCamino + '15',
-    borderWidth: 1,
-    borderColor: COLORS.enCamino + '20',
-    marginTop: 12,
-    gap: 12,
-  },
-  repartidorNombre: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-  },
-  repartidorEstado: {
-    color: COLORS.enCamino,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  estadoActual: {
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
-  },
-  estadoActualTexto: {
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  pedidoId: {
-    color: COLORS.grisClaro,
-    marginTop: 4,
-    opacity: 0.6,
-  },
-  timeline: {
-    paddingVertical: 16,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  timelineLinea: {
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  timelinePunto: {
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timelinePuntoActual: {
-    borderWidth: 3,
-    borderColor: COLORS.amarillo,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  timelineBarra: {
-    width: 2,
-    marginTop: 2,
-  },
-  timelineInfo: {
-    flex: 1,
-    paddingTop: 2,
-  },
-  timelineLabel: {
-    fontWeight: '500',
-  },
-  timelineAhora: {
-    color: COLORS.amarillo,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  infoPedido: {
-    backgroundColor: COLORS.negro + '60',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '8',
-    marginTop: 12,
-  },
-  infoTitulo: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    marginBottom: 12,
-  },
-  infoFila: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  infoLabel: {
-    color: COLORS.grisClaro,
-    opacity: 0.7,
-  },
-  infoValor: {
-    fontWeight: '600',
-    color: COLORS.blanco,
-  },
-  productos: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '8',
-    paddingTop: 12,
-  },
-  productosTitulo: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    marginBottom: 8,
-  },
-  productoItem: {
-    flexDirection: 'row',
-    marginBottom: 4,
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.blanco + '5',
-  },
-  productoNombre: {
-    flex: 1,
-    color: COLORS.grisClaro,
-  },
-  productoCantidad: {
-    color: COLORS.grisClaro,
-    marginHorizontal: 10,
-    opacity: 0.6,
-  },
-  productoPrecio: {
-    fontWeight: 'bold',
-    color: COLORS.amarillo,
-  },
-  productoError: {
-    fontSize: 14,
-    color: COLORS.grisClaro,
-    textAlign: 'center',
-    padding: 10,
-    opacity: 0.6,
-  },
-  botonVolver: {
-    marginTop: 20,
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  botonVolverGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  botonVolverTexto: {
-    color: COLORS.negro,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  contenedor: { flex: 1, backgroundColor: COLORS.negro },
+  fondoGradiente: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  centrado: { flex: 1, backgroundColor: COLORS.negro, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: COLORS.blanco + '10' },
+  botonVolverHeader: { padding: 4 },
+  titulo: { fontWeight: 'bold', color: COLORS.blanco, letterSpacing: 1, flex: 1, textAlign: 'center' },
+  scroll: { flexGrow: 1 },
+  cargandoTexto: { color: COLORS.grisClaro, marginTop: 16, fontSize: 14, opacity: 0.7 },
+  errorTexto: { fontSize: 20, textAlign: 'center', marginTop: 20 },
+  mapaContenedor: { backgroundColor: COLORS.negro + '60', overflow: 'hidden', borderWidth: 1, borderColor: COLORS.blanco + '10', marginTop: 12 },
+  mapa: { width: '100%' },
+  mapaInfo: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12, paddingHorizontal: 8, flexWrap: 'wrap', gap: 8 },
+  mapaInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mapaInfoTexto: { color: COLORS.blanco, fontWeight: 'bold' },
+  repartidorInfo: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.enCamino + '15', borderWidth: 1, borderColor: COLORS.enCamino + '20', marginTop: 12, gap: 12 },
+  repartidorNombre: { fontWeight: 'bold', color: COLORS.blanco },
+  repartidorEstado: { color: COLORS.enCamino, marginTop: 2, fontWeight: '500' },
+  estadoActual: { alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: COLORS.blanco + '8' },
+  estadoActualTexto: { fontWeight: 'bold', marginTop: 8 },
+  pedidoId: { color: COLORS.grisClaro, marginTop: 4, opacity: 0.6 },
+  timeline: { paddingVertical: 16 },
+  timelineItem: { flexDirection: 'row', marginBottom: 4 },
+  timelineLinea: { alignItems: 'center', marginRight: 16 },
+  timelinePunto: { borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+  timelinePuntoActual: { borderWidth: 3, borderColor: COLORS.amarillo, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
+  timelineBarra: { width: 2, marginTop: 2 },
+  timelineInfo: { flex: 1, paddingTop: 2 },
+  timelineLabel: { fontWeight: '500' },
+  timelineAhora: { color: COLORS.amarillo, marginTop: 2, fontWeight: '600' },
+  infoPedido: { backgroundColor: COLORS.negro + '60', borderWidth: 1, borderColor: COLORS.blanco + '8', marginTop: 12 },
+  infoTitulo: { fontWeight: 'bold', color: COLORS.blanco, marginBottom: 12 },
+  infoFila: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  infoLabel: { color: COLORS.grisClaro, opacity: 0.7 },
+  infoValor: { fontWeight: '600', color: COLORS.blanco },
+  productos: { marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.blanco + '8', paddingTop: 12 },
+  productosTitulo: { fontWeight: 'bold', color: COLORS.blanco, marginBottom: 8 },
+  productoItem: { flexDirection: 'row', marginBottom: 4, paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: COLORS.blanco + '5' },
+  productoNombre: { flex: 1, color: COLORS.grisClaro },
+  productoCantidad: { color: COLORS.grisClaro, marginHorizontal: 10, opacity: 0.6 },
+  productoPrecio: { fontWeight: 'bold', color: COLORS.amarillo },
+  productoError: { fontSize: 14, color: COLORS.grisClaro, textAlign: 'center', padding: 10, opacity: 0.6 },
+  botonVolver: { marginTop: 20, borderRadius: 12, overflow: 'hidden', elevation: 4, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 },
+  botonVolverGradient: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 12 },
+  botonVolverTexto: { color: COLORS.negro, fontWeight: 'bold', fontSize: 16 },
 });

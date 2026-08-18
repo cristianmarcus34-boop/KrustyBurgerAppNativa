@@ -1,5 +1,5 @@
-﻿// screens/cliente/PantallaPedidos.tsx
-import React, { useEffect, useState, useRef } from 'react';
+﻿// screens/cliente/PantallaPedidos.tsx - CON FORMATEADOR DE PRECIOS
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   Dimensions,
   Animated,
-  RefreshControl
+  RefreshControl,
+  useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,49 +19,102 @@ import { tiendaPedidos } from '../../stores/tiendaPedidos';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Colores } from '../../lib/colores';
 import { Pedido } from '../../lib/tipos';
+import { formatearPrecio, formatearPrecioConDecimales } from '../../lib/formateador'; // ✅ IMPORTAR FORMATEADOR
 
 // ============================================================
-// 🎨 PALETA DE COLORES
+// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
 // ============================================================
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-  pendiente: '#FF9800',
-  confirmado: '#2196F3',
-  preparando: '#9C27B0',
-  listo: '#4CAF50',
-  enCamino: '#FF5722',
-  entregado: '#4CAF50',
-  cancelado: '#F44336',
+const DESIGN = {
+  colors: {
+    fondo: '#F5F2ED',
+    surface: '#FFFFFF',
+    surfaceHover: '#F8F6F2',
+    card: '#FFFFFF',
+    cardShadow: 'rgba(0,0,0,0.06)',
+    border: 'rgba(0,0,0,0.06)',
+    borderLight: 'rgba(0,0,0,0.04)',
+    text: '#1A1A1A',
+    textSecondary: 'rgba(0,0,0,0.55)',
+    textTertiary: 'rgba(0,0,0,0.30)',
+    accent: '#E53935',
+    accentLight: '#FF6B6B',
+    accentSecondary: '#F5C518',
+    accentSecondaryLight: '#FFE135',
+    gradientStart: '#E53935',
+    gradientEnd: '#F5C518',
+    verde: '#43A047',
+    verdeClaro: '#66BB6A',
+    rosa: '#EC407A',
+    azul: '#1A237E',
+    azulClaro: '#3949AB',
+    platino: '#78909C',
+    oro: '#F9A825',
+    plata: '#BDBDBD',
+    bronce: '#A1887F',
+    pendiente: '#FF9800',
+    confirmado: '#2196F3',
+    preparando: '#9C27B0',
+    listo: '#4CAF50',
+    enCamino: '#FF5722',
+    entregado: '#4CAF50',
+    cancelado: '#F44336',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    '2xl': 48,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    full: 999,
+  },
 };
 
-const { width, height } = Dimensions.get('window');
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
+  const isSmallPhone = width < 375;
+
+  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+    if (isDesktop || isTablet) return valores.tablet;
+    if (isSmallPhone) return valores.small;
+    return valores.normal;
+  }, [isDesktop, isTablet, isSmallPhone]);
+
+  const spacing = (base: number) => {
+    if (isTablet) return base * 1.5;
+    if (isSmallPhone) return base * 0.75;
+    return base;
+  };
+
+  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+};
 
 // ✅ CONFIGURACIÓN DE ESTADOS
 const ESTADOS_CONFIG: Record<string, { label: string; icono: keyof typeof Ionicons.glyphMap; color: string }> = {
-  pendiente: { label: 'Pendiente', icono: 'time-outline', color: COLORS.pendiente },
-  confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', color: COLORS.confirmado },
-  preparando: { label: 'Preparando', icono: 'flame-outline', color: COLORS.preparando },
-  listo: { label: 'Listo', icono: 'bag-check-outline', color: COLORS.listo },
-  en_camino: { label: 'En camino', icono: 'bicycle-outline', color: COLORS.enCamino },
-  entregado: { label: 'Entregado', icono: 'home-outline', color: COLORS.entregado },
-  cancelado: { label: 'Cancelado', icono: 'close-circle-outline', color: COLORS.cancelado },
+  pendiente: { label: 'Pendiente', icono: 'time-outline', color: DESIGN.colors.pendiente },
+  confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', color: DESIGN.colors.confirmado },
+  preparando: { label: 'Preparando', icono: 'flame-outline', color: DESIGN.colors.preparando },
+  listo: { label: 'Listo', icono: 'bag-check-outline', color: DESIGN.colors.listo },
+  en_camino: { label: 'En camino', icono: 'bicycle-outline', color: DESIGN.colors.enCamino },
+  entregado: { label: 'Entregado', icono: 'home-outline', color: DESIGN.colors.entregado },
+  cancelado: { label: 'Cancelado', icono: 'close-circle-outline', color: DESIGN.colors.cancelado },
 };
 
 export default function PantallaPedidos(props: any) {
-  // ✅ SOLO USAMOS LO QUE EXISTE EN EL STORE
   const { pedidos, cargando, cargarPedidosUsuario } = tiendaPedidos();
   const { perfil } = tiendaAutenticacion();
+  const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const [refrescando, setRefrescando] = useState(false);
 
@@ -94,9 +148,8 @@ export default function PantallaPedidos(props: any) {
     setRefrescando(false);
   };
 
-  const isTablet = width >= 768;
-  const isSmallPhone = width < 375;
-
+  const isTablet = responsive.isTablet;
+  const isSmallPhone = responsive.isSmallPhone;
   const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
   const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
   const tarjetaPadding = isTablet ? 20 : isSmallPhone ? 12 : 16;
@@ -109,10 +162,10 @@ export default function PantallaPedidos(props: any) {
     return ESTADOS_CONFIG[estado] || ESTADOS_CONFIG.pendiente;
   };
 
-  const renderPedido = ({ item, index }: { item: Pedido; index: number }) => {
+  // ✅ RenderItem memoizado con useCallback - USANDO FORMATEADOR
+  const renderPedido = useCallback(({ item, index }: { item: Pedido; index: number }) => {
     const estado = item.estado || 'pendiente';
     const estadoInfo = getEstadoInfo(estado);
-    const delay = index * 100;
     const itemFade = fadeAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [0.2, 1],
@@ -122,11 +175,11 @@ export default function PantallaPedidos(props: any) {
       outputRange: [20 * (index + 1), 0],
     });
 
-    // ✅ Determinar si mostrar info de envío
     const mostrarInfoEnvio = item.distancia_km !== undefined && item.distancia_km !== null;
 
     return (
       <Animated.View
+        key={item.id?.toString() || index.toString()}
         style={{
           opacity: itemFade,
           transform: [{ translateY: itemSlide }],
@@ -134,34 +187,40 @@ export default function PantallaPedidos(props: any) {
       >
         <TouchableOpacity
           style={[
-            estilos.tarjeta,
+            styles.card,
             {
               padding: tarjetaPadding,
               borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
               borderColor: estadoInfo.color + '40',
+              backgroundColor: DESIGN.colors.surface,
+              shadowColor: DESIGN.colors.cardShadow,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 1,
+              shadowRadius: 8,
+              elevation: 3,
             }
           ]}
           onPress={() => props.navigation.navigate('Seguimiento', { pedidoId: item.id })}
           activeOpacity={0.8}
         >
           {/* ✅ ENCABEZADO */}
-          <View style={estilos.encabezadoPedido}>
-            <View style={estilos.pedidoInfo}>
+          <View style={styles.cardHeader}>
+            <View style={styles.pedidoInfo}>
               <View style={[
-                estilos.iconoContainer,
+                styles.iconContainer,
                 {
-                  backgroundColor: estadoInfo.color + '20',
+                  backgroundColor: estadoInfo.color + '15',
                   padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                   borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
                 }
               ]}>
                 <Ionicons name={estadoInfo.icono} size={isTablet ? 28 : isSmallPhone ? 18 : 22} color={estadoInfo.color} />
               </View>
-              <View style={estilos.pedidoTexto}>
-                <Text style={[estilos.pedidoId, { fontSize: pedidoIdSize }]}>
+              <View style={styles.pedidoTexto}>
+                <Text style={[styles.pedidoId, { fontSize: pedidoIdSize, color: DESIGN.colors.text }]}>
                   Pedido #{item.id}
                 </Text>
-                <Text style={[estilos.fecha, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}>
+                <Text style={[styles.fecha, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
                   {item.creado_en ? new Date(item.creado_en).toLocaleDateString('es-AR', {
                     day: '2-digit',
                     month: '2-digit',
@@ -173,9 +232,9 @@ export default function PantallaPedidos(props: any) {
               </View>
             </View>
             <View style={[
-              estilos.estado,
+              styles.estado,
               {
-                backgroundColor: estadoInfo.color + '20',
+                backgroundColor: estadoInfo.color + '15',
                 paddingHorizontal: isTablet ? 14 : isSmallPhone ? 8 : 10,
                 paddingVertical: isTablet ? 6 : isSmallPhone ? 4 : 5,
                 borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
@@ -184,7 +243,7 @@ export default function PantallaPedidos(props: any) {
               }
             ]}>
               <Text style={[
-                estilos.estadoTexto,
+                styles.estadoTexto,
                 {
                   fontSize: estadoTextSize,
                   color: estadoInfo.color,
@@ -195,44 +254,45 @@ export default function PantallaPedidos(props: any) {
             </View>
           </View>
 
-          {/* ✅ DETALLES Y PRECIO */}
-          <View style={estilos.detalles}>
+          {/* ✅ DETALLES Y PRECIO - USANDO FORMATEADOR */}
+          <View style={styles.detalles}>
             <View>
-              <Text style={[estilos.total, { fontSize: totalSize }]}>
-                ${item.total?.toFixed(2) || '0.00'}
+              {/* ✅ USAR formatearPrecio para el total */}
+              <Text style={[styles.total, { fontSize: totalSize, color: DESIGN.colors.accent }]}>
+                {formatearPrecio(item.total || 0)}
               </Text>
               {item.items_json && (
-                <Text style={[estilos.cantidadItems, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}>
+                <Text style={[styles.cantidadItems, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
                   {item.items_json.length} producto(s)
                 </Text>
               )}
             </View>
-            <View style={estilos.accion}>
-              <Text style={[estilos.verDetalle, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+            <View style={styles.accion}>
+              <Text style={[styles.verDetalle, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
                 Ver detalle
               </Text>
-              <Ionicons name="chevron-forward" size={isTablet ? 22 : isSmallPhone ? 16 : 18} color={COLORS.grisClaro} />
+              <Ionicons name="chevron-forward" size={isTablet ? 22 : isSmallPhone ? 16 : 18} color={DESIGN.colors.textTertiary} />
             </View>
           </View>
 
-          {/* ✅ INFORMACIÓN DE ENVÍO (NUEVO) */}
+          {/* ✅ INFORMACIÓN DE ENVÍO - USANDO FORMATEADOR */}
           {mostrarInfoEnvio && (
             <View style={[
-              estilos.infoEnvioContainer,
+              styles.infoEnvioContainer,
               {
                 marginTop: 10,
                 padding: isTablet ? 14 : isSmallPhone ? 8 : 10,
                 borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                backgroundColor: COLORS.negro + '30',
-                borderColor: COLORS.blanco + '8',
+                backgroundColor: DESIGN.colors.surfaceHover,
+                borderColor: DESIGN.colors.border,
                 borderWidth: 1,
               }
             ]}>
               {/* Distancia */}
               {item.distancia_km !== undefined && item.distancia_km !== null && (
-                <View style={estilos.infoEnvioFila}>
-                  <Ionicons name="navigate" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
-                  <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize }]}>
+                <View style={styles.infoEnvioFila}>
+                  <Ionicons name="navigate" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={DESIGN.colors.accentSecondary} />
+                  <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
                     📏 Distancia: {item.distancia_km.toFixed(1)} km
                   </Text>
                 </View>
@@ -240,33 +300,33 @@ export default function PantallaPedidos(props: any) {
 
               {/* Tiempo estimado */}
               {item.tiempo_estimado !== undefined && item.tiempo_estimado !== null && (
-                <View style={estilos.infoEnvioFila}>
-                  <Ionicons name="time-outline" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
-                  <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize }]}>
+                <View style={styles.infoEnvioFila}>
+                  <Ionicons name="time-outline" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={DESIGN.colors.accentSecondary} />
+                  <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
                     ⏱️ Tiempo estimado: {item.tiempo_estimado} min
                   </Text>
                 </View>
               )}
 
-              {/* Costo de envío */}
-              <View style={estilos.infoEnvioFila}>
-                <Ionicons name="cash" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.verdeClaro} />
+              {/* ✅ Costo de envío - USANDO FORMATEADOR */}
+              <View style={styles.infoEnvioFila}>
+                <Ionicons name="cash" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={DESIGN.colors.verde} />
                 <Text style={[
-                  estilos.infoEnvioTexto,
+                  styles.infoEnvioTexto,
                   {
                     fontSize: infoEnvioSize,
-                    color: item.costo_envio && item.costo_envio > 0 ? COLORS.verdeClaro : COLORS.grisClaro,
+                    color: item.costo_envio && item.costo_envio > 0 ? DESIGN.colors.verde : DESIGN.colors.textTertiary,
                   }
                 ]}>
-                  💰 Costo de envío: {item.costo_envio && item.costo_envio > 0 ? `$${item.costo_envio.toFixed(2)}` : 'Gratis'}
+                  💰 Costo de envío: {item.costo_envio && item.costo_envio > 0 ? formatearPrecio(item.costo_envio) : 'Gratis'}
                 </Text>
               </View>
 
               {/* Tipo de entrega */}
               {item.tipo_entrega && (
-                <View style={estilos.infoEnvioFila}>
-                  <Ionicons name={item.tipo_entrega === 'retiro' ? 'storefront-outline' : 'home-outline'} size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.grisClaro} />
-                  <Text style={[estilos.infoEnvioTexto, { fontSize: infoEnvioSize }]}>
+                <View style={styles.infoEnvioFila}>
+                  <Ionicons name={item.tipo_entrega === 'retiro' ? 'storefront-outline' : 'home-outline'} size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={DESIGN.colors.textTertiary} />
+                  <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
                     {item.tipo_entrega === 'retiro' ? '📦 Retiro en local' : '🚚 Domicilio'}
                   </Text>
                 </View>
@@ -276,31 +336,31 @@ export default function PantallaPedidos(props: any) {
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [pedidos, isTablet, isSmallPhone, tarjetaPadding, pedidoIdSize, totalSize, estadoTextSize, infoEnvioSize, fadeAnim, slideUpAnim]);
 
   return (
-    <View style={estilos.contenedor}>
+    <View style={styles.container}>
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
-        style={estilos.fondoGradiente}
+        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        style={styles.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
       {/* ✅ HEADER */}
       <View style={[
-        estilos.header,
+        styles.header,
         {
           paddingTop: insets.top + (isTablet ? 20 : 10),
           paddingHorizontal: paddingHorizontal,
           paddingBottom: isTablet ? 16 : 12,
         }
       ]}>
-        <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+        <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
           📋 Mis Pedidos
         </Text>
-        <View style={estilos.headerRight}>
-          <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
+        <View style={styles.headerRight}>
+          <Text style={[styles.counter, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.surface + '60' }]}>
             {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'}
           </Text>
         </View>
@@ -308,9 +368,9 @@ export default function PantallaPedidos(props: any) {
 
       {/* ✅ LISTA DE PEDIDOS */}
       {cargando ? (
-        <View style={estilos.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.amarillo} />
-          <Text style={[estilos.loadingTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
+          <Text style={[styles.loadingText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.surface + '70' }]}>
             Cargando tus pedidos...
           </Text>
         </View>
@@ -318,9 +378,9 @@ export default function PantallaPedidos(props: any) {
         <FlatList
           data={pedidos}
           renderItem={renderPedido}
-          keyExtractor={item => item.id?.toString() || Math.random().toString()}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           contentContainerStyle={[
-            estilos.lista,
+            styles.list,
             {
               paddingHorizontal: paddingHorizontal,
               paddingBottom: insets.bottom + 150,
@@ -332,17 +392,17 @@ export default function PantallaPedidos(props: any) {
             <RefreshControl
               refreshing={refrescando}
               onRefresh={manejarRefresh}
-              tintColor={COLORS.amarillo}
-              colors={[COLORS.amarillo]}
+              tintColor={DESIGN.colors.accentSecondary}
+              colors={[DESIGN.colors.accentSecondary]}
             />
           }
           ListEmptyComponent={
-            <View style={estilos.vacioContenedor}>
-              <Ionicons name="receipt-outline" size={isTablet ? 80 : 60} color={COLORS.grisClaro + '30'} />
-              <Text style={[estilos.vacio, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18 }]}>
+            <View style={styles.emptyContainer}>
+              <Ionicons name="receipt-outline" size={isTablet ? 80 : 60} color={DESIGN.colors.surface + '20'} />
+              <Text style={[styles.emptyText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.surface }]}>
                 No tienes pedidos aún
               </Text>
-              <Text style={[estilos.vacioSub, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+              <Text style={[styles.emptySubText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.surface + '60' }]}>
                 Tus pedidos aparecerán aquí cuando realices tu primera compra 🍔
               </Text>
             </View>
@@ -353,12 +413,15 @@ export default function PantallaPedidos(props: any) {
   );
 }
 
-const estilos = StyleSheet.create({
-  contenedor: {
+// ============================================================
+// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// ============================================================
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
-    backgroundColor: COLORS.negro,
+    backgroundColor: DESIGN.colors.fondo,
   },
-  fondoGradiente: {
+  backgroundGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -371,11 +434,10 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.blanco + '10',
+    borderBottomColor: DESIGN.colors.surface + '10',
   },
-  titulo: {
+  title: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
     letterSpacing: 1,
     flex: 1,
   },
@@ -383,8 +445,7 @@ const estilos = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  contador: {
-    color: COLORS.grisClaro,
+  counter: {
     fontWeight: '500',
     opacity: 0.6,
   },
@@ -395,22 +456,20 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  loadingTexto: {
-    color: COLORS.grisClaro,
+  loadingText: {
     fontWeight: '400',
     opacity: 0.7,
   },
   // ✅ LISTA
-  lista: {
+  list: {
     flexGrow: 1,
   },
   // ✅ TARJETA
-  tarjeta: {
-    backgroundColor: COLORS.negro + '60',
+  card: {
     marginBottom: 10,
     borderWidth: 1,
   },
-  encabezadoPedido: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -422,7 +481,7 @@ const estilos = StyleSheet.create({
     gap: 10,
     flex: 1,
   },
-  iconoContainer: {
+  iconContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -431,10 +490,8 @@ const estilos = StyleSheet.create({
   },
   pedidoId: {
     fontWeight: 'bold',
-    color: COLORS.blanco,
   },
   fecha: {
-    color: COLORS.grisClaro,
     marginTop: 2,
     opacity: 0.6,
   },
@@ -450,15 +507,13 @@ const estilos = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: COLORS.blanco + '8',
+    borderTopColor: DESIGN.colors.border,
     paddingTop: 10,
   },
   total: {
     fontWeight: 'bold',
-    color: COLORS.amarillo,
   },
   cantidadItems: {
-    color: COLORS.grisClaro,
     marginTop: 2,
     opacity: 0.5,
   },
@@ -468,11 +523,10 @@ const estilos = StyleSheet.create({
     gap: 4,
   },
   verDetalle: {
-    color: COLORS.grisClaro,
     fontWeight: '500',
     opacity: 0.6,
   },
-  // ✅ INFORMACIÓN DE ENVÍO (NUEVO)
+  // ✅ INFORMACIÓN DE ENVÍO
   infoEnvioContainer: {
     borderWidth: 1,
     gap: 4,
@@ -483,24 +537,21 @@ const estilos = StyleSheet.create({
     gap: 6,
   },
   infoEnvioTexto: {
-    color: COLORS.grisClaro,
     fontWeight: '400',
     opacity: 0.8,
   },
   // ✅ VACÍO
-  vacioContenedor: {
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
   },
-  vacio: {
-    color: COLORS.blanco,
+  emptyText: {
     fontWeight: 'bold',
     marginTop: 16,
     textAlign: 'center',
   },
-  vacioSub: {
-    color: COLORS.grisClaro,
+  emptySubText: {
     textAlign: 'center',
     marginTop: 4,
     opacity: 0.6,

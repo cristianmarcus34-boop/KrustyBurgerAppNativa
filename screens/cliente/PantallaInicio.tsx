@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx - CON TÍTULO Y LOGO
+﻿// screens/cliente/PantallaInicio.tsx - COMPLETO Y ACTUALIZADO
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
@@ -31,6 +32,8 @@ const hamburguesasImg = require('../../assets/imagenes/categorias/hamburguesaCat
 const combosImg = require('../../assets/imagenes/categorias/combosCat.jpg');
 const bebidasImg = require('../../assets/imagenes/categorias/bebidasCat.jpg');
 const postresImg = require('../../assets/imagenes/categorias/postresCat.jpg');
+const acompanantesImg = require('../../assets/imagenes/categorias/acompanantes.jpg');
+const ofertasImg = require('../../assets/imagenes/categorias/ofertas.jpg');
 
 // ✅ IMPORTAR LOGO DE KRUSTY
 const logoKrusty = require('../../assets/icon.png');
@@ -38,7 +41,7 @@ const logoKrusty = require('../../assets/icon.png');
 // ✅ IMPORTAR IMAGEN DE BIENVENIDA
 const bienvenidaImg = require('../../assets/imagenes/bienvenidos.png');
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ============================================================
 // 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
@@ -80,7 +83,7 @@ const DESIGN = {
 };
 
 // ============================================================
-// 📋 DATOS DE CATEGORÍAS
+// 📋 CONFIGURACIÓN DE CATEGORÍAS
 // ============================================================
 interface CategoriaData {
   id: string;
@@ -88,22 +91,31 @@ interface CategoriaData {
   imagen: any;
   color: string;
   descripcion: string;
+  esOferta?: boolean;
 }
 
 const CATEGORIAS: CategoriaData[] = [
   {
-    id: 'hamburguesas',
-    nombre: 'Hamburguesas',
-    imagen: hamburguesasImg,
+    id: 'ofertas',
+    nombre: '🔥 Ofertas',
+    imagen: ofertasImg,
     color: '#E53935',
-    descripcion: 'Las mejores de Springfield',
+    descripcion: 'Descuentos imperdibles',
+    esOferta: true,
   },
   {
-    id: 'combos',
-    nombre: 'Combos',
-    imagen: combosImg,
-    color: '#F5C518',
-    descripcion: 'Con papas y bebida',
+    id: 'hamburguesas',
+    nombre: 'Burgers',
+    imagen: hamburguesasImg,
+    color: '#E53935',
+    descripcion: 'Premium',
+  },
+  {
+    id: 'acompanantes',
+    nombre: 'Extras',
+    imagen: acompanantesImg,
+    color: '#FF6F00',
+    descripcion: 'Papas, aros y más',
   },
   {
     id: 'bebidas',
@@ -126,8 +138,8 @@ const CATEGORIAS: CategoriaData[] = [
 // ============================================================
 export default function PantallaInicio(props: any) {
   const { perfil, esAdministrador } = tiendaAutenticacion();
-  const { cantidadTotal, agregarProducto } = tiendaCarrito();
-  const { favoritos, favoritosData, cargando: cargandoFavoritos, cargarFavoritos, limpiarFavoritos } = tiendaFavoritos();
+  const { agregarProducto } = tiendaCarrito();
+  const { favoritos, cargando: cargandoFavoritos, cargarFavoritos, limpiarFavoritos } = tiendaFavoritos();
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
@@ -142,19 +154,23 @@ export default function PantallaInicio(props: any) {
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
 
+  // ✅ USEFOCUSEFFECT - FORZAR ACTUALIZACIÓN DEL BADGE
+  useFocusEffect(
+    useCallback(() => {
+      const cantidad = tiendaCarrito.getState().cantidadTotal();
+      console.log('🛒 [PantallaInicio] Forzando actualización badge:', cantidad);
+      return () => { };
+    }, [])
+  );
+
   // ============================================================
   // 📐 TAMAÑOS
   // ============================================================
   const tamanos = useMemo(() => ({
     padding: responsive.getEspaciado('LG'),
-    ofertaCardWidth: responsive.isDesktop ? SCREEN_WIDTH * 0.25 :
-      responsive.isTablet ? SCREEN_WIDTH * 0.35 : SCREEN_WIDTH * 0.7,
-    ofertaImagenHeight: responsive.getValor({ tablet: 210, normal: 160, small: 130 }),
-    favoritoCardWidth: responsive.isDesktop ? SCREEN_WIDTH * 0.18 :
-      responsive.isTablet ? SCREEN_WIDTH * 0.28 : SCREEN_WIDTH * 0.55,
-    categoriaSize: responsive.getValor({ tablet: 60, normal: 50, small: 42 }),
+    categoriaWidth: responsive.isDesktop ? SCREEN_WIDTH * 0.18 :
+      responsive.isTablet ? SCREEN_WIDTH * 0.25 : SCREEN_WIDTH * 0.35,
     logoSize: responsive.getValor({ tablet: 600, normal: 600, small: 115 }),
-    tituloSize: responsive.getValor({ tablet: 52, normal: 36, small: 32 }),
     bienvenidaSize: responsive.getValor({ tablet: 200, normal: 350, small: 120 }),
   }), [responsive]);
 
@@ -166,7 +182,8 @@ export default function PantallaInicio(props: any) {
       const { data, error } = await supabase
         .from('ofertas')
         .select('*')
-        .eq('activa', true);
+        .eq('activa', true)
+        .limit(10);
       if (error) throw error;
       setOfertas(data || []);
     } catch (error) {
@@ -176,14 +193,6 @@ export default function PantallaInicio(props: any) {
       setCargandoOfertas(false);
     }
   }, []);
-
-  const cargarFavoritosUsuario = useCallback(async () => {
-    if (perfil?.id) {
-      await cargarFavoritos(perfil.id);
-    } else {
-      limpiarFavoritos();
-    }
-  }, [perfil?.id, cargarFavoritos, limpiarFavoritos]);
 
   const cargarCantidadProductos = useCallback(async () => {
     try {
@@ -203,6 +212,14 @@ export default function PantallaInicio(props: any) {
       console.error('Error contando productos:', error);
     }
   }, []);
+
+  const cargarFavoritosUsuario = useCallback(async () => {
+    if (perfil?.id) {
+      await cargarFavoritos(perfil.id);
+    } else {
+      limpiarFavoritos();
+    }
+  }, [perfil?.id, cargarFavoritos, limpiarFavoritos]);
 
   // ============================================================
   // 🎬 EFECTOS
@@ -227,176 +244,63 @@ export default function PantallaInicio(props: any) {
   }, [cargarOfertas, cargarFavoritosUsuario, cargarCantidadProductos]);
 
   // ============================================================
-  // 🎨 FUNCIONES AUXILIARES
+  // 🖼️ RENDER DE CATEGORÍA (horizontal)
   // ============================================================
-  const getColorPorId = useCallback((id: number) => {
-    const colores = ['#E53935', '#F5C518', '#43A047', '#1A237E', '#7B1FA2', '#FF6F00', '#F48FB1'];
-    return colores[id % colores.length];
-  }, []);
-
-  // ============================================================
-  // 🖼️ RENDER DE OFERTAS
-  // ============================================================
-  const renderOferta = useCallback(({ item }: { item: any }) => {
-    const color = getColorPorId(item.id);
-    const hasFreeShipping = item.descuento?.toLowerCase().includes('envío gratis') ||
-      item.descuento?.toLowerCase().includes('envio gratis');
+  const renderCategoria = useCallback(({ item }: { item: CategoriaData }) => {
+    const width = tamanos.categoriaWidth;
+    const count = cantidadProductos[item.id] || 0;
+    const cantidadMostrar = item.esOferta ? ofertas.length : count;
 
     return (
-      <Animated.View
+      <TouchableOpacity
+        key={item.id}
         style={[
-          styles.ofertaWrapper,
+          styles.categoriaItem,
           {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
+            width: width,
+            backgroundColor: DESIGN.colors.surface,
+            borderColor: item.color + '20',
+            shadowColor: DESIGN.colors.cardShadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 1,
+            shadowRadius: 6,
+            elevation: 2,
           }
         ]}
-      >
-        <TouchableOpacity
-          style={[
-            styles.ofertaCard,
-            {
-              width: tamanos.ofertaCardWidth,
-              backgroundColor: DESIGN.colors.card,
-              borderColor: color + '25',
-            }
-          ]}
-          activeOpacity={0.9}
-          onPress={() => props.navigation.navigate('DetalleOferta', { oferta: item })}
-        >
-          <LinearGradient
-            colors={[color + '10', 'transparent']}
-            style={styles.ofertaGradiente}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-
-          {/* Badges */}
-          <View style={styles.ofertaBadges}>
-            <View style={[styles.badgeDescuento, { backgroundColor: color }]}>
-              <Text style={styles.badgeDescuentoText}>🔥 {item.descuento}</Text>
-            </View>
-            {hasFreeShipping && (
-              <View style={[styles.badgeEnvio, { backgroundColor: '#43A047' }]}>
-                <Ionicons name="rocket" size={12} color="#fff" />
-                <Text style={styles.badgeEnvioText}>Envío gratis</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Imagen */}
-          <View style={[styles.ofertaImagenContainer, { height: tamanos.ofertaImagenHeight }]}>
-            {item.imagen ? (
-              <Image source={{ uri: item.imagen }} style={styles.ofertaImagen} resizeMode="cover" />
-            ) : (
-              <View style={styles.ofertaImagenPlaceholder}>
-                <Text style={styles.ofertaImagenEmoji}>🍔</Text>
-              </View>
-            )}
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.05)']}
-              style={styles.ofertaImagenOverlay}
-              start={{ x: 0, y: 0.6 }}
-              end={{ x: 0, y: 1 }}
-            />
-          </View>
-
-          {/* Info */}
-          <View style={styles.ofertaInfo}>
-            <Text style={styles.ofertaTitulo} numberOfLines={1}>
-              {item.titulo}
-            </Text>
-            <View style={styles.ofertaPrecios}>
-              <Text style={[styles.ofertaPrecioActual, { color }]}>
-                {formatearPrecio(item.precio_oferta)}
-              </Text>
-              <Text style={styles.ofertaPrecioOriginal}>
-                {formatearPrecio(item.precio_original)}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }, [tamanos, fadeAnim, slideAnim]);
-
-  // ============================================================
-  // ⭐ RENDER DE FAVORITOS
-  // ============================================================
-  const renderFavorito = useCallback(({ item }: { item: any }) => {
-    const count = favoritosData.find((f) => f.producto_id === item.id)?.contador || 1;
-
-    return (
-      <Animated.View
-        style={[
-          styles.favoritoWrapper,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
+        onPress={() => {
+          if (item.esOferta) {
+            // ✅ CORREGIDO: navegar directamente a la pantalla stack Ofertas
+            props.navigation.navigate('Ofertas');
+          } else {
+            props.navigation.navigate('Menu', { categoria: item.id });
           }
-        ]}
+        }}
+        activeOpacity={0.8}
       >
-        <TouchableOpacity
-          style={[
-            styles.favoritoCard,
-            {
-              width: tamanos.favoritoCardWidth,
-              backgroundColor: DESIGN.colors.card,
-              borderColor: DESIGN.colors.borderLight,
-            }
-          ]}
-          onPress={() => props.navigation.navigate('DetalleProducto', { producto: item })}
-          activeOpacity={0.8}
-        >
-          <View style={styles.favoritoImagenContainer}>
-            {item.imagen ? (
-              <Image source={{ uri: item.imagen }} style={styles.favoritoImagen} resizeMode="cover" />
-            ) : (
-              <View style={styles.favoritoImagenPlaceholder}>
-                <Text style={styles.favoritoImagenEmoji}>🍔</Text>
-              </View>
-            )}
-            {count > 1 && (
-              <View style={styles.favoritoCount}>
-                <Text style={styles.favoritoCountText}>×{count}</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.favoritoInfo}>
-            <Text style={styles.favoritoNombre} numberOfLines={1}>
-              {item.nombre}
-            </Text>
-            <Text style={styles.favoritoPrecio}>
-              {formatearPrecio(item.precio)}
-            </Text>
-            <TouchableOpacity
-              style={styles.favoritoBoton}
-              onPress={() => {
-                agregarProducto(item);
-                Alert.alert('🎉', `${item.nombre} agregado al carrito`);
-              }}
-            >
-              <LinearGradient
-                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
-                style={styles.favoritoBotonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.favoritoBotonText}>+ Agregar</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
+        <View style={styles.categoriaImageContainer}>
+          <Image source={item.imagen} style={styles.categoriaImagen} resizeMode="cover" />
+          {cantidadMostrar > 0 && (
+            <View style={[styles.categoriaBadge, { backgroundColor: item.color }]}>
+              <Text style={styles.categoriaBadgeText}>{cantidadMostrar}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.categoriaInfo}>
+          <Text style={[styles.categoriaNombre, { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }]} numberOfLines={1}>
+            {item.nombre}
+          </Text>
+          <Text style={[styles.categoriaDesc, { fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 8 }) }]} numberOfLines={1}>
+            {item.descripcion}
+          </Text>
+        </View>
+      </TouchableOpacity>
     );
-  }, [tamanos, favoritosData, agregarProducto, fadeAnim, slideAnim]);
+  }, [tamanos, cantidadProductos, ofertas, responsive]);
 
   // ============================================================
   // 🏗️ RENDER PRINCIPAL
   // ============================================================
   const padding = tamanos.padding;
-  const cantidad = cantidadTotal();
 
   return (
     <View style={styles.container}>
@@ -429,12 +333,9 @@ export default function PantallaInicio(props: any) {
           transform: [{ translateY: slideAnim }],
         }}
       >
-        {/* ============================================================ */}
-        {/* HEADER CON BIENVENIDA Y LOGO */}
-        {/* ============================================================ */}
+        {/* HEADER */}
         <View style={[styles.header, { paddingHorizontal: padding }]}>
           <View style={styles.headerLeft}>
-            {/* ✅ TÍTULO "BIENVENIDOS" EN GRANDE CON IMAGEN ARRIBA DEL LOGO */}
             <Animated.View
               style={[
                 styles.bienvenidaContainer,
@@ -444,7 +345,6 @@ export default function PantallaInicio(props: any) {
                 }
               ]}
             >
-              {/* ✅ IMAGEN DE BIENVENIDA (ARRIBA DEL LOGO) */}
               <Image
                 source={bienvenidaImg}
                 style={[
@@ -457,7 +357,6 @@ export default function PantallaInicio(props: any) {
                 resizeMode="contain"
               />
 
-              {/* ✅ LOGO DE KRUSTY (DEBAJO DE LA IMAGEN) */}
               <Image
                 source={logoKrusty}
                 style={[
@@ -471,30 +370,23 @@ export default function PantallaInicio(props: any) {
               />
             </Animated.View>
 
-            {/* ✅ SALUDO AL USUARIO */}
             <View style={styles.saludoContainer}>
-              <Text style={styles.headerGreeting}>☀️ Buenos días,</Text>
+              <Text style={styles.headerGreeting}> Buenos días</Text>
               <Text style={styles.headerName}>
                 {perfil?.nombre_cliente || 'Cliente'}
               </Text>
-              <View style={styles.headerPoints}>
-                <Ionicons name="star" size={14} color={DESIGN.colors.accentSecondary} />
-                <Text style={styles.headerPointsText}>
-                  {perfil?.puntos_acumulados || 0} pts
-                </Text>
-              </View>
             </View>
           </View>
 
           <View style={styles.headerRight}>
             {esAdministrador && (
               <TouchableOpacity
-                style={styles.headerButton}
+                style={styles.headerButtonAdmin}
                 onPress={() => props.navigation.navigate('PanelAdmin')}
               >
                 <LinearGradient
                   colors={['#43A047', '#FFD700']}
-                  style={styles.headerButtonGradient}
+                  style={styles.headerButtonAdminGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
@@ -502,156 +394,24 @@ export default function PantallaInicio(props: any) {
                 </LinearGradient>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => props.navigation.navigate('Carrito')}
-            >
-              <LinearGradient
-                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
-                style={styles.headerButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Ionicons name="bag-outline" size={20} color="#fff" />
-                {cantidad > 0 && (
-                  <View style={styles.headerBadge}>
-                    <Text style={styles.headerBadgeText}>
-                      {cantidad > 99 ? '99+' : cantidad}
-                    </Text>
-                  </View>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
           </View>
         </View>
 
-        {/* ============================================================ */}
-        {/* OFERTAS */}
-        {/* ============================================================ */}
-        <View style={[styles.section, { paddingHorizontal: padding }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🔥 Ofertas del Día</Text>
-            <TouchableOpacity>
-              <Text style={styles.sectionSeeAll}>Ver todas →</Text>
-            </TouchableOpacity>
-          </View>
+        {/* CATEGORÍAS - FILA HORIZONTAL SCROLLEABLE */}
+        <View style={[styles.categoriasContainer, { paddingHorizontal: padding }]}>
+          <Text style={styles.sectionTitle}> Categorías</Text>
 
-          {cargandoOfertas ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={DESIGN.colors.accent} />
-            </View>
-          ) : ofertas.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>📭</Text>
-              <Text style={styles.emptyText}>No hay ofertas disponibles</Text>
-            </View>
-          ) : (
-            <FlatList
-              horizontal
-              data={ofertas}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderOferta}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-              snapToInterval={tamanos.ofertaCardWidth + 14}
-              decelerationRate="fast"
-              snapToAlignment="start"
-            />
-          )}
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* ============================================================ */}
-        {/* CATEGORÍAS */}
-        {/* ============================================================ */}
-        <View style={[styles.section, { paddingHorizontal: padding }]}>
-          <Text style={styles.sectionTitle}>🍔 Categorías</Text>
-
-          <View style={styles.categoriesGrid}>
-            {CATEGORIAS.map((cat) => {
-              const width = (SCREEN_WIDTH - padding * 2 - 12) / 2 - 6;
-              const count = cantidadProductos[cat.id] || 0;
-
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryCard,
-                    {
-                      width,
-                      backgroundColor: DESIGN.colors.card,
-                      borderColor: cat.color + '20',
-                    }
-                  ]}
-                  onPress={() => props.navigation.navigate('Menu')}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.categoryImageContainer}>
-                    <Image source={cat.imagen} style={styles.categoryImage} resizeMode="cover" />
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.4)']}
-                      style={styles.categoryOverlay}
-                      start={{ x: 0, y: 0.5 }}
-                      end={{ x: 0, y: 1 }}
-                    />
-                    {count > 0 && (
-                      <View style={styles.categoryBadgeContainer}>
-                        <View style={[styles.categoryBadge, { backgroundColor: cat.color }]}>
-                          <Text style={styles.categoryBadgeText}>{count}</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryName}>{cat.nombre}</Text>
-                    <Text style={styles.categoryDesc}>{cat.descripcion}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* ============================================================ */}
-        {/* FAVORITOS */}
-        {/* ============================================================ */}
-        <View style={[styles.section, { paddingHorizontal: padding }]}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>⭐ Tus Favoritos</Text>
-            {favoritos.length > 0 && (
-              <TouchableOpacity onPress={() => props.navigation.navigate('Perfil')}>
-                <Text style={styles.sectionSeeAll}>Ver todos →</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {cargandoFavoritos ? (
-            <View style={styles.loadingContainerSmall}>
-              <ActivityIndicator size="small" color={DESIGN.colors.accent} />
-            </View>
-          ) : favoritos.length > 0 ? (
-            <FlatList
-              horizontal
-              data={favoritos}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={renderFavorito}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalList}
-              snapToInterval={tamanos.favoritoCardWidth + 14}
-              decelerationRate="fast"
-              snapToAlignment="start"
-            />
-          ) : (
-            <View style={styles.emptyContainerSmall}>
-              <Ionicons name="heart-outline" size={32} color={DESIGN.colors.textTertiary} />
-              <Text style={styles.emptyTextSmall}>Aún no tienes favoritos</Text>
-              <Text style={styles.emptySubText}>Los productos que más te gusten aparecerán aquí</Text>
-            </View>
-          )}
+          <FlatList
+            horizontal
+            data={CATEGORIAS}
+            keyExtractor={(item) => item.id}
+            renderItem={renderCategoria}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriasList}
+            snapToInterval={tamanos.categoriaWidth + 12}
+            decelerationRate="fast"
+            snapToAlignment="start"
+          />
         </View>
 
         <View style={styles.footerSpacing} />
@@ -679,9 +439,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  // ============================================================
   // HEADER
-  // ============================================================
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -698,9 +456,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // ============================================================
-  // BIENVENIDA CON IMAGEN + LOGO
-  // ============================================================
+  // BIENVENIDA
   bienvenidaContainer: {
     alignItems: 'center',
     marginBottom: 12,
@@ -711,19 +467,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     marginTop: 20,
     marginBottom: -300,
-    marginLeft: 70,
-
+    marginLeft: 0,
   },
   logoBienvenida: {
     backgroundColor: 'transparent',
     marginBottom: 12,
-    marginLeft: 80,
+    marginLeft: 0,
   },
 
-
-  // ============================================================
   // SALUDO
-  // ============================================================
   saludoContainer: {
     marginTop: 4,
   },
@@ -740,424 +492,96 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     marginTop: 2,
   },
-  headerPoints: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    backgroundColor: DESIGN.colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: DESIGN.radius.full,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  headerPointsText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: DESIGN.colors.textSecondary,
-  },
 
-  // ============================================================
-  // BOTONES HEADER
-  // ============================================================
-  headerButton: {
-    borderRadius: DESIGN.radius.md,
+  // BOTÓN ADMIN
+  headerButtonAdmin: {
+    borderRadius: DESIGN.radius.full,
     overflow: 'hidden',
     shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  headerButtonGradient: {
+  headerButtonAdminGradient: {
     padding: 10,
-    position: 'relative',
-  },
-  headerBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: DESIGN.colors.accent,
-    borderRadius: DESIGN.radius.full,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: DESIGN.colors.surface,
-  },
-  headerBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#fff',
+    justifyContent: 'center',
+    borderRadius: DESIGN.radius.full,
   },
 
-  // ============================================================
-  // SECCIONES
-  // ============================================================
-  section: {
-    marginVertical: 4,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+  // CATEGORÍAS
+  categoriasContainer: {
+    marginVertical: 8,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: DESIGN.colors.text,
     letterSpacing: -0.3,
+    marginBottom: 14,
   },
-  sectionSeeAll: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: DESIGN.colors.textSecondary,
-  },
-  divider: {
-    height: 20,
-  },
-  horizontalList: {
-    paddingVertical: 6,
-  },
-
-  // ============================================================
-  // OFERTAS
-  // ============================================================
-  ofertaWrapper: {
+  categoriasList: {
     paddingVertical: 4,
-    marginRight: 14,
-  },
-  ofertaCard: {
-    borderRadius: DESIGN.radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  ofertaGradiente: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-  },
-  ofertaBadges: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    zIndex: 10,
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  badgeDescuento: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: DESIGN.radius.full,
-  },
-  badgeDescuentoText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.3,
-  },
-  badgeEnvio: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: DESIGN.radius.full,
-  },
-  badgeEnvioText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  ofertaImagenContainer: {
-    width: '100%',
-    position: 'relative',
-  },
-  ofertaImagen: {
-    width: '100%',
-    height: '100%',
-  },
-  ofertaImagenPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: DESIGN.colors.surface,
-  },
-  ofertaImagenEmoji: {
-    fontSize: 40,
-  },
-  ofertaImagenOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '30%',
-  },
-  ofertaInfo: {
-    padding: 12,
-  },
-  ofertaTitulo: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DESIGN.colors.text,
-    letterSpacing: -0.2,
-  },
-  ofertaPrecios: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  ofertaPrecioActual: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  ofertaPrecioOriginal: {
-    fontSize: 12,
-    color: DESIGN.colors.textTertiary,
-    textDecorationLine: 'line-through',
-  },
-
-  // ============================================================
-  // CATEGORÍAS
-  // ============================================================
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
   },
-  categoryCard: {
+  categoriaItem: {
     borderRadius: DESIGN.radius.md,
     overflow: 'hidden',
     borderWidth: 1,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 2,
+    marginRight: 12,
   },
-  categoryImageContainer: {
+  categoriaImageContainer: {
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
+    backgroundColor: DESIGN.colors.surfaceHover,
   },
-  categoryImage: {
+  categoriaImagen: {
     width: '100%',
     height: '100%',
   },
-  categoryOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-  },
-  categoryBadgeContainer: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  categoryBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: DESIGN.radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  categoryInfo: {
-    padding: 10,
-  },
-  categoryName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: DESIGN.colors.text,
-  },
-  categoryDesc: {
-    fontSize: 11,
-    color: DESIGN.colors.textSecondary,
-    marginTop: 1,
-  },
-
-  // ============================================================
-  // FAVORITOS
-  // ============================================================
-  favoritoWrapper: {
-    paddingVertical: 4,
-    marginRight: 14,
-  },
-  favoritoCard: {
-    borderRadius: DESIGN.radius.md,
-    padding: 12,
-    borderWidth: 1,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  favoritoImagenContainer: {
-    position: 'relative',
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: DESIGN.radius.sm,
-    overflow: 'hidden',
-    backgroundColor: DESIGN.colors.surface,
-  },
-  favoritoImagen: {
-    width: '100%',
-    height: '100%',
-  },
-  favoritoImagenPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  favoritoImagenEmoji: {
-    fontSize: 28,
-  },
-  favoritoCount: {
+  categoriaBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    backgroundColor: DESIGN.colors.surface,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: DESIGN.radius.full,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  favoritoCountText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: DESIGN.colors.text,
-  },
-  favoritoInfo: {
-    marginTop: 8,
-  },
-  favoritoNombre: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: DESIGN.colors.text,
-  },
-  favoritoPrecio: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: DESIGN.colors.accent,
-    marginTop: 2,
-  },
-  favoritoBoton: {
-    marginTop: 8,
-    borderRadius: DESIGN.radius.sm,
-    overflow: 'hidden',
-  },
-  favoritoBotonGradient: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  favoritoBotonText: {
-    fontSize: 11,
-    fontWeight: '600',
+  categoriaBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
     color: '#fff',
   },
-
-  // ============================================================
-  // LOADING & EMPTY
-  // ============================================================
-  loadingContainer: {
-    justifyContent: 'center',
+  categoriaInfo: {
+    padding: 8,
     alignItems: 'center',
-    padding: 40,
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.lg,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
   },
-  loadingContainerSmall: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.md,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-  },
-  emptyContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.lg,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-  },
-  emptyContainerSmall: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.md,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-  },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: DESIGN.colors.textSecondary,
-  },
-  emptyTextSmall: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: DESIGN.colors.textSecondary,
-    marginTop: 8,
-  },
-  emptySubText: {
-    fontSize: 11,
-    color: DESIGN.colors.textTertiary,
+  categoriaNombre: {
+    fontWeight: '600',
+    color: DESIGN.colors.text,
     textAlign: 'center',
-    marginTop: 4,
   },
+  categoriaDesc: {
+    color: DESIGN.colors.textSecondary,
+    textAlign: 'center',
+    opacity: 0.6,
+    marginTop: 1,
+  },
+
   footerSpacing: {
     height: 20,
   },

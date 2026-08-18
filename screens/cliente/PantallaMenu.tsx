@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaMenu.tsx
+﻿// screens/cliente/PantallaMenu.tsx - CON USEFOCUSEFFECT
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -10,46 +10,66 @@ import {
   Animated,
   RefreshControl,
   TextInput,
-  Dimensions,
+  useWindowDimensions,
+  Image,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native'; // ✅ IMPORTADO
 import { supabase } from '../../lib/supabase';
+import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { Producto } from '../../lib/tipos';
-import { Colores, getTematica } from '../../lib/colores';
-import TarjetaProducto from '../../components/TarjetaProducto';
+import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
-// 📐 SISTEMA DE DISEÑO
+// 🎨 SISTEMA DE DISEÑO - BLANCO Y ELEGANTE
 // ============================================================
-const DISEÑO = {
-  BREAKPOINTS: {
-    TABLET: 768,
-    DESKTOP: 1024,
-    SMALL_PHONE: 375,
+const DESIGN = {
+  colors: {
+    fondo: '#F5F2ED',
+    surface: '#FFFFFF',
+    surfaceHover: '#F8F6F2',
+    card: '#FFFFFF',
+    cardShadow: 'rgba(0,0,0,0.06)',
+    cardShadowHeavy: 'rgba(0,0,0,0.08)',
+    border: 'rgba(0,0,0,0.06)',
+    borderLight: 'rgba(0,0,0,0.04)',
+    text: '#1A1A1A',
+    textSecondary: 'rgba(0,0,0,0.55)',
+    textTertiary: 'rgba(0,0,0,0.30)',
+    accent: '#E53935',
+    accentLight: '#FF6B6B',
+    accentSecondary: '#F5C518',
+    accentSecondaryLight: '#FFE135',
+    gradientStart: '#E53935',
+    gradientEnd: '#F5C518',
+    verde: '#43A047',
+    verdeClaro: '#66BB6A',
+    rosa: '#EC407A',
+    azul: '#1A237E',
+    azulClaro: '#3949AB',
+    platino: '#78909C',
+    oro: '#F9A825',
+    plata: '#BDBDBD',
+    bronce: '#A1887F',
   },
-  TIPOGRAFIA: {
-    HERO: { tablet: 32, normal: 26, small: 22 },
-    TITULO: { tablet: 24, normal: 20, small: 17 },
-    SUBTITULO: { tablet: 18, normal: 16, small: 14 },
-    CUERPO: { tablet: 16, normal: 14, small: 12 },
-    PEQUENO: { tablet: 14, normal: 12, small: 10 },
-    MICRO: { tablet: 12, normal: 10, small: 9 },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    '2xl': 48,
   },
-  ESPACIADO: {
-    XL: { tablet: 40, normal: 24, small: 16 },
-    LG: { tablet: 32, normal: 20, small: 14 },
-    MD: { tablet: 24, normal: 16, small: 12 },
-    SM: { tablet: 16, normal: 12, small: 10 },
-    XS: { tablet: 12, normal: 8, small: 6 },
-  },
-  RADIO: {
-    LG: { tablet: 24, normal: 18, small: 14 },
-    MD: { tablet: 18, normal: 14, small: 10 },
-    SM: { tablet: 12, normal: 10, small: 8 },
-    XS: { tablet: 8, normal: 6, small: 4 },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    full: 999,
   },
 };
 
@@ -57,74 +77,41 @@ const DISEÑO = {
 // 🎯 HOOK RESPONSIVE
 // ============================================================
 const useResponsive = () => {
-  const { width, height } = Dimensions.get('window');
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
+  const isSmallPhone = width < 375;
 
-  const isTablet = width >= DISEÑO.BREAKPOINTS.TABLET;
-  const isDesktop = width >= DISEÑO.BREAKPOINTS.DESKTOP;
-  const isSmallPhone = width < DISEÑO.BREAKPOINTS.SMALL_PHONE;
-  const isLandscape = width > height;
-
-  const getValor = useCallback((
-    valores: { tablet: any; normal: any; small: any }
-  ) => {
+  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
     if (isDesktop || isTablet) return valores.tablet;
     if (isSmallPhone) return valores.small;
     return valores.normal;
   }, [isDesktop, isTablet, isSmallPhone]);
 
-  const getTexto = useCallback((
-    escala: keyof typeof DISEÑO.TIPOGRAFIA
-  ) => {
-    return getValor(DISEÑO.TIPOGRAFIA[escala]);
-  }, [getValor]);
-
-  const getEspaciado = useCallback((
-    escala: keyof typeof DISEÑO.ESPACIADO
-  ) => {
-    return getValor(DISEÑO.ESPACIADO[escala]);
-  }, [getValor]);
-
-  const getRadio = useCallback((
-    escala: keyof typeof DISEÑO.RADIO
-  ) => {
-    return getValor(DISEÑO.RADIO[escala]);
-  }, [getValor]);
-
-  return {
-    isTablet,
-    isDesktop,
-    isSmallPhone,
-    isLandscape,
-    width,
-    height,
-    getValor,
-    getTexto,
-    getEspaciado,
-    getRadio,
-  };
+  return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
 };
 
 // ============================================================
 // 📋 CONFIGURACIÓN DE CATEGORÍAS
 // ============================================================
 const CATEGORIAS = [
-  { id: 'Todas', label: '🌟 Todas', icono: 'grid' },
-  { id: 'burgers', label: '🍔 Hamburguesas', icono: 'fast-food' },
-  { id: 'combos', label: '🍟 Combos', icono: 'restaurant' },
-  { id: 'bebidas', label: '🥤 Bebidas', icono: 'cafe' },
-  { id: 'postres', label: '🍦 Postres', icono: 'ice-cream' },
-  { id: 'acompanantes', label: '🍿 Acompañantes', icono: 'barbell' },
+  { id: 'Todas', label: 'Todas' },
+  { id: 'burgers', label: 'Burgers' },
+  { id: 'bebidas', label: 'Bebidas' },
+  { id: 'postres', label: 'Postres' },
+  { id: 'acompanantes', label: 'Extras' },
 ];
 
 // ============================================================
 // 🏠 PANTALLA MENU
 // ============================================================
 export default function PantallaMenu(props: any) {
-  // ✅ Hooks
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  const { agregarProducto, cantidadTotal } = tiendaCarrito();
-  const temaKrusty = getTematica('krusty');
+
+  // ✅ Stores
+  const { agregarProducto } = tiendaCarrito();
+  const { perfil } = tiendaAutenticacion();
 
   // ✅ Estados
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -139,27 +126,28 @@ export default function PantallaMenu(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
-  const carritoScale = useRef(new Animated.Value(0)).current;
-  const carritoTranslateY = useRef(new Animated.Value(50)).current;
 
-  // ✅ Cantidad del carrito
-  const cantidad = cantidadTotal();
+  // ✅ USEFOCUSEFFECT - FORZAR ACTUALIZACIÓN DEL BADGE
+  useFocusEffect(
+    useCallback(() => {
+      // ✅ Forzar lectura del store cuando la pantalla obtiene foco
+      const cantidad = tiendaCarrito.getState().cantidadTotal();
+      console.log('🛒 [PantallaMenu] Forzando actualización badge:', cantidad);
+      return () => { };
+    }, [])
+  );
 
   // ============================================================
   // 📦 CÁLCULOS DE TAMAÑOS
   // ============================================================
   const tamanos = useMemo(() => ({
-    padding: responsive.getEspaciado('LG'),
+    padding: responsive.getValor({ tablet: 40, normal: 20, small: 16 }),
     gridColumns: responsive.isDesktop ? 3 : responsive.isTablet ? 2 : 2,
-    // ✅ CARRITO MÁS PEQUEÑO Y SUTIL
-    carritoSize: responsive.getValor({ tablet: 52, normal: 48, small: 42 }),
-    carritoIconSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }),
   }), [responsive]);
 
   const padding = tamanos.padding;
   const numColumns = modoGrid ? tamanos.gridColumns : 1;
 
-  // ✅ Calcular ancho de tarjeta
   const cardWidth = useMemo(() => {
     if (modoGrid) {
       const paddingHorizontal = padding * 2;
@@ -171,56 +159,17 @@ export default function PantallaMenu(props: any) {
   }, [modoGrid, padding, numColumns, responsive]);
 
   // ============================================================
-  // 🎬 ANIMACIÓN DEL CARRITO
-  // ============================================================
-  useEffect(() => {
-    if (cantidad > 0) {
-      Animated.parallel([
-        Animated.spring(carritoScale, {
-          toValue: 1,
-          friction: 6,
-          tension: 60,
-          useNativeDriver: true,
-        }),
-        Animated.spring(carritoTranslateY, {
-          toValue: 0,
-          friction: 8,
-          tension: 50,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(carritoScale, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(carritoTranslateY, {
-          toValue: 50,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [cantidad]);
-
-  // ============================================================
   // 🔄 FUNCIONES DE CARGA
   // ============================================================
   const cargarProductos = useCallback(async () => {
     setCargando(true);
     try {
       let consulta = supabase.from('productos').select('*');
-
       if (categoriaSeleccionada !== 'Todas') {
         consulta = consulta.eq('categoria', categoriaSeleccionada);
       }
-
       const { data, error } = await consulta;
-
       if (error) throw error;
-
       setProductos(data as Producto[] || []);
       setProductosFiltrados(data as Producto[] || []);
     } catch (error) {
@@ -232,9 +181,6 @@ export default function PantallaMenu(props: any) {
     }
   }, [categoriaSeleccionada]);
 
-  // ============================================================
-  // 🔍 FUNCIÓN DE BÚSQUEDA
-  // ============================================================
   const filtrarPorBusqueda = useCallback((texto: string) => {
     setBusqueda(texto);
     if (texto.trim() === '') {
@@ -248,37 +194,18 @@ export default function PantallaMenu(props: any) {
     }
   }, [productos]);
 
-  // ============================================================
-  // 🎬 EFECTOS
-  // ============================================================
   useEffect(() => {
     cargarProductos();
   }, [categoriaSeleccionada]);
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
     ]).start();
   }, []);
 
-  // ============================================================
-  // 🔄 REFRESH
-  // ============================================================
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await cargarProductos();
@@ -301,11 +228,9 @@ export default function PantallaMenu(props: any) {
   // ============================================================
   const formatData = useCallback((data: Producto[], numColumns: number) => {
     if (!modoGrid) return data;
-
     const result = [...data];
     const numberOfFullRows = Math.floor(result.length / numColumns);
     let numberOfElementsLastRow = result.length - (numberOfFullRows * numColumns);
-
     if (numberOfElementsLastRow > 0 && numberOfElementsLastRow < numColumns) {
       const emptyItems = numColumns - numberOfElementsLastRow;
       for (let i = 0; i < emptyItems; i++) {
@@ -320,7 +245,6 @@ export default function PantallaMenu(props: any) {
         } as Producto);
       }
     }
-
     return result;
   }, [modoGrid]);
 
@@ -332,15 +256,119 @@ export default function PantallaMenu(props: any) {
       return <View style={{ width: cardWidth }} />;
     }
 
+    const priceSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
+    const buttonSize = responsive.getValor({ tablet: 34, normal: 30, small: 28 });
+    const iconSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
+
     return (
-      <TarjetaProducto
-        producto={item}
-        onAgregar={handleAgregarProducto}
-        onDetalle={handleDetalleProducto}
-        modoGrid={modoGrid}
-      />
+      <View style={[
+        styles.productCardWrapper,
+        {
+          width: modoGrid ? cardWidth : '100%',
+          marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+        }
+      ]}>
+        <TouchableOpacity
+          style={[
+            styles.productCard,
+            {
+              backgroundColor: DESIGN.colors.surface,
+              borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+              borderColor: DESIGN.colors.border,
+              shadowColor: DESIGN.colors.cardShadow,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 1,
+              shadowRadius: 12,
+              elevation: 4,
+            }
+          ]}
+          onPress={() => handleDetalleProducto(item)}
+          activeOpacity={0.9}
+        >
+          {/* Imagen */}
+          <View style={[
+            styles.productImageContainer,
+            {
+              height: responsive.getValor({ tablet: 180, normal: 150, small: 130 }),
+              borderTopLeftRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+              borderTopRightRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+            }
+          ]}>
+            {item.imagen ? (
+              <Image source={{ uri: item.imagen }} style={styles.productImage} resizeMode="cover" />
+            ) : (
+              <View style={[styles.productImagePlaceholder, { backgroundColor: DESIGN.colors.surfaceHover }]}>
+                <Text style={{ fontSize: 40 }}>🍔</Text>
+              </View>
+            )}
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.1)']}
+              style={styles.productImageOverlay}
+              start={{ x: 0, y: 0.6 }}
+              end={{ x: 0, y: 1 }}
+            />
+          </View>
+
+          {/* Info */}
+          <View style={[
+            styles.productInfo,
+            { padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }
+          ]}>
+            <Text style={[
+              styles.productName,
+              {
+                fontSize: responsive.getValor({ tablet: 17, normal: 15, small: 13 }),
+                color: DESIGN.colors.text,
+              }
+            ]} numberOfLines={1}>
+              {item.nombre}
+            </Text>
+            <Text style={[
+              styles.productDesc,
+              {
+                fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 10 }),
+                color: DESIGN.colors.textSecondary,
+              }
+            ]} numberOfLines={2}>
+              {item.descripcion || 'Sin descripción'}
+            </Text>
+
+            <View style={styles.productFooter}>
+              <Text style={[
+                styles.productPrice,
+                {
+                  fontSize: priceSize,
+                  color: DESIGN.colors.accent,
+                }
+              ]}>
+                {formatearPrecio(item.precio)}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => handleAgregarProducto(item)}
+                style={[
+                  styles.addButton,
+                  {
+                    width: buttonSize,
+                    height: buttonSize,
+                    borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                    backgroundColor: DESIGN.colors.accent,
+                  }
+                ]}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="add"
+                  size={iconSize}
+                  color={DESIGN.colors.surface}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
-  }, [handleAgregarProducto, handleDetalleProducto, modoGrid, cardWidth]);
+  }, [cardWidth, modoGrid, handleAgregarProducto, handleDetalleProducto, responsive]);
 
   // ✅ Formatear datos para columnas
   const datosFormateados = useMemo(() => {
@@ -348,120 +376,119 @@ export default function PantallaMenu(props: any) {
     return formatData([...productosFiltrados], numColumns);
   }, [productosFiltrados, modoGrid, numColumns, formatData]);
 
-  // ============================================================
-  // 🏗️ RENDER PRINCIPAL
-  // ============================================================
+  const tituloSize = responsive.getValor({ tablet: 28, normal: 22, small: 18 });
+
   return (
-    <View style={[estilos.contenedor, { backgroundColor: Colores.fondoOscuro }]}>
-      {/* Gradiente de fondo estilo Krusty */}
+    <View style={[styles.container, { backgroundColor: DESIGN.colors.fondo }]}>
+      <View style={styles.background} />
+
       <LinearGradient
-        colors={[temaKrusty.primario, Colores.verdeKrusty, Colores.fondoOscuro]}
-        style={estilos.fondoGradiente}
+        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        style={styles.headerGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
-      {/* ============================================================ */}
-      {/* 🔹 HEADER */}
-      {/* ============================================================ */}
+      {/* HEADER */}
       <Animated.View style={[
-        estilos.encabezado,
+        styles.header,
         {
           paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 12, small: 8 }),
           paddingHorizontal: padding,
           paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-          borderBottomColor: Colores.textoClaro + '8',
         }
       ]}>
         <TouchableOpacity
           onPress={() => props.navigation.goBack()}
-          style={estilos.botonVolver}
+          style={styles.backButton}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 30, normal: 26, small: 22 })} color={Colores.textoClaro} />
+          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 30, normal: 26, small: 22 })} color={DESIGN.colors.surface} />
         </TouchableOpacity>
 
         <Text style={[
-          estilos.titulo,
+          styles.title,
           {
-            fontSize: responsive.getTexto('TITULO'),
-            color: Colores.textoClaro,
+            fontSize: tituloSize,
+            color: DESIGN.colors.surface,
           }
         ]}>
-          🍔 Menú Krusty
+          Menú Krusty
         </Text>
 
         <TouchableOpacity
           onPress={() => setModoGrid(!modoGrid)}
-          style={estilos.botonGrid}
+          style={styles.gridButton}
           activeOpacity={0.7}
         >
           <Ionicons
-            name={modoGrid ? 'list' : 'grid'}
-            size={responsive.getValor({ tablet: 26, normal: 22, small: 18 })}
-            color={Colores.textoClaro}
+            name={modoGrid ? 'grid-outline' : 'list-outline'}
+            size={responsive.getValor({ tablet: 28, normal: 24, small: 20 })}
+            color={DESIGN.colors.surface}
           />
         </TouchableOpacity>
       </Animated.View>
 
-      {/* ============================================================ */}
-      {/* 🔹 BÚSQUEDA */}
-      {/* ============================================================ */}
+      {/* BÚSQUEDA */}
       <Animated.View style={[
-        estilos.contenedorBusqueda,
+        styles.searchContainer,
         {
           paddingHorizontal: padding,
           paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
+          paddingTop: responsive.getValor({ tablet: 12, normal: 8, small: 6 }),
           opacity: fadeAnim,
         }
       ]}>
         <View style={[
-          estilos.inputBusqueda,
+          styles.searchInput,
           {
-            backgroundColor: Colores.fondoOscuro + '60',
-            borderRadius: responsive.getRadio('MD'),
-            borderColor: Colores.textoClaro + '15',
+            backgroundColor: DESIGN.colors.surface,
+            borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+            borderColor: DESIGN.colors.border,
             paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-            paddingVertical: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+            paddingVertical: responsive.getValor({ tablet: 6, normal: 4, small: 2 }),
+            shadowColor: DESIGN.colors.cardShadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 1,
+            shadowRadius: 8,
+            elevation: 3,
           }
         ]}>
-          <Ionicons name="search" size={20} color={Colores.textoGris} />
+          <Ionicons name="search" size={20} color={DESIGN.colors.textTertiary} />
           <TextInput
             style={[
-              estilos.inputBusquedaTexto,
+              styles.searchInputText,
               {
-                fontSize: responsive.getTexto('CUERPO'),
-                color: Colores.textoClaro,
+                fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                color: DESIGN.colors.text,
                 marginLeft: 10,
                 flex: 1,
               }
             ]}
             placeholder="Buscar productos..."
-            placeholderTextColor={Colores.textoGris + '60'}
+            placeholderTextColor={DESIGN.colors.textTertiary}
             value={busqueda}
             onChangeText={filtrarPorBusqueda}
           />
           {busqueda.length > 0 && (
             <TouchableOpacity onPress={() => filtrarPorBusqueda('')}>
-              <Ionicons name="close-circle" size={20} color={Colores.textoGris} />
+              <Ionicons name="close-circle" size={20} color={DESIGN.colors.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
       </Animated.View>
 
-      {/* ============================================================ */}
-      {/* 🔹 CATEGORÍAS */}
-      {/* ============================================================ */}
+      {/* CATEGORÍAS */}
       <Animated.View style={[
-        estilos.contenedorCategorias,
+        styles.categoriesContainer,
         {
           opacity: fadeAnim,
           paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-          backgroundColor: Colores.fondoOscuro + '40',
+          backgroundColor: DESIGN.colors.surface + '90',
           borderBottomWidth: 1,
-          borderBottomColor: Colores.textoClaro + '8',
+          borderBottomColor: DESIGN.colors.border,
         }
       ]}>
         <FlatList
@@ -469,36 +496,42 @@ export default function PantallaMenu(props: any) {
           data={CATEGORIAS}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[
-            estilos.listaCategorias,
+            styles.categoriesList,
             { paddingHorizontal: padding }
           ]}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[
-                estilos.categoria,
+                styles.category,
                 {
                   paddingHorizontal: responsive.getValor({ tablet: 20, normal: 16, small: 12 }),
                   paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-                  borderRadius: responsive.getRadio('SM'),
-                  marginRight: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                  borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                  marginRight: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
                   backgroundColor: categoriaSeleccionada === item.id ?
-                    temaKrusty.secundario :
-                    Colores.fondoOscuro + '50',
+                    DESIGN.colors.accentSecondary :
+                    DESIGN.colors.surface,
                   borderColor: categoriaSeleccionada === item.id ?
-                    temaKrusty.secundario :
-                    Colores.textoClaro + '10',
+                    DESIGN.colors.accentSecondary :
+                    DESIGN.colors.border,
+                  borderWidth: 1,
+                  shadowColor: DESIGN.colors.cardShadow,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: categoriaSeleccionada === item.id ? 1 : 0,
+                  shadowRadius: 4,
+                  elevation: categoriaSeleccionada === item.id ? 3 : 0,
                 }
               ]}
               onPress={() => setCategoriaSeleccionada(item.id)}
               activeOpacity={0.7}
             >
               <Text style={[
-                estilos.categoriaTexto,
+                styles.categoryText,
                 {
                   fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
                   color: categoriaSeleccionada === item.id ?
-                    Colores.textoOscuro :
-                    Colores.textoClaro,
+                    DESIGN.colors.text :
+                    DESIGN.colors.textSecondary,
                   fontWeight: categoriaSeleccionada === item.id ? '700' : '500',
                 }
               ]}>
@@ -510,20 +543,18 @@ export default function PantallaMenu(props: any) {
         />
       </Animated.View>
 
-      {/* ============================================================ */}
-      {/* 🔹 PRODUCTOS */}
-      {/* ============================================================ */}
+      {/* PRODUCTOS */}
       {cargando ? (
-        <View style={estilos.loadingContainer}>
-          <ActivityIndicator size="large" color={temaKrusty.secundario} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
           <Text style={[
-            estilos.loadingTexto,
+            styles.loadingText,
             {
-              fontSize: responsive.getTexto('CUERPO'),
-              color: Colores.textoGris,
+              fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+              color: DESIGN.colors.textSecondary,
             }
           ]}>
-            Cargando deliciosos productos...
+            Cargando...
           </Text>
         </View>
       ) : (
@@ -532,7 +563,7 @@ export default function PantallaMenu(props: any) {
           renderItem={renderProducto}
           keyExtractor={(item, index) => item.id?.toString() || `empty-${index}`}
           contentContainerStyle={[
-            estilos.listaProductos,
+            styles.productList,
             {
               paddingHorizontal: padding,
               paddingBottom: insets.bottom + responsive.getValor({ tablet: 100, normal: 80, small: 60 }),
@@ -544,256 +575,214 @@ export default function PantallaMenu(props: any) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={temaKrusty.secundario}
-              colors={[temaKrusty.secundario]}
+              tintColor={DESIGN.colors.accentSecondary}
+              colors={[DESIGN.colors.accentSecondary]}
             />
           }
           ListEmptyComponent={
             <View style={[
-              estilos.vacioContenedor,
+              styles.emptyContainer,
               {
                 paddingTop: responsive.getValor({ tablet: 80, normal: 60, small: 40 }),
                 paddingHorizontal: padding,
               }
             ]}>
-              <Text style={[estilos.vacioEmoji, { fontSize: responsive.getValor({ tablet: 80, normal: 60, small: 50 }) }]}>
-                📭
-              </Text>
               <Text style={[
-                estilos.vacio,
+                styles.emptyText,
                 {
-                  fontSize: responsive.getTexto('TITULO'),
-                  color: Colores.textoClaro,
+                  fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }),
+                  color: DESIGN.colors.text,
                 }
               ]}>
-                No hay productos en esta categoría
+                Productos en esta categoría
               </Text>
               <Text style={[
-                estilos.vacioSub,
+                styles.emptySubtext,
                 {
-                  fontSize: responsive.getTexto('CUERPO'),
-                  color: Colores.textoGris,
+                  fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                  color: DESIGN.colors.textSecondary,
                 }
               ]}>
-                Pronto tendremos más opciones para vos 🍔
+                Pronto tendremos más opciones para vos
               </Text>
             </View>
           }
           key={modoGrid ? 'grid' : 'list'}
           numColumns={numColumns}
-          columnWrapperStyle={numColumns > 1 ? estilos.columnWrapper : undefined}
+          columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : undefined}
         />
       )}
 
-      {/* ============================================================ */}
-      {/* 🔹 BOTÓN FLOTANTE DEL CARRITO - SUTIL */}
-      {/* ============================================================ */}
-      {cantidad > 0 && (
-        <Animated.View
-          style={[
-            estilos.botonCarritoFlotante,
-            {
-              // ✅ SUBIR MÁS EL BOTÓN (más padding desde abajo)
-              bottom: insets.bottom + responsive.getValor({ tablet: 80, normal: 695, small: 60 }),
-              right: responsive.getValor({ tablet: 24, normal: 20, small: 16 }),
-              transform: [
-                { scale: carritoScale },
-                { translateY: carritoTranslateY },
-              ],
-            }
-          ]}
-        >
-          <TouchableOpacity
-            onPress={() => props.navigation.navigate('Carrito')}
-            activeOpacity={0.8}
-            style={estilos.botonCarritoTouch}
-          >
-            <LinearGradient
-              colors={[temaKrusty.secundario, temaKrusty.primario]}
-              style={[
-                estilos.carritoGradient,
-                {
-                  width: tamanos.carritoSize,
-                  height: tamanos.carritoSize,
-                  borderRadius: tamanos.carritoSize / 2,
-                }
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Ionicons name="cart" size={tamanos.carritoIconSize} color={Colores.textoOscuro} />
-              <View style={[
-                estilos.carritoBadge,
-                {
-                  top: -3,
-                  right: -3,
-                  minWidth: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
-                  height: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
-                  borderRadius: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
-                }
-              ]}>
-                <Text style={[
-                  estilos.carritoBadgeTexto,
-                  {
-                    fontSize: responsive.getValor({ tablet: 11, normal: 9, small: 8 }),
-                  }
-                ]}>
-                  {cantidad > 99 ? '99+' : cantidad}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
+      {/* ✅ CARRITO FLOTANTE ELIMINADO - Ahora está en la barra inferior */}
     </View>
   );
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS - BLANCOS Y ELEGANTES
 // ============================================================
-const estilos = StyleSheet.create({
-  contenedor: {
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
+    backgroundColor: DESIGN.colors.fondo,
   },
-  fondoGradiente: {
+  background: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: DESIGN.colors.fondo,
+  },
+  headerGradiente: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    height: '19%',
+    shadowColor: DESIGN.colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 4,
   },
 
-  // ============================================================
   // HEADER
-  // ============================================================
-  encabezado: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
   },
-  botonVolver: {
+  backButton: {
     padding: 4,
   },
-  titulo: {
-    fontWeight: 'bold',
-    letterSpacing: 1,
+  title: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  botonGrid: {
+  gridButton: {
     padding: 4,
   },
 
-  // ============================================================
   // BÚSQUEDA
-  // ============================================================
-  contenedorBusqueda: {
-    backgroundColor: Colores.fondoOscuro + '20',
+  searchContainer: {
+    backgroundColor: 'transparent',
   },
-  inputBusqueda: {
+  searchInput: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
   },
-  inputBusquedaTexto: {
+  searchInputText: {
     padding: 0,
   },
 
-  // ============================================================
   // CATEGORÍAS
-  // ============================================================
-  contenedorCategorias: {
+  categoriesContainer: {
     borderBottomWidth: 1,
   },
-  listaCategorias: {
-    gap: 8,
+  categoriesList: {
+    gap: 4,
   },
-  categoria: {
+  category: {
     borderWidth: 1,
   },
-  categoriaTexto: {
-    letterSpacing: 0.5,
+  categoryText: {
+    letterSpacing: 0.3,
   },
 
-  // ============================================================
   // PRODUCTOS
-  // ============================================================
-  listaProductos: {
+  productList: {
     flexGrow: 1,
+  },
+  productCardWrapper: {
+    flex: 1,
+  },
+  productCard: {
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  productImageContainer: {
+    width: '100%',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productImageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '30%',
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  productDesc: {
+    marginBottom: 8,
+    opacity: 0.7,
+  },
+  productFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  productPrice: {
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  addButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 0,
   },
   columnWrapper: {
     justifyContent: 'space-between',
     gap: 12,
   },
 
-  // ============================================================
   // LOADING
-  // ============================================================
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
   },
-  loadingTexto: {
+  loadingText: {
     fontWeight: '400',
     opacity: 0.7,
   },
 
-  // ============================================================
   // VACÍO
-  // ============================================================
-  vacioContenedor: {
+  emptyContainer: {
     alignItems: 'center',
   },
-  vacioEmoji: {
+  emptyEmoji: {
     marginBottom: 16,
   },
-  vacio: {
+  emptyText: {
     fontWeight: '600',
     textAlign: 'center',
   },
-  vacioSub: {
+  emptySubtext: {
     textAlign: 'center',
     marginTop: 6,
     opacity: 0.7,
-  },
-
-  // ============================================================
-  // BOTÓN FLOTANTE DEL CARRITO - SUTIL
-  // ============================================================
-  botonCarritoFlotante: {
-    position: 'absolute',
-    zIndex: 100,
-    shadowColor: Colores.secundario,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  botonCarritoTouch: {
-    borderRadius: 50,
-  },
-  carritoGradient: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: Colores.textoClaro + '15',
-  },
-  carritoBadge: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colores.secundario,
-    borderWidth: 1.5,
-    borderColor: Colores.fondoOscuro,
-  },
-  carritoBadgeTexto: {
-    color: Colores.textoClaro,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    includeFontPadding: false,
   },
 });

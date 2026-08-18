@@ -87,7 +87,6 @@ export default function PantallaGestionPedidos(props: any) {
   // ============================================================
   const cargarPedidos = async () => {
     try {
-      // 1. Obtener todos los pedidos
       const { data: pedidosData, error: pedidosError } = await supabase
         .from('pedidos')
         .select('*')
@@ -102,10 +101,8 @@ export default function PantallaGestionPedidos(props: any) {
         return;
       }
 
-      // 2. Obtener IDs de usuarios únicos
       const userIds = [...new Set(pedidosData.map(p => p.id_de_usuario).filter(Boolean))];
 
-      // 3. Obtener datos de los clientes
       let perfilesMap: Record<string, any> = {};
       if (userIds.length > 0) {
         const { data: perfilesData, error: perfilesError } = await supabase
@@ -121,11 +118,9 @@ export default function PantallaGestionPedidos(props: any) {
         }
       }
 
-      // 4. Combinar pedidos con datos del cliente
       const pedidosConCliente: PedidoConCliente[] = pedidosData.map(pedido => {
         const perfil = perfilesMap[pedido.id_de_usuario || ''] || {};
 
-        // Construir dirección completa
         const partesDireccion = [];
         if (perfil.direccion_calle) partesDireccion.push(perfil.direccion_calle);
         if (perfil.direccion_numero) partesDireccion.push(perfil.direccion_numero);
@@ -135,7 +130,6 @@ export default function PantallaGestionPedidos(props: any) {
         if (perfil.direccion_ciudad) partesDireccion.push(perfil.direccion_ciudad);
         const direccionCompleta = partesDireccion.length > 0 ? partesDireccion.join(', ') : pedido.direccion || 'Sin dirección';
 
-        // Obtener nombres de productos
         let itemsNombres: string[] = [];
         try {
           if (pedido.items_json && typeof pedido.items_json === 'string') {
@@ -147,7 +141,6 @@ export default function PantallaGestionPedidos(props: any) {
             itemsNombres = (pedido.items_json as any[]).map(item => `${item.cantidad}x ${item.nombre}`);
           }
         } catch (e) {
-          // Si no se puede parsear, mostrar mensaje genérico
           itemsNombres = ['Ver detalles del pedido'];
         }
 
@@ -309,6 +302,7 @@ export default function PantallaGestionPedidos(props: any) {
 
     const tieneInfoEnvio = item.distancia_km !== undefined && item.distancia_km !== null;
     const tieneItems = item.items_nombres && item.items_nombres.length > 0;
+    const esEfectivo = item.metodo_pago === 'efectivo';
 
     return (
       <Animated.View
@@ -450,16 +444,52 @@ export default function PantallaGestionPedidos(props: any) {
               </View>
             )}
 
-            {/* ✅ TOTAL */}
+            {/* ✅ TOTAL Y PAGO EN EFECTIVO CON VUELTO */}
             <View style={[estilos.totalContainer, {
               borderTopColor: Colores.burnsBlanco + '8',
             }]}>
-              <Text style={[estilos.totalLabel, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '50' }]}>
-                Total
-              </Text>
-              <Text style={[estilos.total, { fontSize: totalSize, color: Colores.burnsDorado }]}>
-                ${item.total?.toFixed(2)}
-              </Text>
+              <View style={estilos.totalRow}>
+                <Text style={[estilos.totalLabel, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: Colores.burnsBlanco + '50' }]}>
+                  Total
+                </Text>
+                <Text style={[estilos.total, { fontSize: totalSize, color: Colores.burnsDorado }]}>
+                  ${item.total?.toFixed(2)}
+                </Text>
+              </View>
+
+              {/* ✅ MOSTRAR PAGO EN EFECTIVO Y VUELTO */}
+              {esEfectivo && item.monto_pago !== undefined && item.monto_pago !== null && (
+                <View style={[estilos.efectivoContainer, {
+                  marginTop: 6,
+                  paddingTop: 6,
+                  borderTopWidth: 1,
+                  borderTopColor: Colores.burnsBlanco + '8',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="cash" size={isTablet ? 16 : 14} color={Colores.burnsDorado} />
+                    <Text style={[estilos.efectivoLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: Colores.burnsBlanco + '60' }]}>
+                      💰 Pagó:
+                    </Text>
+                    <Text style={[estilos.efectivoMonto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.burnsDorado, fontWeight: 'bold' }]}>
+                      ${item.monto_pago.toFixed(2)}
+                    </Text>
+                  </View>
+                  {item.vuelto !== undefined && item.vuelto !== null && item.vuelto > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={[estilos.vueltoLabel, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10, color: Colores.burnsVerde }]}>
+                        💵 Vuelto:
+                      </Text>
+                      <Text style={[estilos.vueltoMonto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.burnsVerde, fontWeight: 'bold' }]}>
+                        ${item.vuelto.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
 
             {/* ✅ BOTONES DE ACCIÓN */}
@@ -829,7 +859,7 @@ export default function PantallaGestionPedidos(props: any) {
                   )}
                 </View>
 
-                {/* Resumen */}
+                {/* Resumen con Vuelto */}
                 <View style={estilos.modalDetalleSeccion}>
                   <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : 14, color: Colores.burnsDorado }]}>
                     📊 Resumen
@@ -860,6 +890,31 @@ export default function PantallaGestionPedidos(props: any) {
                       </Text>
                     </View>
                   )}
+
+                  {/* ✅ MONTO PAGADO Y VUELTO */}
+                  {pedidoSeleccionado.metodo_pago === 'efectivo' && pedidoSeleccionado.monto_pago !== undefined && pedidoSeleccionado.monto_pago !== null && (
+                    <>
+                      <View style={estilos.modalDetalleFila}>
+                        <Text style={[estilos.modalDetalleLabel, { fontSize: isTablet ? 14 : 12, color: Colores.burnsDorado }]}>
+                          💰 Pagó con
+                        </Text>
+                        <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 14 : 12, color: Colores.burnsDorado, fontWeight: 'bold' }]}>
+                          ${pedidoSeleccionado.monto_pago.toFixed(2)}
+                        </Text>
+                      </View>
+                      {pedidoSeleccionado.vuelto !== undefined && pedidoSeleccionado.vuelto !== null && pedidoSeleccionado.vuelto > 0 && (
+                        <View style={estilos.modalDetalleFila}>
+                          <Text style={[estilos.modalDetalleLabel, { fontSize: isTablet ? 14 : 12, color: Colores.burnsVerde }]}>
+                            💵 Vuelto
+                          </Text>
+                          <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 14 : 12, color: Colores.burnsVerde, fontWeight: 'bold' }]}>
+                            ${pedidoSeleccionado.vuelto.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
                   <View style={[estilos.modalDetalleFila, estilos.modalDetalleTotal]}>
                     <Text style={[estilos.modalDetalleLabel, { fontSize: isTablet ? 18 : 16, color: Colores.burnsBlanco, fontWeight: 'bold' }]}>
                       TOTAL
@@ -998,7 +1053,6 @@ const estilos = StyleSheet.create({
     fontWeight: 'bold',
     textTransform: 'capitalize',
   },
-  // ✅ NUEVOS ESTILOS PARA DATOS DEL CLIENTE
   clienteContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1064,17 +1118,35 @@ const estilos = StyleSheet.create({
     fontWeight: '500',
   },
   totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   totalLabel: {
     fontWeight: '500',
   },
   total: {
+    fontWeight: 'bold',
+  },
+  // ✅ ESTILOS PARA PAGO EN EFECTIVO Y VUELTO
+  efectivoContainer: {
+    // estilos aplicados dinámicamente
+  },
+  efectivoLabel: {
+    fontWeight: '500',
+  },
+  efectivoMonto: {
+    fontWeight: 'bold',
+  },
+  vueltoLabel: {
+    fontWeight: '500',
+  },
+  vueltoMonto: {
     fontWeight: 'bold',
   },
   botones: {

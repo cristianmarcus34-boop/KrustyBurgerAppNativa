@@ -34,6 +34,7 @@ export interface ElementoPedido {
 export interface Pedido {
     id: number;
     creado_en: string;
+    ruta_puntos?: { latitude: number; longitude: number }[];
     cliente_nombre: string | null;
     estado: EstadoPedido;
     total: number | null;
@@ -59,6 +60,9 @@ export interface Pedido {
     encabezado_repartidor: string | null;
     distancia_km?: number | null;
     tiempo_estimado?: number | null;
+    // ✅ NUEVAS PROPIEDADES PARA PAGO EN EFECTIVO
+    monto_pago?: number | null;   // Cuánto pagó el cliente
+    vuelto?: number | null;       // Vuelto a devolver
 }
 
 export interface Perfil {
@@ -84,6 +88,7 @@ export interface Perfil {
     lat_cliente?: number | null;
     lng_cliente?: number | null;
     direccion_manual?: string | null;
+    created_at?: string;
 }
 
 export interface ElementoCarrito {
@@ -142,7 +147,7 @@ export interface Recompensa {
     activa: boolean;
     imagen?: string | null;
     created_at?: string;
-    updated_at?: string;
+    actualizado_en?: string;
 }
 
 export interface Canje {

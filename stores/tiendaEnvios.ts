@@ -1,4 +1,4 @@
-// stores/tiendaEnvios.ts
+// stores/tiendaEnvios.ts - COMPLETO Y OPTIMIZADO
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { ConfiguracionEnvio, ConfiguracionLocal } from '../lib/tipos';
@@ -22,23 +22,35 @@ export const tiendaEnvios = create<EstadoEnvios>((set, get) => ({
     error: null,
 
     cargarConfiguracion: async () => {
+        console.log('🔄 [Store] Iniciando carga de configuración...');
         set({ cargando: true, error: null });
+
         try {
+            // ✅ Cargar configuración de envíos (sin filtros para obtener siempre el registro)
             const { data: configData, error: configError } = await supabase
                 .from('configuracion_envios')
                 .select('*')
-                .eq('activo', true)
-                .eq('tipo', 'domicilio')
                 .single();
 
-            if (configError) throw configError;
+            if (configError) {
+                console.error('❌ [Store] Error cargando configuracion_envios:', configError);
+                throw configError;
+            }
 
+            console.log('✅ [Store] Configuración de envíos cargada:', configData);
+
+            // ✅ Cargar ubicación del local
             const { data: localData, error: localError } = await supabase
                 .from('configuracion_local')
                 .select('*')
                 .single();
 
-            if (localError) throw localError;
+            if (localError) {
+                console.error('❌ [Store] Error cargando configuracion_local:', localError);
+                throw localError;
+            }
+
+            console.log('✅ [Store] Ubicación del local cargada:', localData);
 
             set({
                 configuracion: configData as ConfiguracionEnvio,
@@ -46,8 +58,10 @@ export const tiendaEnvios = create<EstadoEnvios>((set, get) => ({
                 cargando: false,
                 error: null,
             });
+
+            console.log('✅ [Store] Estado actualizado correctamente');
         } catch (error: any) {
-            console.error('❌ Error cargando configuración de envíos:', error);
+            console.error('❌ [Store] Error cargando configuración:', error);
             set({
                 error: error.message || 'Error al cargar configuración',
                 cargando: false,
@@ -56,13 +70,17 @@ export const tiendaEnvios = create<EstadoEnvios>((set, get) => ({
     },
 
     actualizarConfiguracion: async (datos: Partial<ConfiguracionEnvio>) => {
+        console.log('💾 [Store] Actualizando configuración de envíos...');
         const { configuracion } = get();
+
         if (!configuracion) {
+            console.error('❌ [Store] No hay configuración cargada');
             return { success: false, error: 'No hay configuración cargada' };
         }
 
         try {
             const datosValidados: any = {};
+
             if (datos.precio_base !== undefined) {
                 datosValidados.precio_base = Number(datos.precio_base);
                 if (isNaN(datosValidados.precio_base)) {
@@ -86,37 +104,54 @@ export const tiendaEnvios = create<EstadoEnvios>((set, get) => ({
                 if (isNaN(datosValidados.distancia_maxima_km)) {
                     return { success: false, error: 'La distancia máxima debe ser un número válido' };
                 }
+                if (datosValidados.distancia_maxima_km <= 0) {
+                    return { success: false, error: 'La distancia máxima debe ser mayor a 0' };
+                }
             }
             if (datos.activo !== undefined) {
                 datosValidados.activo = Boolean(datos.activo);
             }
+
+            // ✅ Siempre actualizar updated_at
+            datosValidados.updated_at = new Date().toISOString();
+
+            console.log('📦 [Store] Datos a guardar en configuracion_envios:', datosValidados);
 
             const { error } = await supabase
                 .from('configuracion_envios')
                 .update(datosValidados)
                 .eq('id', configuracion.id);
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ [Store] Error actualizando configuracion_envios:', error);
+                throw error;
+            }
 
-            set({
-                configuracion: { ...configuracion, ...datosValidados },
-            });
+            // ✅ Actualizar el estado local
+            const nuevaConfiguracion = { ...configuracion, ...datosValidados };
+            set({ configuracion: nuevaConfiguracion });
 
+            console.log('✅ [Store] Configuración actualizada correctamente:', nuevaConfiguracion);
             return { success: true };
+
         } catch (error: any) {
-            console.error('❌ Error actualizando configuración:', error);
+            console.error('❌ [Store] Error actualizando configuración:', error);
             return { success: false, error: error.message || 'Error al actualizar' };
         }
     },
 
     actualizarUbicacionLocal: async (datos: Partial<ConfiguracionLocal>) => {
+        console.log('💾 [Store] Actualizando ubicación del local...');
         const { configuracionLocal } = get();
+
         if (!configuracionLocal) {
+            console.error('❌ [Store] No hay ubicación cargada');
             return { success: false, error: 'No hay ubicación cargada' };
         }
 
         try {
             const datosValidados: any = {};
+
             if (datos.latitud !== undefined) {
                 datosValidados.latitud = Number(datos.latitud);
                 if (isNaN(datosValidados.latitud) || datosValidados.latitud < -90 || datosValidados.latitud > 90) {
@@ -133,25 +168,37 @@ export const tiendaEnvios = create<EstadoEnvios>((set, get) => ({
             if (datos.direccion !== undefined) datosValidados.direccion = datos.direccion;
             if (datos.telefono !== undefined) datosValidados.telefono = datos.telefono;
 
+            // ✅ Siempre actualizar updated_at
+            datosValidados.updated_at = new Date().toISOString();
+
+            console.log('📦 [Store] Datos a guardar en configuracion_local:', datosValidados);
+
             const { error } = await supabase
                 .from('configuracion_local')
                 .update(datosValidados)
                 .eq('id', configuracionLocal.id);
 
-            if (error) throw error;
+            if (error) {
+                console.error('❌ [Store] Error actualizando configuracion_local:', error);
+                throw error;
+            }
 
-            set({
-                configuracionLocal: { ...configuracionLocal, ...datosValidados },
-            });
+            // ✅ Actualizar el estado local
+            const nuevaUbicacion = { ...configuracionLocal, ...datosValidados };
+            set({ configuracionLocal: nuevaUbicacion });
 
+            console.log('✅ [Store] Ubicación actualizada correctamente:', nuevaUbicacion);
             return { success: true };
+
         } catch (error: any) {
-            console.error('❌ Error actualizando ubicación:', error);
+            console.error('❌ [Store] Error actualizando ubicación:', error);
             return { success: false, error: error.message || 'Error al actualizar' };
         }
     },
 
     recargar: async () => {
+        console.log('🔄 [Store] Recargando configuración...');
         await get().cargarConfiguracion();
+        console.log('✅ [Store] Recarga completada');
     },
 }));

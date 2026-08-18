@@ -1,4 +1,4 @@
-// screens/repartidor/PantallaTransmision.tsx
+// screens/repartidor/PantallaTransmision.tsx - CORREGIDO
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
@@ -15,7 +15,7 @@ import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 import { obtenerRuta, guardarRutaPedido, obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 
-// ✅ IMPORTAR MARCADORES DEL COMPONENTE MAPA
+// ✅ IMPORTAR MARCADORES
 import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
 import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
 
@@ -47,7 +47,6 @@ const COLORS = {
   cancelado: '#F44336',
 };
 
-// ✅ FUNCIÓN PARA VALIDAR COORDENADAS
 const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) => {
   if (!coords || coords.length < 2) return false;
   return coords.every(coord =>
@@ -84,16 +83,10 @@ export default function PantallaTransmision(props: any) {
   const mapRef = useRef<MapView>(null);
   const watchRef = useRef<any>(null);
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
-
-  // ✅ Animación de pulso para la moto
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // ============================================================
-  // 📱 RESPONSIVE - TAMAÑOS DINÁMICOS
-  // ============================================================
   const isTablet = width >= 768;
   const isSmallPhone = width < 375;
 
@@ -119,7 +112,6 @@ export default function PantallaTransmision(props: any) {
   const statsGap = isTablet ? 12 : isSmallPhone ? 5 : 6;
   const headerPaddingTop = isTablet ? 18 : isSmallPhone ? 8 : 10;
 
-  // ✅ Preparar coordenadas para el Polyline con validación
   const obtenerCoordenadasPolyline = () => {
     if (rutaPuntos.length > 1) return rutaPuntos;
     if (pedidoSeleccionado) {
@@ -141,50 +133,19 @@ export default function PantallaTransmision(props: any) {
   const puntosValidos = validarCoordenadas(coordenadasPolyline);
 
   useEffect(() => {
-    if (transmitiendo && pedidoSeleccionado) {
-      console.log('🔍 ========== DEPURACIÓN POLYLINE ==========');
-      console.log('  - puntosValidos:', puntosValidos);
-      console.log('  - pedidoSeleccionado:', pedidoSeleccionado?.id);
-      console.log('  - rutaPuntos.length:', rutaPuntos.length);
-      console.log('  - rutaPuntos (primeros 3):', JSON.stringify(rutaPuntos.slice(0, 3), null, 2));
-      console.log('  - coordenadasPolyline length:', coordenadasPolyline.length);
-      console.log('  - coordenadasPolyline (primeros 3):', JSON.stringify(coordenadasPolyline.slice(0, 3), null, 2));
-      console.log('  - ¿Se debe renderizar?', puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1);
-      console.log('🔍 ==========================================');
-    }
-  }, [transmitiendo, pedidoSeleccionado, rutaPuntos, puntosValidos, coordenadasPolyline]);
-
-  useEffect(() => {
     cargarPedidos();
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, []);
 
-  // ✅ Animación de pulso para la moto cuando está transmitiendo
   useEffect(() => {
     if (transmitiendo) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
         ])
       ).start();
     } else {
@@ -192,22 +153,20 @@ export default function PantallaTransmision(props: any) {
     }
   }, [transmitiendo]);
 
-  // ✅ Obtener ruta real - MEJORADO
+  // ✅ CARGAR RUTA CUANDO SE INICIA LA TRANSMISIÓN
   useEffect(() => {
     if (transmitiendo && pedidoSeleccionado && ubicacionActual) {
-      const obtenerRutaReal = async () => {
+      const cargarRuta = async () => {
         const origenLat = ubicacionActual.lat;
         const origenLng = ubicacionActual.lng;
         const destinoLat = pedidoSeleccionado?.lat_cliente || UBICACION_KRUSTY.latitude;
         const destinoLng = pedidoSeleccionado?.lng_cliente || UBICACION_KRUSTY.longitude;
 
-        // ✅ Intentar cargar ruta guardada en la DB
+        // ✅ INTENTAR CARGAR RUTA GUARDADA
         const rutaGuardada = await obtenerRutaPedido(pedidoSeleccionado.id);
         if (rutaGuardada && rutaGuardada.length > 1) {
           console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
           setRutaPuntos(rutaGuardada);
-
-          // ✅ Cargar distancia y tiempo desde la DB
           const infoRuta = await obtenerInfoRutaPedido(pedidoSeleccionado.id);
           if (infoRuta) {
             setDistanciaReal(infoRuta.distancia);
@@ -216,7 +175,7 @@ export default function PantallaTransmision(props: any) {
           return;
         }
 
-        // ✅ Si no hay ruta guardada, obtener nueva de Google Maps
+        // ✅ OBTENER NUEVA RUTA
         console.log('🔄 Obteniendo nueva ruta de Google Maps...');
         const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
 
@@ -225,24 +184,29 @@ export default function PantallaTransmision(props: any) {
           setRutaPuntos(ruta.points);
           setDistanciaReal(ruta.distance);
           setTiempoReal(ruta.duration);
-
-          // ✅ Guardar en la DB
           await guardarRutaPedido(pedidoSeleccionado.id, ruta.points, ruta.distance, ruta.duration);
           console.log('💾 Ruta guardada en la DB');
         } else {
-          // ✅ Fallback: línea recta
+          // ✅ FALLBACK: LÍNEA RECTA - ¡PERO LA GUARDAMOS!
           console.warn('⚠️ Usando línea recta como fallback');
-          setRutaPuntos([
+          const puntosLineaRecta = [
             { latitude: origenLat, longitude: origenLng },
             { latitude: destinoLat, longitude: destinoLng }
-          ]);
+          ];
+          setRutaPuntos(puntosLineaRecta);
+          setDistanciaReal('0.0 km');
+          setTiempoReal('0 min');
+
+          // ✅ ¡GUARDAR LA LÍNEA RECTA EN LA DB!
+          await guardarRutaPedido(pedidoSeleccionado.id, puntosLineaRecta, '0.0 km', '0 min');
+          console.log('💾 Ruta de fallback guardada en la DB');
         }
       };
-      obtenerRutaReal();
+      cargarRuta();
     }
-  }, [transmitiendo, pedidoSeleccionado, ubicacionActual]);
+  }, [transmitiendo, pedidoSeleccionado]);
 
-  // ✅ ZOOM MEJORADO - Mostrar toda la ruta
+  // ✅ ZOOM MEJORADO
   useEffect(() => {
     if (transmitiendo && ubicacionActual && mapRef.current) {
       if (rutaPuntos.length > 1) {
@@ -345,7 +309,7 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ✅ INICIAR TRANSMISIÓN - MEJORADO CON RUTA
+  // ✅ INICIAR TRANSMISIÓN - CORREGIDA
   const iniciarTransmision = async (pedido: Pedido) => {
     setPedidoSeleccionado(pedido);
     setTransmitiendo(true);
@@ -355,35 +319,46 @@ export default function PantallaTransmision(props: any) {
     const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
     const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
 
+    // ✅ PRIMERO: Intentar cargar ruta guardada
     const rutaGuardada = await obtenerRutaPedido(pedido.id);
     if (rutaGuardada && rutaGuardada.length > 1) {
       console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
       setRutaPuntos(rutaGuardada);
-
       const infoRuta = await obtenerInfoRutaPedido(pedido.id);
       if (infoRuta) {
         setDistanciaReal(infoRuta.distancia);
         setTiempoReal(infoRuta.duracion);
       }
     } else {
-      console.log('🔄 Obteniendo nueva ruta...');
+      // ✅ SEGUNDO: Obtener nueva ruta
+      console.log('🔄 Obteniendo nueva ruta de Google Maps...');
       const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
 
       if (ruta && ruta.points.length > 1) {
+        console.log('✅ Ruta obtenida:', ruta.points.length, 'puntos');
         setRutaPuntos(ruta.points);
         setDistanciaReal(ruta.distance);
         setTiempoReal(ruta.duration);
         await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
         console.log('💾 Ruta guardada en la DB');
       } else {
+        // ✅ FALLBACK: Línea recta Y LA GUARDAMOS
         console.warn('⚠️ Usando línea recta como fallback');
-        setRutaPuntos([
+        const puntosLineaRecta = [
           { latitude: origenLat, longitude: origenLng },
           { latitude: destinoLat, longitude: destinoLng }
-        ]);
+        ];
+        setRutaPuntos(puntosLineaRecta);
+        setDistanciaReal('0.0 km');
+        setTiempoReal('0 min');
+
+        // ✅ ¡GUARDAR LA LÍNEA RECTA!
+        await guardarRutaPedido(pedido.id, puntosLineaRecta, '0.0 km', '0 min');
+        console.log('💾 Ruta de fallback guardada en la DB');
       }
     }
 
+    // ✅ Actualizar estado del pedido
     try {
       const { error } = await supabase
         .from('pedidos')
@@ -401,6 +376,7 @@ export default function PantallaTransmision(props: any) {
       console.error('❌ Error en actualización de estado:', error);
     }
 
+    // ✅ Iniciar seguimiento de ubicación
     const { status } = await Location.requestForegroundPermissionsAsync();
 
     if (status === 'granted') {
@@ -494,7 +470,6 @@ export default function PantallaTransmision(props: any) {
     return c[estado] || COLORS.grisClaro;
   };
 
-  // ✅ Render de pedido con información de envío
   const renderPedido = ({ item }: { item: Pedido }) => (
     <View style={[
       estilos.tarjeta,
@@ -507,16 +482,10 @@ export default function PantallaTransmision(props: any) {
     ]}>
       <View style={estilos.tarjetaHeader}>
         <View style={{ flex: 1 }}>
-          <Text
-            style={[estilos.pedidoId, { fontSize: pedidoIdSize }]}
-            numberOfLines={1}
-          >
+          <Text style={[estilos.pedidoId, { fontSize: pedidoIdSize }]} numberOfLines={1}>
             Pedido #{item.id}
           </Text>
-          <Text
-            style={[estilos.clienteNombre, { fontSize: clienteNombreSize }]}
-            numberOfLines={1}
-          >
+          <Text style={[estilos.clienteNombre, { fontSize: clienteNombreSize }]} numberOfLines={1}>
             {item.cliente_nombre || 'Cliente'}
           </Text>
         </View>
@@ -542,7 +511,6 @@ export default function PantallaTransmision(props: any) {
         </View>
       </View>
 
-      {/* ✅ INFORMACIÓN DE ENVÍO */}
       <View style={[
         estilos.infoEnvioContainer,
         {
@@ -558,7 +526,6 @@ export default function PantallaTransmision(props: any) {
           flexWrap: 'wrap',
         }
       ]}>
-        {/* Distancia */}
         {item.distancia_km !== undefined && item.distancia_km !== null ? (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="navigate" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
@@ -582,7 +549,6 @@ export default function PantallaTransmision(props: any) {
           </View>
         )}
 
-        {/* Tiempo estimado */}
         {item.tiempo_estimado !== undefined && item.tiempo_estimado !== null ? (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="time" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
@@ -606,7 +572,6 @@ export default function PantallaTransmision(props: any) {
           </View>
         )}
 
-        {/* Costo de envío */}
         <View style={estilos.infoEnvioItem}>
           <Ionicons name="cash" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.verdeClaro} />
           <Text style={[estilos.infoEnvioTexto, {
@@ -617,7 +582,6 @@ export default function PantallaTransmision(props: any) {
           </Text>
         </View>
 
-        {/* Tipo de entrega */}
         <View style={estilos.infoEnvioItem}>
           <Ionicons name={item.tipo_entrega === 'retiro' ? 'storefront' : 'home'} size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
           <Text style={[estilos.infoEnvioTexto, {
@@ -630,16 +594,10 @@ export default function PantallaTransmision(props: any) {
       </View>
 
       <View style={estilos.tarjetaInfo}>
-        <Text
-          style={[estilos.tarjetaDireccion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
-          numberOfLines={1}
-        >
+        <Text style={[estilos.tarjetaDireccion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]} numberOfLines={1}>
           📍 {item.direccion || 'Retiro en local'}
         </Text>
-        <Text
-          style={[estilos.tarjetaTelefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
-          numberOfLines={1}
-        >
+        <Text style={[estilos.tarjetaTelefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]} numberOfLines={1}>
           📱 {item.telefono || 'Sin teléfono'}
         </Text>
         <Text style={[estilos.tarjetaTotal, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
@@ -702,7 +660,6 @@ export default function PantallaTransmision(props: any) {
           />
         }
       >
-        {/* ✅ HEADER */}
         <View style={[
           estilos.encabezado,
           {
@@ -736,7 +693,6 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ STATS */}
         <View style={[
           estilos.stats,
           {
@@ -763,7 +719,6 @@ export default function PantallaTransmision(props: any) {
           </View>
         </View>
 
-        {/* ✅ PESTAÑAS */}
         <View style={[
           estilos.pestanas,
           {
@@ -824,7 +779,6 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ MAPA EN TRANSMISIÓN - CON MARCADORES ACTUALIZADOS */}
         {transmitiendo && pedidoSeleccionado && (
           <Animated.View style={[
             estilos.mapaContenedor,
@@ -850,16 +804,10 @@ export default function PantallaTransmision(props: any) {
               showsUserLocation={true}
               showsMyLocationButton={true}
             >
-              {/* 🛵 REPARTIDOR CON MOTO ANIMADA - MarcadorMoto */}
               <Marker coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}>
-                <MarcadorMoto
-                  size="normal"
-                  animated={true}
-                  scale={pulseAnim}
-                />
+                <MarcadorMoto size="normal" animated={true} scale={pulseAnim} />
               </Marker>
 
-              {/* 📍 DESTINO CLIENTE CON BANDERA - MarcadorDestino */}
               {pedidoSeleccionado && (
                 <Marker
                   coordinate={{
@@ -871,7 +819,6 @@ export default function PantallaTransmision(props: any) {
                 </Marker>
               )}
 
-              {/* 🗺️ RUTA TIPO UBER - CON SOMBRA Y DEGRADADO */}
               {puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1 && (
                 <>
                   <Polyline
@@ -961,7 +908,6 @@ export default function PantallaTransmision(props: any) {
           </Animated.View>
         )}
 
-        {/* ✅ TARJETA DE TRANSMISIÓN ACTIVA */}
         {transmitiendo && pedidoSeleccionado && (
           <Animated.View style={[
             estilos.tarjetaTransmision,
@@ -1022,7 +968,6 @@ export default function PantallaTransmision(props: any) {
           </Animated.View>
         )}
 
-        {/* ✅ LISTA DE PEDIDOS */}
         <View style={[
           estilos.listaContainer,
           {
@@ -1058,7 +1003,6 @@ export default function PantallaTransmision(props: any) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ✅ MODAL CERRAR SESIÓN */}
       <Modal
         visible={mostrarModalCerrar}
         transparent
@@ -1184,7 +1128,6 @@ export default function PantallaTransmision(props: any) {
         </View>
       </Modal>
 
-      {/* ✅ MODAL ÉXITO */}
       <Modal
         visible={mostrarModalExito}
         transparent
@@ -1250,323 +1193,70 @@ export default function PantallaTransmision(props: any) {
 }
 
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: COLORS.negro,
-  },
-  fondoGradiente: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  encabezado: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  titulo: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    letterSpacing: 0.5,
-  },
-  subtitulo: {
-    color: COLORS.grisClaro,
-    marginTop: 1,
-    opacity: 0.7,
-  },
-  botonCerrarSesion: {
-    backgroundColor: COLORS.rojo + '15',
-    borderWidth: 1,
-    borderColor: COLORS.rojo + '20',
-  },
-  stats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.blanco + '8',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: COLORS.blanco + '8',
-  },
-  statValor: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-  },
-  statLabel: {
-    color: COLORS.grisClaro,
-    marginTop: 1,
-    opacity: 0.6,
-  },
-  pestanas: {
-    flexDirection: 'row',
-  },
-  pestana: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  pestanaTexto: {
-    fontWeight: '600',
-  },
-  mapaContenedor: {
-    backgroundColor: COLORS.negro + '60',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-  },
-  mapa: {
-    width: '100%',
-  },
-  mapaInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  mapaInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  mapaInfoTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-  },
-  botonDetenerMapa: {
-    overflow: 'hidden',
-  },
-  botonDetenerGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-  },
-  botonDetenerMapaTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
-  },
-  tarjetaTransmision: {
-    backgroundColor: COLORS.amarillo + '10',
-    borderWidth: 1,
-  },
-  transmisionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  puntoVivo: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.amarillo,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  transmitiendoTexto: {
-    fontWeight: 'bold',
-    color: COLORS.amarillo,
-  },
-  pedidoTransmision: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-  },
-  clienteTransmision: {
-    color: COLORS.grisClaro,
-    marginTop: 1,
-    opacity: 0.7,
-  },
-  direccionTransmision: {
-    color: COLORS.blanco,
-    marginTop: 2,
-  },
-  gpsInfo: {
-    backgroundColor: COLORS.negro + '40',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
-  },
-  gpsTexto: {
-    color: COLORS.amarillo,
-    fontFamily: 'monospace',
-    opacity: 0.8,
-  },
-  listaContainer: {
-    flex: 1,
-  },
-  tarjeta: {
-    backgroundColor: COLORS.negro + '60',
-    borderWidth: 1,
-  },
-  tarjetaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 3,
-  },
-  pedidoId: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-  },
-  clienteNombre: {
-    color: COLORS.grisClaro,
-    marginTop: 1,
-    opacity: 0.7,
-  },
-  estadoBadge: {
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-  },
-  estadoTexto: {
-    fontWeight: 'bold',
-    textTransform: 'capitalize',
-  },
-  infoEnvioContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    flexWrap: 'wrap',
-    backgroundColor: COLORS.negro + '30',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
-  },
-  infoEnvioItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  infoEnvioTexto: {
-    color: COLORS.grisClaro,
-    fontWeight: '500',
-  },
-  tarjetaInfo: {
-    marginBottom: 4,
-  },
-  tarjetaDireccion: {
-    color: COLORS.blanco,
-    marginBottom: 1,
-  },
-  tarjetaTelefono: {
-    color: COLORS.grisClaro,
-    marginBottom: 1,
-    opacity: 0.6,
-  },
-  tarjetaTotal: {
-    fontWeight: 'bold',
-    color: COLORS.amarillo,
-    marginTop: 1,
-  },
-  botonIniciar: {
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  botonIniciarGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-  },
-  botonIniciarTexto: {
-    color: COLORS.negro,
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
-  },
-  vacio: {
-    alignItems: 'center',
-    paddingVertical: 30,
-  },
-  vacioTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  vacioSubtexto: {
-    color: COLORS.grisClaro,
-    textAlign: 'center',
-    marginTop: 2,
-    opacity: 0.6,
-  },
-  modalFondo: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modal: {
-    backgroundColor: COLORS.grisOscuro,
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  modalExito: {
-    borderColor: COLORS.verdeClaro,
-  },
-  modalIcono: {
-    marginBottom: 6,
-  },
-  modalTitulo: {
-    fontWeight: 'bold',
-    color: COLORS.blanco,
-    marginBottom: 4,
-  },
-  modalTexto: {
-    color: COLORS.grisClaro,
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  modalBotones: {
-    flexDirection: 'row',
-    width: '100%',
-  },
-  modalBoton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 3,
-  },
-  modalCancelar: {
-    backgroundColor: COLORS.negro + '50',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '10',
-  },
-  modalCancelarTexto: {
-    color: COLORS.blanco,
-    fontWeight: '600',
-  },
-  modalConfirmar: {
-    overflow: 'hidden',
-  },
-  modalConfirmarGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    paddingHorizontal: 14,
-    width: '100%',
-    height: '100%',
-  },
-  modalConfirmarTexto: {
-    color: COLORS.blanco,
-    fontWeight: 'bold',
-  },
+  contenedor: { flex: 1, backgroundColor: COLORS.negro },
+  fondoGradiente: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  encabezado: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  titulo: { fontWeight: 'bold', color: COLORS.blanco, letterSpacing: 0.5 },
+  subtitulo: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
+  botonCerrarSesion: { backgroundColor: COLORS.rojo + '15', borderWidth: 1, borderColor: COLORS.rojo + '20' },
+  stats: { flexDirection: 'row', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: COLORS.blanco + '8' },
+  statItem: { alignItems: 'center', flex: 1 },
+  statDivider: { width: 1, backgroundColor: COLORS.blanco + '8' },
+  statValor: { fontWeight: 'bold', color: COLORS.blanco },
+  statLabel: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.6 },
+  pestanas: { flexDirection: 'row' },
+  pestana: { flex: 1, alignItems: 'center' },
+  pestanaTexto: { fontWeight: '600' },
+  mapaContenedor: { backgroundColor: COLORS.negro + '60', overflow: 'hidden', borderWidth: 1, borderColor: COLORS.blanco + '10' },
+  mapa: { width: '100%' },
+  mapaInfo: { flexDirection: 'row', justifyContent: 'space-around' },
+  mapaInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  mapaInfoTexto: { color: COLORS.blanco, fontWeight: 'bold' },
+  botonDetenerMapa: { overflow: 'hidden' },
+  botonDetenerGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
+  botonDetenerMapaTexto: { color: COLORS.blanco, fontWeight: 'bold', letterSpacing: 0.3 },
+  tarjetaTransmision: { backgroundColor: COLORS.amarillo + '10', borderWidth: 1 },
+  transmisionHeader: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  puntoVivo: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.amarillo, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 6, elevation: 3 },
+  transmitiendoTexto: { fontWeight: 'bold', color: COLORS.amarillo },
+  pedidoTransmision: { fontWeight: 'bold', color: COLORS.blanco },
+  clienteTransmision: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
+  direccionTransmision: { color: COLORS.blanco, marginTop: 2 },
+  gpsInfo: { backgroundColor: COLORS.negro + '40', borderRadius: 4, borderWidth: 1, borderColor: COLORS.blanco + '5' },
+  gpsTexto: { color: COLORS.amarillo, fontFamily: 'monospace', opacity: 0.8 },
+  listaContainer: { flex: 1 },
+  tarjeta: { backgroundColor: COLORS.negro + '60', borderWidth: 1 },
+  tarjetaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 },
+  pedidoId: { fontWeight: 'bold', color: COLORS.blanco },
+  clienteNombre: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
+  estadoBadge: { borderWidth: 1, borderColor: COLORS.blanco + '10' },
+  estadoTexto: { fontWeight: 'bold', textTransform: 'capitalize' },
+  infoEnvioContainer: { flexDirection: 'row', justifyContent: 'space-around', flexWrap: 'wrap', backgroundColor: COLORS.negro + '30', borderWidth: 1, borderColor: COLORS.blanco + '5' },
+  infoEnvioItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  infoEnvioTexto: { color: COLORS.grisClaro, fontWeight: '500' },
+  tarjetaInfo: { marginBottom: 4 },
+  tarjetaDireccion: { color: COLORS.blanco, marginBottom: 1 },
+  tarjetaTelefono: { color: COLORS.grisClaro, marginBottom: 1, opacity: 0.6 },
+  tarjetaTotal: { fontWeight: 'bold', color: COLORS.amarillo, marginTop: 1 },
+  botonIniciar: { overflow: 'hidden', elevation: 3, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  botonIniciarGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
+  botonIniciarTexto: { color: COLORS.negro, fontWeight: 'bold', letterSpacing: 0.3 },
+  vacio: { alignItems: 'center', paddingVertical: 30 },
+  vacioTexto: { color: COLORS.blanco, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
+  vacioSubtexto: { color: COLORS.grisClaro, textAlign: 'center', marginTop: 2, opacity: 0.6 },
+  modalFondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modal: { backgroundColor: COLORS.grisOscuro, alignItems: 'center', borderWidth: 2 },
+  modalExito: { borderColor: COLORS.verdeClaro },
+  modalIcono: { marginBottom: 6 },
+  modalTitulo: { fontWeight: 'bold', color: COLORS.blanco, marginBottom: 4 },
+  modalTexto: { color: COLORS.grisClaro, textAlign: 'center', marginBottom: 14 },
+  modalBotones: { flexDirection: 'row', width: '100%' },
+  modalBoton: { flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 3 },
+  modalCancelar: { backgroundColor: COLORS.negro + '50', borderWidth: 1, borderColor: COLORS.blanco + '10' },
+  modalCancelarTexto: { color: COLORS.blanco, fontWeight: '600' },
+  modalConfirmar: { overflow: 'hidden' },
+  modalConfirmarGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 14, width: '100%', height: '100%' },
+  modalConfirmarTexto: { color: COLORS.blanco, fontWeight: 'bold' },
 });

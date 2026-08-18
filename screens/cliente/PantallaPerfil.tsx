@@ -1,35 +1,127 @@
-// screens/cliente/PantallaPerfil.tsx
+// screens/cliente/PantallaPerfil.tsx - VERSIÓN BLANCA Y ELEGANTE
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, useWindowDimensions, Animated, RefreshControl,
-  Dimensions, TextInput, Alert, ActivityIndicator, Image
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+  useWindowDimensions,
+  Animated,
+  RefreshControl,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { notificacionService } from '../../services/notificacionService';
 import { Colores } from '../../lib/colores';
-//import { cuponService } from '../../lib/cupones/cuponService';
 
-const { width, height } = Dimensions.get('window');
+// ============================================================
+// 🎨 SISTEMA DE DISEÑO - BLANCO Y ELEGANTE
+// ============================================================
+const DESIGN = {
+  colors: {
+    fondo: '#F8F7F5',
+    surface: '#FFFFFF',
+    surfaceHover: '#F5F4F2',
+    card: '#FFFFFF',
+    cardShadow: 'rgba(0,0,0,0.05)',
+    cardShadowHeavy: 'rgba(0,0,0,0.08)',
+    border: 'rgba(0,0,0,0.06)',
+    borderLight: 'rgba(0,0,0,0.03)',
+    text: '#1A1A1A',
+    textSecondary: 'rgba(0,0,0,0.55)',
+    textTertiary: 'rgba(0,0,0,0.30)',
+    accent: '#E53935',
+    accentLight: '#FF6B6B',
+    accentSecondary: '#F5C518',
+    accentSecondaryLight: '#FFE135',
+    gradientStart: '#E53935',
+    gradientEnd: '#F5C518',
+    verde: '#43A047',
+    verdeClaro: '#66BB6A',
+    rosa: '#EC407A',
+    rosaClaro: '#F06292',
+    azul: '#1A237E',
+    azulClaro: '#3949AB',
+    platino: '#78909C',
+    oro: '#F9A825',
+    plata: '#BDBDBD',
+    bronce: '#A1887F',
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    '2xl': 48,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    full: 999,
+  },
+};
+
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
+  const isSmallPhone = width < 375;
+
+  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+    if (isDesktop || isTablet) return valores.tablet;
+    if (isSmallPhone) return valores.small;
+    return valores.normal;
+  }, [isDesktop, isTablet, isSmallPhone]);
+
+  const spacing = (base: number) => {
+    if (isTablet) return base * 1.5;
+    if (isSmallPhone) return base * 0.75;
+    return base;
+  };
+
+  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+};
+
+// ============================================================
+// 📋 TIPOS LOCALES
+// ============================================================
+interface MenuItem {
+  id: string;
+  label: string;
+  icono: string;
+  color: string;
+  navigate: string;
+  show: boolean;
+  subtitle?: string;
+}
 
 export default function PantallaPerfil(props: any) {
   const { perfil, sesion, cerrarSesion, actualizarPerfil } = tiendaAutenticacion();
+  const responsive = useResponsive();
+  const insets = useSafeAreaInsets();
+
   const [totalPedidos, setTotalPedidos] = useState(0);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [cargandoActualizacion, setCargandoActualizacion] = useState(false);
-  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
   const [imagenPerfil, setImagenPerfil] = useState<string | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
-  const [cuponesDisponibles, setCuponesDisponibles] = useState(0);
-  const [cargandoCupones, setCargandoCupones] = useState(false);
 
   const [telefono, setTelefono] = useState('');
   const [direccionCalle, setDireccionCalle] = useState('');
@@ -42,42 +134,8 @@ export default function PantallaPerfil(props: any) {
   const [preferenciasComida, setPreferenciasComida] = useState('');
   const [metodoPago, setMetodoPago] = useState('');
 
-  const { width: winWidth } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
-
-  /*/ ✅ Cargar cupones disponibles
-  const cargarCuponesDisponibles = useCallback(async () => {
-    if (!perfil?.id) {
-      setCuponesDisponibles(0);
-      return;
-    }
-
-    setCargandoCupones(true);
-    try {
-      const cupones = await cuponService.obtenerCuponesDisponibles(perfil.id);
-      setCuponesDisponibles(cupones.length);
-    } catch (error) {
-      console.error('Error cargando cupones:', error);
-      setCuponesDisponibles(0);
-    } finally {
-      setCargandoCupones(false);
-    }
-  }, [perfil?.id]);*/
-
-  /*useFocusEffect(
-    React.useCallback(() => {
-      const contarNotificaciones = async () => {
-        if (!perfil?.id) return;
-        const data = await notificacionService.obtenerNotificaciones(perfil.id, true);
-        setNotificacionesNoLeidas(data.length);
-      };
-      contarNotificaciones();
-      cargarCuponesDisponibles();
-    }, [perfil?.id, cargarCuponesDisponibles])
-  );*/
 
   useEffect(() => {
     if (perfil?.id) {
@@ -117,20 +175,17 @@ export default function PantallaPerfil(props: any) {
   };
 
   const cargarTotalPedidos = async () => {
+    if (!perfil?.id) return;
     const { count } = await supabase
       .from('pedidos')
       .select('*', { count: 'exact', head: true })
-      .eq('id_de_usuario', perfil?.id);
+      .eq('id_de_usuario', perfil.id);
     setTotalPedidos(count || 0);
   };
 
   const manejarRefresh = async () => {
     setRefrescando(true);
-    await Promise.all([
-      cargarTotalPedidos(),
-      cargarDatosPerfil(),
-      //cargarCuponesDisponibles()
-    ]);
+    await Promise.all([cargarTotalPedidos(), cargarDatosPerfil()]);
     setRefrescando(false);
   };
 
@@ -163,7 +218,6 @@ export default function PantallaPerfil(props: any) {
       }
 
       await actualizarPerfil({ ...perfil, ...datosActualizados });
-
       Alert.alert('✅ Éxito', 'Perfil actualizado correctamente');
       setModoEdicion(false);
     } catch (error) {
@@ -176,7 +230,6 @@ export default function PantallaPerfil(props: any) {
   const seleccionarImagen = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
       if (status !== 'granted') {
         Alert.alert('Permiso denegado', 'Necesitamos acceso a tus fotos para cambiar la foto de perfil');
         return;
@@ -203,7 +256,6 @@ export default function PantallaPerfil(props: any) {
   const tomarFoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-
       if (status !== 'granted') {
         Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara para tomar una foto');
         return;
@@ -228,24 +280,19 @@ export default function PantallaPerfil(props: any) {
 
   const subirImagenPerfil = async (uri: string) => {
     if (!perfil?.id) {
-      console.log('❌ No hay usuario logueado');
       Alert.alert('Error', 'Debes iniciar sesión para cambiar la foto');
       return;
     }
 
     setSubiendoImagen(true);
-    console.log('📷 Iniciando subida de imagen para usuario:', perfil.id);
-
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      console.log('📷 Blob obtenido, tamaño:', blob.size, 'bytes');
 
       const fileExt = uri.split('.').pop() || 'jpg';
       const fileName = `${perfil.id}.${fileExt}`;
-      console.log('📷 Nombre de archivo:', fileName);
 
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('perfiles')
         .upload(fileName, blob, {
           contentType: `image/${fileExt}`,
@@ -253,37 +300,23 @@ export default function PantallaPerfil(props: any) {
           upsert: true,
         });
 
-      if (uploadError) {
-        console.error('❌ Error en upload:', uploadError);
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
-      console.log('✅ Imagen subida exitosamente:', data);
-
-      const { data: urlData } = supabase.storage
-        .from('perfiles')
-        .getPublicUrl(fileName);
-
+      const { data: urlData } = supabase.storage.from('perfiles').getPublicUrl(fileName);
       const publicUrl = urlData.publicUrl;
-      console.log('📷 URL pública:', publicUrl);
 
       const { error: updateError } = await supabase
         .from('perfiles')
         .update({ avatar_url: publicUrl })
         .eq('id', perfil.id);
 
-      if (updateError) {
-        console.error('❌ Error actualizando perfil:', updateError);
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       await actualizarPerfil({ ...perfil, avatar_url: publicUrl });
       setImagenPerfil(publicUrl);
-
-      console.log('✅ Foto de perfil actualizada correctamente');
       Alert.alert('✅ Éxito', 'Foto de perfil actualizada correctamente');
     } catch (error: any) {
-      console.error('❌ Error subiendo imagen:', error);
+      console.error('Error subiendo imagen:', error);
       Alert.alert('Error', `No se pudo subir la imagen: ${error.message || 'Error desconocido'}`);
     } finally {
       setSubiendoImagen(false);
@@ -329,20 +362,19 @@ export default function PantallaPerfil(props: any) {
   };
 
   const nivelCliente = (puntos: number) => {
-    if (puntos >= 5000) return { icono: '💎', nombre: 'Platino', color: Colores.platino, bg: Colores.platino + '20' };
-    if (puntos >= 1500) return { icono: '👑', nombre: 'Oro', color: Colores.oro, bg: Colores.oro + '20' };
-    if (puntos >= 500) return { icono: '🥈', nombre: 'Plata', color: Colores.plata, bg: Colores.plata + '20' };
-    return { icono: '🥉', nombre: 'Bronce', color: Colores.bronce, bg: Colores.bronce + '20' };
+    if (puntos >= 5000) return { icono: '💎', nombre: 'Platino', color: DESIGN.colors.platino };
+    if (puntos >= 1500) return { icono: '👑', nombre: 'Oro', color: DESIGN.colors.oro };
+    if (puntos >= 500) return { icono: '🥈', nombre: 'Plata', color: DESIGN.colors.plata };
+    return { icono: '🥉', nombre: 'Bronce', color: DESIGN.colors.bronce };
   };
 
   const nivel = nivelCliente(perfil?.puntos_acumulados || 0);
+  const isTablet = responsive.isTablet;
+  const isSmallPhone = responsive.isSmallPhone;
+  const padding = isTablet ? 40 : isSmallPhone ? 16 : 20;
 
-  const isTablet = winWidth >= 768;
-  const isSmallPhone = winWidth < 375;
-
-  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
-  const paddingBottom = insets.bottom + 20;
-  const avatarSize = isTablet ? 100 : isSmallPhone ? 70 : 80;
+  // Tamaños responsivos
+  const avatarSize = isTablet ? 120 : isSmallPhone ? 80 : 90;
   const nombreSize = isTablet ? 28 : isSmallPhone ? 20 : 24;
   const correoSize = isTablet ? 17 : isSmallPhone ? 12 : 14;
   const statValorSize = isTablet ? 26 : isSmallPhone ? 18 : 22;
@@ -351,97 +383,87 @@ export default function PantallaPerfil(props: any) {
   const labelSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
   const inputSize = isTablet ? 16 : isSmallPhone ? 14 : 15;
 
-  // ✅ Menu items con cupones incluidos
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     {
       id: 'pedidos',
       label: 'Mis Pedidos',
       icono: 'receipt-outline',
-      color: Colores.margeVerde,
+      color: DESIGN.colors.verde,
       navigate: 'Pedidos',
-      show: true
+      show: true,
     },
     {
       id: 'recompensas',
       label: 'Recompensas',
       icono: 'star-outline',
-      color: Colores.margeRosa,
+      color: DESIGN.colors.rosa,
       subtitle: 'Canjear puntos',
       navigate: 'Recompensas',
-      show: true
-    },
-    {
-      id: 'cupones',
-      label: 'Mis Cupones',
-      icono: 'ticket-outline',
-      color: Colores.secundario,
-      subtitle: cuponesDisponibles > 0 ? `${cuponesDisponibles} disponibles` : 'Sin cupones',
-      navigate: 'MisCupones',
-      show: perfil?.id ? true : false
-    },
-    {
-      id: 'canjear-cupon',
-      label: 'Canjear Cupón',
-      icono: 'qr-code-outline',
-      color: Colores.primario,
-      subtitle: 'Escanea o ingresa código',
-      navigate: 'CanjearCupon',
-      show: perfil?.id ? true : false
+      show: true,
     },
   ];
 
+  const handleNavigate = (item: MenuItem) => {
+    if (item.id === 'pedidos') {
+      props.navigation.navigate('Principal', {
+        screen: 'Pedidos',
+      });
+    } else {
+      props.navigation.navigate(item.navigate);
+    }
+  };
+
   return (
-    <View style={estilos.contenedor}>
-      {/* 💛 GRADIENTE MARGE: Verde → Rosa */}
-      <LinearGradient
-        colors={[Colores.margeVerde, Colores.margeRosa]}
-        style={estilos.fondoGradiente}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+    <View style={styles.container}>
+      {/* Fondo blanco/crema suave - SIN GRADIENTE NARANJA */}
+      <View style={styles.background} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          estilos.scrollContent,
+          styles.scrollContent,
           {
-            paddingBottom: paddingBottom,
-          }
+            paddingBottom: insets.bottom + 120,
+          },
         ]}
         refreshControl={
           <RefreshControl
             refreshing={refrescando}
             onRefresh={manejarRefresh}
-            tintColor={Colores.margeRosa}
-            colors={[Colores.margeRosa]}
+            tintColor={DESIGN.colors.accent}
+            colors={[DESIGN.colors.accent]}
           />
         }
       >
-        <Animated.View style={[
-          estilos.encabezado,
-          {
-            paddingHorizontal: paddingHorizontal,
-            paddingTop: insets.top + (isTablet ? 30 : 20),
-            paddingBottom: isTablet ? 24 : 16,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideUpAnim }],
-          }
-        ]}>
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              paddingHorizontal: padding,
+              paddingTop: insets.top + (isTablet ? 30 : 20),
+              paddingBottom: isTablet ? 24 : 16,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}
+        >
+          {/* Avatar con borde sutil */}
           <TouchableOpacity
             onPress={perfil?.id ? mostrarOpcionesFoto : undefined}
             activeOpacity={0.8}
             disabled={!perfil?.id}
           >
-            <View style={[
-              estilos.avatarContainer,
-              {
-                width: avatarSize,
-                height: avatarSize,
-                borderRadius: avatarSize / 2,
-                backgroundColor: Colores.margeRosa + '20',
-                borderColor: Colores.margeRosa + '40',
-              }
-            ]}>
+            <View
+              style={[
+                styles.avatarContainer,
+                {
+                  width: avatarSize,
+                  height: avatarSize,
+                  borderRadius: avatarSize / 2,
+                  borderColor: DESIGN.colors.border,
+                },
+              ]}
+            >
               {imagenPerfil ? (
                 <Image
                   source={{ uri: imagenPerfil }}
@@ -452,94 +474,141 @@ export default function PantallaPerfil(props: any) {
                   }}
                 />
               ) : (
-                <Text style={[estilos.avatarEmoji, { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 }]}>
+                <Text
+                  style={[
+                    styles.avatarEmoji,
+                    { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 },
+                  ]}
+                >
                   {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
                 </Text>
               )}
               {perfil?.id && (
-                <View style={estilos.camaraIcon}>
-                  <Ionicons name="camera" size={isTablet ? 18 : 14} color={Colores.textoClaro} />
+                <View style={styles.cameraIcon}>
+                  <Ionicons
+                    name="camera"
+                    size={isTablet ? 18 : 14}
+                    color={DESIGN.colors.surface}
+                  />
                 </View>
               )}
             </View>
           </TouchableOpacity>
 
           {subiendoImagen && (
-            <View style={estilos.subiendoImagen}>
-              <ActivityIndicator size="small" color={Colores.margeRosa} />
-              <Text style={estilos.subiendoImagenTexto}>Subiendo imagen...</Text>
+            <View style={styles.uploadingContainer}>
+              <ActivityIndicator size="small" color={DESIGN.colors.accent} />
+              <Text style={styles.uploadingText}>Subiendo imagen...</Text>
             </View>
           )}
 
-          <Text style={[estilos.nombre, { fontSize: nombreSize, color: Colores.textoClaro }]}>
+          <Text style={[styles.name, { fontSize: nombreSize }]}>
             {perfil?.nombre_cliente || 'Invitado'}
           </Text>
 
-          <Text style={[estilos.correo, { fontSize: correoSize, color: Colores.textoClaro + '70' }]}>
+          <Text style={[styles.email, { fontSize: correoSize }]}>
             {perfil?.email || 'Inicia sesión para ver tus datos'}
           </Text>
 
           {perfil?.id ? (
             <>
-              <View style={estilos.puntos}>
-                <LinearGradient
-                  colors={[Colores.margeRosa, Colores.margeAzul]}
-                  style={estilos.puntosGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={estilos.puntosIcono}>⭐</Text>
-                  <Text style={[estilos.puntosTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>
+              {/* Puntos - ahora más sutil */}
+              <View style={styles.pointsContainer}>
+                <View style={styles.pointsWrapper}>
+                  <Text style={styles.pointsIcon}>⭐</Text>
+                  <Text
+                    style={[
+                      styles.pointsText,
+                      { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 },
+                    ]}
+                  >
                     {perfil?.puntos_acumulados || 0} Krusty Points
                   </Text>
-                </LinearGradient>
+                </View>
               </View>
 
-              <View style={[
-                estilos.nivel,
-                {
-                  backgroundColor: nivel.bg,
-                  paddingHorizontal: isTablet ? 20 : isSmallPhone ? 12 : 16,
-                  paddingVertical: isTablet ? 8 : isSmallPhone ? 5 : 6,
-                  borderRadius: isTablet ? 24 : isSmallPhone ? 14 : 18,
-                }
-              ]}>
-                <Text style={[estilos.nivelTexto, {
-                  color: nivel.color,
-                  fontSize: isTablet ? 17 : isSmallPhone ? 13 : 15,
-                }]}>
+              {/* Nivel - badge limpio */}
+              <View
+                style={[
+                  styles.levelBadge,
+                  {
+                    paddingHorizontal: isTablet ? 20 : isSmallPhone ? 12 : 16,
+                    paddingVertical: isTablet ? 8 : isSmallPhone ? 5 : 6,
+                    borderRadius: isTablet ? 24 : isSmallPhone ? 14 : 18,
+                    borderColor: nivel.color + '30',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.levelText,
+                    {
+                      color: nivel.color,
+                      fontSize: isTablet ? 17 : isSmallPhone ? 13 : 15,
+                    },
+                  ]}
+                >
                   {nivel.icono} Nivel {nivel.nombre}
                 </Text>
               </View>
 
-              <View style={estilos.stats}>
-                <View style={estilos.statItem}>
-                  <Text style={[estilos.statValor, { fontSize: statValorSize, color: Colores.textoClaro }]}>{totalPedidos}</Text>
-                  <Text style={[estilos.statLabel, { fontSize: statLabelSize, color: Colores.textoClaro + '50' }]}>Pedidos</Text>
+              {/* Stats - tarjeta blanca */}
+              <View style={styles.stats}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { fontSize: statValorSize }]}>
+                    {totalPedidos}
+                  </Text>
+                  <Text style={[styles.statLabel, { fontSize: statLabelSize }]}>
+                    Pedidos
+                  </Text>
                 </View>
-                <View style={estilos.statDivider} />
-                <View style={estilos.statItem}>
-                  <Text style={[estilos.statValor, { fontSize: statValorSize, color: Colores.textoClaro }]}>{perfil?.puntos_acumulados || 0}</Text>
-                  <Text style={[estilos.statLabel, { fontSize: statLabelSize, color: Colores.textoClaro + '50' }]}>Puntos</Text>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { fontSize: statValorSize }]}>
+                    {perfil?.puntos_acumulados || 0}
+                  </Text>
+                  <Text style={[styles.statLabel, { fontSize: statLabelSize }]}>
+                    Puntos
+                  </Text>
                 </View>
-                <View style={estilos.statDivider} />
-                <View style={estilos.statItem}>
-                  <Text style={[estilos.statValor, { fontSize: statValorSize, color: Colores.textoClaro }]}>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { fontSize: statValorSize }]}>
                     {perfil?.ultimo_acceso
-                      ? new Date(perfil.ultimo_acceso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+                      ? new Date(perfil.ultimo_acceso).toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                      })
                       : '---'}
                   </Text>
-                  <Text style={[estilos.statLabel, { fontSize: statLabelSize, color: Colores.textoClaro + '50' }]}>Último acceso</Text>
+                  <Text style={[styles.statLabel, { fontSize: statLabelSize }]}>
+                    Último acceso
+                  </Text>
                 </View>
               </View>
             </>
           ) : (
-            <View style={estilos.mensajeInvitado}>
-              <Ionicons name="person-outline" size={isTablet ? 50 : 40} color={Colores.textoClaro + '50'} />
-              <Text style={[estilos.textoInvitado, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: Colores.textoClaro }]}>
+            // Guest view - limpio y minimalista
+            <View style={styles.guestMessage}>
+              <Ionicons
+                name="person-outline"
+                size={isTablet ? 50 : 40}
+                color={DESIGN.colors.textTertiary}
+              />
+              <Text
+                style={[
+                  styles.guestText,
+                  { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18 },
+                ]}
+              >
                 Estás viendo como invitado
               </Text>
-              <Text style={[estilos.textoInvitadoSub, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: Colores.textoClaro + '60' }]}>
+              <Text
+                style={[
+                  styles.guestSubText,
+                  { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 },
+                ]}
+              >
                 Inicia sesión para acceder a tus pedidos, puntos y recompensas
               </Text>
             </View>
@@ -547,192 +616,223 @@ export default function PantallaPerfil(props: any) {
         </Animated.View>
 
         {perfil?.id && (
-          <Animated.View style={[
-            estilos.seccionInfo,
-            {
-              paddingHorizontal: paddingHorizontal,
-              marginTop: 16,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideUpAnim }],
-            }
-          ]}>
+          <Animated.View
+            style={[
+              styles.infoSection,
+              {
+                paddingHorizontal: padding,
+                marginTop: 16,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideUpAnim }],
+              },
+            ]}
+          >
+            {/* Editar perfil - botón sutil */}
             <TouchableOpacity
               style={[
-                estilos.botonEditar,
+                styles.editButton,
                 {
                   paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 20,
-                  alignSelf: 'flex-end',
-                  marginBottom: 12,
-                  backgroundColor: modoEdicion ? Colores.margeVerde + '20' : Colores.margeRosa + '20',
-                  borderColor: modoEdicion ? Colores.margeVerde + '30' : Colores.margeRosa + '30',
-                  borderWidth: 1,
-                }
+                  backgroundColor: modoEdicion
+                    ? DESIGN.colors.verde + '12'
+                    : DESIGN.colors.surfaceHover,
+                  borderColor: modoEdicion
+                    ? DESIGN.colors.verde + '25'
+                    : DESIGN.colors.border,
+                },
               ]}
               onPress={() => setModoEdicion(!modoEdicion)}
               activeOpacity={0.7}
             >
-              <Text style={[
-                estilos.botonEditarTexto,
-                {
-                  color: modoEdicion ? Colores.margeVerde : Colores.margeRosa,
-                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  fontWeight: '600',
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.editButtonText,
+                  {
+                    color: modoEdicion ? DESIGN.colors.verde : DESIGN.colors.textSecondary,
+                    fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                  },
+                ]}
+              >
                 {modoEdicion ? '✖ Cerrar edición' : '✏️ Editar perfil'}
               </Text>
             </TouchableOpacity>
 
-            <View style={[
-              estilos.cardInfo,
-              {
-                backgroundColor: Colores.textoOscuro + '40',
-                borderRadius: isTablet ? 20 : isSmallPhone ? 12 : 16,
-                padding: isTablet ? 24 : isSmallPhone ? 14 : 18,
-                borderWidth: 1,
-                borderColor: Colores.textoClaro + '8',
-              }
-            ]}>
-              <View style={estilos.campo}>
-                <View style={estilos.labelContainer}>
-                  <Ionicons name="call-outline" size={isTablet ? 20 : 18} color={Colores.margeRosa} />
-                  <Text style={[estilos.label, { fontSize: labelSize, marginLeft: 8, color: Colores.textoClaro }]}>Teléfono</Text>
+            {/* Tarjeta de información - BLANCA */}
+            <View
+              style={[
+                styles.infoCard,
+                {
+                  borderRadius: isTablet ? 20 : isSmallPhone ? 12 : 16,
+                  padding: isTablet ? 24 : isSmallPhone ? 14 : 18,
+                  borderColor: DESIGN.colors.border,
+                  backgroundColor: DESIGN.colors.surface,
+                },
+              ]}
+            >
+              <View style={styles.field}>
+                <View style={styles.labelContainer}>
+                  <Ionicons
+                    name="call-outline"
+                    size={isTablet ? 20 : 18}
+                    color={DESIGN.colors.textSecondary}
+                  />
+                  <Text style={[styles.label, { fontSize: labelSize, marginLeft: 8 }]}>
+                    Teléfono
+                  </Text>
                 </View>
                 {modoEdicion ? (
                   <TextInput
-                    style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
+                    style={[styles.input, { fontSize: inputSize }]}
                     value={telefono}
                     onChangeText={setTelefono}
                     placeholder="Ej: 11 1234-5678"
-                    placeholderTextColor={Colores.textoClaro + '40'}
+                    placeholderTextColor={DESIGN.colors.textTertiary}
                     keyboardType="phone-pad"
-                    selectionColor={Colores.margeRosa}
+                    selectionColor={DESIGN.colors.accent}
                   />
                 ) : (
-                  <Text style={[estilos.valor, { fontSize: inputSize, color: Colores.textoClaro + '70' }]}>
+                  <Text style={[styles.value, { fontSize: inputSize }]}>
                     {telefono || 'No especificado'}
                   </Text>
                 )}
               </View>
 
-              <View style={estilos.campo}>
-                <View style={estilos.labelContainer}>
-                  <Ionicons name="location-outline" size={isTablet ? 20 : 18} color={Colores.margeRosa} />
-                  <Text style={[estilos.label, { fontSize: labelSize, marginLeft: 8, color: Colores.textoClaro }]}>Dirección</Text>
+              <View style={styles.field}>
+                <View style={styles.labelContainer}>
+                  <Ionicons
+                    name="location-outline"
+                    size={isTablet ? 20 : 18}
+                    color={DESIGN.colors.textSecondary}
+                  />
+                  <Text style={[styles.label, { fontSize: labelSize, marginLeft: 8 }]}>
+                    Dirección
+                  </Text>
                 </View>
                 {modoEdicion ? (
                   <>
-                    <View style={estilos.filaInputs}>
+                    <View style={styles.rowInputs}>
                       <TextInput
-                        style={[estilos.input, estilos.inputFlex, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputFlex, { fontSize: inputSize }]}
                         value={direccionCalle}
                         onChangeText={setDireccionCalle}
                         placeholder="Calle"
-                        placeholderTextColor={Colores.textoClaro + '40'}
-                        selectionColor={Colores.margeRosa}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                        selectionColor={DESIGN.colors.accent}
                       />
                       <TextInput
-                        style={[estilos.input, estilos.inputSmall, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputSmall, { fontSize: inputSize }]}
                         value={direccionNumero}
                         onChangeText={setDireccionNumero}
                         placeholder="N°"
-                        placeholderTextColor={Colores.textoClaro + '40'}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
                         keyboardType="numeric"
-                        selectionColor={Colores.margeRosa}
+                        selectionColor={DESIGN.colors.accent}
                       />
                     </View>
-                    <View style={estilos.filaInputs}>
+                    <View style={styles.rowInputs}>
                       <TextInput
-                        style={[estilos.input, estilos.inputFlex, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputFlex, { fontSize: inputSize }]}
                         value={direccionPiso}
                         onChangeText={setDireccionPiso}
                         placeholder="Piso (opcional)"
-                        placeholderTextColor={Colores.textoClaro + '40'}
-                        selectionColor={Colores.margeRosa}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                        selectionColor={DESIGN.colors.accent}
                       />
                       <TextInput
-                        style={[estilos.input, estilos.inputFlex, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputFlex, { fontSize: inputSize }]}
                         value={direccionDepartamento}
                         onChangeText={setDireccionDepartamento}
                         placeholder="Depto (opcional)"
-                        placeholderTextColor={Colores.textoClaro + '40'}
-                        selectionColor={Colores.margeRosa}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                        selectionColor={DESIGN.colors.accent}
                       />
                     </View>
-                    <View style={estilos.filaInputs}>
+                    <View style={styles.rowInputs}>
                       <TextInput
-                        style={[estilos.input, estilos.inputFlex, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputFlex, { fontSize: inputSize }]}
                         value={direccionBarrio}
                         onChangeText={setDireccionBarrio}
                         placeholder="Barrio"
-                        placeholderTextColor={Colores.textoClaro + '40'}
-                        selectionColor={Colores.margeRosa}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                        selectionColor={DESIGN.colors.accent}
                       />
                       <TextInput
-                        style={[estilos.input, estilos.inputFlex, { fontSize: inputSize, color: Colores.textoClaro }]}
+                        style={[styles.input, styles.inputFlex, { fontSize: inputSize }]}
                         value={direccionCiudad}
                         onChangeText={setDireccionCiudad}
                         placeholder="Ciudad"
-                        placeholderTextColor={Colores.textoClaro + '40'}
-                        selectionColor={Colores.margeRosa}
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                        selectionColor={DESIGN.colors.accent}
                       />
                     </View>
                     <TextInput
-                      style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
+                      style={[styles.input, { fontSize: inputSize }]}
                       value={direccionCodigoPostal}
                       onChangeText={setDireccionCodigoPostal}
                       placeholder="Código Postal"
-                      placeholderTextColor={Colores.textoClaro + '40'}
+                      placeholderTextColor={DESIGN.colors.textTertiary}
                       keyboardType="numeric"
-                      selectionColor={Colores.margeRosa}
+                      selectionColor={DESIGN.colors.accent}
                     />
                   </>
                 ) : (
-                  <Text style={[estilos.valor, { fontSize: inputSize, color: Colores.textoClaro + '70' }]}>
+                  <Text style={[styles.value, { fontSize: inputSize }]}>
                     {obtenerDireccionCompleta()}
                   </Text>
                 )}
               </View>
 
-              <View style={estilos.campo}>
-                <View style={estilos.labelContainer}>
-                  <Ionicons name="restaurant-outline" size={isTablet ? 20 : 18} color={Colores.margeRosa} />
-                  <Text style={[estilos.label, { fontSize: labelSize, marginLeft: 8, color: Colores.textoClaro }]}>Preferencias alimentarias</Text>
+              <View style={styles.field}>
+                <View style={styles.labelContainer}>
+                  <Ionicons
+                    name="restaurant-outline"
+                    size={isTablet ? 20 : 18}
+                    color={DESIGN.colors.textSecondary}
+                  />
+                  <Text style={[styles.label, { fontSize: labelSize, marginLeft: 8 }]}>
+                    Preferencias alimentarias
+                  </Text>
                 </View>
                 {modoEdicion ? (
                   <TextInput
-                    style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
+                    style={[styles.input, { fontSize: inputSize }]}
                     value={preferenciasComida}
                     onChangeText={setPreferenciasComida}
                     placeholder="Ej: Sin gluten, Vegano, etc."
-                    placeholderTextColor={Colores.textoClaro + '40'}
-                    selectionColor={Colores.margeRosa}
+                    placeholderTextColor={DESIGN.colors.textTertiary}
+                    selectionColor={DESIGN.colors.accent}
                   />
                 ) : (
-                  <Text style={[estilos.valor, { fontSize: inputSize, color: Colores.textoClaro + '70' }]}>
+                  <Text style={[styles.value, { fontSize: inputSize }]}>
                     {preferenciasComida || 'No especificadas'}
                   </Text>
                 )}
               </View>
 
-              <View style={estilos.campo}>
-                <View style={estilos.labelContainer}>
-                  <Ionicons name="card-outline" size={isTablet ? 20 : 18} color={Colores.margeRosa} />
-                  <Text style={[estilos.label, { fontSize: labelSize, marginLeft: 8, color: Colores.textoClaro }]}>Método de pago preferido</Text>
+              <View style={styles.field}>
+                <View style={styles.labelContainer}>
+                  <Ionicons
+                    name="card-outline"
+                    size={isTablet ? 20 : 18}
+                    color={DESIGN.colors.textSecondary}
+                  />
+                  <Text style={[styles.label, { fontSize: labelSize, marginLeft: 8 }]}>
+                    Método de pago preferido
+                  </Text>
                 </View>
                 {modoEdicion ? (
                   <TextInput
-                    style={[estilos.input, { fontSize: inputSize, color: Colores.textoClaro }]}
+                    style={[styles.input, { fontSize: inputSize }]}
                     value={metodoPago}
                     onChangeText={setMetodoPago}
                     placeholder="Ej: Tarjeta de crédito, Efectivo, Mercado Pago"
-                    placeholderTextColor={Colores.textoClaro + '40'}
-                    selectionColor={Colores.margeRosa}
+                    placeholderTextColor={DESIGN.colors.textTertiary}
+                    selectionColor={DESIGN.colors.accent}
                   />
                 ) : (
-                  <Text style={[estilos.valor, { fontSize: inputSize, color: Colores.textoClaro + '70' }]}>
+                  <Text style={[styles.value, { fontSize: inputSize }]}>
                     {metodoPago || 'No especificado'}
                   </Text>
                 )}
@@ -741,24 +841,33 @@ export default function PantallaPerfil(props: any) {
               {modoEdicion && (
                 <TouchableOpacity
                   style={[
-                    estilos.botonGuardar,
+                    styles.saveButton,
                     {
                       marginTop: 16,
                       paddingVertical: isTablet ? 14 : isSmallPhone ? 10 : 12,
                       borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                      backgroundColor: Colores.margeRosa,
-                    }
+                      backgroundColor: DESIGN.colors.accent,
+                    },
                   ]}
                   onPress={actualizarDatosPerfil}
                   disabled={cargandoActualizacion}
                   activeOpacity={0.7}
                 >
                   {cargandoActualizacion ? (
-                    <ActivityIndicator size="small" color={Colores.textoOscuro} />
+                    <ActivityIndicator size="small" color={DESIGN.colors.surface} />
                   ) : (
                     <>
-                      <Ionicons name="save-outline" size={isTablet ? 22 : 18} color={Colores.textoOscuro} />
-                      <Text style={[estilos.botonGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                      <Ionicons
+                        name="save-outline"
+                        size={isTablet ? 22 : 18}
+                        color={DESIGN.colors.surface}
+                      />
+                      <Text
+                        style={[
+                          styles.saveButtonText,
+                          { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 },
+                        ]}
+                      >
                         Guardar cambios
                       </Text>
                     </>
@@ -769,187 +878,298 @@ export default function PantallaPerfil(props: any) {
           </Animated.View>
         )}
 
-        <Animated.View style={[
-          estilos.menu,
-          {
-            paddingHorizontal: paddingHorizontal,
-            opacity: fadeAnim,
-            transform: [{ translateY: slideUpAnim }],
-            marginTop: isTablet ? 8 : 4,
-          }
-        ]}>
+        {/* Menú */}
+        <Animated.View
+          style={[
+            styles.menu,
+            {
+              paddingHorizontal: padding,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+              marginTop: isTablet ? 8 : 4,
+            },
+          ]}
+        >
           {!perfil?.id && (
             <TouchableOpacity
-              style={[estilos.menuItem, estilos.menuLogin, {
-                borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                borderWidth: 2,
-                borderColor: Colores.margeRosa,
-              }]}
+              style={[
+                styles.menuItem,
+                styles.menuLogin,
+                {
+                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                  padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                  borderWidth: 1.5,
+                  borderColor: DESIGN.colors.accent,
+                },
+              ]}
               onPress={navegarALogin}
               activeOpacity={0.7}
             >
-              <Ionicons name="log-in-outline" size={isTablet ? 28 : isSmallPhone ? 20 : 24} color={Colores.margeRosa} />
-              <Text style={[estilos.menuTexto, {
-                color: Colores.margeRosa,
-                fontWeight: 'bold',
-                fontSize: menuTextSize,
-                marginLeft: 12,
-                flex: 1,
-              }]}>
+              <Ionicons
+                name="log-in-outline"
+                size={isTablet ? 28 : isSmallPhone ? 20 : 24}
+                color={DESIGN.colors.accent}
+              />
+              <Text
+                style={[
+                  styles.menuText,
+                  {
+                    color: DESIGN.colors.accent,
+                    fontWeight: '700',
+                    fontSize: menuTextSize,
+                    marginLeft: 12,
+                    flex: 1,
+                  },
+                ]}
+              >
                 Iniciar Sesión
               </Text>
-              <Ionicons name="chevron-forward" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={Colores.textoClaro + '40'} />
+              <Ionicons
+                name="chevron-forward"
+                size={isTablet ? 24 : isSmallPhone ? 18 : 20}
+                color={DESIGN.colors.textTertiary}
+              />
             </TouchableOpacity>
           )}
 
           {perfil?.id && (
             <TouchableOpacity
-              style={[estilos.menuItem, {
-                borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                backgroundColor: Colores.textoOscuro + '40',
-                borderColor: Colores.textoClaro + '5',
-                marginBottom: 8,
-              }]}
+              style={[
+                styles.menuItem,
+                {
+                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                  padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                  marginBottom: 8,
+                  backgroundColor: DESIGN.colors.surface,
+                  borderColor: DESIGN.colors.border,
+                },
+              ]}
               onPress={() => props.navigation.navigate('NotificacionesUsuario')}
               activeOpacity={0.7}
             >
-              <View style={estilos.menuItemLeft}>
-                <Ionicons name="notifications-outline" size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={Colores.margeRosa} />
-                <Text style={[estilos.menuTexto, { fontSize: menuTextSize, marginLeft: 12, color: Colores.textoClaro }]}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={isTablet ? 26 : isSmallPhone ? 20 : 24}
+                  color={DESIGN.colors.textSecondary}
+                />
+                <Text style={[styles.menuText, { fontSize: menuTextSize, marginLeft: 12 }]}>
                   Notificaciones
                 </Text>
               </View>
-              <View style={estilos.menuItemRight}>
-                {notificacionesNoLeidas > 0 && (
-                  <View style={estilos.badgeNotificaciones}>
-                    <Text style={[estilos.badgeNotificacionesTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
-                      {notificacionesNoLeidas > 99 ? '99+' : notificacionesNoLeidas}
-                    </Text>
-                  </View>
-                )}
-                <Ionicons name="chevron-forward" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={Colores.textoClaro + '40'} />
+              <View style={styles.menuItemRight}>
+                <Ionicons
+                  name="chevron-forward"
+                  size={isTablet ? 24 : isSmallPhone ? 18 : 20}
+                  color={DESIGN.colors.textTertiary}
+                />
               </View>
             </TouchableOpacity>
           )}
 
-          {menuItems.map((item, index) => {
+          {menuItems.map((item) => {
             if (!item.show) return null;
             return (
               <TouchableOpacity
                 key={item.id}
-                style={[estilos.menuItem, {
-                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                  padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                  backgroundColor: Colores.textoOscuro + '40',
-                  borderColor: Colores.textoClaro + '5',
-                  marginBottom: 8,
-                }]}
-                onPress={() => props.navigation.navigate(item.navigate)}
+                style={[
+                  styles.menuItem,
+                  {
+                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                    padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                    marginBottom: 8,
+                    backgroundColor: DESIGN.colors.surface,
+                    borderColor: DESIGN.colors.border,
+                  },
+                ]}
+                onPress={() => handleNavigate(item)}
                 activeOpacity={0.7}
               >
-                <Ionicons name={item.icono as any} size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={item.color} />
-                <Text style={[estilos.menuTexto, {
-                  fontSize: menuTextSize,
-                  marginLeft: 12,
-                  flex: 1,
-                  color: Colores.textoClaro,
-                }]}>
+                <Ionicons
+                  name={item.icono as any}
+                  size={isTablet ? 26 : isSmallPhone ? 20 : 24}
+                  color={item.color}
+                />
+                <Text
+                  style={[
+                    styles.menuText,
+                    {
+                      fontSize: menuTextSize,
+                      marginLeft: 12,
+                      flex: 1,
+                    },
+                  ]}
+                >
                   {item.label}
                 </Text>
                 {item.subtitle && (
-                  <Text style={[estilos.menuValor, {
-                    fontSize: isTablet ? 13 : isSmallPhone ? 10 : 12,
-                    marginRight: 8,
-                    color: item.color,
-                  }]}>
+                  <Text
+                    style={[
+                      styles.menuSubtitle,
+                      {
+                        fontSize: isTablet ? 13 : isSmallPhone ? 10 : 12,
+                        marginRight: 8,
+                        color: item.color,
+                      },
+                    ]}
+                  >
                     {item.subtitle}
                   </Text>
                 )}
-                <Ionicons name="chevron-forward" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={Colores.textoClaro + '40'} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={isTablet ? 24 : isSmallPhone ? 18 : 20}
+                  color={DESIGN.colors.textTertiary}
+                />
               </TouchableOpacity>
             );
           })}
 
+          {/* Cerrar Sesión - Botón destacado pero elegante */}
           {perfil?.id && (
             <TouchableOpacity
-              style={[estilos.menuItem, estilos.menuCerrar, {
-                borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                marginTop: 8,
-                backgroundColor: Colores.secundario + '10',
-                borderColor: Colores.secundario + '20',
-              }]}
+              style={[
+                styles.menuItem,
+                styles.menuLogout,
+                {
+                  borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                  padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                  marginTop: 12,
+                  backgroundColor: DESIGN.colors.surface,
+                  borderColor: DESIGN.colors.accent + '30',
+                  borderWidth: 1.5,
+                },
+              ]}
               onPress={() => setMostrarModal(true)}
               activeOpacity={0.7}
             >
-              <Ionicons name="log-out-outline" size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={Colores.secundario} />
-              <Text style={[estilos.menuTexto, {
-                color: Colores.secundario,
-                fontSize: menuTextSize,
-                marginLeft: 12,
-              }]}>
-                Cerrar Sesión
-              </Text>
+              <View style={styles.menuItemLeft}>
+                <Ionicons
+                  name="log-out-outline"
+                  size={isTablet ? 28 : isSmallPhone ? 22 : 24}
+                  color={DESIGN.colors.accent}
+                />
+                <Text
+                  style={[
+                    styles.menuText,
+                    {
+                      color: DESIGN.colors.accent,
+                      fontSize: menuTextSize,
+                      marginLeft: 12,
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
+                  Cerrar Sesión
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={isTablet ? 24 : isSmallPhone ? 18 : 20}
+                color={DESIGN.colors.accent}
+              />
             </TouchableOpacity>
           )}
         </Animated.View>
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* Modal de confirmación - elegante */}
       <Modal visible={mostrarModal} transparent animationType="fade">
-        <View style={estilos.modalFondo}>
-          <View style={[
-            estilos.modal,
-            {
-              padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
-              borderRadius: isTablet ? 28 : 24,
-              borderColor: Colores.secundario + '40',
-              width: isTablet ? '60%' : '85%',
-            }
-          ]}>
-            <Text style={[estilos.modalIcono, { fontSize: isTablet ? 80 : 60 }]}>🚪</Text>
-            <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: Colores.textoClaro }]}>
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modal,
+              {
+                padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
+                borderRadius: isTablet ? 28 : 24,
+                borderColor: DESIGN.colors.border,
+                width: isTablet ? '60%' : '85%',
+                backgroundColor: DESIGN.colors.surface,
+              },
+            ]}
+          >
+            <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>🚪</Text>
+            <Text
+              style={[
+                styles.modalTitle,
+                {
+                  fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22,
+                  color: DESIGN.colors.text,
+                },
+              ]}
+            >
               Cerrar Sesión
             </Text>
-            <Text style={[estilos.modalTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: Colores.textoGris }]}>
+            <Text
+              style={[
+                styles.modalText,
+                {
+                  fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+                  color: DESIGN.colors.textSecondary,
+                },
+              ]}
+            >
               ¿Estás seguro de que quieres salir?
             </Text>
-            <View style={estilos.modalBotones}>
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalCancelar, {
-                  paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                  borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                }]}
+                style={[
+                  styles.modalButton,
+                  styles.modalCancel,
+                  {
+                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                    borderColor: DESIGN.colors.border,
+                    backgroundColor: DESIGN.colors.surfaceHover,
+                  },
+                ]}
                 onPress={() => setMostrarModal(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                <Text
+                  style={[
+                    styles.modalCancelText,
+                    {
+                      fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+                      color: DESIGN.colors.textSecondary,
+                    },
+                  ]}
+                >
                   Cancelar
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalConfirmar, {
-                  paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                  borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                  overflow: 'hidden',
-                }]}
+                style={[
+                  styles.modalButton,
+                  styles.modalConfirm,
+                  {
+                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                    overflow: 'hidden',
+                    backgroundColor: DESIGN.colors.accent,
+                  },
+                ]}
                 onPress={confirmarCerrarSesion}
                 activeOpacity={0.7}
               >
-                <LinearGradient
-                  colors={[Colores.secundario, Colores.secundarioOscuro]}
-                  style={estilos.modalConfirmarGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                <Ionicons
+                  name="log-out-outline"
+                  size={isTablet ? 22 : isSmallPhone ? 16 : 20}
+                  color={DESIGN.colors.surface}
+                />
+                <Text
+                  style={[
+                    styles.modalConfirmText,
+                    {
+                      fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+                      color: DESIGN.colors.surface,
+                    },
+                  ]}
                 >
-                  <Ionicons name="log-out-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={Colores.textoClaro} />
-                  <Text style={[estilos.modalConfirmarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-                    Cerrar Sesión
-                  </Text>
-                </LinearGradient>
+                  Cerrar Sesión
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -959,103 +1179,112 @@ export default function PantallaPerfil(props: any) {
   );
 }
 
-const estilos = StyleSheet.create({
-  contenedor: {
+// ============================================================
+// 🎨 ESTILOS - BLANCOS Y ELEGANTES
+// ============================================================
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
-    backgroundColor: Colores.textoOscuro,
+    backgroundColor: DESIGN.colors.fondo,
   },
-  fondoGradiente: {
+  background: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: DESIGN.colors.fondo,
   },
   scrollContent: {
     flexGrow: 1,
   },
-  encabezado: {
+  header: {
     alignItems: 'center',
   },
   avatarContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     marginBottom: 12,
-    shadowColor: Colores.margeRosa,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowColor: DESIGN.colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 6,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: DESIGN.colors.surface,
   },
   avatarEmoji: {
     fontWeight: 'bold',
-    color: Colores.margeRosa,
+    color: DESIGN.colors.accent,
   },
-  camaraIcon: {
+  cameraIcon: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: Colores.margeRosa,
+    backgroundColor: DESIGN.colors.accent,
     borderRadius: 20,
     padding: 4,
     borderWidth: 2,
-    borderColor: Colores.textoOscuro,
+    borderColor: DESIGN.colors.surface,
   },
-  subiendoImagen: {
+  uploadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 4,
-    backgroundColor: Colores.textoOscuro + '60',
+    backgroundColor: DESIGN.colors.surface + '95',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    shadowColor: DESIGN.colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  subiendoImagenTexto: {
-    color: Colores.margeRosa,
+  uploadingText: {
+    color: DESIGN.colors.accent,
     fontSize: 12,
   },
-  nombre: {
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
+  name: {
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    color: DESIGN.colors.text,
   },
-  correo: {
+  email: {
     marginTop: 4,
+    color: DESIGN.colors.textSecondary,
   },
-  puntos: {
+  pointsContainer: {
     marginTop: 12,
+    backgroundColor: DESIGN.colors.surfaceHover,
     borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: Colores.margeRosa,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  puntosGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
+  },
+  pointsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  puntosIcono: {
+  pointsIcon: {
     fontSize: 16,
   },
-  puntosTexto: {
-    fontWeight: 'bold',
-    color: Colores.textoOscuro,
+  pointsText: {
+    fontWeight: '600',
+    color: DESIGN.colors.text,
   },
-  nivel: {
+  levelBadge: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
+    backgroundColor: DESIGN.colors.surface,
   },
-  nivelTexto: {
-    fontWeight: 'bold',
+  levelText: {
+    fontWeight: '600',
   },
   stats: {
     flexDirection: 'row',
@@ -1063,11 +1292,16 @@ const estilos = StyleSheet.create({
     width: '100%',
     marginTop: 16,
     paddingHorizontal: 10,
-    backgroundColor: Colores.textoOscuro + '30',
+    backgroundColor: DESIGN.colors.surface,
     borderRadius: 16,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '5',
+    borderColor: DESIGN.colors.border,
+    shadowColor: DESIGN.colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   statItem: {
     alignItems: 'center',
@@ -1075,42 +1309,53 @@ const estilos = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    backgroundColor: Colores.textoClaro + '10',
+    backgroundColor: DESIGN.colors.border,
   },
-  statValor: {
-    fontWeight: 'bold',
+  statValue: {
+    fontWeight: '700',
+    color: DESIGN.colors.text,
   },
   statLabel: {
     marginTop: 4,
+    color: DESIGN.colors.textSecondary,
   },
-  mensajeInvitado: {
+  guestMessage: {
     alignItems: 'center',
     marginTop: 16,
     paddingHorizontal: 20,
   },
-  textoInvitado: {
-    fontWeight: 'bold',
+  guestText: {
+    fontWeight: '700',
     marginTop: 8,
     textAlign: 'center',
+    color: DESIGN.colors.text,
   },
-  textoInvitadoSub: {
+  guestSubText: {
     textAlign: 'center',
     marginTop: 4,
+    color: DESIGN.colors.textSecondary,
   },
-  seccionInfo: {
+  infoSection: {
     marginBottom: 8,
   },
-  botonEditar: {
+  editButton: {
     alignSelf: 'flex-end',
+    marginBottom: 12,
     borderWidth: 1,
   },
-  botonEditarTexto: {
-    fontWeight: '600',
+  editButtonText: {
+    fontWeight: '500',
   },
-  cardInfo: {
+  infoCard: {
     borderWidth: 1,
+    backgroundColor: DESIGN.colors.surface,
+    shadowColor: DESIGN.colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  campo: {
+  field: {
     marginBottom: 14,
   },
   labelContainer: {
@@ -1120,17 +1365,20 @@ const estilos = StyleSheet.create({
   },
   label: {
     fontWeight: '600',
+    color: DESIGN.colors.text,
   },
-  valor: {
+  value: {
     paddingVertical: 6,
+    color: DESIGN.colors.textSecondary,
   },
   input: {
-    backgroundColor: Colores.textoOscuro + '40',
+    backgroundColor: DESIGN.colors.surfaceHover,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
+    borderColor: DESIGN.colors.border,
+    color: DESIGN.colors.text,
   },
   inputFlex: {
     flex: 1,
@@ -1138,20 +1386,25 @@ const estilos = StyleSheet.create({
   inputSmall: {
     width: '30%',
   },
-  filaInputs: {
+  rowInputs: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 8,
   },
-  botonGuardar: {
+  saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    shadowColor: DESIGN.colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  botonGuardarTexto: {
-    fontWeight: 'bold',
-    color: Colores.textoOscuro,
+  saveButtonText: {
+    fontWeight: '700',
+    color: DESIGN.colors.surface,
   },
   menu: {
     marginTop: 8,
@@ -1172,20 +1425,25 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  menuTexto: {
+  menuText: {
     fontWeight: '500',
+    color: DESIGN.colors.text,
   },
-  menuValor: {
+  menuSubtitle: {
     fontWeight: '600',
   },
   menuLogin: {
-    backgroundColor: Colores.margeRosa + '10',
+    backgroundColor: DESIGN.colors.accent + '06',
   },
-  menuCerrar: {
-    borderWidth: 1,
+  menuLogout: {
+    shadowColor: DESIGN.colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  badgeNotificaciones: {
-    backgroundColor: Colores.secundario,
+  badgeNotifications: {
+    backgroundColor: DESIGN.colors.accent,
     borderRadius: 12,
     minWidth: 22,
     height: 22,
@@ -1193,69 +1451,67 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  badgeNotificacionesTexto: {
-    color: Colores.textoClaro,
+  badgeNotificationsText: {
+    color: DESIGN.colors.surface,
     fontWeight: 'bold',
   },
-  modalFondo: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modal: {
-    backgroundColor: Colores.fondoOscuro,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
+    shadowColor: DESIGN.colors.cardShadowHeavy,
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 1,
+    shadowRadius: 40,
+    elevation: 20,
   },
-  modalIcono: {
+  modalIcon: {
     marginBottom: 12,
   },
-  modalTitulo: {
-    fontWeight: 'bold',
+  modalTitle: {
+    fontWeight: '700',
     marginBottom: 8,
+    color: DESIGN.colors.text,
   },
-  modalTexto: {
+  modalText: {
     textAlign: 'center',
     marginBottom: 24,
+    color: DESIGN.colors.textSecondary,
   },
-  modalBotones: {
+  modalButtons: {
     flexDirection: 'row',
     gap: 12,
     width: '100%',
   },
-  modalBoton: {
+  modalButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
   },
-  modalCancelar: {
-    backgroundColor: Colores.textoOscuro + '50',
+  modalCancel: {
+    backgroundColor: DESIGN.colors.surfaceHover,
     borderWidth: 1,
-    borderColor: Colores.textoClaro + '10',
   },
-  modalCancelarTexto: {
-    color: Colores.textoClaro,
+  modalCancelText: {
+    color: DESIGN.colors.textSecondary,
     fontWeight: '600',
   },
-  modalConfirmar: {
-    overflow: 'hidden',
-  },
-  modalConfirmarGradient: {
+  modalConfirm: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    width: '100%',
-    height: '100%',
   },
-  modalConfirmarTexto: {
-    color: Colores.textoClaro,
-    fontWeight: 'bold',
+  modalConfirmText: {
+    color: DESIGN.colors.surface,
+    fontWeight: '700',
   },
 });

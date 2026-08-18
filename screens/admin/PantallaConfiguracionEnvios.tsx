@@ -1,5 +1,5 @@
-// screens/admin/PantallaConfiguracionEnvios.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+// screens/admin/PantallaConfiguracionEnvios.tsx - COMPLETO Y OPTIMIZADO
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -10,12 +10,13 @@ import {
     Alert,
     ActivityIndicator,
     Dimensions,
-    RefreshControl
+    RefreshControl,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../../lib/supabase';
 import { tiendaEnvios } from '../../stores/tiendaEnvios';
 import { Colores } from '../../lib/colores';
 
@@ -39,15 +40,41 @@ const COLORS = {
     grisClaro: '#B0B0B0',
 };
 
+// ============================================================
+// 🎯 HOOK RESPONSIVE
+// ============================================================
+const useResponsive = () => {
+    const isTablet = width >= 768;
+    const isSmallPhone = width < 375;
+
+    return {
+        isTablet,
+        isSmallPhone,
+        paddingHorizontal: isTablet ? 40 : isSmallPhone ? 12 : 16,
+        tituloSize: isTablet ? 26 : isSmallPhone ? 18 : 22,
+        labelSize: isTablet ? 14 : isSmallPhone ? 11 : 13,
+        inputSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
+        botonPadding: isTablet ? 14 : isSmallPhone ? 10 : 12,
+        cardPadding: isTablet ? 20 : isSmallPhone ? 12 : 16,
+    };
+};
+
+// ============================================================
+// 🏠 COMPONENTE PRINCIPAL
+// ============================================================
 export default function PantallaConfiguracionEnvios(props: any) {
     const insets = useSafeAreaInsets();
+    const responsive = useResponsive();
+
+    // ✅ Store
     const {
         configuracion,
         configuracionLocal,
         cargando,
         cargarConfiguracion,
         actualizarConfiguracion,
-        actualizarUbicacionLocal
+        actualizarUbicacionLocal,
+        recargar,
     } = tiendaEnvios();
 
     // ✅ Estados del formulario
@@ -66,170 +93,204 @@ export default function PantallaConfiguracionEnvios(props: any) {
     const [direccionLocal, setDireccionLocal] = useState('');
     const [telefonoLocal, setTelefonoLocal] = useState('');
 
-    const isTablet = width >= 768;
-    const paddingHorizontal = isTablet ? 40 : 16;
-
-    // ✅ CARGAR DATOS AL MONTAR
+    // ============================================================
+    // 🎬 EFECTOS
+    // ============================================================
     useEffect(() => {
-        console.log('🔄 [ConfigEnvios] Montando componente...');
+        console.log('🔄 [Pantalla] Montando componente...');
         cargarDatos();
     }, []);
 
-    // ✅ FUNCIÓN PARA CARGAR DATOS
-    const cargarDatos = async () => {
-        console.log('📦 [ConfigEnvios] Cargando datos...');
-        await cargarConfiguracion();
-        // Los estados se actualizarán automáticamente por el useEffect de abajo
-    };
-
     // ✅ SINCRONIZAR ESTADOS LOCALES CON EL STORE
     useEffect(() => {
-        console.log('🔄 [ConfigEnvios] Store actualizado, sincronizando UI...');
+        console.log('🔄 [Pantalla] Store actualizado, sincronizando UI...');
 
         if (configuracion) {
-            console.log('📦 Configuración:', configuracion);
-            setPrecioBase(String(configuracion.precio_base || 0));
-            setPrecioPorKm(String(configuracion.precio_por_km || 0));
-            setDistanciaMinima(String(configuracion.distancia_minima_km || 0));
-            setDistanciaMaxima(String(configuracion.distancia_maxima_km || 0));
-            setActivo(configuracion.activo !== undefined ? configuracion.activo : true);
+            console.log('📦 [Pantalla] Configuración recibida:', configuracion);
+            setPrecioBase(String(configuracion.precio_base ?? 0));
+            setPrecioPorKm(String(configuracion.precio_por_km ?? 0));
+            setDistanciaMinima(String(configuracion.distancia_minima_km ?? 0));
+            setDistanciaMaxima(String(configuracion.distancia_maxima_km ?? 0));
+            setActivo(configuracion.activo ?? true);
         }
 
         if (configuracionLocal) {
-            console.log('📦 Ubicación:', configuracionLocal);
+            console.log('📦 [Pantalla] Ubicación recibida:', configuracionLocal);
             setNombreLocal(configuracionLocal.nombre || '');
-            setLatitudLocal(String(configuracionLocal.latitud || 0));
-            setLongitudLocal(String(configuracionLocal.longitud || 0));
+            setLatitudLocal(String(configuracionLocal.latitud ?? 0));
+            setLongitudLocal(String(configuracionLocal.longitud ?? 0));
             setDireccionLocal(configuracionLocal.direccion || '');
             setTelefonoLocal(configuracionLocal.telefono || '');
         }
-    }, [configuracion, configuracionLocal]); // ✅ Se ejecuta cuando cambia el store
+    }, [configuracion, configuracionLocal]);
 
-    // ✅ GUARDAR CONFIGURACIÓN DE ENVÍOS
+    // ============================================================
+    // 🔄 FUNCIONES DE CARGA
+    // ============================================================
+    const cargarDatos = async () => {
+        console.log('📦 [Pantalla] Cargando datos desde el store...');
+        await cargarConfiguracion();
+        console.log('✅ [Pantalla] Carga de datos completada');
+    };
+
+    const onRefresh = async () => {
+        console.log('🔄 [Pantalla] Pull-to-refresh...');
+        setRefrescando(true);
+        await recargar();
+        setRefrescando(false);
+        console.log('✅ [Pantalla] Refresh completado');
+    };
+
+    // ============================================================
+    // ✅ VALIDACIONES
+    // ============================================================
+    const validarNumero = (valor: string, nombre: string): number | null => {
+        if (valor === '') return null;
+        const num = parseFloat(valor.replace(',', '.'));
+        if (isNaN(num)) {
+            Alert.alert('Error', `${nombre} debe ser un número válido`);
+            return null;
+        }
+        return num;
+    };
+
+    // ============================================================
+    // 💾 GUARDAR CONFIGURACIÓN DE ENVÍOS
+    // ============================================================
     const guardarConfiguracion = async () => {
-        console.log('💾 [ConfigEnvios] Guardando configuración...');
+        console.log('💾 [Pantalla] Guardando configuración de envíos...');
 
         const datos: any = {};
-        if (precioBase) datos.precio_base = parseFloat(precioBase);
-        if (precioPorKm) datos.precio_por_km = parseFloat(precioPorKm);
-        if (distanciaMinima) datos.distancia_minima_km = parseFloat(distanciaMinima);
-        if (distanciaMaxima) datos.distancia_maxima_km = parseFloat(distanciaMaxima);
+
+        const precioBaseNum = validarNumero(precioBase, 'Precio base');
+        if (precioBaseNum !== null) datos.precio_base = precioBaseNum;
+
+        const precioPorKmNum = validarNumero(precioPorKm, 'Precio por km');
+        if (precioPorKmNum !== null) datos.precio_por_km = precioPorKmNum;
+
+        const distanciaMinNum = validarNumero(distanciaMinima, 'Distancia mínima');
+        if (distanciaMinNum !== null) datos.distancia_minima_km = distanciaMinNum;
+
+        const distanciaMaxNum = validarNumero(distanciaMaxima, 'Distancia máxima');
+        if (distanciaMaxNum !== null) {
+            if (distanciaMaxNum <= 0) {
+                Alert.alert('Error', 'La distancia máxima debe ser mayor a 0');
+                return;
+            }
+            datos.distancia_maxima_km = distanciaMaxNum;
+        }
+
         datos.activo = activo;
 
-        // ✅ Validaciones
-        if (datos.precio_base !== undefined && datos.precio_base < 0) {
-            Alert.alert('Error', 'El precio base no puede ser negativo');
-            return;
-        }
-        if (datos.precio_por_km !== undefined && datos.precio_por_km < 0) {
-            Alert.alert('Error', 'El precio por km no puede ser negativo');
-            return;
-        }
-        if (datos.distancia_maxima_km !== undefined && datos.distancia_maxima_km <= 0) {
-            Alert.alert('Error', 'La distancia máxima debe ser mayor a 0');
+        if (Object.keys(datos).length === 0) {
+            Alert.alert('Error', 'No hay datos para guardar');
             return;
         }
 
         setGuardando(true);
 
         try {
-            // ✅ Actualizar en Supabase directamente
-            const { error } = await supabase
-                .from('configuracion_envios')
-                .update({
-                    ...datos,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', 1);
+            const resultado = await actualizarConfiguracion(datos);
 
-            if (error) {
-                console.error('❌ Error en Supabase:', error);
-                Alert.alert('❌ Error', error.message);
+            if (!resultado.success) {
+                Alert.alert('❌ Error', resultado.error || 'No se pudo actualizar');
                 setGuardando(false);
                 return;
             }
 
-            console.log('✅ Actualizado en Supabase');
-
-            // ✅ RECARGAR DATOS DESDE SUPABASE
-            await cargarConfiguracion();
-
-            // ✅ Los estados se actualizarán automáticamente por el useEffect
-
+            // ✅ El store ya actualizó el estado, solo mostramos el mensaje
             Alert.alert('✅ Éxito', 'Configuración de envíos actualizada correctamente');
 
+            // ✅ Forzar recarga para asegurar que todo esté sincronizado
+            await recargar();
+
         } catch (error: any) {
-            console.error('❌ Error:', error);
+            console.error('❌ [Pantalla] Error:', error);
             Alert.alert('❌ Error', error.message || 'No se pudo actualizar');
         } finally {
             setGuardando(false);
         }
     };
 
-    // ✅ GUARDAR UBICACIÓN DEL LOCAL
+    // ============================================================
+    // 💾 GUARDAR UBICACIÓN DEL LOCAL
+    // ============================================================
     const guardarUbicacion = async () => {
-        console.log('💾 [ConfigEnvios] Guardando ubicación...');
+        console.log('💾 [Pantalla] Guardando ubicación del local...');
 
-        const datos: any = {};
-        if (nombreLocal) datos.nombre = nombreLocal;
-        if (latitudLocal) datos.latitud = parseFloat(latitudLocal);
-        if (longitudLocal) datos.longitud = parseFloat(longitudLocal);
-        if (direccionLocal) datos.direccion = direccionLocal;
-        if (telefonoLocal) datos.telefono = telefonoLocal;
+        const lat = parseFloat(latitudLocal.replace(',', '.'));
+        const lng = parseFloat(longitudLocal.replace(',', '.'));
 
-        // ✅ Validaciones
-        if (datos.latitud !== undefined && (datos.latitud < -90 || datos.latitud > 90)) {
+        if (isNaN(lat) || isNaN(lng)) {
+            Alert.alert('Error', 'Latitud y Longitud deben ser números válidos');
+            return;
+        }
+
+        if (lat < -90 || lat > 90) {
             Alert.alert('Error', 'La latitud debe estar entre -90 y 90');
             return;
         }
-        if (datos.longitud !== undefined && (datos.longitud < -180 || datos.longitud > 180)) {
+        if (lng < -180 || lng > 180) {
             Alert.alert('Error', 'La longitud debe estar entre -180 y 180');
             return;
         }
 
+        const datos: any = {
+            nombre: nombreLocal.trim() || 'Krusty Burger',
+            latitud: lat,
+            longitud: lng,
+        };
+
+        if (direccionLocal.trim()) {
+            datos.direccion = direccionLocal.trim();
+        }
+        if (telefonoLocal.trim()) {
+            datos.telefono = telefonoLocal.trim();
+        }
+
+        console.log('📦 [Pantalla] Datos a guardar:', datos);
+
         setGuardando(true);
 
         try {
-            // ✅ Actualizar en Supabase directamente
-            const { error } = await supabase
-                .from('configuracion_local')
-                .update({
-                    ...datos,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', 1);
+            const resultado = await actualizarUbicacionLocal(datos);
 
-            if (error) {
-                console.error('❌ Error en Supabase:', error);
-                Alert.alert('❌ Error', error.message);
+            if (!resultado.success) {
+                Alert.alert('❌ Error', resultado.error || 'No se pudo actualizar');
                 setGuardando(false);
                 return;
             }
 
-            console.log('✅ Ubicación actualizada en Supabase');
-
-            // ✅ RECARGAR DATOS
-            await cargarConfiguracion();
-
+            // ✅ El store ya actualizó el estado, solo mostramos el mensaje
             Alert.alert('✅ Éxito', 'Ubicación actualizada correctamente');
 
+            // ✅ Forzar recarga para asegurar que todo esté sincronizado
+            await recargar();
+
         } catch (error: any) {
-            console.error('❌ Error:', error);
-            Alert.alert('❌ Error', error.message);
+            console.error('❌ [Pantalla] Error:', error);
+            Alert.alert('❌ Error', error.message || 'No se pudo actualizar');
         } finally {
             setGuardando(false);
         }
     };
 
-    // ✅ PULL-TO-REFRESH
-    const onRefresh = async () => {
-        console.log('🔄 [ConfigEnvios] Pull-to-refresh...');
-        setRefrescando(true);
-        await cargarDatos();
-        setRefrescando(false);
-        console.log('✅ [ConfigEnvios] Refresh completado');
+    // ============================================================
+    // 📊 EJEMPLO DE CÁLCULO
+    // ============================================================
+    const calcularEjemplo = (distancia: number) => {
+        const base = parseFloat(precioBase || '0');
+        const porKm = parseFloat(precioPorKm || '0');
+        const minKm = parseFloat(distanciaMinima || '0');
+        const extra = Math.max(0, distancia - minKm);
+        return base + (extra * porKm);
     };
 
+    const distanciaMax = parseFloat(distanciaMaxima || '10');
+
+    // ============================================================
+    // ⏳ LOADING
+    // ============================================================
     if (cargando && !refrescando) {
         return (
             <View style={estilos.loadingContainer}>
@@ -239,6 +300,9 @@ export default function PantallaConfiguracionEnvios(props: any) {
         );
     }
 
+    // ============================================================
+    // 🏗️ RENDER PRINCIPAL
+    // ============================================================
     return (
         <View style={estilos.contenedor}>
             <LinearGradient
@@ -251,9 +315,9 @@ export default function PantallaConfiguracionEnvios(props: any) {
             <View style={[
                 estilos.header,
                 {
-                    paddingTop: insets.top + (isTablet ? 20 : 10),
-                    paddingHorizontal: paddingHorizontal,
-                    paddingBottom: isTablet ? 16 : 12,
+                    paddingTop: insets.top + (responsive.isTablet ? 20 : 10),
+                    paddingHorizontal: responsive.paddingHorizontal,
+                    paddingBottom: responsive.isTablet ? 16 : 12,
                 }
             ]}>
                 <TouchableOpacity
@@ -261,280 +325,317 @@ export default function PantallaConfiguracionEnvios(props: any) {
                     onPress={() => props.navigation.goBack()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={COLORS.blanco} />
+                    <Ionicons name="arrow-back" size={responsive.isTablet ? 28 : 24} color={COLORS.blanco} />
                 </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: isTablet ? 26 : 22 }]}>
+
+                <Text style={[estilos.titulo, { fontSize: responsive.tituloSize }]}>
                     🚚 Configuración de Envíos
                 </Text>
+
                 <TouchableOpacity
                     style={[estilos.botonRecargar, {
-                        padding: isTablet ? 10 : 8,
-                        borderRadius: isTablet ? 10 : 8,
+                        padding: responsive.isTablet ? 10 : 8,
+                        borderRadius: responsive.isTablet ? 10 : 8,
                     }]}
                     onPress={onRefresh}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="refresh-outline" size={isTablet ? 24 : 20} color={COLORS.amarillo} />
+                    <Ionicons name="refresh-outline" size={responsive.isTablet ? 24 : 20} color={COLORS.amarillo} />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={[
-                    estilos.scroll,
-                    {
-                        paddingHorizontal: paddingHorizontal,
-                        paddingBottom: insets.bottom + 150,
-                        paddingTop: 8,
-                    }
-                ]}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refrescando}
-                        onRefresh={onRefresh}
-                        tintColor={COLORS.amarillo}
-                        colors={[COLORS.amarillo]}
-                    />
-                }
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
             >
-                {/* ✅ SECCIÓN: CONFIGURACIÓN DE ENVÍOS */}
-                <View style={estilos.seccion}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                        💰 Tarifas de envío
-                    </Text>
-
-                    <View style={estilos.card}>
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13 }]}>Precio base ($)</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={precioBase}
-                            onChangeText={setPrecioBase}
-                            placeholder="1000.00"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={[
+                        estilos.scroll,
+                        {
+                            paddingHorizontal: responsive.paddingHorizontal,
+                            paddingBottom: insets.bottom + 120,
+                            paddingTop: 8,
+                        }
+                    ]}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refrescando}
+                            onRefresh={onRefresh}
+                            tintColor={COLORS.amarillo}
+                            colors={[COLORS.amarillo]}
                         />
+                    }
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/* SECCIÓN: CONFIGURACIÓN DE ENVÍOS */}
+                    <View style={estilos.seccion}>
+                        <Text style={[estilos.seccionTitulo, { fontSize: responsive.isTablet ? 18 : 16 }]}>
+                            💰 Tarifas de envío
+                        </Text>
 
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Precio por km extra ($)</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={precioPorKm}
-                            onChangeText={setPrecioPorKm}
-                            placeholder="150.00"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
+                        <View style={[estilos.card, { padding: responsive.cardPadding }]}>
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize }]}>
+                                Precio base ($)
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={precioBase}
+                                onChangeText={setPrecioBase}
+                                placeholder="1000.00"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
 
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Distancia mínima incluida (km)</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={distanciaMinima}
-                            onChangeText={setDistanciaMinima}
-                            placeholder="0"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Precio por km extra ($)
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={precioPorKm}
+                                onChangeText={setPrecioPorKm}
+                                placeholder="150.00"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
 
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Distancia máxima de cobertura (km)</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={distanciaMaxima}
-                            onChangeText={setDistanciaMaxima}
-                            placeholder="10"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Distancia mínima incluida (km)
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={distanciaMinima}
+                                onChangeText={setDistanciaMinima}
+                                placeholder="0"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
 
-                        <View style={estilos.activoContainer}>
-                            <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginBottom: 0 }]}>Activo</Text>
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Distancia máxima de cobertura (km)
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={distanciaMaxima}
+                                onChangeText={setDistanciaMaxima}
+                                placeholder="10"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <View style={estilos.activoContainer}>
+                                <Text style={[estilos.label, { fontSize: responsive.labelSize, marginBottom: 0 }]}>
+                                    Activo
+                                </Text>
+                                <TouchableOpacity
+                                    style={[
+                                        estilos.toggle,
+                                        {
+                                            backgroundColor: activo ? COLORS.verdeClaro : COLORS.gris,
+                                            width: responsive.isTablet ? 52 : 48,
+                                            height: responsive.isTablet ? 30 : 28,
+                                            borderRadius: responsive.isTablet ? 15 : 14,
+                                        }
+                                    ]}
+                                    onPress={() => setActivo(!activo)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[
+                                        estilos.toggleKnob,
+                                        {
+                                            width: responsive.isTablet ? 24 : 22,
+                                            height: responsive.isTablet ? 24 : 22,
+                                            borderRadius: responsive.isTablet ? 12 : 11,
+                                            transform: [{ translateX: activo ? (responsive.isTablet ? 24 : 22) : 2 }],
+                                            backgroundColor: COLORS.blanco,
+                                        }
+                                    ]} />
+                                </TouchableOpacity>
+                            </View>
+
                             <TouchableOpacity
-                                style={[
-                                    estilos.toggle,
-                                    {
-                                        backgroundColor: activo ? COLORS.verdeClaro : COLORS.gris,
-                                        width: isTablet ? 52 : 48,
-                                        height: isTablet ? 30 : 28,
-                                        borderRadius: isTablet ? 15 : 14,
-                                    }
-                                ]}
-                                onPress={() => setActivo(!activo)}
+                                style={[estilos.botonGuardar, {
+                                    paddingVertical: responsive.botonPadding,
+                                    borderRadius: responsive.isTablet ? 14 : 12,
+                                    marginTop: 16,
+                                    backgroundColor: COLORS.amarillo,
+                                }]}
+                                onPress={guardarConfiguracion}
+                                disabled={guardando}
                                 activeOpacity={0.7}
                             >
-                                <View style={[
-                                    estilos.toggleKnob,
-                                    {
-                                        width: isTablet ? 24 : 22,
-                                        height: isTablet ? 24 : 22,
-                                        borderRadius: isTablet ? 12 : 11,
-                                        transform: [{ translateX: activo ? (isTablet ? 24 : 22) : 2 }],
-                                        backgroundColor: COLORS.blanco,
-                                    }
-                                ]} />
+                                {guardando ? (
+                                    <ActivityIndicator size="small" color={COLORS.negro} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="save-outline" size={responsive.isTablet ? 22 : 18} color={COLORS.negro} />
+                                        <Text style={[estilos.botonGuardarTexto, { fontSize: responsive.isTablet ? 16 : 14 }]}>
+                                            Guardar tarifas
+                                        </Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                         </View>
-
-                        <TouchableOpacity
-                            style={[estilos.botonGuardar, {
-                                paddingVertical: isTablet ? 14 : 12,
-                                borderRadius: isTablet ? 14 : 12,
-                                marginTop: 16,
-                            }]}
-                            onPress={guardarConfiguracion}
-                            disabled={guardando}
-                            activeOpacity={0.7}
-                        >
-                            {guardando ? (
-                                <ActivityIndicator size="small" color={COLORS.negro} />
-                            ) : (
-                                <>
-                                    <Ionicons name="save-outline" size={isTablet ? 22 : 18} color={COLORS.negro} />
-                                    <Text style={[estilos.botonGuardarTexto, { fontSize: isTablet ? 16 : 14 }]}>
-                                        Guardar tarifas
-                                    </Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
                     </View>
-                </View>
 
-                {/* ✅ SECCIÓN: UBICACIÓN DEL LOCAL */}
-                <View style={estilos.seccion}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                        📍 Ubicación del local
-                    </Text>
-
-                    <View style={estilos.card}>
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13 }]}>Nombre del local</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={nombreLocal}
-                            onChangeText={setNombreLocal}
-                            placeholder="Krusty Burger"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            selectionColor={COLORS.amarillo}
-                        />
-
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Latitud</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={latitudLocal}
-                            onChangeText={setLatitudLocal}
-                            placeholder="-34.776484410467525"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
-
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Longitud</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={longitudLocal}
-                            onChangeText={setLongitudLocal}
-                            placeholder="-58.29220250409459"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="decimal-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
-
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Dirección</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={direccionLocal}
-                            onChangeText={setDireccionLocal}
-                            placeholder="Av. Principal 1234, CABA"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            selectionColor={COLORS.amarillo}
-                        />
-
-                        <Text style={[estilos.label, { fontSize: isTablet ? 14 : 13, marginTop: 12 }]}>Teléfono</Text>
-                        <TextInput
-                            style={[estilos.input, { fontSize: isTablet ? 16 : 14 }]}
-                            value={telefonoLocal}
-                            onChangeText={setTelefonoLocal}
-                            placeholder="11 1234-5678"
-                            placeholderTextColor={COLORS.grisClaro + '60'}
-                            keyboardType="phone-pad"
-                            selectionColor={COLORS.amarillo}
-                        />
-
-                        <TouchableOpacity
-                            style={[estilos.botonGuardar, {
-                                paddingVertical: isTablet ? 14 : 12,
-                                borderRadius: isTablet ? 14 : 12,
-                                marginTop: 16,
-                                backgroundColor: COLORS.amarilloClaro,
-                            }]}
-                            onPress={guardarUbicacion}
-                            disabled={guardando}
-                            activeOpacity={0.7}
-                        >
-                            {guardando ? (
-                                <ActivityIndicator size="small" color={COLORS.negro} />
-                            ) : (
-                                <>
-                                    <Ionicons name="save-outline" size={isTablet ? 22 : 18} color={COLORS.negro} />
-                                    <Text style={[estilos.botonGuardarTexto, { fontSize: isTablet ? 16 : 14 }]}>
-                                        Guardar ubicación
-                                    </Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* ✅ SECCIÓN: EJEMPLO DE CÁLCULO */}
-                <View style={estilos.seccion}>
-                    <Text style={[estilos.seccionTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                        📊 Ejemplo de cálculo
-                    </Text>
-
-                    <View style={estilos.card}>
-                        <View style={estilos.ejemploFila}>
-                            <Text style={[estilos.ejemploLabel, { fontSize: isTablet ? 14 : 13 }]}>Distancia: 1 km</Text>
-                            <Text style={[estilos.ejemploValor, { fontSize: isTablet ? 16 : 14, color: COLORS.amarillo }]}>
-                                ${(parseFloat(precioBase || '0') + Math.max(0, 1 - parseFloat(distanciaMinima || '0')) * parseFloat(precioPorKm || '0')).toFixed(2)}
-                            </Text>
-                        </View>
-                        <View style={estilos.ejemploFila}>
-                            <Text style={[estilos.ejemploLabel, { fontSize: isTablet ? 14 : 13 }]}>Distancia: 3 km</Text>
-                            <Text style={[estilos.ejemploValor, { fontSize: isTablet ? 16 : 14, color: COLORS.amarillo }]}>
-                                ${(parseFloat(precioBase || '0') + Math.max(0, 3 - parseFloat(distanciaMinima || '0')) * parseFloat(precioPorKm || '0')).toFixed(2)}
-                            </Text>
-                        </View>
-                        <View style={estilos.ejemploFila}>
-                            <Text style={[estilos.ejemploLabel, { fontSize: isTablet ? 14 : 13 }]}>Distancia: 5 km</Text>
-                            <Text style={[estilos.ejemploValor, { fontSize: isTablet ? 16 : 14, color: COLORS.amarillo }]}>
-                                ${(parseFloat(precioBase || '0') + Math.max(0, 5 - parseFloat(distanciaMinima || '0')) * parseFloat(precioPorKm || '0')).toFixed(2)}
-                            </Text>
-                        </View>
-                        <View style={estilos.ejemploFila}>
-                            <Text style={[estilos.ejemploLabel, { fontSize: isTablet ? 14 : 13 }]}>Distancia: {parseFloat(distanciaMaxima || '10')} km</Text>
-                            <Text style={[estilos.ejemploValor, { fontSize: isTablet ? 16 : 14, color: COLORS.verdeClaro }]}>
-                                ${(parseFloat(precioBase || '0') + Math.max(0, parseFloat(distanciaMaxima || '10') - parseFloat(distanciaMinima || '0')) * parseFloat(precioPorKm || '0')).toFixed(2)}
-                            </Text>
-                        </View>
-                        <Text style={[estilos.ejemploNota, { fontSize: isTablet ? 12 : 11 }]}>
-                            ⚠️ Costos calculados con la configuración actual.
+                    {/* SECCIÓN: UBICACIÓN DEL LOCAL */}
+                    <View style={estilos.seccion}>
+                        <Text style={[estilos.seccionTitulo, { fontSize: responsive.isTablet ? 18 : 16 }]}>
+                            📍 Ubicación del local
                         </Text>
-                        <Text style={[estilos.ejemploNota, { fontSize: isTablet ? 12 : 11 }]}>
-                            🔄 Los cambios se reflejan al guardar.
+
+                        <View style={[estilos.card, { padding: responsive.cardPadding }]}>
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize }]}>
+                                Nombre del local
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={nombreLocal}
+                                onChangeText={setNombreLocal}
+                                placeholder="Krusty Burger"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Latitud
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={latitudLocal}
+                                onChangeText={setLatitudLocal}
+                                placeholder="-34.776484410467525"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Longitud
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={longitudLocal}
+                                onChangeText={setLongitudLocal}
+                                placeholder="-58.29220250409459"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="decimal-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Dirección
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={direccionLocal}
+                                onChangeText={setDireccionLocal}
+                                placeholder="Av. Principal 1234, CABA"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 12 }]}>
+                                Teléfono
+                            </Text>
+                            <TextInput
+                                style={[estilos.input, { fontSize: responsive.inputSize }]}
+                                value={telefonoLocal}
+                                onChangeText={setTelefonoLocal}
+                                placeholder="11 1234-5678"
+                                placeholderTextColor={COLORS.grisClaro + '40'}
+                                keyboardType="phone-pad"
+                                selectionColor={COLORS.amarillo}
+                            />
+
+                            <TouchableOpacity
+                                style={[estilos.botonGuardar, {
+                                    paddingVertical: responsive.botonPadding,
+                                    borderRadius: responsive.isTablet ? 14 : 12,
+                                    marginTop: 16,
+                                    backgroundColor: COLORS.amarilloClaro,
+                                }]}
+                                onPress={guardarUbicacion}
+                                disabled={guardando}
+                                activeOpacity={0.7}
+                            >
+                                {guardando ? (
+                                    <ActivityIndicator size="small" color={COLORS.negro} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="save-outline" size={responsive.isTablet ? 22 : 18} color={COLORS.negro} />
+                                        <Text style={[estilos.botonGuardarTexto, { fontSize: responsive.isTablet ? 16 : 14 }]}>
+                                            Guardar ubicación
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* SECCIÓN: EJEMPLO DE CÁLCULO */}
+                    <View style={estilos.seccion}>
+                        <Text style={[estilos.seccionTitulo, { fontSize: responsive.isTablet ? 18 : 16 }]}>
+                            📊 Ejemplo de cálculo
+                        </Text>
+
+                        <View style={[estilos.card, { padding: responsive.cardPadding }]}>
+                            <View style={estilos.ejemploFila}>
+                                <Text style={[estilos.ejemploLabel, { fontSize: responsive.labelSize }]}>
+                                    Distancia: 1 km
+                                </Text>
+                                <Text style={[estilos.ejemploValor, { fontSize: responsive.inputSize, color: COLORS.amarillo }]}>
+                                    ${calcularEjemplo(1).toFixed(2)}
+                                </Text>
+                            </View>
+                            <View style={estilos.ejemploFila}>
+                                <Text style={[estilos.ejemploLabel, { fontSize: responsive.labelSize }]}>
+                                    Distancia: 3 km
+                                </Text>
+                                <Text style={[estilos.ejemploValor, { fontSize: responsive.inputSize, color: COLORS.amarillo }]}>
+                                    ${calcularEjemplo(3).toFixed(2)}
+                                </Text>
+                            </View>
+                            <View style={estilos.ejemploFila}>
+                                <Text style={[estilos.ejemploLabel, { fontSize: responsive.labelSize }]}>
+                                    Distancia: 5 km
+                                </Text>
+                                <Text style={[estilos.ejemploValor, { fontSize: responsive.inputSize, color: COLORS.amarillo }]}>
+                                    ${calcularEjemplo(5).toFixed(2)}
+                                </Text>
+                            </View>
+                            <View style={estilos.ejemploFila}>
+                                <Text style={[estilos.ejemploLabel, { fontSize: responsive.labelSize }]}>
+                                    Distancia: {distanciaMax} km
+                                </Text>
+                                <Text style={[estilos.ejemploValor, { fontSize: responsive.inputSize, color: COLORS.verdeClaro }]}>
+                                    ${calcularEjemplo(distanciaMax).toFixed(2)}
+                                </Text>
+                            </View>
+                            <Text style={[estilos.ejemploNota, { fontSize: responsive.isTablet ? 12 : 11 }]}>
+                                ⚠️ Costos calculados con la configuración actual.
+                            </Text>
+                            <Text style={[estilos.ejemploNota, { fontSize: responsive.isTablet ? 12 : 11 }]}>
+                                🔄 Los cambios se reflejan al guardar.
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* INDICADOR DE ÚLTIMA ACTUALIZACIÓN */}
+                    <View style={estilos.footerInfo}>
+                        <Text style={[estilos.footerInfoTexto, { fontSize: responsive.isTablet ? 12 : 10 }]}>
+                            {configuracion?.updated_at ?
+                                `Última actualización: ${new Date(configuracion.updated_at).toLocaleString('es-AR')}` :
+                                'Cargando...'
+                            }
                         </Text>
                     </View>
-                </View>
-
-                {/* ✅ INDICADOR DE ÚLTIMA ACTUALIZACIÓN */}
-                <View style={estilos.footerInfo}>
-                    <Text style={[estilos.footerInfoTexto, { fontSize: isTablet ? 12 : 10 }]}>
-                        {configuracion?.updated_at ?
-                            `Última actualización: ${new Date(configuracion.updated_at).toLocaleString('es-AR')}` :
-                            'Cargando...'
-                        }
-                    </Text>
-                </View>
-            </ScrollView>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
