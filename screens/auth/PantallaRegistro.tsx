@@ -1,4 +1,5 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+﻿// screens/auth/PantallaRegistro.tsx - COMPLETO CON CHECKBOX Y PRIVACIDAD
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,17 +11,15 @@ import {
   Platform,
   ScrollView,
   Animated,
-  Dimensions,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Colores } from '../../lib/colores';
+import { DISENO, useResponsive } from '../../lib/colores';
 import { useToast, Toast } from '../../components/Toast';
 
-const { width, height } = Dimensions.get('window');
 const logoImage = require('../../assets/logo-krusty.png');
 
 export default function PantallaRegistro(props: any) {
@@ -30,10 +29,11 @@ export default function PantallaRegistro(props: any) {
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
+  const [terminosAceptados, setTerminosAceptados] = useState(false);
   const { registrarCliente } = tiendaAutenticacion();
-  const insets = useSafeAreaInsets();
 
-  // ✅ Toast
+  const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
   const toast = useToast();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,29 +42,20 @@ export default function PantallaRegistro(props: any) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
     ]).start();
   }, []);
 
   const manejarRegistro = async () => {
-    // ✅ Validaciones con toast - USANDO LOS ATAJOS
     if (!nombre || !correo || !telefono || !contrasena) {
       toast.advertencia('Completa todos los campos');
+      return;
+    }
+
+    if (!terminosAceptados) {
+      toast.advertencia('Debes aceptar los Términos y Condiciones');
       return;
     }
 
@@ -93,7 +84,6 @@ export default function PantallaRegistro(props: any) {
     });
     setCargando(false);
 
-    // ✅ Manejar el resultado
     if (typeof resultado === 'string' && resultado) {
       toast.error(resultado);
     } else if (resultado && typeof resultado === 'object' && 'error' in resultado) {
@@ -106,22 +96,22 @@ export default function PantallaRegistro(props: any) {
     }
   };
 
-  const isTablet = width >= 768;
-  const isSmallPhone = width < 375;
+  const isTablet = responsive.isTablet;
+  const isSmallPhone = responsive.isSmallPhone;
 
-  const logoSize = isTablet ? 100 : isSmallPhone ? 70 : 85;
-  const tituloSize = isTablet ? 36 : isSmallPhone ? 26 : 30;
-  const subtituloSize = isTablet ? 16 : isSmallPhone ? 12 : 14;
-  const labelSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
-  const inputSize = isTablet ? 17 : isSmallPhone ? 14 : 15;
-  const buttonTextSize = isTablet ? 19 : isSmallPhone ? 15 : 17;
-  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 20 : 24;
-  const paddingTop = insets.top + (isTablet ? 30 : 15);
+  const logoSize = responsive.getValor({ tablet: 100, normal: 85, small: 70 });
+  const tituloSize = responsive.getValor({ tablet: 36, normal: 30, small: 26 });
+  const subtituloSize = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
+  const labelSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
+  const inputSize = responsive.getValor({ tablet: 17, normal: 15, small: 14 });
+  const buttonTextSize = responsive.getValor({ tablet: 19, normal: 17, small: 15 });
+  const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
+  const paddingTop = insets.top + responsive.spacing(15);
 
   return (
     <>
       <LinearGradient
-        colors={[Colores.frinkBlanco, Colores.frinkGris]}
+        colors={[DISENO.colors.surface, DISENO.colors.surfaceHover]}
         style={estilos.contenedor}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -173,10 +163,9 @@ export default function PantallaRegistro(props: any) {
               </Text>
             </Animated.View>
 
-            {/* BANNER DESTACADO */}
             <View style={estilos.bannerPuntosContainer}>
               <LinearGradient
-                colors={[Colores.primario, Colores.primarioOscuro]}
+                colors={[DISENO.colors.accentSecondary, DISENO.colors.accentSecondaryLight]}
                 style={estilos.bannerPuntosGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -219,7 +208,7 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name="person-outline"
                   size={22}
-                  color={Colores.frinkGris}
+                  color={DISENO.colors.textTertiary}
                   style={estilos.inputIcon}
                 />
                 <TextInput
@@ -227,8 +216,8 @@ export default function PantallaRegistro(props: any) {
                   value={nombre}
                   onChangeText={setNombre}
                   placeholder="Tu nombre completo"
-                  placeholderTextColor={Colores.frinkGris + '60'}
-                  selectionColor={Colores.frinkAzul}
+                  placeholderTextColor={DISENO.colors.textTertiary}
+                  selectionColor={DISENO.colors.accent}
                 />
               </View>
 
@@ -244,7 +233,7 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name="mail-outline"
                   size={22}
-                  color={Colores.frinkGris}
+                  color={DISENO.colors.textTertiary}
                   style={estilos.inputIcon}
                 />
                 <TextInput
@@ -252,10 +241,10 @@ export default function PantallaRegistro(props: any) {
                   value={correo}
                   onChangeText={setCorreo}
                   placeholder="tucorreo@ejemplo.com"
-                  placeholderTextColor={Colores.frinkGris + '60'}
+                  placeholderTextColor={DISENO.colors.textTertiary}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  selectionColor={Colores.frinkAzul}
+                  selectionColor={DISENO.colors.accent}
                 />
               </View>
 
@@ -271,7 +260,7 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name="call-outline"
                   size={22}
-                  color={Colores.frinkGris}
+                  color={DISENO.colors.textTertiary}
                   style={estilos.inputIcon}
                 />
                 <TextInput
@@ -279,9 +268,9 @@ export default function PantallaRegistro(props: any) {
                   value={telefono}
                   onChangeText={setTelefono}
                   placeholder="Tu número de teléfono"
-                  placeholderTextColor={Colores.frinkGris + '60'}
+                  placeholderTextColor={DISENO.colors.textTertiary}
                   keyboardType="phone-pad"
-                  selectionColor={Colores.frinkAzul}
+                  selectionColor={DISENO.colors.accent}
                 />
               </View>
 
@@ -297,7 +286,7 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name="lock-closed-outline"
                   size={22}
-                  color={Colores.frinkGris}
+                  color={DISENO.colors.textTertiary}
                   style={estilos.inputIcon}
                 />
                 <TextInput
@@ -305,23 +294,71 @@ export default function PantallaRegistro(props: any) {
                   value={contrasena}
                   onChangeText={setContrasena}
                   placeholder="Mínimo 6 caracteres"
-                  placeholderTextColor={Colores.frinkGris + '60'}
+                  placeholderTextColor={DISENO.colors.textTertiary}
                   secureTextEntry={!mostrarContrasena}
-                  selectionColor={Colores.frinkAzul}
+                  selectionColor={DISENO.colors.accent}
                 />
                 <TouchableOpacity
                   onPress={() => setMostrarContrasena(!mostrarContrasena)}
                   style={estilos.eyeButton}
                 >
                   <Ionicons
-                    name={
-                      mostrarContrasena ? 'eye-outline' : 'eye-off-outline'
-                    }
+                    name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                     size={22}
-                    color={Colores.frinkGris}
+                    color={DISENO.colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
+
+              {/* ✅ CHECKBOX DE TÉRMINOS */}
+              <TouchableOpacity
+                style={estilos.terminosCheckboxContainer}
+                onPress={() => setTerminosAceptados(!terminosAceptados)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    estilos.checkbox,
+                    terminosAceptados && estilos.checkboxActivo,
+                    {
+                      borderColor: terminosAceptados
+                        ? DISENO.colors.accent
+                        : DISENO.colors.border,
+                      backgroundColor: terminosAceptados
+                        ? DISENO.colors.accent
+                        : 'transparent',
+                    },
+                  ]}
+                >
+                  {terminosAceptados && (
+                    <Ionicons
+                      name="checkmark"
+                      size={16}
+                      color={DISENO.colors.surface}
+                    />
+                  )}
+                </View>
+                <Text style={[estilos.terminosCheckboxTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                  Acepto los{' '}
+                  <Text
+                    style={estilos.terminosLink}
+                    onPress={() => props.navigation.navigate('Terminos')}
+                  >
+                    Términos y Condiciones
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              {/* ✅ ENLACE A POLÍTICA DE PRIVACIDAD */}
+              <TouchableOpacity
+                style={estilos.privacidadContainer}
+                onPress={() => props.navigation.navigate('Privacidad')}
+                activeOpacity={0.7}
+              >
+                <Text style={[estilos.privacidadTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                  📄 Ver <Text style={estilos.privacidadDestacado}>Política de Privacidad</Text>
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={estilos.boton}
@@ -330,14 +367,14 @@ export default function PantallaRegistro(props: any) {
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={[Colores.frinkAmarillo, Colores.frinkAzul]}
+                  colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
                   style={estilos.botonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   {cargando ? (
                     <ActivityIndicator
-                      color={Colores.frinkBlanco}
+                      color={DISENO.colors.surface}
                       size="small"
                     />
                   ) : (
@@ -345,7 +382,7 @@ export default function PantallaRegistro(props: any) {
                       <Ionicons
                         name="person-add"
                         size={buttonTextSize + 4}
-                        color={Colores.frinkBlanco}
+                        color={DISENO.colors.surface}
                       />
                       <Text
                         style={[
@@ -393,7 +430,7 @@ export default function PantallaRegistro(props: any) {
                 <Ionicons
                   name="person-outline"
                   size={20}
-                  color={Colores.frinkGris}
+                  color={DISENO.colors.textTertiary}
                 />
                 <Text
                   style={[
@@ -404,30 +441,11 @@ export default function PantallaRegistro(props: any) {
                   Continuar como invitado
                 </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={estilos.terminosContainer}
-                onPress={() => toast.info('Función en desarrollo')}
-                activeOpacity={0.6}
-              >
-                <Text
-                  style={[
-                    estilos.terminosTexto,
-                    { fontSize: isTablet ? 12 : 10 },
-                  ]}
-                >
-                  Al registrarte, aceptas nuestros{' '}
-                  <Text style={estilos.terminosDestacado}>
-                    Términos y Condiciones
-                  </Text>
-                </Text>
-              </TouchableOpacity>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>
 
-      {/* ✅ Toast */}
       <Toast
         visible={toast.visible}
         mensaje={toast.mensaje}
@@ -441,6 +459,7 @@ export default function PantallaRegistro(props: any) {
 const estilos = StyleSheet.create({
   contenedor: {
     flex: 1,
+    backgroundColor: DISENO.colors.fondo,
   },
   keyboardView: {
     flex: 1,
@@ -455,11 +474,9 @@ const estilos = StyleSheet.create({
   },
   logoWrapper: {
     marginBottom: 12,
-    shadowColor: Colores.frinkAzul,
-    shadowOffset: { width: 0, height: 6 },
+    ...DISENO.shadow.lg,
+    shadowColor: DISENO.colors.accent,
     shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 12,
   },
   logoImage: {
     backgroundColor: 'transparent',
@@ -467,11 +484,11 @@ const estilos = StyleSheet.create({
   },
   titulo: {
     fontWeight: '900',
-    color: Colores.frinkAzul,
+    color: DISENO.colors.accent,
     letterSpacing: 2,
   },
   subtitulo: {
-    color: Colores.frinkAzul + '80',
+    color: DISENO.colors.textSecondary,
     marginTop: 4,
     fontWeight: '300',
     letterSpacing: 0.5,
@@ -481,11 +498,9 @@ const estilos = StyleSheet.create({
     marginVertical: 12,
     borderRadius: 14,
     overflow: 'hidden',
-    elevation: 6,
-    shadowColor: Colores.primario,
-    shadowOffset: { width: 0, height: 3 },
+    ...DISENO.shadow.md,
+    shadowColor: DISENO.colors.accentSecondary,
     shadowOpacity: 0.3,
-    shadowRadius: 10,
   },
   bannerPuntosGradient: {
     flexDirection: 'row',
@@ -500,29 +515,35 @@ const estilos = StyleSheet.create({
     flex: 1,
   },
   bannerPuntosTitulo: {
-    color: Colores.textoOscuro,
+    color: DISENO.colors.text,
     fontWeight: 'bold',
   },
   bannerPuntosDesc: {
-    color: Colores.textoOscuro + '80',
+    color: DISENO.colors.textSecondary,
     marginTop: 2,
   },
   formulario: {
     width: '100%',
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    ...DISENO.shadow.md,
+    borderWidth: 1,
+    borderColor: DISENO.colors.border,
   },
   label: {
     fontWeight: '600',
-    color: Colores.frinkAzul,
+    color: DISENO.colors.text,
     marginBottom: 6,
     letterSpacing: 0.5,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colores.textoClaro,
+    backgroundColor: DISENO.colors.fondo,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colores.frinkGris + '30',
+    borderColor: DISENO.colors.border,
     paddingHorizontal: 14,
     height: 54,
   },
@@ -530,7 +551,7 @@ const estilos = StyleSheet.create({
     marginRight: 12,
   },
   input: {
-    color: Colores.frinkAzul,
+    color: DISENO.colors.text,
     paddingVertical: 12,
     paddingRight: 8,
     flex: 1,
@@ -538,15 +559,56 @@ const estilos = StyleSheet.create({
   eyeButton: {
     padding: 4,
   },
+  // ✅ CHECKBOX
+  terminosCheckboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActivo: {
+    borderWidth: 2,
+  },
+  terminosCheckboxTexto: {
+    color: DISENO.colors.textSecondary,
+    fontWeight: '400',
+    flex: 1,
+  },
+  terminosLink: {
+    color: DISENO.colors.accent,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  // ✅ PRIVACIDAD
+  privacidadContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  privacidadTexto: {
+    color: DISENO.colors.textTertiary,
+    textAlign: 'center',
+    fontWeight: '400',
+  },
+  privacidadDestacado: {
+    color: DISENO.colors.accent,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
   boton: {
-    marginTop: 24,
+    marginTop: 16,
     borderRadius: 14,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: Colores.frinkAmarillo,
-    shadowOffset: { width: 0, height: 6 },
+    ...DISENO.shadow.md,
+    shadowColor: DISENO.colors.accent,
     shadowOpacity: 0.4,
-    shadowRadius: 16,
   },
   botonGradient: {
     flexDirection: 'row',
@@ -558,7 +620,7 @@ const estilos = StyleSheet.create({
   },
   textoBoton: {
     fontWeight: '800',
-    color: Colores.frinkBlanco,
+    color: DISENO.colors.surface,
     letterSpacing: 1.5,
   },
   enlacesContainer: {
@@ -566,11 +628,11 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
   },
   enlace: {
-    color: Colores.frinkGris,
+    color: DISENO.colors.textSecondary,
     fontWeight: '500',
   },
   enlaceDestacado: {
-    color: Colores.frinkAzul,
+    color: DISENO.colors.accent,
     fontWeight: '700',
   },
   separadorContainer: {
@@ -582,10 +644,10 @@ const estilos = StyleSheet.create({
   separador: {
     flex: 1,
     height: 1,
-    backgroundColor: Colores.frinkGris + '30',
+    backgroundColor: DISENO.colors.border,
   },
   separadorTexto: {
-    color: Colores.frinkGris + '60',
+    color: DISENO.colors.textTertiary,
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
@@ -598,26 +660,12 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colores.frinkGris + '20',
-    backgroundColor: Colores.textoClaro + '80',
+    borderColor: DISENO.colors.border,
+    backgroundColor: DISENO.colors.surfaceHover,
   },
   botonInvitadoTexto: {
-    color: Colores.frinkGris,
+    color: DISENO.colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.5,
-  },
-  terminosContainer: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  terminosTexto: {
-    color: Colores.frinkAzul + '70',
-    textAlign: 'center',
-    fontWeight: '400',
-  },
-  terminosDestacado: {
-    color: Colores.frinkAzul,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });

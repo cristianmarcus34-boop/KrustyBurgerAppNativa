@@ -1,13 +1,8 @@
-
 // deno-lint-ignore-file no-import-prefix
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
+
+// ✅ AHORA USA EL ALIAS "std/"
+import { serve } from 'https://raw.githubusercontent.com/denoland/deno_std/0.224.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// ... el resto de tu código queda IGUAL ...
-
-// ... el resto de tu código ...
-
-// ... el resto de tu código igual ...
 
 // ============================================================
 // TIPOS
@@ -89,7 +84,7 @@ function _mapearEstado(mpStatus: string): string {
 }
 
 // ============================================================
-// 1. WEBHOOK - Mercado Pago → Supabase
+// 1. WEBHOOK
 // ============================================================
 
 async function manejarWebhook(body: WebhookPayload): Promise<RespuestaAPI> {
@@ -133,7 +128,7 @@ async function manejarWebhook(body: WebhookPayload): Promise<RespuestaAPI> {
 }
 
 // ============================================================
-// 2. CREAR PREFERENCIA - App → Supabase → Mercado Pago
+// 2. CREAR PREFERENCIA
 // ============================================================
 
 async function crearPreferencia(datos: DatosCrearPreferencia): Promise<RespuestaAPI> {
@@ -248,7 +243,7 @@ async function crearPreferencia(datos: DatosCrearPreferencia): Promise<Respuesta
 }
 
 // ============================================================
-// 3. VERIFICAR ESTADO - App → Supabase
+// 3. VERIFICAR ESTADO
 // ============================================================
 
 async function verificarEstado(pedidoId: number): Promise<RespuestaAPI> {
@@ -286,7 +281,6 @@ serve(async (req: Request) => {
 
         console.log(`📥 ${req.method} /${path}`)
 
-        // WEBHOOK
         if (path === 'webhook') {
             if (req.method !== 'POST') {
                 return new Response('Method not allowed', { status: 405 })
@@ -299,7 +293,6 @@ serve(async (req: Request) => {
             })
         }
 
-        // CREAR PREFERENCIA
         if (path === 'crear-preferencia') {
             if (req.method !== 'POST') {
                 return new Response('Method not allowed', { status: 405 })
@@ -312,7 +305,6 @@ serve(async (req: Request) => {
             })
         }
 
-        // VERIFICAR ESTADO
         if (path === 'estado') {
             if (req.method !== 'GET') {
                 return new Response('Method not allowed', { status: 405 })
@@ -334,7 +326,6 @@ serve(async (req: Request) => {
             })
         }
 
-        // HEALTH CHECK
         if (path === 'health') {
             return new Response(JSON.stringify({
                 estado: 'OK',

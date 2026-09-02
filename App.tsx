@@ -1,4 +1,4 @@
-// App.tsx - COMPLETO CON STACK.GROUP
+// App.tsx
 import './setup.js';
 
 // ✅ FILTRO DE ERRORES DE TEXTO
@@ -32,15 +32,21 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View, Platform } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as Linking from 'expo-linking';
+
+// ✅ IMPORTACIONES DE STORES Y SERVICIOS
 import { tiendaAutenticacion } from './stores/tiendaAutenticacion';
 import { tiendaCarrito } from './stores/tiendaCarrito';
-import { Colores } from './lib/colores';
+import { notificacionService, setNavigationRef } from './services/notificacionService';
 
-// ✅ IMPORTACIÓN DE LA BARRA INFERIOR PROFESIONAL
+// ✅ IMPORTACIÓN DE LA BARRA INFERIOR
 import BarraInferiorProfesional from './components/BarraInferiorProfesional';
 
-// ✅ IMPORTAR setNavigationRef DEL SERVICIO
-import { notificacionService, setNavigationRef } from './services/notificacionService';
+// ✅ IMPORTACIÓN DE CONFIGURACIÓN CENTRALIZADA
+import {
+  temaApp,
+  HEADER_OPTIONS,
+  HEADER_LEGAL_OPTIONS
+} from './config/tema';
 
 // ✅ IMPORTACIONES DE PANTALLAS
 import PantallaBienvenida from './screens/PantallaBienvenida';
@@ -69,37 +75,12 @@ import PantallaGestionOfertas from './screens/admin/PantallaGestionOfertas';
 import PantallaDetalleOferta from './screens/cliente/PantallaDetalleOferta';
 import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEnvios';
 import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
-
 import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
+import PantallaTerminos from './screens/cliente/PantallaTerminos';
+import PantallaPrivacidad from './screens/cliente/PantallaPrivacidad';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
-// ✅ TEMÁTICA KRUSTY
-const temaApp = {
-  primario: '#E53935',
-  secundario: '#F5C518',
-  verde: '#43A047',
-  fondo: '#1A1A1A',
-  texto: '#FFFFFF',
-  textoGris: '#B0B0B0',
-  gradiente: ['#E53935', '#F5C518'] as const,
-};
-
-// ✅ HEADER CONFIGURACIÓN
-const HEADER_OPTIONS = {
-  headerStyle: {
-    backgroundColor: temaApp.fondo,
-  },
-  headerTintColor: temaApp.texto,
-  headerTitleStyle: {
-    fontWeight: 'bold' as const,
-    fontSize: 18,
-    color: temaApp.secundario,
-  },
-  headerBackTitle: '',
-  headerShadowVisible: false,
-};
 
 // ✅ CONFIGURACIÓN DE DEEP LINKING
 const linking = {
@@ -117,6 +98,8 @@ const linking = {
       Registro: 'registro',
       Bienvenida: 'bienvenida',
       Ofertas: 'ofertas',
+      Terminos: 'terminos',
+      Privacidad: 'privacidad',
       Principal: {
         screens: {
           Inicio: 'inicio',
@@ -138,7 +121,7 @@ const renderTabBar = (props: any) => {
   return <BarraInferiorProfesional {...props} />;
 };
 
-// ✅ PESTAÑAS DEL CLIENTE - CON CARRITO
+// ✅ PESTAÑAS DEL CLIENTE
 function PestanasCliente() {
   const { cantidadTotal } = tiendaCarrito();
   const cantidad = cantidadTotal();
@@ -265,15 +248,12 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!sesion ? (
           <Stack.Group>
+            {/* ✅ PRIMERA PANTALLA - BIENVENIDA */}
             <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
             <Stack.Screen name="Login" component={PantallaLogin} />
             <Stack.Screen name="Registro" component={PantallaRegistro} />
             <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
-            <Stack.Screen
-              name="NuevaContrasena"
-              component={PantallaNuevaContrasena}
-              initialParams={{ token: null }}
-            />
+            <Stack.Screen name="NuevaContrasena" component={PantallaNuevaContrasena} initialParams={{ token: null }} />
             <Stack.Screen name="Principal" component={PestanasCliente} />
             <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
             <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
@@ -283,11 +263,21 @@ export default function App() {
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
             <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+            {/* ✅ PANTALLAS LEGALES - DENTRO DEL GRUPO */}
+            <Stack.Screen
+              name="Terminos"
+              component={PantallaTerminos}
+              options={HEADER_LEGAL_OPTIONS}
+            />
+            <Stack.Screen
+              name="Privacidad"
+              component={PantallaPrivacidad}
+              options={HEADER_LEGAL_OPTIONS}
+            />
           </Stack.Group>
         ) : esAdministrador ? (
           <Stack.Group>
             <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
-
             <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
             <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
             <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
@@ -305,10 +295,32 @@ export default function App() {
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
             <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+            {/* ✅ PANTALLAS LEGALES - DENTRO DEL GRUPO ADMIN */}
+            <Stack.Screen
+              name="Terminos"
+              component={PantallaTerminos}
+              options={HEADER_LEGAL_OPTIONS}
+            />
+            <Stack.Screen
+              name="Privacidad"
+              component={PantallaPrivacidad}
+              options={HEADER_LEGAL_OPTIONS}
+            />
           </Stack.Group>
         ) : esRepartidor ? (
           <Stack.Group>
             <Stack.Screen name="Transmision" component={PantallaTransmision} />
+            {/* ✅ PANTALLAS LEGALES - DENTRO DEL GRUPO REPARTIDOR */}
+            <Stack.Screen
+              name="Terminos"
+              component={PantallaTerminos}
+              options={HEADER_LEGAL_OPTIONS}
+            />
+            <Stack.Screen
+              name="Privacidad"
+              component={PantallaPrivacidad}
+              options={HEADER_LEGAL_OPTIONS}
+            />
           </Stack.Group>
         ) : (
           <Stack.Group>
@@ -321,6 +333,17 @@ export default function App() {
             <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
             <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
             <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+            {/* ✅ PANTALLAS LEGALES - DENTRO DEL GRUPO CLIENTE */}
+            <Stack.Screen
+              name="Terminos"
+              component={PantallaTerminos}
+              options={HEADER_LEGAL_OPTIONS}
+            />
+            <Stack.Screen
+              name="Privacidad"
+              component={PantallaPrivacidad}
+              options={HEADER_LEGAL_OPTIONS}
+            />
           </Stack.Group>
         )}
       </Stack.Navigator>

@@ -1,14 +1,13 @@
 // lib/colores.ts
+import { Dimensions, useWindowDimensions } from 'react-native';
+import { useCallback } from 'react';
 
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO COMPLETO
-// ============================================================
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ============================================================
 // 📐 TAMAÑOS Y ESPACIADOS
 // ============================================================
 export const Sizes = {
-  // Espaciados
   spacing: {
     xs: 4,
     sm: 8,
@@ -18,7 +17,6 @@ export const Sizes = {
     '2xl': 48,
     '3xl': 64,
   },
-  // Radios de borde
   radius: {
     xs: 4,
     sm: 8,
@@ -28,7 +26,6 @@ export const Sizes = {
     '2xl': 28,
     full: 999,
   },
-  // Tamaños de iconos
   icon: {
     xs: 12,
     sm: 16,
@@ -38,7 +35,6 @@ export const Sizes = {
     '2xl': 32,
     '3xl': 40,
   },
-  // Tamaños de avatar
   avatar: {
     sm: 32,
     md: 44,
@@ -46,7 +42,6 @@ export const Sizes = {
     xl: 72,
     '2xl': 96,
   },
-  // Altura de componentes
   height: {
     input: 48,
     button: 50,
@@ -54,11 +49,17 @@ export const Sizes = {
     header: 64,
     tabBar: 72,
   },
-  // Anchos máximos
   maxWidth: {
     container: 480,
     card: 360,
     modal: 400,
+  },
+  // ✅ RESPONSIVE
+  screen: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    isTablet: SCREEN_WIDTH >= 768,
+    isSmallPhone: SCREEN_WIDTH < 375,
   },
 };
 
@@ -450,7 +451,7 @@ export const Colores = {
       texto: '#FFFFFF',
       gradiente: ['#43A047', '#42A5F5'] as const,
     },
-    // ✅ NUEVA TEMÁTICA CLARA
+    // ✅ TEMÁTICA CLARA (para perfil elegante)
     claro: {
       primario: '#E53935',
       secundario: '#F5C518',
@@ -459,11 +460,11 @@ export const Colores = {
       texto: '#1A1A1A',
       textoSecundario: 'rgba(0,0,0,0.55)',
       textoTerciario: 'rgba(0,0,0,0.30)',
-      gradiente: ['#E53935', '#F5C518'] as const,
-      sombra: 'rgba(0,0,0,0.06)',
       borde: 'rgba(0,0,0,0.06)',
+      sombra: 'rgba(0,0,0,0.06)',
+      gradiente: ['#E53935', '#F5C518'] as const,
     },
-    // ✅ NUEVA TEMÁTICA OSCURA
+    // ✅ TEMÁTICA OSCURA
     oscuro: {
       primario: '#E53935',
       secundario: '#F5C518',
@@ -472,9 +473,9 @@ export const Colores = {
       texto: '#FFFFFF',
       textoSecundario: 'rgba(255,255,255,0.6)',
       textoTerciario: 'rgba(255,255,255,0.3)',
-      gradiente: ['#E53935', '#F5C518'] as const,
-      sombra: 'rgba(0,0,0,0.3)',
       borde: 'rgba(255,255,255,0.06)',
+      sombra: 'rgba(0,0,0,0.3)',
+      gradiente: ['#E53935', '#F5C518'] as const,
     },
   },
 };
@@ -483,26 +484,20 @@ export const Colores = {
 // 🎯 TIPOS Y FUNCIONES
 // ============================================================
 
-// ✅ TIPO: Claves válidas para las temáticas
 export type PersonajeKey = keyof typeof Colores.tematicas;
-
-// ✅ TIPO: Una temática (con propiedades adicionales permitidas)
 export type Tematica = {
   primario: string;
   secundario: string;
   fondo: string;
   texto: string;
   gradiente: readonly [string, string];
-  // ✅ Permite propiedades adicionales sin errores
   [key: string]: any;
 };
 
-// ✅ FUNCIÓN: Obtener temática por personaje
 export const getTematica = (personaje: PersonajeKey): Tematica => {
   return Colores.tematicas[personaje] || Colores.tematicas.krusty;
 };
 
-// ✅ FUNCIÓN: Obtener temática con fallback seguro
 export const getTematicaConFallback = (personaje: string): Tematica => {
   if (personaje in Colores.tematicas) {
     return Colores.tematicas[personaje as PersonajeKey];
@@ -510,18 +505,185 @@ export const getTematicaConFallback = (personaje: string): Tematica => {
   return Colores.tematicas.krusty;
 };
 
-// ✅ FUNCIÓN: Obtener temática clara
 export const getTematicaClara = (): Tematica => {
   return Colores.tematicas.claro;
 };
 
-// ✅ FUNCIÓN: Obtener temática oscura
 export const getTematicaOscura = (): Tematica => {
   return Colores.tematicas.oscuro;
 };
 
-// ✅ TIPOS EXISTENTES
 export type ColorKey = keyof typeof Colores;
 export type EstadoColor = keyof typeof Colores.estado;
+
+// ============================================================
+// 📐 SISTEMA DE DISEÑO - DISEÑO (para usar en todas las pantallas)
+// ============================================================
+
+// ✅ DISEÑO DE TIPOGRAFÍA RESPONSIVE
+export const DISEÑO = {
+  BREAKPOINTS: { TABLET: 768, DESKTOP: 1024, SMALL_PHONE: 375 },
+  TIPOGRAFIA: {
+    HERO: { tablet: 28, normal: 22, small: 18 },
+    TITULO: { tablet: 22, normal: 18, small: 15 },
+    SUBTITULO: { tablet: 18, normal: 15, small: 13 },
+    CUERPO: { tablet: 16, normal: 14, small: 12 },
+    PEQUENO: { tablet: 14, normal: 12, small: 10 },
+    MICRO: { tablet: 12, normal: 10, small: 9 },
+  },
+  ESPACIADO: {
+    XL: { tablet: 32, normal: 20, small: 14 },
+    LG: { tablet: 24, normal: 16, small: 12 },
+    MD: { tablet: 20, normal: 14, small: 10 },
+    SM: { tablet: 14, normal: 10, small: 8 },
+    XS: { tablet: 10, normal: 8, small: 6 },
+  },
+  RADIO: {
+    LG: { tablet: 20, normal: 16, small: 12 },
+    MD: { tablet: 16, normal: 12, small: 10 },
+    SM: { tablet: 12, normal: 10, small: 8 },
+    XS: { tablet: 8, normal: 6, small: 4 },
+  },
+};
+
+// ============================================================
+// 🎯 HOOK RESPONSIVE CENTRALIZADO
+// ============================================================
+
+export const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isDesktop = width >= 1024;
+  const isSmallPhone = width < 375;
+
+  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
+    if (isDesktop || isTablet) return valores.tablet;
+    if (isSmallPhone) return valores.small;
+    return valores.normal;
+  }, [isDesktop, isTablet, isSmallPhone]);
+
+  const getTexto = useCallback((escala: keyof typeof DISEÑO.TIPOGRAFIA) =>
+    getValor(DISEÑO.TIPOGRAFIA[escala]), [getValor]);
+
+  const getEspaciado = useCallback((escala: keyof typeof DISEÑO.ESPACIADO) =>
+    getValor(DISEÑO.ESPACIADO[escala]), [getValor]);
+
+  const getRadio = useCallback((escala: keyof typeof DISEÑO.RADIO) =>
+    getValor(DISEÑO.RADIO[escala]), [getValor]);
+
+  const spacing = (base: number) => {
+    if (isTablet) return base * 1.5;
+    if (isSmallPhone) return base * 0.75;
+    return base;
+  };
+
+  return {
+    isTablet,
+    isDesktop,
+    isSmallPhone,
+    width,
+    height,
+    getValor,
+    getTexto,
+    getEspaciado,
+    getRadio,
+    spacing
+  };
+};
+
+// ============================================================
+// ✅ FUNCIÓN RESPONSIVE SIMPLE
+// ============================================================
+
+export function responsiveSize(
+  base: number,
+  tabletMultiplier: number = 1.5,
+  smallMultiplier: number = 0.75
+): number {
+  const isTablet = Sizes.screen.isTablet;
+  const isSmallPhone = Sizes.screen.isSmallPhone;
+
+  if (isTablet) return base * tabletMultiplier;
+  if (isSmallPhone) return base * smallMultiplier;
+  return base;
+}
+
+// ============================================================
+// ✅ OBJETO DE DISEÑO UNIFICADO (para usar en lugar de DESIGN local)
+// ============================================================
+
+export const DISENO = {
+  colors: {
+    fondo: Colores.fondoClaro,
+    surface: Colores.fondoBlanco,
+    surfaceHover: '#F8F6F2',
+    card: Colores.fondoBlanco,
+    cardShadow: 'rgba(0,0,0,0.06)',
+    cardShadowHeavy: 'rgba(0,0,0,0.12)',
+    border: 'rgba(0,0,0,0.06)',
+    borderLight: 'rgba(0,0,0,0.04)',
+    text: Colores.textoOscuro,
+    textSecondary: 'rgba(0,0,0,0.55)',
+    textTertiary: 'rgba(0,0,0,0.30)',
+    accent: Colores.secundario,
+    accentLight: Colores.secundarioClaro,
+    accentSecondary: Colores.primario,
+    accentSecondaryLight: Colores.primarioClaro,
+    gradientStart: Colores.secundario,
+    gradientEnd: Colores.primario,
+    success: Colores.verdeKrusty,
+    successLight: Colores.verdeClaro,
+    warning: Colores.naranjaBart,
+    danger: Colores.secundario,
+    info: Colores.azulClaro,
+    platino: '#78909C',
+    oro: '#F9A825',
+    plata: '#BDBDBD',
+    bronce: '#A1887F',
+    rosa: '#EC407A',
+    rosaClaro: '#F06292',
+    azul: '#1A237E',
+    azulClaro: '#3949AB',
+    verde: '#43A047',
+    verdeClaro: '#66BB6A',
+    // ✅ Para botones con gradiente
+    gradientButtonStart: Colores.secundario,
+    gradientButtonEnd: Colores.primario,
+  },
+  spacing: Sizes.spacing,
+  radius: Sizes.radius,
+  shadow: Shadows.light,
+  typography: Typography,
+  isTablet: Sizes.screen.isTablet,
+  isSmallPhone: Sizes.screen.isSmallPhone,
+  screenWidth: Sizes.screen.width,
+  screenHeight: Sizes.screen.height,
+  // ✅ DISEÑO RESPONSIVE
+  diseño: DISEÑO,
+  // ✅ Funciones de diseño
+  getValor: (valores: { tablet: any; normal: any; small: any }) => {
+    if (Sizes.screen.isTablet) return valores.tablet;
+    if (Sizes.screen.isSmallPhone) return valores.small;
+    return valores.normal;
+  },
+  getTexto: (escala: keyof typeof DISEÑO.TIPOGRAFIA) => {
+    const valores = DISEÑO.TIPOGRAFIA[escala];
+    if (Sizes.screen.isTablet) return valores.tablet;
+    if (Sizes.screen.isSmallPhone) return valores.small;
+    return valores.normal;
+  },
+  getEspaciado: (escala: keyof typeof DISEÑO.ESPACIADO) => {
+    const valores = DISEÑO.ESPACIADO[escala];
+    if (Sizes.screen.isTablet) return valores.tablet;
+    if (Sizes.screen.isSmallPhone) return valores.small;
+    return valores.normal;
+  },
+  getRadio: (escala: keyof typeof DISEÑO.RADIO) => {
+    const valores = DISEÑO.RADIO[escala];
+    if (Sizes.screen.isTablet) return valores.tablet;
+    if (Sizes.screen.isSmallPhone) return valores.small;
+    return valores.normal;
+  },
+};
 
 export default Colores;

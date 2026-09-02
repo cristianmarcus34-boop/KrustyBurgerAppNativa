@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { supabase } from '../../lib/supabase';
@@ -173,6 +174,69 @@ export default function PantallaCarrito(props: any) {
     }
   }, [ubicacionGuardada, elementos.length]);
 
+  // ✅ RECARGAR UBICACIÓN CUANDO LA PANTALLA OBTIENE FOCO
+  useFocusEffect(
+    useCallback(() => {
+      const recargarUbicacion = async () => {
+        console.log('🔄 [Carrito] Recargando ubicación al obtener foco...');
+
+        // ✅ PRIORIDAD 1: Usar la dirección del perfil SIEMPRE si existe
+        if (perfil) {
+          const partesDireccion = [];
+          if (perfil.direccion_calle) partesDireccion.push(perfil.direccion_calle);
+          if (perfil.direccion_numero) partesDireccion.push(perfil.direccion_numero);
+          if (perfil.direccion_piso) partesDireccion.push(`Piso ${perfil.direccion_piso}`);
+          if (perfil.direccion_departamento) partesDireccion.push(`Depto ${perfil.direccion_departamento}`);
+          if (perfil.direccion_barrio) partesDireccion.push(perfil.direccion_barrio);
+          if (perfil.direccion_ciudad) partesDireccion.push(perfil.direccion_ciudad);
+          if (perfil.direccion_codigo_postal) partesDireccion.push(`CP ${perfil.direccion_codigo_postal}`);
+
+          const direccionCompleta = partesDireccion.length > 0 ? partesDireccion.join(', ') : '';
+
+          if (direccionCompleta) {
+            console.log('📍 [Carrito] Usando dirección del perfil (prioridad máxima):', direccionCompleta);
+
+            const ubicacionPerfil: UbicacionGuardada = {
+              latitude: perfil.lat_cliente || -34.776484410467525,
+              longitude: perfil.lng_cliente || -58.29220250409459,
+              direccion: direccionCompleta,
+              seleccionadaPorUsuario: false,
+            };
+
+            setUbicacionGuardada(ubicacionPerfil);
+            await guardarUbicacionTemporal(ubicacionPerfil);
+            setCargandoUbicacion(false);
+            return;
+          }
+        }
+
+        // 2️⃣ Si no hay dirección en perfil, intentar cargar desde el store
+        const ubicacionCargada = await cargarUbicacionTemporal();
+
+        if (ubicacionCargada) {
+          console.log('📍 [Carrito] Usando ubicación del store (sin perfil):', ubicacionCargada);
+          setUbicacionGuardada(ubicacionCargada);
+          setCargandoUbicacion(false);
+          return;
+        }
+
+        // 3️⃣ Si no hay ubicación en perfil ni en store, usar local por defecto
+        console.log('📍 [Carrito] No hay ubicación, usando local por defecto');
+        const ubicacionDefault: UbicacionGuardada = {
+          latitude: -34.776484410467525,
+          longitude: -58.29220250409459,
+          direccion: 'Local Krusty Burger',
+          seleccionadaPorUsuario: false,
+        };
+        setUbicacionGuardada(ubicacionDefault);
+        await guardarUbicacionTemporal(ubicacionDefault);
+        setCargandoUbicacion(false);
+      };
+
+      recargarUbicacion();
+    }, [perfil]) // ✅ Dependencia: perfil
+  );
+
   // ============================================================
   // 🔄 FUNCIONES DE CARGA
   // ============================================================
@@ -202,6 +266,7 @@ export default function PantallaCarrito(props: any) {
         latitude: -34.776484410467525,
         longitude: -58.29220250409459,
         direccion: 'Local Krusty Burger',
+        seleccionadaPorUsuario: false,
       };
       setUbicacionGuardada(ubicacionDefault);
       await guardarUbicacionTemporal(ubicacionDefault);
@@ -212,6 +277,7 @@ export default function PantallaCarrito(props: any) {
         latitude: -34.776484410467525,
         longitude: -58.29220250409459,
         direccion: 'Local Krusty Burger',
+        seleccionadaPorUsuario: false,
       };
       setUbicacionGuardada(ubicacionDefault);
     } finally {
@@ -606,7 +672,6 @@ export default function PantallaCarrito(props: any) {
           </Text>
           <TouchableOpacity
             style={styles.emptyButton}
-            // ✅ CORREGIDO: navega a Menu en lugar de Inicio
             onPress={() => props.navigation.navigate('Principal', { screen: 'Menu' })}
             activeOpacity={0.7}
           >

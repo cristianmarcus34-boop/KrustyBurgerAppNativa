@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaSeguimiento.tsx - COMPLETO
+﻿// screens/cliente/PantallaSeguimiento.tsx - CON FORMATEADOR
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
@@ -13,6 +13,7 @@ import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
+import { formatearPrecio } from '../../lib/formateador'; // ✅ IMPORTAR FORMATEADOR
 
 // ✅ IMPORTAR MARCADORES
 import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
@@ -520,7 +521,7 @@ export default function PantallaSeguimiento(props: any) {
             <View style={estilos.mapaInfoItem}>
               <Ionicons name="cash" size={isTablet ? 22 : 18} color={COLORS.verdeClaro} />
               <Text style={[estilos.mapaInfoTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>
-                💰 ${costoEnvio.toFixed(2)}
+                💰 {formatearPrecio(costoEnvio)}
               </Text>
             </View>
           </View>
@@ -671,15 +672,15 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
-          {/* Total */}
+          {/* Total - USANDO FORMATEADOR */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Total</Text>
             <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-              ${pedido.total?.toFixed(2)}
+              {formatearPrecio(pedido.total || 0)}
             </Text>
           </View>
 
-          {/* Envío */}
+          {/* Envío - USANDO FORMATEADOR */}
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Envío</Text>
             <Text style={[
@@ -689,7 +690,7 @@ export default function PantallaSeguimiento(props: any) {
                 color: costoEnvio > 0 ? COLORS.verdeClaro : COLORS.grisClaro
               }
             ]}>
-              {costoEnvio > 0 ? `$${costoEnvio.toFixed(2)}` : 'Gratis'}
+              {costoEnvio > 0 ? formatearPrecio(costoEnvio) : 'Gratis'}
             </Text>
           </View>
 
@@ -721,7 +722,7 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
-          {/* Monto pagado y vuelto */}
+          {/* Monto pagado y vuelto - USANDO FORMATEADOR */}
           {pedido.metodo_pago === 'efectivo' && montoPago !== null && (
             <>
               <View style={[estilos.infoFila, { marginTop: 4, borderTopWidth: 1, borderTopColor: COLORS.blanco + '10', paddingTop: 8 }]}>
@@ -729,7 +730,7 @@ export default function PantallaSeguimiento(props: any) {
                   💰 Pagó con
                 </Text>
                 <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.amarillo, fontWeight: 'bold' }]}>
-                  ${montoPago.toFixed(2)}
+                  {formatearPrecio(montoPago)}
                 </Text>
               </View>
               {vuelto !== null && vuelto > 0 && (
@@ -738,7 +739,7 @@ export default function PantallaSeguimiento(props: any) {
                     💵 Vuelto
                   </Text>
                   <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: COLORS.verdeClaro, fontWeight: 'bold' }]}>
-                    ${vuelto.toFixed(2)}
+                    {formatearPrecio(vuelto)}
                   </Text>
                 </View>
               )}
@@ -749,11 +750,11 @@ export default function PantallaSeguimiento(props: any) {
           <View style={estilos.infoFila}>
             <Text style={[estilos.infoLabel, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>Entrega</Text>
             <Text style={[estilos.infoValor, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
-              {pedido.tipo_entrega === 'retiro' ? '📦 Retiro en local' : '🚚 Domicilio'}
+              {pedido.tipo_entrega === 'retiro' ? '📦 Retiro en local' : '🚚 Delivery'}
             </Text>
           </View>
 
-          {/* Productos */}
+          {/* Productos - CON FORMATEADOR */}
           {pedido.items_json && (
             <View style={estilos.productos}>
               <Text style={[estilos.productosTitulo, { fontSize: isTablet ? 17 : isSmallPhone ? 14 : 15 }]}>
@@ -775,7 +776,7 @@ export default function PantallaSeguimiento(props: any) {
                         x{item.cantidad || 1}
                       </Text>
                       <Text style={[estilos.productoPrecio, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
-                        ${(item.total || item.precio || item.subtotal || 0).toFixed(2)}
+                        {formatearPrecio(item.total || item.precio || item.subtotal || 0)}
                       </Text>
                     </View>
                   ));

@@ -1,4 +1,4 @@
-﻿// screens/auth/PantallaLogin.tsx - VERSIÓN ROBUSTECIDA Y CON ESTILO BLANCO/ELEGANTE
+﻿// screens/auth/PantallaLogin.tsx - CON ENLACES LEGALES
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -12,10 +12,8 @@ import {
   Platform,
   ScrollView,
   Animated,
-  Dimensions,
   Image,
   Keyboard,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,88 +21,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { notificacionService } from '../../services/notificacionService';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
+import { DISENO, useResponsive } from '../../lib/colores';
 
-const { width } = Dimensions.get('window');
 const logoImage = require('../../assets/logo-krusty.png');
 
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - BLANCO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F8F7F5',
-    surface: '#FFFFFF',
-    surfaceHover: '#F5F4F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.05)',
-    cardShadowHeavy: 'rgba(0,0,0,0.10)',
-    border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.03)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentLight: '#FF6B6B',
-    accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    error: '#E53935',
-    errorBg: '#FEE8E8',
-    success: '#43A047',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 999,
-  },
-};
-
-// ============================================================
-// 🎯 HOOK RESPONSIVE
-// ============================================================
-const useResponsive = () => {
-  const { width, height } = useWindowDimensions();
-  const isTablet = width >= 768;
-  const isDesktop = width >= 1024;
-  const isSmallPhone = width < 375;
-
-  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
-    if (isDesktop || isTablet) return valores.tablet;
-    if (isSmallPhone) return valores.small;
-    return valores.normal;
-  }, [isDesktop, isTablet, isSmallPhone]);
-
-  const spacing = (base: number) => {
-    if (isTablet) return base * 1.5;
-    if (isSmallPhone) return base * 0.75;
-    return base;
-  };
-
-  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
-};
-
-// ============================================================
-// 🏠 COMPONENTE PRINCIPAL
-// ============================================================
 export default function PantallaLogin(props: any) {
   const responsive = useResponsive();
-  const insets = useSafeAreaInsets(); // ✅ UN SOLO insets
+  const insets = useSafeAreaInsets();
 
-  // ✅ ESTADOS
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -117,7 +41,6 @@ export default function PantallaLogin(props: any) {
 
   const { iniciarSesion } = tiendaAutenticacion();
 
-  // ✅ REFS
   const correoInputRef = useRef<TextInput>(null);
   const contrasenaInputRef = useRef<TextInput>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -126,67 +49,31 @@ export default function PantallaLogin(props: any) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<number | null>(null);
 
-  // ✅ ANIMACIONES
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
     ]).start();
 
-    // ✅ Limpiar timer al desmontar
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
-  // ✅ FUNCIÓN DE SHAKE PARA ERRORES
   const shake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, {
-        toValue: 10,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeAnim, {
-        toValue: -10,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeAnim, {
-        toValue: 10,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shakeAnim, {
-        toValue: 0,
-        duration: 80,
-        useNativeDriver: true,
-      }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 80, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 80, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 80, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 80, useNativeDriver: true }),
     ]).start();
   };
 
-  // ✅ VALIDACIONES
   const validarCampos = (): boolean => {
     const nuevosErrores: { correo?: string; contrasena?: string } = {};
     let isValid = true;
 
-    // Validar correo
     if (!correo || correo.trim() === '') {
       nuevosErrores.correo = 'El correo electrónico es requerido';
       isValid = false;
@@ -198,7 +85,6 @@ export default function PantallaLogin(props: any) {
       }
     }
 
-    // Validar contraseña
     if (!contrasena || contrasena.trim() === '') {
       nuevosErrores.contrasena = 'La contraseña es requerida';
       isValid = false;
@@ -212,52 +98,37 @@ export default function PantallaLogin(props: any) {
 
     if (!isValid) {
       shake();
-      if (nuevosErrores.correo) {
-        correoInputRef.current?.focus();
-      } else if (nuevosErrores.contrasena) {
-        contrasenaInputRef.current?.focus();
-      }
+      if (nuevosErrores.correo) correoInputRef.current?.focus();
+      else if (nuevosErrores.contrasena) contrasenaInputRef.current?.focus();
     }
 
     return isValid;
   };
 
-  // ✅ VERIFICAR CONEXIÓN A INTERNET - CON ABORTCONTROLLER
   const verificarConexion = async (): Promise<boolean> => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-      await fetch('https://www.google.com', {
-        method: 'HEAD',
-        signal: controller.signal,
-      });
-
+      await fetch('https://www.google.com', { method: 'HEAD', signal: controller.signal });
       clearTimeout(timeoutId);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   };
 
-  // ✅ INICIAR BLOQUEO TEMPORAL
   const iniciarBloqueo = (segundos: number = 30) => {
     setBloqueado(true);
     setTiempoRestante(segundos);
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
+    if (timerRef.current) clearInterval(timerRef.current);
 
     timerRef.current = setInterval(() => {
       setTiempoRestante(prev => {
         if (prev <= 1) {
           setBloqueado(false);
           setIntentosFallidos(0);
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
+          if (timerRef.current) clearInterval(timerRef.current);
           return 0;
         }
         return prev - 1;
@@ -265,34 +136,24 @@ export default function PantallaLogin(props: any) {
     }, 1000);
   };
 
-  // ✅ MANEJAR LOGIN - ROBUSTECIDO
   const manejarLogin = async () => {
     Keyboard.dismiss();
 
     if (bloqueado) {
-      Alert.alert(
-        '⏳ Demasiados intentos',
-        `Has excedido el número de intentos. Espera ${tiempoRestante} segundos para intentar nuevamente.`
-      );
+      Alert.alert('⏳ Demasiados intentos', `Espera ${tiempoRestante} segundos.`);
       return;
     }
 
-    if (!validarCampos()) {
-      return;
-    }
+    if (!validarCampos()) return;
 
     const tieneConexion = await verificarConexion();
     if (!tieneConexion) {
-      Alert.alert(
-        '📡 Sin conexión',
-        'No hay conexión a internet. Verifica tu red y vuelve a intentar.'
-      );
+      Alert.alert('📡 Sin conexión', 'Verifica tu red y vuelve a intentar.');
       return;
     }
 
     setCargando(true);
     setMensajeErrorGeneral(null);
-    setErrores({});
 
     try {
       const resultado = await iniciarSesion(correo.trim(), contrasena);
@@ -304,49 +165,33 @@ export default function PantallaLogin(props: any) {
         if (nuevosIntentos >= 5) {
           iniciarBloqueo(30);
           setCargando(false);
-          Alert.alert(
-            '🔒 Demasiados intentos',
-            'Has superado el límite de intentos. Espera 30 segundos para volver a intentar.'
-          );
+          Alert.alert('🔒 Demasiados intentos', 'Espera 30 segundos.');
           return;
         }
 
         let mensajeError = resultado.error || 'Error al iniciar sesión';
         let tituloError = '⚠️ Error';
 
-        if (mensajeError.includes('Invalid login credentials') ||
-          mensajeError.includes('Invalid credentials')) {
-          mensajeError = '❌ Correo o contraseña incorrectos. Verifica tus datos.';
+        if (mensajeError.includes('Invalid login credentials')) {
+          mensajeError = '❌ Correo o contraseña incorrectos.';
           tituloError = 'Credenciales inválidas';
         } else if (mensajeError.includes('User not found')) {
           mensajeError = '❌ No encontramos una cuenta con este correo.';
           tituloError = 'Usuario no encontrado';
         } else if (mensajeError.includes('Email not confirmed')) {
-          mensajeError = '📧 Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada.';
+          mensajeError = '📧 Tu correo aún no ha sido confirmado.';
           tituloError = 'Correo no confirmado';
-        } else if (mensajeError.includes('network') || mensajeError.includes('timeout')) {
-          mensajeError = '📡 Error de conexión. Verifica tu internet y vuelve a intentar.';
-          tituloError = 'Error de red';
-        } else if (mensajeError.includes('rate limit')) {
-          mensajeError = '⏳ Demasiadas solicitudes. Espera un momento y vuelve a intentar.';
-          tituloError = 'Límite de intentos';
-        }
-
-        let mensajeCompleto = mensajeError;
-        if (nuevosIntentos >= 3) {
-          mensajeCompleto += '\n\n💡 ¿Olvidaste tu contraseña? Toca "¿Olvidaste tu contraseña?" para recuperarla.';
         }
 
         shake();
         setMensajeErrorGeneral(mensajeError);
-        Alert.alert(tituloError, mensajeCompleto);
+        Alert.alert(tituloError, mensajeError);
         setCargando(false);
         return;
       }
 
       setIntentosFallidos(0);
       setMensajeErrorGeneral(null);
-      setErrores({});
 
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
@@ -359,26 +204,14 @@ export default function PantallaLogin(props: any) {
 
     } catch (error: any) {
       console.error('❌ Error en login:', error);
-
-      let mensajeError = 'Ocurrió un error inesperado. Intenta nuevamente.';
-      let tituloError = 'Error inesperado';
-
-      if (error?.message) {
-        if (error.message.includes('network') || error.message.includes('timeout')) {
-          mensajeError = '📡 Error de conexión. Verifica tu internet.';
-          tituloError = 'Error de red';
-        }
-      }
-
       shake();
-      setMensajeErrorGeneral(mensajeError);
-      Alert.alert(tituloError, mensajeError);
+      setMensajeErrorGeneral('Ocurrió un error inesperado.');
+      Alert.alert('Error inesperado', 'Intenta nuevamente.');
     } finally {
       setCargando(false);
     }
   };
 
-  // ✅ MANEJAR INVITADO
   const manejarInvitado = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -391,46 +224,35 @@ export default function PantallaLogin(props: any) {
     props.navigation.navigate('Principal');
   };
 
-  // ✅ LIMPIAR ERRORES AL ESCRIBIR
   const handleCorreoChange = (text: string) => {
     setCorreo(text);
-    if (errores.correo) {
-      setErrores(prev => ({ ...prev, correo: undefined }));
-    }
-    if (mensajeErrorGeneral) {
-      setMensajeErrorGeneral(null);
-    }
+    if (errores.correo) setErrores(prev => ({ ...prev, correo: undefined }));
+    if (mensajeErrorGeneral) setMensajeErrorGeneral(null);
   };
 
   const handleContrasenaChange = (text: string) => {
     setContrasena(text);
-    if (errores.contrasena) {
-      setErrores(prev => ({ ...prev, contrasena: undefined }));
-    }
-    if (mensajeErrorGeneral) {
-      setMensajeErrorGeneral(null);
-    }
+    if (errores.contrasena) setErrores(prev => ({ ...prev, contrasena: undefined }));
+    if (mensajeErrorGeneral) setMensajeErrorGeneral(null);
   };
 
-  // ✅ RESPONSIVE
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
 
-  const logoSize = isTablet ? 120 : isSmallPhone ? 80 : 100;
-  const tituloSize = isTablet ? 40 : isSmallPhone ? 28 : 34;
-  const subtituloSize = isTablet ? 18 : isSmallPhone ? 13 : 15;
-  const labelSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
-  const inputSize = isTablet ? 18 : isSmallPhone ? 12 : 13;
-  const buttonTextSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
-  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 20 : 24;
-  const paddingTop = insets.top + (isTablet ? 40 : 20);
+  const logoSize = responsive.getValor({ tablet: 120, normal: 100, small: 80 });
+  const tituloSize = responsive.getValor({ tablet: 40, normal: 34, small: 28 });
+  const subtituloSize = responsive.getValor({ tablet: 18, normal: 15, small: 13 });
+  const inputSize = responsive.getValor({ tablet: 18, normal: 13, small: 12 });
+  const buttonTextSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
+  const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
+  const paddingTop = insets.top + responsive.spacing(20);
 
   return (
     <View style={estilos.contenedor}>
       <View style={estilos.background} />
 
       <LinearGradient
-        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
         style={estilos.headerGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -450,34 +272,22 @@ export default function PantallaLogin(props: any) {
             }
           ]}
           showsVerticalScrollIndicator={false}
-          bounces={false}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View
             style={[
               estilos.logoContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }],
-              }
+              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
             ]}
           >
             <View style={estilos.logoWrapper}>
               <Image
                 source={logoImage}
-                style={[
-                  estilos.logoImage,
-                  {
-                    width: logoSize,
-                    height: logoSize,
-                  }
-                ]}
+                style={[estilos.logoImage, { width: logoSize, height: logoSize }]}
                 resizeMode="contain"
               />
             </View>
-            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-              Krusty Burger
-            </Text>
+            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>Krusty Burger</Text>
             <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
               "El Jefe tiene la última palabra" 🦈
             </Text>
@@ -488,31 +298,23 @@ export default function PantallaLogin(props: any) {
               estilos.formulario,
               {
                 opacity: fadeAnim,
-                transform: [
-                  { translateY: slideUpAnim },
-                  { translateX: shakeAnim }
-                ],
+                transform: [{ translateY: slideUpAnim }, { translateX: shakeAnim }],
               }
             ]}
           >
             {mensajeErrorGeneral && (
               <View style={estilos.errorGeneralContainer}>
-                <Ionicons name="alert-circle" size={20} color={DESIGN.colors.error} />
+                <Ionicons name="alert-circle" size={20} color={DISENO.colors.danger} />
                 <Text style={estilos.errorGeneralTexto}>{mensajeErrorGeneral}</Text>
               </View>
             )}
 
-            <Text style={[estilos.label, { fontSize: labelSize }]}>
-              Correo electrónico
-            </Text>
-            <View style={[
-              estilos.inputContainer,
-              errores.correo && estilos.inputError
-            ]}>
+            <Text style={[estilos.label, { fontSize: inputSize }]}>Correo electrónico</Text>
+            <View style={[estilos.inputContainer, errores.correo && estilos.inputError]}>
               <Ionicons
                 name={errores.correo ? "alert-circle" : "mail-outline"}
                 size={22}
-                color={errores.correo ? DESIGN.colors.error : DESIGN.colors.textTertiary}
+                color={errores.correo ? DISENO.colors.danger : DISENO.colors.textTertiary}
                 style={estilos.inputIcon}
               />
               <TextInput
@@ -521,36 +323,29 @@ export default function PantallaLogin(props: any) {
                 value={correo}
                 onChangeText={handleCorreoChange}
                 placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={DESIGN.colors.textTertiary}
+                placeholderTextColor={DISENO.colors.textTertiary}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                selectionColor={DESIGN.colors.accent}
+                selectionColor={DISENO.colors.accent}
                 editable={!cargando && !bloqueado}
                 returnKeyType="next"
                 onSubmitEditing={() => contrasenaInputRef.current?.focus()}
               />
               {correo.length > 0 && !errores.correo && (
                 <TouchableOpacity onPress={() => setCorreo('')}>
-                  <Ionicons name="close-circle" size={18} color={DESIGN.colors.textTertiary} />
+                  <Ionicons name="close-circle" size={18} color={DISENO.colors.textTertiary} />
                 </TouchableOpacity>
               )}
             </View>
-            {errores.correo && (
-              <Text style={estilos.textoError}>{errores.correo}</Text>
-            )}
+            {errores.correo && <Text style={estilos.textoError}>{errores.correo}</Text>}
 
-            <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
-              Contraseña
-            </Text>
-            <View style={[
-              estilos.inputContainer,
-              errores.contrasena && estilos.inputError
-            ]}>
+            <Text style={[estilos.label, { fontSize: inputSize, marginTop: 16 }]}>Contraseña</Text>
+            <View style={[estilos.inputContainer, errores.contrasena && estilos.inputError]}>
               <Ionicons
                 name={errores.contrasena ? "alert-circle" : "lock-closed-outline"}
                 size={22}
-                color={errores.contrasena ? DESIGN.colors.error : DESIGN.colors.textTertiary}
+                color={errores.contrasena ? DISENO.colors.danger : DISENO.colors.textTertiary}
                 style={estilos.inputIcon}
               />
               <TextInput
@@ -559,9 +354,9 @@ export default function PantallaLogin(props: any) {
                 value={contrasena}
                 onChangeText={handleContrasenaChange}
                 placeholder="Tu contraseña"
-                placeholderTextColor={DESIGN.colors.textTertiary}
+                placeholderTextColor={DISENO.colors.textTertiary}
                 secureTextEntry={!mostrarContrasena}
-                selectionColor={DESIGN.colors.accent}
+                selectionColor={DISENO.colors.accent}
                 editable={!cargando && !bloqueado}
                 returnKeyType="done"
                 onSubmitEditing={manejarLogin}
@@ -573,17 +368,15 @@ export default function PantallaLogin(props: any) {
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                   size={22}
-                  color={DESIGN.colors.textTertiary}
+                  color={DISENO.colors.textTertiary}
                 />
               </TouchableOpacity>
             </View>
-            {errores.contrasena && (
-              <Text style={estilos.textoError}>{errores.contrasena}</Text>
-            )}
+            {errores.contrasena && <Text style={estilos.textoError}>{errores.contrasena}</Text>}
 
             {intentosFallidos > 0 && intentosFallidos < 5 && (
               <View style={estilos.intentosContainer}>
-                <Ionicons name="warning-outline" size={14} color={DESIGN.colors.error + '80'} />
+                <Ionicons name="warning-outline" size={14} color={DISENO.colors.danger + '80'} />
                 <Text style={estilos.intentosTexto}>
                   {intentosFallidos} de 5 intentos disponibles
                 </Text>
@@ -592,7 +385,7 @@ export default function PantallaLogin(props: any) {
 
             {bloqueado && (
               <View style={estilos.bloqueoContainer}>
-                <Ionicons name="time-outline" size={18} color={DESIGN.colors.accent} />
+                <Ionicons name="time-outline" size={18} color={DISENO.colors.accent} />
                 <Text style={estilos.bloqueoTexto}>
                   ⏳ Bloqueado por {tiempoRestante} segundos
                 </Text>
@@ -606,23 +399,23 @@ export default function PantallaLogin(props: any) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
                 style={estilos.botonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {cargando ? (
-                  <ActivityIndicator color={DESIGN.colors.surface} size="small" />
+                  <ActivityIndicator color={DISENO.colors.surface} size="small" />
                 ) : bloqueado ? (
                   <>
-                    <Ionicons name="time" size={buttonTextSize + 4} color={DESIGN.colors.surface} />
+                    <Ionicons name="time" size={buttonTextSize + 4} color={DISENO.colors.surface} />
                     <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
                       Espera {tiempoRestante}s
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Ionicons name="log-in" size={buttonTextSize + 4} color={DESIGN.colors.surface} />
+                    <Ionicons name="log-in" size={buttonTextSize + 4} color={DISENO.colors.surface} />
                     <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
                       Iniciar Sesión
                     </Text>
@@ -632,21 +425,17 @@ export default function PantallaLogin(props: any) {
             </TouchableOpacity>
 
             <View style={estilos.enlacesContainer}>
-              <TouchableOpacity
-                onPress={() => props.navigation.navigate('Registro')}
-                activeOpacity={0.6}
-              >
-                <Text style={[estilos.enlace, { fontSize: isTablet ? 16 : 14 }]}>
+              <TouchableOpacity onPress={() => props.navigation.navigate('Registro')} activeOpacity={0.6}>
+                <Text style={[estilos.enlace, { fontSize: inputSize }]}>
                   ¿No tienes cuenta? <Text style={estilos.enlaceDestacado}>Regístrate</Text>
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 onPress={() => props.navigation.navigate('ResetPassword')}
                 activeOpacity={0.6}
                 style={estilos.olvidoContainer}
               >
-                <Text style={[estilos.olvidoTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                <Text style={[estilos.olvidoTexto, { fontSize: inputSize - 2 }]}>
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
@@ -663,11 +452,11 @@ export default function PantallaLogin(props: any) {
               onPress={() => props.navigation.navigate('Registro')}
               activeOpacity={0.7}
             >
-              <Ionicons name="gift-outline" size={18} color={DESIGN.colors.accentSecondary} />
-              <Text style={[estilos.bannerLoginTexto, { fontSize: isTablet ? 14 : 12 }]}>
+              <Ionicons name="gift-outline" size={18} color={DISENO.colors.accentSecondary} />
+              <Text style={[estilos.bannerLoginTexto, { fontSize: inputSize - 1 }]}>
                 🎁 ¿Nuevo? Gana <Text style={estilos.bannerLoginDestacado}>500 puntos</Text> al registrarte
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={DESIGN.colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={16} color={DISENO.colors.textTertiary} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -676,11 +465,32 @@ export default function PantallaLogin(props: any) {
               activeOpacity={0.6}
               disabled={cargando}
             >
-              <Ionicons name="person-outline" size={20} color={DESIGN.colors.textSecondary} />
-              <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
+              <Ionicons name="person-outline" size={20} color={DISENO.colors.textTertiary} />
+              <Text style={[estilos.botonInvitadoTexto, { fontSize: inputSize }]}>
                 Continuar como invitado
               </Text>
             </TouchableOpacity>
+
+            {/* ✅ ENLACES LEGALES EN EL FOOTER */}
+            <View style={estilos.legalContainer}>
+              <TouchableOpacity
+                onPress={() => props.navigation.navigate('Terminos')}
+                activeOpacity={0.6}
+              >
+                <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                  📋 Términos
+                </Text>
+              </TouchableOpacity>
+              <Text style={estilos.legalSeparador}>•</Text>
+              <TouchableOpacity
+                onPress={() => props.navigation.navigate('Privacidad')}
+                activeOpacity={0.6}
+              >
+                <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                  🔒 Privacidad
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={estilos.versionTexto}>v1.0.0</Text>
           </Animated.View>
@@ -690,21 +500,15 @@ export default function PantallaLogin(props: any) {
   );
 }
 
-// ============================================================
-// 🎨 ESTILOS - BLANCOS Y ELEGANTES
-// ============================================================
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
-  },
+  contenedor: { flex: 1, backgroundColor: DISENO.colors.fondo },
   background: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: DESIGN.colors.fondo,
+    backgroundColor: DISENO.colors.fondo,
   },
   headerGradiente: {
     position: 'absolute',
@@ -715,38 +519,21 @@ const estilos = StyleSheet.create({
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 36,
-  },
-  logoWrapper: {
-    marginBottom: 16,
-    shadowColor: DESIGN.colors.cardShadowHeavy,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 15,
-  },
-  logoImage: {
-    backgroundColor: 'transparent',
-  },
+  keyboardView: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center' },
+  logoContainer: { alignItems: 'center', marginBottom: 36 },
+  logoWrapper: { marginBottom: 16, ...DISENO.shadow.lg },
+  logoImage: { backgroundColor: 'transparent' },
   titulo: {
     fontWeight: '800',
-    color: DESIGN.colors.surface,
+    color: DISENO.colors.surface,
     letterSpacing: 2,
     textShadowColor: 'rgba(0,0,0,0.1)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   subtitulo: {
-    color: DESIGN.colors.surface + '80',
+    color: DISENO.colors.surface + '80',
     marginTop: 4,
     fontWeight: '300',
     letterSpacing: 0.5,
@@ -754,71 +541,50 @@ const estilos = StyleSheet.create({
   },
   formulario: {
     width: '100%',
-    backgroundColor: DESIGN.colors.surface,
+    backgroundColor: DISENO.colors.surface,
     borderRadius: 24,
     padding: 24,
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 10,
+    ...DISENO.shadow.lg,
     borderWidth: 1,
-    borderColor: DESIGN.colors.border,
+    borderColor: DISENO.colors.border,
   },
   label: {
     fontWeight: '600',
-    color: DESIGN.colors.text,
+    color: DISENO.colors.text,
     marginBottom: 4,
     letterSpacing: 0.3,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DESIGN.colors.surfaceHover,
+    backgroundColor: DISENO.colors.surfaceHover,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: DESIGN.colors.border,
+    borderColor: DISENO.colors.border,
     paddingHorizontal: 14,
     height: 56,
   },
   inputError: {
-    borderColor: DESIGN.colors.error,
-    borderWidth: 1.5,
-    backgroundColor: DESIGN.colors.errorBg,
+    borderColor: DISENO.colors.danger,
+    backgroundColor: DISENO.colors.danger + '10',
   },
-  inputIcon: {
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  input: {
-    color: DESIGN.colors.text,
-    paddingVertical: 12,
-    paddingTop: 15,
-    flex: 1,
-  },
-  eyeButton: {
-    padding: 4,
-    flexShrink: 0,
-  },
-  textoError: {
-    color: DESIGN.colors.error,
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
-  },
+  inputIcon: { marginRight: 12, flexShrink: 0 },
+  input: { color: DISENO.colors.text, paddingVertical: 12, paddingTop: 15, flex: 1 },
+  eyeButton: { padding: 4, flexShrink: 0 },
+  textoError: { color: DISENO.colors.danger, fontSize: 12, marginTop: 4, marginLeft: 4 },
   errorGeneralContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DESIGN.colors.errorBg,
+    backgroundColor: DISENO.colors.danger + '10',
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: DESIGN.colors.error + '30',
+    borderColor: DISENO.colors.danger + '30',
   },
   errorGeneralTexto: {
-    color: DESIGN.colors.error,
+    color: DISENO.colors.danger,
     fontSize: 13,
     flex: 1,
     fontWeight: '500',
@@ -831,7 +597,7 @@ const estilos = StyleSheet.create({
     gap: 4,
   },
   intentosTexto: {
-    color: DESIGN.colors.error + '80',
+    color: DISENO.colors.danger + '80',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -841,13 +607,13 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
     gap: 6,
-    backgroundColor: DESIGN.colors.accent + '10',
+    backgroundColor: DISENO.colors.accent + '10',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   bloqueoTexto: {
-    color: DESIGN.colors.accent,
+    color: DISENO.colors.accent,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -855,11 +621,9 @@ const estilos = StyleSheet.create({
     marginTop: 20,
     borderRadius: 14,
     overflow: 'hidden',
-    elevation: 6,
-    shadowColor: DESIGN.colors.accent,
-    shadowOffset: { width: 0, height: 6 },
+    ...DISENO.shadow.md,
+    shadowColor: DISENO.colors.accent,
     shadowOpacity: 0.25,
-    shadowRadius: 16,
   },
   botonGradient: {
     flexDirection: 'row',
@@ -869,30 +633,13 @@ const estilos = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
   },
-  textoBoton: {
-    fontWeight: '600',
-    color: DESIGN.colors.surface,
-    letterSpacing: 1,
-
-  },
-  enlacesContainer: {
-    marginTop: 18,
-    alignItems: 'center',
-    gap: 10,
-  },
-  enlace: {
-    color: DESIGN.colors.textSecondary,
-    fontWeight: '500',
-  },
-  enlaceDestacado: {
-    color: DESIGN.colors.accent,
-    fontWeight: '700',
-  },
-  olvidoContainer: {
-    paddingVertical: 4,
-  },
+  textoBoton: { fontWeight: '600', color: DISENO.colors.surface, letterSpacing: 1 },
+  enlacesContainer: { marginTop: 18, alignItems: 'center', gap: 10 },
+  enlace: { color: DISENO.colors.textSecondary, fontWeight: '500' },
+  enlaceDestacado: { color: DISENO.colors.accent, fontWeight: '700' },
+  olvidoContainer: { paddingVertical: 4 },
   olvidoTexto: {
-    color: DESIGN.colors.textTertiary,
+    color: DISENO.colors.textTertiary,
     textDecorationLine: 'underline',
     fontWeight: '400',
   },
@@ -902,13 +649,9 @@ const estilos = StyleSheet.create({
     marginTop: 22,
     marginBottom: 14,
   },
-  separador: {
-    flex: 1,
-    height: 1,
-    backgroundColor: DESIGN.colors.border,
-  },
+  separador: { flex: 1, height: 1, backgroundColor: DISENO.colors.border },
   separadorTexto: {
-    color: DESIGN.colors.textTertiary,
+    color: DISENO.colors.textTertiary,
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
@@ -922,18 +665,18 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 10,
     borderRadius: 12,
-    backgroundColor: DESIGN.colors.accentSecondary + '10',
+    backgroundColor: DISENO.colors.accentSecondary + '10',
     borderWidth: 1,
-    borderColor: DESIGN.colors.accentSecondary + '20',
+    borderColor: DISENO.colors.accentSecondary + '20',
   },
   bannerLoginTexto: {
-    color: DESIGN.colors.textSecondary,
+    color: DISENO.colors.textSecondary,
     fontWeight: '400',
     flex: 1,
     textAlign: 'center',
   },
   bannerLoginDestacado: {
-    color: DESIGN.colors.accentSecondary,
+    color: DISENO.colors.accentSecondary,
     fontWeight: '700',
   },
   botonInvitado: {
@@ -944,16 +687,34 @@ const estilos = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-    backgroundColor: DESIGN.colors.surfaceHover,
+    borderColor: DISENO.colors.border,
+    backgroundColor: DISENO.colors.surfaceHover,
   },
   botonInvitadoTexto: {
-    color: DESIGN.colors.textSecondary,
+    color: DISENO.colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
+  // ✅ ENLACES LEGALES
+  legalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    gap: 8,
+  },
+  legalTexto: {
+    color: DISENO.colors.textTertiary,
+    fontWeight: '400',
+    textDecorationLine: 'underline',
+  },
+  legalSeparador: {
+    color: DISENO.colors.textTertiary,
+    fontSize: 10,
+    opacity: 0.5,
+  },
   versionTexto: {
-    color: DESIGN.colors.textTertiary,
+    color: DISENO.colors.textTertiary,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 14,

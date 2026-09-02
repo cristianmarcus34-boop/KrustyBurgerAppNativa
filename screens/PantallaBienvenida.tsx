@@ -43,7 +43,7 @@ export default function PantallaBienvenida({ navigation }: any) {
         {
             icon: 'star',
             text: 'Ganá puntos Krusty',
-            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos, productos gratis y envíos sin costo. ⭐',
+            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos y envíos sin costo. ⭐',
             color: Colores.primario,
             iconBg: Colores.primario + '20',
         },
@@ -88,7 +88,7 @@ export default function PantallaBienvenida({ navigation }: any) {
     const paddingTop = isTablet ? 48 : isSmallPhone ? 24 : 32;
 
     const abrirWebAgencia = async () => {
-        const url = 'https://agencia-powa.vercel.app';
+        const url = 'https://www.agenciadigitalpowa.com.ar';
         try {
             const supported = await Linking.canOpenURL(url);
             if (supported) {

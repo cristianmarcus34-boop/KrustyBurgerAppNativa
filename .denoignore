@@ -1,0 +1,10 @@
+node_modules/
+mobile/
+screens/
+components/
+lib/
+assets/
+*.tsx
+*.jsx
+package.json
+package-lock.json

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/deno.json",
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --watch index.ts",
+    "start": "deno run --allow-net --allow-env index.ts"
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.224.0/"
+  },
+  "nodeModulesDir": "auto"
+}

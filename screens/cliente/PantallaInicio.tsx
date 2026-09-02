@@ -1,10 +1,9 @@
-﻿// screens/cliente/PantallaInicio.tsx - COMPLETO Y ACTUALIZADO
+﻿// screens/cliente/PantallaInicio.tsx - CON DISEÑO CENTRALIZADO
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  useWindowDimensions,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -12,7 +11,6 @@ import {
   RefreshControl,
   FlatList,
   ActivityIndicator,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +21,9 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { supabase } from '../../lib/supabase';
-import { Colores, getTematica } from '../../lib/colores';
+// ✅ IMPORTAMOS DESDE EL ARCHIVO CENTRALIZADO
+import { DISENO, useResponsive } from '../../lib/colores';
 import { formatearPrecio } from '../../lib/formateador';
-import { Producto, Perfil } from '../../lib/tipos';
 
 // ✅ IMPORTAR IMÁGENES DE CATEGORÍAS
 const hamburguesasImg = require('../../assets/imagenes/categorias/hamburguesaCat.jpg');
@@ -41,46 +39,7 @@ const logoKrusty = require('../../assets/icon.png');
 // ✅ IMPORTAR IMAGEN DE BIENVENIDA
 const bienvenidaImg = require('../../assets/imagenes/bienvenidos.png');
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F5F2ED',
-    surface: '#FFFFFF',
-    surfaceHover: '#F8F6F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.04)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentLight: '#FF6B6B',
-    accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 999,
-  },
-};
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================================
 // 📋 CONFIGURACIÓN DE CATEGORÍAS
@@ -99,7 +58,7 @@ const CATEGORIAS: CategoriaData[] = [
     id: 'ofertas',
     nombre: '🔥 Ofertas',
     imagen: ofertasImg,
-    color: '#E53935',
+    color: DISENO.colors.danger,
     descripcion: 'Descuentos imperdibles',
     esOferta: true,
   },
@@ -107,28 +66,28 @@ const CATEGORIAS: CategoriaData[] = [
     id: 'hamburguesas',
     nombre: 'Burgers',
     imagen: hamburguesasImg,
-    color: '#E53935',
+    color: DISENO.colors.danger,
     descripcion: 'Premium',
   },
   {
     id: 'acompanantes',
     nombre: 'Extras',
     imagen: acompanantesImg,
-    color: '#FF6F00',
+    color: DISENO.colors.warning,
     descripcion: 'Papas, aros y más',
   },
   {
     id: 'bebidas',
     nombre: 'Bebidas',
     imagen: bebidasImg,
-    color: '#1A237E',
+    color: DISENO.colors.info,
     descripcion: 'Refrescos y más',
   },
   {
     id: 'postres',
     nombre: 'Postres',
     imagen: postresImg,
-    color: '#F48FB1',
+    color: DISENO.colors.rosa,
     descripcion: 'Dulces tentaciones',
   },
 ];
@@ -140,6 +99,7 @@ export default function PantallaInicio(props: any) {
   const { perfil, esAdministrador } = tiendaAutenticacion();
   const { agregarProducto } = tiendaCarrito();
   const { favoritos, cargando: cargandoFavoritos, cargarFavoritos, limpiarFavoritos } = tiendaFavoritos();
+  // ✅ USAMOS EL HOOK CENTRALIZADO
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
@@ -154,7 +114,7 @@ export default function PantallaInicio(props: any) {
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
 
-  // ✅ USEFOCUSEFFECT - FORZAR ACTUALIZACIÓN DEL BADGE
+  // ✅ USEFOCUSEFFECT
   useFocusEffect(
     useCallback(() => {
       const cantidad = tiendaCarrito.getState().cantidadTotal();
@@ -244,7 +204,7 @@ export default function PantallaInicio(props: any) {
   }, [cargarOfertas, cargarFavoritosUsuario, cargarCantidadProductos]);
 
   // ============================================================
-  // 🖼️ RENDER DE CATEGORÍA (horizontal)
+  // 🖼️ RENDER DE CATEGORÍA
   // ============================================================
   const renderCategoria = useCallback(({ item }: { item: CategoriaData }) => {
     const width = tamanos.categoriaWidth;
@@ -258,18 +218,13 @@ export default function PantallaInicio(props: any) {
           styles.categoriaItem,
           {
             width: width,
-            backgroundColor: DESIGN.colors.surface,
+            backgroundColor: DISENO.colors.surface,
             borderColor: item.color + '20',
-            shadowColor: DESIGN.colors.cardShadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 1,
-            shadowRadius: 6,
-            elevation: 2,
+            ...DISENO.shadow.sm,
           }
         ]}
         onPress={() => {
           if (item.esOferta) {
-            // ✅ CORREGIDO: navegar directamente a la pantalla stack Ofertas
             props.navigation.navigate('Ofertas');
           } else {
             props.navigation.navigate('Menu', { categoria: item.id });
@@ -279,7 +234,6 @@ export default function PantallaInicio(props: any) {
       >
         <View style={styles.categoriaImageContainer}>
           <Image source={item.imagen} style={styles.categoriaImagen} resizeMode="cover" />
-
         </View>
         <View style={styles.categoriaInfo}>
           <Text style={[styles.categoriaNombre, { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }]} numberOfLines={1}>
@@ -301,7 +255,7 @@ export default function PantallaInicio(props: any) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#F5F2ED', '#FFFFFF', '#F5F2ED']}
+        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -320,8 +274,8 @@ export default function PantallaInicio(props: any) {
           <RefreshControl
             refreshing={refrescando}
             onRefresh={onRefresh}
-            tintColor={DESIGN.colors.accent}
-            colors={[DESIGN.colors.accent]}
+            tintColor={DISENO.colors.accent}
+            colors={[DISENO.colors.accent]}
           />
         }
         style={{
@@ -367,8 +321,10 @@ export default function PantallaInicio(props: any) {
             </Animated.View>
 
             <View style={styles.saludoContainer}>
-              <Text style={styles.headerGreeting}> Buenos días</Text>
-              <Text style={styles.headerName}>
+              <Text style={[styles.headerGreeting, { fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 11 }) }]}>
+                Buenos días
+              </Text>
+              <Text style={[styles.headerName, { fontSize: responsive.getValor({ tablet: 28, normal: 24, small: 20 }) }]}>
                 {perfil?.nombre_cliente || 'Cliente'}
               </Text>
             </View>
@@ -381,21 +337,23 @@ export default function PantallaInicio(props: any) {
                 onPress={() => props.navigation.navigate('PanelAdmin')}
               >
                 <LinearGradient
-                  colors={['#43A047', '#FFD700']}
+                  colors={[DISENO.colors.success, DISENO.colors.accentSecondary]}
                   style={styles.headerButtonAdminGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Ionicons name="shield-checkmark" size={20} color="#000" />
+                  <Ionicons name="shield-checkmark" size={20} color={DISENO.colors.text} />
                 </LinearGradient>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* CATEGORÍAS - FILA HORIZONTAL SCROLLEABLE */}
+        {/* CATEGORÍAS */}
         <View style={[styles.categoriasContainer, { paddingHorizontal: padding }]}>
-          <Text style={styles.sectionTitle}> Categorías</Text>
+          <Text style={[styles.sectionTitle, { fontSize: responsive.getValor({ tablet: 20, normal: 18, small: 15 }) }]}>
+            Categorías
+          </Text>
 
           <FlatList
             horizontal
@@ -417,12 +375,12 @@ export default function PantallaInicio(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS - USANDO DISENO CENTRALIZADO
 // ============================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
+    backgroundColor: DISENO.colors.fondo,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -434,8 +392,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-
-  // HEADER
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -451,8 +407,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
   },
-
-  // BIENVENIDA
   bienvenidaContainer: {
     alignItems: 'center',
     marginBottom: 12,
@@ -470,34 +424,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginLeft: 0,
   },
-
-  // SALUDO
   saludoContainer: {
     marginTop: 4,
   },
   headerGreeting: {
-    fontSize: 13,
-    color: DESIGN.colors.textSecondary,
+    color: DISENO.colors.textSecondary,
     letterSpacing: 0.3,
     fontWeight: '400',
   },
   headerName: {
-    fontSize: 24,
     fontWeight: '700',
-    color: DESIGN.colors.text,
+    color: DISENO.colors.text,
     letterSpacing: -0.5,
     marginTop: 2,
   },
-
-  // BOTÓN ADMIN
   headerButtonAdmin: {
-    borderRadius: DESIGN.radius.full,
+    borderRadius: DISENO.radius.full,
     overflow: 'hidden',
-    shadowColor: DESIGN.colors.cardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 6,
+    ...DISENO.shadow.md,
   },
   headerButtonAdminGradient: {
     padding: 10,
@@ -505,17 +449,14 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: DESIGN.radius.full,
+    borderRadius: DISENO.radius.full,
   },
-
-  // CATEGORÍAS
   categoriasContainer: {
     marginVertical: 8,
   },
   sectionTitle: {
-    fontSize: 18,
     fontWeight: '600',
-    color: DESIGN.colors.text,
+    color: DISENO.colors.text,
     letterSpacing: -0.3,
     marginBottom: 14,
   },
@@ -524,7 +465,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   categoriaItem: {
-    borderRadius: DESIGN.radius.md,
+    borderRadius: DISENO.radius.md,
     overflow: 'hidden',
     borderWidth: 1,
     marginRight: 12,
@@ -533,34 +474,11 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
-    backgroundColor: DESIGN.colors.surfaceHover,
+    backgroundColor: DISENO.colors.surfaceHover,
   },
   categoriaImagen: {
     width: '100%',
     height: '100%',
-  },
-  categoriaBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  categoriaBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#fff',
   },
   categoriaInfo: {
     padding: 8,
@@ -568,78 +486,16 @@ const styles = StyleSheet.create({
   },
   categoriaNombre: {
     fontWeight: '600',
-    color: DESIGN.colors.text,
+    color: DISENO.colors.text,
     textAlign: 'center',
   },
   categoriaDesc: {
-    color: DESIGN.colors.textSecondary,
+    color: DISENO.colors.textSecondary,
     textAlign: 'center',
     opacity: 0.6,
     marginTop: 1,
   },
-
   footerSpacing: {
     height: 20,
   },
 });
-
-// ============================================================
-// 🎯 HOOK RESPONSIVE
-// ============================================================
-const useResponsive = () => {
-  const { width, height } = useWindowDimensions();
-  const isTablet = width >= 768;
-  const isDesktop = width >= 1024;
-  const isSmallPhone = width < 375;
-
-  const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
-    if (isDesktop || isTablet) return valores.tablet;
-    if (isSmallPhone) return valores.small;
-    return valores.normal;
-  }, [isDesktop, isTablet, isSmallPhone]);
-
-  const getTexto = useCallback((escala: keyof typeof DISEÑO.TIPOGRAFIA) =>
-    getValor(DISEÑO.TIPOGRAFIA[escala]), [getValor]);
-
-  const getEspaciado = useCallback((escala: keyof typeof DISEÑO.ESPACIADO) =>
-    getValor(DISEÑO.ESPACIADO[escala]), [getValor]);
-
-  const getRadio = useCallback((escala: keyof typeof DISEÑO.RADIO) =>
-    getValor(DISEÑO.RADIO[escala]), [getValor]);
-
-  const spacing = (base: number) => {
-    if (isTablet) return base * 1.5;
-    if (isSmallPhone) return base * 0.75;
-    return base;
-  };
-
-  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, getTexto, getEspaciado, getRadio, spacing };
-};
-
-// ============================================================
-// 📐 SISTEMA DE DISEÑO
-// ============================================================
-const DISEÑO = {
-  BREAKPOINTS: { TABLET: 768, DESKTOP: 1024, SMALL_PHONE: 375 },
-  TIPOGRAFIA: {
-    HERO: { tablet: 28, normal: 22, small: 18 },
-    TITULO: { tablet: 22, normal: 18, small: 15 },
-    SUBTITULO: { tablet: 18, normal: 15, small: 13 },
-    CUERPO: { tablet: 16, normal: 14, small: 12 },
-    PEQUENO: { tablet: 14, normal: 12, small: 10 },
-    MICRO: { tablet: 12, normal: 10, small: 9 },
-  },
-  ESPACIADO: {
-    XL: { tablet: 32, normal: 20, small: 14 },
-    LG: { tablet: 24, normal: 16, small: 12 },
-    MD: { tablet: 20, normal: 14, small: 10 },
-    SM: { tablet: 14, normal: 10, small: 8 },
-    XS: { tablet: 10, normal: 8, small: 6 },
-  },
-  RADIO: {
-    LG: { tablet: 20, normal: 16, small: 12 },
-    MD: { tablet: 16, normal: 12, small: 10 },
-    SM: { tablet: 12, normal: 10, small: 8 },
-    XS: { tablet: 8, normal: 6, small: 4 },
-  },
-};
