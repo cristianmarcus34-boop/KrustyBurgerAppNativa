@@ -2,7 +2,7 @@
   "expo": {
     "name": "KrustyBurger",
     "slug": "KrustyBurger",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
