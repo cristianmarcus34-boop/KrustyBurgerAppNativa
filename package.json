@@ -1,7 +1,7 @@
 {
   "name": "krustyburger",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "index.js",
   "dependencies": {
     "@expo-google-fonts/bebas-neue": "^0.4.1",
     "@expo-google-fonts/lobster": "^0.4.1",

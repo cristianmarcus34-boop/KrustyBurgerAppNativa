@@ -24,8 +24,11 @@ export const useNotificaciones = () => {
 
         const cargarNotificaciones = async () => {
             try {
-                const notis = await notificacionService.obtenerNotificacionesNoLeidas(perfil.id);
-                // ✅ CORREGIDO: Tipado correcto
+                const notis = await notificacionService.obtenerNotificaciones(
+                    perfil.id,
+                    true
+                );
+
                 setNotificaciones(notis as Notificacion[]);
                 setNoLeidas(notis.length);
             } catch (error) {
