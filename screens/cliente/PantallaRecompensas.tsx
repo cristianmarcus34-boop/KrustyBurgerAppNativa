@@ -1,71 +1,16 @@
-// screens/cliente/PantallaRecompensas.tsx
+// screens/cliente/PantallaRecompensas.tsx - CON SIMPSONFONT Y TEMA CLARO
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    Modal, ActivityIndicator, Animated, useWindowDimensions
+    Modal, ActivityIndicator, useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Colores } from '../../lib/colores';
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-    colors: {
-        fondo: '#F5F2ED',
-        surface: '#FFFFFF',
-        surfaceHover: '#F8F6F2',
-        card: '#FFFFFF',
-        cardShadow: 'rgba(0,0,0,0.06)',
-        border: 'rgba(0,0,0,0.06)',
-        borderLight: 'rgba(0,0,0,0.04)',
-        text: '#1A1A1A',
-        textSecondary: 'rgba(0,0,0,0.55)',
-        textTertiary: 'rgba(0,0,0,0.30)',
-        accent: '#E53935',
-        accentLight: '#FF6B6B',
-        accentSecondary: '#F5C518',
-        accentSecondaryLight: '#FFE135',
-        gradientStart: '#E53935',
-        gradientEnd: '#F5C518',
-        verde: '#43A047',
-        verdeClaro: '#66BB6A',
-        rosa: '#EC407A',
-        rosaClaro: '#F06292',
-        azul: '#1A237E',
-        azulClaro: '#3949AB',
-        platino: '#78909C',
-        oro: '#F9A825',
-        plata: '#BDBDBD',
-        bronce: '#A1887F',
-        pendiente: '#FF9800',
-        confirmado: '#2196F3',
-        preparando: '#9C27B0',
-        listo: '#4CAF50',
-        enCamino: '#FF5722',
-        entregado: '#4CAF50',
-        cancelado: '#F44336',
-    },
-    spacing: {
-        xs: 4,
-        sm: 8,
-        md: 16,
-        lg: 24,
-        xl: 32,
-        '2xl': 48,
-    },
-    radius: {
-        sm: 8,
-        md: 12,
-        lg: 16,
-        xl: 20,
-        full: 999,
-    },
-};
+import { DISENO } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -82,13 +27,7 @@ const useResponsive = () => {
         return valores.normal;
     }, [isDesktop, isTablet, isSmallPhone]);
 
-    const spacing = (base: number) => {
-        if (isTablet) return base * 1.5;
-        if (isSmallPhone) return base * 0.75;
-        return base;
-    };
-
-    return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+    return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
 };
 
 interface Recompensa {
@@ -103,7 +42,7 @@ interface Recompensa {
 }
 
 export default function PantallaRecompensas(props: any) {
-    const { perfil, actualizarPerfil } = tiendaAutenticacion();
+    const { perfil } = tiendaAutenticacion();
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
     const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
@@ -114,30 +53,29 @@ export default function PantallaRecompensas(props: any) {
     const [mensajeExito, setMensajeExito] = useState('');
     const [canjeando, setCanjeando] = useState(false);
 
-    // ✅ Responsive
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
 
-    // ✅ Tamaños dinámicos
+    // ✅ Tamaños (Simpsonfont reducido)
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const paddingTop = insets.top + (isTablet ? 30 : 20);
     const paddingBottom = insets.bottom + 20;
-    const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
-    const puntosSize = isTablet ? 16 : isSmallPhone ? 12 : 14;
+    const tituloSize = isTablet ? 24 : isSmallPhone ? 17 : 20;
+    const puntosSize = isTablet ? 14 : isSmallPhone ? 11 : 12;
     const puntosBadgePadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
     const tarjetaPadding = isTablet ? 18 : isSmallPhone ? 12 : 14;
     const iconoSize = isTablet ? 60 : isSmallPhone ? 44 : 50;
     const iconoContainer = isTablet ? 64 : isSmallPhone ? 48 : 54;
-    const nombreSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
-    const descSize = isTablet ? 14 : isSmallPhone ? 11 : 12;
-    const puntosTextSize = isTablet ? 15 : isSmallPhone ? 12 : 13;
-    const botonTextSize = isTablet ? 14 : isSmallPhone ? 11 : 12;
+    const nombreSize = isTablet ? 14 : isSmallPhone ? 12 : 13;
+    const descSize = isTablet ? 13 : isSmallPhone ? 11 : 12;
+    const puntosTextSize = isTablet ? 13 : isSmallPhone ? 11 : 12;
+    const botonTextSize = isTablet ? 12 : isSmallPhone ? 10 : 11;
     const botonPaddingH = isTablet ? 20 : isSmallPhone ? 12 : 16;
     const botonPaddingV = isTablet ? 12 : isSmallPhone ? 8 : 10;
     const modalWidth = isTablet ? '60%' : '85%';
     const modalPadding = isTablet ? 36 : isSmallPhone ? 20 : 24;
-    const modalTituloSize = isTablet ? 26 : isSmallPhone ? 20 : 22;
-    const modalTextSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
+    const modalTituloSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
+    const modalTextSize = isTablet ? 14 : isSmallPhone ? 12 : 13;
 
     useEffect(() => { cargarRecompensas(); }, []);
 
@@ -241,10 +179,10 @@ export default function PantallaRecompensas(props: any) {
 
     const getColorPorTipo = (tipo: string): string => {
         switch (tipo) {
-            case 'DESCUENTO': return DESIGN.colors.accent;
-            case 'PRODUCTO_GRATIS': return DESIGN.colors.verde;
-            case 'ENVIO_GRATIS': return DESIGN.colors.azulClaro;
-            default: return DESIGN.colors.accentSecondary;
+            case 'DESCUENTO': return DISENO.colors.accent;
+            case 'PRODUCTO_GRATIS': return DISENO.colors.success;
+            case 'ENVIO_GRATIS': return DISENO.colors.info;
+            default: return DISENO.colors.accentSecondary;
         }
     };
 
@@ -256,17 +194,13 @@ export default function PantallaRecompensas(props: any) {
         return (
             <View style={[
                 styles.card,
-                disponible && styles.cardDisponible,
                 {
                     padding: tarjetaPadding,
                     borderRadius: isTablet ? 20 : isSmallPhone ? 14 : 16,
-                    borderColor: disponible ? tipoColor + '40' : DESIGN.colors.border,
-                    backgroundColor: DESIGN.colors.surface,
-                    shadowColor: DESIGN.colors.cardShadow,
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 1,
-                    shadowRadius: 8,
-                    elevation: 3,
+                    borderColor: disponible ? tipoColor + '50' : DISENO.colors.border,
+                    borderWidth: disponible ? 1.5 : 1,
+                    backgroundColor: DISENO.colors.surface,
+                    ...DISENO.shadow.sm,
                 }
             ]}>
                 <View style={[
@@ -275,7 +209,7 @@ export default function PantallaRecompensas(props: any) {
                         width: iconoContainer,
                         height: iconoContainer,
                         borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                        backgroundColor: disponible ? tipoColor + '15' : DESIGN.colors.surfaceHover,
+                        backgroundColor: disponible ? tipoColor + '15' : DISENO.colors.surfaceHover,
                     }
                 ]}>
                     <Text style={[styles.icon, { fontSize: iconoSize }]}>
@@ -285,7 +219,7 @@ export default function PantallaRecompensas(props: any) {
 
                 <View style={styles.cardInfo}>
                     <View style={styles.cardHeader}>
-                        <Text style={[styles.cardName, { fontSize: nombreSize, color: DESIGN.colors.text }]} numberOfLines={1}>
+                        <Text style={[styles.cardName, { fontSize: nombreSize, color: DISENO.colors.text }]} numberOfLines={1}>
                             {item.nombre}
                         </Text>
                         <View style={[
@@ -294,15 +228,15 @@ export default function PantallaRecompensas(props: any) {
                                 paddingHorizontal: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                 paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
                                 borderRadius: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                                backgroundColor: disponible ? tipoColor + '15' : DESIGN.colors.surfaceHover,
-                                borderColor: disponible ? tipoColor + '30' : DESIGN.colors.border,
+                                backgroundColor: disponible ? tipoColor + '15' : DISENO.colors.surfaceHover,
+                                borderColor: disponible ? tipoColor + '40' : DISENO.colors.border,
                             }
                         ]}>
                             <Text style={[
                                 styles.typeBadgeText,
                                 {
-                                    fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
-                                    color: disponible ? tipoColor : DESIGN.colors.textTertiary,
+                                    fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                                    color: disponible ? tipoColor : DISENO.colors.textTertiary,
                                 }
                             ]}>
                                 {getTituloTipo(item.tipo)}
@@ -310,7 +244,7 @@ export default function PantallaRecompensas(props: any) {
                         </View>
                     </View>
 
-                    <Text style={[styles.cardDesc, { fontSize: descSize, color: DESIGN.colors.textSecondary }]} numberOfLines={2}>
+                    <Text style={[styles.cardDesc, { fontSize: descSize, color: DISENO.colors.textSecondary }]} numberOfLines={2}>
                         {item.descripcion}
                     </Text>
 
@@ -321,7 +255,7 @@ export default function PantallaRecompensas(props: any) {
                                 styles.cardPoints,
                                 {
                                     fontSize: puntosTextSize,
-                                    color: disponible ? DESIGN.colors.accentSecondary : DESIGN.colors.textTertiary,
+                                    color: disponible ? DISENO.colors.accentSecondary : DISENO.colors.textTertiary,
                                 }
                             ]}>
                                 {item.puntos_necesarios} pts
@@ -331,13 +265,12 @@ export default function PantallaRecompensas(props: any) {
                         <TouchableOpacity
                             style={[
                                 styles.redeemButton,
-                                disponible && styles.redeemButtonActive,
                                 {
                                     paddingHorizontal: botonPaddingH,
                                     paddingVertical: botonPaddingV,
                                     borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                    backgroundColor: disponible ? DESIGN.colors.accentSecondary : DESIGN.colors.surfaceHover,
-                                    borderColor: disponible ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
+                                    backgroundColor: disponible ? DISENO.colors.accentSecondary : DISENO.colors.surfaceHover,
+                                    borderColor: disponible ? DISENO.colors.accentSecondary : DISENO.colors.border,
                                 }
                             ]}
                             onPress={() => confirmarCanje(item)}
@@ -348,8 +281,7 @@ export default function PantallaRecompensas(props: any) {
                                 styles.redeemButtonText,
                                 {
                                     fontSize: botonTextSize,
-                                    color: disponible ? DESIGN.colors.text : DESIGN.colors.textTertiary,
-                                    fontWeight: disponible ? '700' : '500',
+                                    color: disponible ? DISENO.colors.text : DISENO.colors.textTertiary,
                                 }
                             ]}>
                                 {canjeando ? '⏳ Canjeando...' : disponible ? '🔓 Canjear' : '🔒 Bloqueado'}
@@ -361,13 +293,13 @@ export default function PantallaRecompensas(props: any) {
         );
     };
 
-    // ✅ Verificar si hay recompensas disponibles
     const tieneRecompensasDisponibles = recompensas.some(r => (perfil?.puntos_disponibles || 0) >= r.puntos_necesarios);
 
     return (
         <View style={styles.container}>
+            {/* ✅ FONDO TEMA CLARO */}
             <LinearGradient
-                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
                 style={styles.backgroundGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -387,10 +319,10 @@ export default function PantallaRecompensas(props: any) {
                     onPress={() => props.navigation.goBack()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
+                    <Ionicons name="arrow-back" size={isTablet ? 26 : 22} color={DISENO.colors.text} />
                 </TouchableOpacity>
 
-                <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+                <Text style={[styles.title, { fontSize: tituloSize, color: DISENO.colors.text }]}>
                     🎁 Recompensas
                 </Text>
 
@@ -400,18 +332,20 @@ export default function PantallaRecompensas(props: any) {
                         paddingHorizontal: puntosBadgePadding,
                         paddingVertical: isTablet ? 10 : isSmallPhone ? 6 : 8,
                         borderRadius: isTablet ? 24 : isSmallPhone ? 16 : 20,
-                        backgroundColor: DESIGN.colors.surface + '20',
-                        borderColor: DESIGN.colors.accentSecondary + '30',
+                        backgroundColor: DISENO.colors.surface,
+                        borderColor: DISENO.colors.accentSecondary + '40',
+                        borderWidth: 1,
+                        ...DISENO.shadow.sm,
                     }
                 ]}>
-                    <Text style={[styles.pointsIcon, { fontSize: isTablet ? 18 : isSmallPhone ? 13 : 15 }]}>⭐</Text>
-                    <Text style={[styles.pointsText, { fontSize: puntosSize, color: DESIGN.colors.accentSecondary }]}>
+                    <Text style={[styles.pointsIcon, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>⭐</Text>
+                    <Text style={[styles.pointsText, { fontSize: puntosSize, color: DISENO.colors.accentSecondary }]}>
                         {perfil?.puntos_disponibles || 0}
                     </Text>
                 </View>
             </View>
 
-            {/* ✅ MENSAJE INFORMATIVO SOBRE CANJE EN CARRITO */}
+            {/* ✅ BANNER INFORMATIVO */}
             <View style={[
                 styles.infoBanner,
                 {
@@ -420,9 +354,10 @@ export default function PantallaRecompensas(props: any) {
                     marginBottom: 8,
                     padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                     borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                    backgroundColor: DESIGN.colors.accentSecondary + '12',
-                    borderColor: DESIGN.colors.accentSecondary + '30',
+                    backgroundColor: DISENO.colors.surface,
+                    borderColor: DISENO.colors.accentSecondary + '30',
                     borderWidth: 1,
+                    ...DISENO.shadow.sm,
                 }
             ]}>
                 <View style={styles.infoBannerContent}>
@@ -432,19 +367,18 @@ export default function PantallaRecompensas(props: any) {
                             width: isTablet ? 44 : isSmallPhone ? 32 : 36,
                             height: isTablet ? 44 : isSmallPhone ? 32 : 36,
                             borderRadius: isTablet ? 22 : isSmallPhone ? 16 : 18,
-                            backgroundColor: DESIGN.colors.accentSecondary + '20',
+                            backgroundColor: DISENO.colors.accentSecondary + '20',
                             marginRight: 12,
                         }
                     ]}>
-                        <Ionicons name="cart-outline" size={isTablet ? 24 : isSmallPhone ? 16 : 20} color={DESIGN.colors.accentSecondary} />
+                        <Ionicons name="cart-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DISENO.colors.accentSecondary} />
                     </View>
                     <View style={styles.infoBannerTextContainer}>
                         <Text style={[
                             styles.infoBannerTitle,
                             {
-                                fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13,
-                                color: DESIGN.colors.text,
-                                fontWeight: '600',
+                                fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                                color: DISENO.colors.text,
                             }
                         ]}>
                             💡 Canjeá tus puntos en el carrito
@@ -452,8 +386,8 @@ export default function PantallaRecompensas(props: any) {
                         <Text style={[
                             styles.infoBannerText,
                             {
-                                fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
-                                color: DESIGN.colors.textSecondary,
+                                fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
+                                color: DISENO.colors.textSecondary,
                             }
                         ]}>
                             Tus puntos acumulados se pueden canjear como descuento directo en el total de tu compra.
@@ -466,8 +400,8 @@ export default function PantallaRecompensas(props: any) {
             {/* ✅ CONTENIDO */}
             {cargando ? (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
-                    <Text style={[styles.loadingText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.textSecondary }]}>
+                    <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                    <Text style={[styles.loadingText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>
                         Cargando recompensas...
                     </Text>
                 </View>
@@ -487,36 +421,36 @@ export default function PantallaRecompensas(props: any) {
                     showsVerticalScrollIndicator={false}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="gift-outline" size={isTablet ? 80 : 60} color={DESIGN.colors.textTertiary + '30'} />
-                            <Text style={[styles.emptyText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.text }]}>
+                            <Ionicons name="gift-outline" size={isTablet ? 80 : 60} color={DISENO.colors.textTertiary + '40'} />
+                            <Text style={[styles.emptyText, { fontSize: isTablet ? 17 : isSmallPhone ? 14 : 15, color: DISENO.colors.text }]}>
                                 No hay recompensas disponibles
                             </Text>
-                            <Text style={[styles.emptySubtext, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
+                            <Text style={[styles.emptySubtext, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.textSecondary }]}>
                                 Pronto tendremos nuevas recompensas para vos 🎉
                             </Text>
                         </View>
                     }
                     ListFooterComponent={
-                        // ✅ Mostrar mensaje de ayuda si hay puntos pero no recompensas disponibles
                         (perfil?.puntos_disponibles || 0) > 0 && !tieneRecompensasDisponibles && recompensas.length > 0 ? (
                             <View style={[
                                 styles.helpMessage,
                                 {
                                     padding: isTablet ? 16 : isSmallPhone ? 12 : 14,
                                     borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    backgroundColor: DESIGN.colors.accent + '08',
-                                    borderColor: DESIGN.colors.accent + '20',
+                                    backgroundColor: DISENO.colors.surface,
+                                    borderColor: DISENO.colors.accent + '25',
                                     borderWidth: 1,
                                     marginTop: 8,
                                     marginBottom: 16,
+                                    ...DISENO.shadow.sm,
                                 }
                             ]}>
-                                <Ionicons name="bulb-outline" size={isTablet ? 28 : isSmallPhone ? 20 : 24} color={DESIGN.colors.accent} />
+                                <Ionicons name="bulb-outline" size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={DISENO.colors.accent} />
                                 <View style={styles.helpMessageTextContainer}>
-                                    <Text style={[styles.helpMessageTitle, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
+                                    <Text style={[styles.helpMessageTitle, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DISENO.colors.text }]}>
                                         💡 ¿Sabías que podés usar tus puntos?
                                     </Text>
-                                    <Text style={[styles.helpMessageText, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
+                                    <Text style={[styles.helpMessageText, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DISENO.colors.textSecondary }]}>
                                         Aunque no haya recompensas disponibles ahora, podés usar tus {perfil?.puntos_disponibles || 0} puntos como descuento en tu próximo pedido.
                                         Simplemente agregá productos al carrito y aplicá tus puntos en el checkout.
                                     </Text>
@@ -534,55 +468,62 @@ export default function PantallaRecompensas(props: any) {
                         styles.modal,
                         {
                             padding: modalPadding,
-                            borderRadius: isTablet ? 28 : isSmallPhone ? 18 : 24,
+                            borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
                             width: modalWidth,
-                            borderColor: DESIGN.colors.accentSecondary + '40',
-                            backgroundColor: DESIGN.colors.surface,
+                            borderColor: DISENO.colors.border,
+                            borderWidth: 1,
+                            backgroundColor: DISENO.colors.surface,
+                            ...DISENO.shadow.lg,
                         }
                     ]}>
-                        <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>🎁</Text>
-                        <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DESIGN.colors.text }]}>
+                        <Text style={[styles.modalIcon, { fontSize: isTablet ? 72 : 56 }]}>🎁</Text>
+                        <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DISENO.colors.text }]}>
                             Confirmar Canje
                         </Text>
-                        <Text style={[styles.modalText, { fontSize: modalTextSize, color: DESIGN.colors.textSecondary }]}>
-                            Usar <Text style={[styles.modalTextHighlight, { color: DESIGN.colors.accentSecondary }]}>{recompensaSeleccionada?.puntos_necesarios} pts</Text> por:
+                        <Text style={[styles.modalText, { fontSize: modalTextSize, color: DISENO.colors.textSecondary }]}>
+                            Usar <Text style={[styles.modalTextHighlight, { color: DISENO.colors.accent }]}>{recompensaSeleccionada?.puntos_necesarios} pts</Text> por:
                             {"\n"}
-                            <Text style={[styles.modalTextReward, { color: DESIGN.colors.text }]}>"{recompensaSeleccionada?.nombre}"</Text>
+                            <Text style={[styles.modalTextReward, { color: DISENO.colors.text }]}>"{recompensaSeleccionada?.nombre}"</Text>
                         </Text>
 
                         <View style={[styles.modalButtons, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12 }]}>
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.modalCancel, {
+                                style={[styles.modalButton, {
                                     paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
                                     borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    backgroundColor: DESIGN.colors.surfaceHover,
-                                    borderColor: DESIGN.colors.border,
+                                    backgroundColor: DISENO.colors.surfaceHover,
+                                    borderColor: DISENO.colors.border,
+                                    borderWidth: 1,
                                 }]}
                                 onPress={() => setMostrarModalConfirmar(false)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.modalCancelText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.textSecondary }]}>
+                                <Text style={[styles.modalCancelText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>
                                     Cancelar
                                 </Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.modalButton, styles.modalConfirm, {
+                                style={[styles.modalButton, {
                                     paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
                                     borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    overflow: 'hidden',
-                                    backgroundColor: DESIGN.colors.accentSecondary,
+                                    backgroundColor: DISENO.colors.accentSecondary,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                    ...DISENO.shadow.sm,
                                 }]}
                                 onPress={canjear}
                                 disabled={canjeando}
                                 activeOpacity={0.7}
                             >
                                 {canjeando ? (
-                                    <ActivityIndicator size="small" color={DESIGN.colors.text} />
+                                    <ActivityIndicator size="small" color={DISENO.colors.text} />
                                 ) : (
                                     <>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.text} />
-                                        <Text style={[styles.modalConfirmText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
+                                        <Ionicons name="checkmark-circle" size={isTablet ? 20 : isSmallPhone ? 16 : 18} color={DISENO.colors.text} />
+                                        <Text style={[styles.modalConfirmText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.text }]}>
                                             Canjear
                                         </Text>
                                     </>
@@ -598,17 +539,18 @@ export default function PantallaRecompensas(props: any) {
                 <View style={styles.modalOverlay}>
                     <View style={[
                         styles.modal,
-                        styles.modalSuccess,
                         {
                             padding: modalPadding,
-                            borderRadius: isTablet ? 28 : isSmallPhone ? 18 : 24,
+                            borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
                             width: modalWidth,
-                            borderColor: DESIGN.colors.verde + '40',
-                            backgroundColor: DESIGN.colors.surface,
+                            borderColor: DISENO.colors.success + '40',
+                            borderWidth: 1,
+                            backgroundColor: DISENO.colors.surface,
+                            ...DISENO.shadow.lg,
                         }
                     ]}>
-                        <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>✅</Text>
-                        <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DESIGN.colors.verde }]}>
+                        <Text style={[styles.modalIcon, { fontSize: isTablet ? 72 : 56 }]}>✅</Text>
+                        <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DISENO.colors.success }]}>
                             {mensajeExito}
                         </Text>
                     </View>
@@ -619,12 +561,12 @@ export default function PantallaRecompensas(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS - TEMA CLARO CON SIMPSONFONT
 // ============================================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: DESIGN.colors.fondo,
+        backgroundColor: DISENO.colors.fondo,
     },
     backgroundGradient: {
         position: 'absolute',
@@ -637,14 +579,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: DESIGN.colors.surface + '10',
     },
     backButton: {
-        padding: 4,
+        padding: 10,
+        borderRadius: 14,
+        backgroundColor: DISENO.colors.surface,
+        ...DISENO.shadow.sm,
     },
+    // ✅ TÍTULO CON SIMPSONFONT
     title: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         letterSpacing: 1,
         flex: 1,
         textAlign: 'center',
@@ -652,12 +597,13 @@ const styles = StyleSheet.create({
     pointsBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
         gap: 6,
     },
     pointsIcon: {},
+    // ✅ PUNTOS CON SIMPSONFONT
     pointsText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     // ✅ BANNER INFORMATIVO
     infoBanner: {
@@ -675,30 +621,38 @@ const styles = StyleSheet.create({
     infoBannerTextContainer: {
         flex: 1,
     },
+    // ✅ TÍTULO CON SIMPSONFONT
     infoBannerTitle: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 2,
     },
+    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     infoBannerText: {
+        fontFamily: FUENTES.regular,
         lineHeight: 16,
-        opacity: 0.8,
+        opacity: 0.85,
     },
     // ✅ MENSAJE DE AYUDA
     helpMessage: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        borderWidth: 1,
         gap: 12,
     },
     helpMessageTextContainer: {
         flex: 1,
     },
+    // ✅ TÍTULO CON SIMPSONFONT
     helpMessageTitle: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 2,
     },
+    // ✅ TEXTO CON FUENTE REGULAR
     helpMessageText: {
+        fontFamily: FUENTES.regular,
         lineHeight: 16,
-        opacity: 0.8,
+        opacity: 0.85,
     },
     loadingContainer: {
         flex: 1,
@@ -706,7 +660,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 16,
     },
+    // ✅ LOADING CON FUENTE REGULAR
     loadingText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '400',
         opacity: 0.7,
     },
@@ -716,21 +672,13 @@ const styles = StyleSheet.create({
     card: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        borderWidth: 1,
         marginBottom: 12,
-        opacity: 0.6,
-    },
-    cardDisponible: {
-        opacity: 1,
-        borderWidth: 2,
     },
     cardIcon: {
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
         flexShrink: 0,
-        borderWidth: 1,
-        borderColor: DESIGN.colors.border,
     },
     icon: {},
     cardInfo: {
@@ -744,20 +692,26 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         gap: 4,
     },
+    // ✅ NOMBRE CON SIMPSONFONT
     cardName: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         flex: 1,
     },
     typeBadge: {
         borderWidth: 1,
     },
+    // ✅ TIPO BADGE CON FUENTE REGULAR
     typeBadgeText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '600',
         textTransform: 'capitalize',
     },
+    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     cardDesc: {
+        fontFamily: FUENTES.regular,
         marginTop: 2,
-        opacity: 0.7,
+        opacity: 0.75,
         lineHeight: 18,
     },
     cardFooter: {
@@ -774,17 +728,19 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     pointsIconSmall: {},
+    // ✅ PUNTOS CON SIMPSONFONT
     cardPoints: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     redeemButton: {
         borderWidth: 1,
+        ...DISENO.shadow.xs,
     },
-    redeemButtonActive: {
-        borderWidth: 2,
-    },
+    // ✅ BOTÓN CON SIMPSONFONT
     redeemButtonText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         letterSpacing: 0.3,
     },
     emptyContainer: {
@@ -793,50 +749,57 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 80,
     },
+    // ✅ EMPTY CON SIMPSONFONT
     emptyText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginTop: 16,
         textAlign: 'center',
     },
+    // ✅ SUBTEXT CON FUENTE REGULAR
     emptySubtext: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         marginTop: 4,
-        opacity: 0.6,
+        opacity: 0.7,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.85)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
     },
     modal: {
         alignItems: 'center',
-        borderWidth: 2,
         maxWidth: 500,
-    },
-    modalSuccess: {
-        borderWidth: 2,
     },
     modalIcon: {
         marginBottom: 12,
     },
+    // ✅ MODAL TITLE CON SIMPSONFONT
     modalTitle: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 8,
         textAlign: 'center',
     },
+    // ✅ MODAL TEXT CON FUENTE REGULAR
     modalText: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         marginBottom: 24,
-        lineHeight: 24,
-        opacity: 0.8,
+        lineHeight: 22,
     },
+    // ✅ HIGHLIGHT CON SIMPSONFONT
     modalTextHighlight: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
+    // ✅ REWARD NAME CON SIMPSONFONT
     modalTextReward: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     modalButtons: {
         flexDirection: 'row',
@@ -846,23 +809,15 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
     },
-    modalCancel: {
-        borderWidth: 1,
-    },
+    // ✅ CANCEL CON SIMPSONFONT
     modalCancelText: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
-    modalConfirm: {
-        overflow: 'hidden',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-    },
+    // ✅ CONFIRM CON SIMPSONFONT
     modalConfirmText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
 });

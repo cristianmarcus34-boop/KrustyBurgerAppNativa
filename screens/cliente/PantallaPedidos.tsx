@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaPedidos.tsx - VERSIÓN CORREGIDA
+﻿// screens/cliente/PantallaPedidos.tsx - CON SIMPSONFONT Y TEMA CLARO
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -10,46 +10,20 @@ import {
   Animated,
   RefreshControl,
   useWindowDimensions,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Colores } from '../../lib/colores';
+import { DISENO } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 import { Pedido } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
-// 🎨 SISTEMA DE DISEÑO
+// 🎨 CONFIGURACIÓN DE ESTADOS
 // ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F5F2ED',
-    surface: '#FFFFFF',
-    surfaceHover: '#F8F6F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.06)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentSecondary: '#F5C518',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-    verde: '#43A047',
-    pendiente: '#FF9800',
-    confirmado: '#2196F3',
-    preparando: '#9C27B0',
-    listo: '#4CAF50',
-    enCamino: '#FF5722',
-    entregado: '#4CAF50',
-    cancelado: '#F44336',
-  },
-};
-
 const ESTADOS_CONFIG: Record<string, { label: string; icono: keyof typeof Ionicons.glyphMap; color: string }> = {
   pendiente: { label: 'Pendiente', icono: 'time-outline', color: '#FF9800' },
   confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', color: '#2196F3' },
@@ -67,11 +41,9 @@ export default function PantallaPedidos(props: any) {
   const [refrescando, setRefrescando] = useState(false);
   const { width } = useWindowDimensions();
 
-  // ✅ Detectar tamaño de pantalla
   const isTablet = width >= 768;
   const isSmall = width < 375;
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
@@ -80,16 +52,8 @@ export default function PantallaPedidos(props: any) {
       cargarPedidosUsuario(perfil.id);
     }
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, [perfil]);
 
@@ -105,17 +69,16 @@ export default function PantallaPedidos(props: any) {
     return ESTADOS_CONFIG[estado] || ESTADOS_CONFIG.pendiente;
   };
 
-  // ✅ Tamaños responsivos
+  // ✅ Tamaños (Simpsonfont reducido)
   const paddingHorizontal = isTablet ? 40 : isSmall ? 12 : 16;
-  const tituloSize = isTablet ? 34 : isSmall ? 22 : 28;
+  const tituloSize = isTablet ? 24 : isSmall ? 17 : 20;
   const tarjetaPadding = isTablet ? 20 : isSmall ? 12 : 16;
-  const pedidoIdSize = isTablet ? 18 : isSmall ? 13 : 16;
-  const totalSize = isTablet ? 26 : isSmall ? 17 : 22;
-  const estadoTextSize = isTablet ? 13 : isSmall ? 9 : 11;
-  const infoEnvioSize = isTablet ? 13 : isSmall ? 9 : 11;
-  const iconSize = isTablet ? 28 : isSmall ? 16 : 22;
+  const pedidoIdSize = isTablet ? 15 : isSmall ? 12 : 13;
+  const totalSize = isTablet ? 20 : isSmall ? 15 : 17;
+  const estadoTextSize = isTablet ? 11 : isSmall ? 9 : 10;
+  const infoEnvioSize = isTablet ? 12 : isSmall ? 10 : 11;
+  const iconSize = isTablet ? 26 : isSmall ? 16 : 22;
 
-  // ✅ RenderItem - AHORA CON ESTILOS DIRECTOS (sin Animated para evitar problemas)
   const renderPedido = useCallback(({ item, index }: { item: Pedido; index: number }) => {
     const estado = item.estado || 'pendiente';
     const estadoInfo = getEstadoInfo(estado);
@@ -128,21 +91,17 @@ export default function PantallaPedidos(props: any) {
           styles.card,
           {
             padding: tarjetaPadding,
-            borderRadius: isTablet ? 18 : isSmall ? 10 : 16,
+            borderRadius: isTablet ? 18 : isSmall ? 12 : 16,
             borderColor: estadoInfo.color + '40',
-            backgroundColor: DESIGN.colors.surface,
-            shadowColor: 'rgba(0,0,0,0.06)',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 1,
-            shadowRadius: 8,
-            elevation: 3,
-            marginBottom: 12, // ✅ Espacio entre tarjetas
+            borderWidth: 1,
+            backgroundColor: DISENO.colors.surface,
+            ...DISENO.shadow.sm,
           }
         ]}
         onPress={() => props.navigation.navigate('Seguimiento', { pedidoId: item.id })}
         activeOpacity={0.8}
       >
-        {/* ✅ ENCABEZADO */}
+        {/* ENCABEZADO */}
         <View style={styles.cardHeader}>
           <View style={styles.pedidoInfo}>
             <View style={[
@@ -156,10 +115,11 @@ export default function PantallaPedidos(props: any) {
               <Ionicons name={estadoInfo.icono} size={iconSize} color={estadoInfo.color} />
             </View>
             <View style={styles.pedidoTexto}>
-              <Text style={[styles.pedidoId, { fontSize: pedidoIdSize, color: DESIGN.colors.text }]}>
+              {/* ✅ PEDIDO ID CON SIMPSONFONT */}
+              <Text style={[styles.pedidoId, { fontSize: pedidoIdSize, color: DISENO.colors.text }]}>
                 Pedido #{item.id}
               </Text>
-              <Text style={[styles.fecha, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+              <Text style={[styles.fecha, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
                 {item.creado_en ? new Date(item.creado_en).toLocaleDateString('es-AR', {
                   day: '2-digit',
                   month: '2-digit',
@@ -174,9 +134,9 @@ export default function PantallaPedidos(props: any) {
             styles.estado,
             {
               backgroundColor: estadoInfo.color + '15',
-              paddingHorizontal: isTablet ? 14 : isSmall ? 6 : 10,
-              paddingVertical: isTablet ? 6 : isSmall ? 3 : 5,
-              borderRadius: isTablet ? 14 : isSmall ? 6 : 10,
+              paddingHorizontal: isTablet ? 12 : isSmall ? 8 : 10,
+              paddingVertical: isTablet ? 5 : isSmall ? 3 : 4,
+              borderRadius: isTablet ? 14 : isSmall ? 8 : 10,
               borderWidth: 1,
               borderColor: estadoInfo.color + '30',
             }
@@ -193,43 +153,44 @@ export default function PantallaPedidos(props: any) {
           </View>
         </View>
 
-        {/* ✅ DETALLES Y PRECIO */}
-        <View style={[styles.detalles, { borderTopColor: DESIGN.colors.border }]}>
+        {/* DETALLES Y PRECIO */}
+        <View style={[styles.detalles, { borderTopColor: DISENO.colors.border }]}>
           <View>
-            <Text style={[styles.total, { fontSize: totalSize, color: DESIGN.colors.accent }]}>
+            {/* ✅ TOTAL CON SIMPSONFONT */}
+            <Text style={[styles.total, { fontSize: totalSize, color: DISENO.colors.accent }]}>
               {formatearPrecio(item.total || 0)}
             </Text>
             {item.items_json && (
-              <Text style={[styles.cantidadItems, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+              <Text style={[styles.cantidadItems, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
                 {item.items_json.length} producto(s)
               </Text>
             )}
           </View>
           <View style={styles.accion}>
-            <Text style={[styles.verDetalle, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+            <Text style={[styles.verDetalle, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
               Ver detalle
             </Text>
-            <Ionicons name="chevron-forward" size={iconSize * 0.7} color={DESIGN.colors.textTertiary} />
+            <Ionicons name="chevron-forward" size={iconSize * 0.7} color={DISENO.colors.textTertiary} />
           </View>
         </View>
 
-        {/* ✅ INFORMACIÓN DE ENVÍO */}
+        {/* INFORMACIÓN DE ENVÍO */}
         {mostrarInfoEnvio && (
           <View style={[
             styles.infoEnvioContainer,
             {
               marginTop: isTablet ? 10 : isSmall ? 6 : 8,
-              padding: isTablet ? 14 : isSmall ? 6 : 10,
-              borderRadius: isTablet ? 12 : isSmall ? 6 : 10,
-              backgroundColor: DESIGN.colors.surfaceHover || '#F8F6F2',
-              borderColor: DESIGN.colors.border,
+              padding: isTablet ? 14 : isSmall ? 8 : 10,
+              borderRadius: isTablet ? 12 : isSmall ? 8 : 10,
+              backgroundColor: DISENO.colors.surfaceHover,
+              borderColor: DISENO.colors.border,
               borderWidth: 1,
             }
           ]}>
             {item.distancia_km !== undefined && item.distancia_km !== null && (
               <View style={styles.infoEnvioFila}>
-                <Ionicons name="navigate" size={infoEnvioSize + 2} color={DESIGN.colors.accentSecondary} />
-                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+                <Ionicons name="navigate" size={infoEnvioSize + 2} color={DISENO.colors.accentSecondary} />
+                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
                   📏 Distancia: {item.distancia_km.toFixed(1)} km
                 </Text>
               </View>
@@ -237,20 +198,20 @@ export default function PantallaPedidos(props: any) {
 
             {item.tiempo_estimado !== undefined && item.tiempo_estimado !== null && (
               <View style={styles.infoEnvioFila}>
-                <Ionicons name="time-outline" size={infoEnvioSize + 2} color={DESIGN.colors.accentSecondary} />
-                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+                <Ionicons name="time-outline" size={infoEnvioSize + 2} color={DISENO.colors.accentSecondary} />
+                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
                   ⏱️ Tiempo estimado: {item.tiempo_estimado} min
                 </Text>
               </View>
             )}
 
             <View style={styles.infoEnvioFila}>
-              <Ionicons name="cash" size={infoEnvioSize + 2} color={DESIGN.colors.verde} />
+              <Ionicons name="cash" size={infoEnvioSize + 2} color={DISENO.colors.success} />
               <Text style={[
                 styles.infoEnvioTexto,
                 {
                   fontSize: infoEnvioSize,
-                  color: item.costo_envio && item.costo_envio > 0 ? DESIGN.colors.verde : DESIGN.colors.textTertiary,
+                  color: item.costo_envio && item.costo_envio > 0 ? DISENO.colors.success : DISENO.colors.textTertiary,
                 }
               ]}>
                 💰 Costo de envío: {item.costo_envio && item.costo_envio > 0 ? formatearPrecio(item.costo_envio) : 'Gratis'}
@@ -259,8 +220,12 @@ export default function PantallaPedidos(props: any) {
 
             {item.tipo_entrega && (
               <View style={styles.infoEnvioFila}>
-                <Ionicons name={item.tipo_entrega === 'retiro' ? 'storefront-outline' : 'home-outline'} size={infoEnvioSize + 2} color={DESIGN.colors.textTertiary} />
-                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DESIGN.colors.textSecondary }]}>
+                <Ionicons
+                  name={item.tipo_entrega === 'retiro' ? 'storefront-outline' : 'home-outline'}
+                  size={infoEnvioSize + 2}
+                  color={DISENO.colors.textTertiary}
+                />
+                <Text style={[styles.infoEnvioTexto, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
                   {item.tipo_entrega === 'retiro' ? '📦 Retiro en local' : '🚚 Domicilio'}
                 </Text>
               </View>
@@ -273,14 +238,15 @@ export default function PantallaPedidos(props: any) {
 
   return (
     <View style={styles.container}>
+      {/* ✅ FONDO TEMA CLARO */}
       <LinearGradient
-        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
-      {/* ✅ HEADER */}
+      {/* HEADER */}
       <View style={[
         styles.header,
         {
@@ -289,22 +255,26 @@ export default function PantallaPedidos(props: any) {
           paddingBottom: isTablet ? 16 : isSmall ? 8 : 12,
         }
       ]}>
-        <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+        {/* ✅ TÍTULO CON SIMPSONFONT */}
+        <Text style={[styles.title, { fontSize: tituloSize, color: DISENO.colors.text }]}>
           📋 Mis Pedidos
         </Text>
         <View style={styles.headerRight}>
-          <Text style={[styles.counter, { fontSize: infoEnvioSize, color: DESIGN.colors.surface + '60' }]}>
+          <Text style={[styles.counter, { fontSize: infoEnvioSize, color: DISENO.colors.textSecondary }]}>
             {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'}
           </Text>
         </View>
       </View>
 
-      {/* ✅ LISTA DE PEDIDOS - CON FLEX:1 PARA QUE OCUPE TODO EL ESPACIO */}
+      {/* LISTA */}
       <View style={{ flex: 1 }}>
         {cargando ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
-            <Text style={[styles.loadingText, { fontSize: isTablet ? 16 : isSmall ? 12 : 14, color: DESIGN.colors.surface + '70' }]}>
+            <ActivityIndicator size="large" color={DISENO.colors.accent} />
+            <Text style={[styles.loadingText, {
+              fontSize: isTablet ? 14 : isSmall ? 12 : 13,
+              color: DISENO.colors.textSecondary,
+            }]}>
               Cargando tus pedidos...
             </Text>
           </View>
@@ -326,17 +296,28 @@ export default function PantallaPedidos(props: any) {
               <RefreshControl
                 refreshing={refrescando}
                 onRefresh={manejarRefresh}
-                tintColor={DESIGN.colors.accentSecondary}
-                colors={[DESIGN.colors.accentSecondary]}
+                tintColor={DISENO.colors.accent}
+                colors={[DISENO.colors.accent]}
               />
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons name="receipt-outline" size={isTablet ? 80 : isSmall ? 50 : 60} color={DESIGN.colors.surface + '20'} />
-                <Text style={[styles.emptyText, { fontSize: isTablet ? 20 : isSmall ? 16 : 18, color: DESIGN.colors.surface }]}>
+                <Ionicons
+                  name="receipt-outline"
+                  size={isTablet ? 80 : isSmall ? 50 : 60}
+                  color={DISENO.colors.textTertiary + '40'}
+                />
+                {/* ✅ EMPTY CON SIMPSONFONT */}
+                <Text style={[styles.emptyText, {
+                  fontSize: isTablet ? 18 : isSmall ? 15 : 16,
+                  color: DISENO.colors.text,
+                }]}>
                   No tienes pedidos aún
                 </Text>
-                <Text style={[styles.emptySubText, { fontSize: isTablet ? 15 : isSmall ? 12 : 13, color: DESIGN.colors.surface + '60' }]}>
+                <Text style={[styles.emptySubText, {
+                  fontSize: isTablet ? 13 : isSmall ? 11 : 12,
+                  color: DISENO.colors.textSecondary,
+                }]}>
                   Tus pedidos aparecerán aquí cuando realices tu primera compra 🍔
                 </Text>
               </View>
@@ -349,12 +330,12 @@ export default function PantallaPedidos(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS - TEMA CLARO CON SIMPSONFONT
 // ============================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
+    backgroundColor: DISENO.colors.fondo,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -367,11 +348,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: DESIGN.colors.surface + '10',
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   title: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     letterSpacing: 1,
     flex: 1,
   },
@@ -379,9 +360,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  // ✅ CONTADOR CON FUENTE REGULAR
   counter: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
-    opacity: 0.6,
+    opacity: 0.8,
   },
   loadingContainer: {
     flex: 1,
@@ -389,18 +372,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
+  // ✅ LOADING CON FUENTE REGULAR
   loadingText: {
+    fontFamily: FUENTES.regular,
     fontWeight: '400',
     opacity: 0.7,
   },
   list: {
     flexGrow: 1,
-    paddingBottom: 120, // ✅ Espacio para que no se corte el último item
+    paddingBottom: 120,
   },
   card: {
     borderWidth: 1,
-    marginBottom: 12, // ✅ Espacio entre tarjetas
-    backgroundColor: '#FFFFFF',
+    marginBottom: 12,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -421,10 +405,14 @@ const styles = StyleSheet.create({
   pedidoTexto: {
     flex: 1,
   },
+  // ✅ PEDIDO ID CON SIMPSONFONT
   pedidoId: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
+  // ✅ FECHA CON FUENTE REGULAR
   fecha: {
+    fontFamily: FUENTES.regular,
     marginTop: 2,
     opacity: 0.6,
   },
@@ -432,8 +420,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginLeft: 8,
   },
+  // ✅ ESTADO CON FUENTE REGULAR (texto pequeño)
   estadoTexto: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.regular,
+    fontWeight: '600',
     textTransform: 'capitalize',
   },
   detalles: {
@@ -443,21 +433,27 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 10,
   },
+  // ✅ TOTAL CON SIMPSONFONT
   total: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
+  // ✅ CANTIDAD CON FUENTE REGULAR
   cantidadItems: {
+    fontFamily: FUENTES.regular,
     marginTop: 2,
-    opacity: 0.5,
+    opacity: 0.6,
   },
   accion: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
+  // ✅ VER DETALLE CON FUENTE REGULAR
   verDetalle: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
-    opacity: 0.6,
+    opacity: 0.7,
   },
   infoEnvioContainer: {
     borderWidth: 1,
@@ -468,23 +464,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  // ✅ INFO ENVÍO CON FUENTE REGULAR
   infoEnvioTexto: {
+    fontFamily: FUENTES.regular,
     fontWeight: '400',
-    opacity: 0.8,
+    opacity: 0.85,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
   },
+  // ✅ EMPTY CON SIMPSONFONT
   emptyText: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     marginTop: 16,
     textAlign: 'center',
   },
+  // ✅ SUBTEXT CON FUENTE REGULAR
   emptySubText: {
+    fontFamily: FUENTES.regular,
     textAlign: 'center',
     marginTop: 4,
-    opacity: 0.6,
+    opacity: 0.7,
   },
 });

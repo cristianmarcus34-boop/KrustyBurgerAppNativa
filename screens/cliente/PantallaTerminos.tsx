@@ -1,4 +1,4 @@
-// screens/cliente/PantallaTerminos.tsx - UNIFICADA
+// screens/cliente/PantallaTerminos.tsx - CON SIMPSONFONT Y TEMA CLARO
 import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 
 export default function PantallaTerminos({ navigation }: any) {
     const insets = useSafeAreaInsets();
@@ -150,7 +151,8 @@ Estos Términos se rigen por las leyes de la República Argentina.
                     <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DISENO.colors.surface} />
                 </TouchableOpacity>
 
-                <Text style={[styles.title, { fontSize: isTablet ? 26 : 20 }]}>
+                {/* ✅ TÍTULO CON SIMPSONFONT */}
+                <Text style={[styles.title, { fontSize: isTablet ? 22 : 18 }]}>
                     📋 Términos
                 </Text>
 
@@ -194,105 +196,127 @@ Estos Términos se rigen por las leyes de la República Argentina.
                         </Text>
                     </TouchableOpacity>
 
-                    {/* 1. Aceptación */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 1. ACEPTACIÓN */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         📌 1. Aceptación de los Términos
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         Al utilizar la aplicación Krusty Burger, operada técnicamente por <Text style={styles.bold}>Agencia Powa</Text>, aceptas cumplir con estos Términos y Condiciones.
                         {'\n\n'}Si no estás de acuerdo, por favor no uses la aplicación.
                     </Text>
 
-                    {/* 2. Registro */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 2. REGISTRO */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         📝 2. Registro y Cuenta
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Para usar la aplicación, debes registrarte con información verídica.{'\n'}
                         • Eres responsable de mantener la confidencialidad de tu contraseña.{'\n'}
                         • Puedes eliminar tu cuenta en cualquier momento desde la sección de perfil.
                     </Text>
 
-                    {/* 3. Uso */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 3. USO */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         💻 3. Uso de la Plataforma
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • El usuario se compromete a utilizar el sitio únicamente para realizar pedidos legítimos.{'\n'}
                         • Queda prohibida cualquier acción que pueda dañar la infraestructura.{'\n'}
                         • Los pedidos con datos falsos o fraudulentos serán cancelados.
                     </Text>
 
-                    {/* 4. Precios */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 4. PRECIOS */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         💰 4. Precios y Disponibilidad
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Los precios están en pesos argentinos (ARS) e incluyen IVA.{'\n'}
                         • Krusty Burger se reserva el derecho de modificar los precios sin previo aviso.{'\n'}
                         • Las imágenes son de carácter ilustrativo (especialmente en el caso de las Rib-Wich 🍖).
                     </Text>
 
-                    {/* 5. Pagos */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 5. PAGOS */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         💳 5. Pagos y Reembolsos
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Los pagos se procesan a través de Mercado Pago y efectivo.{'\n'}
                         • Los reembolsos se realizan dentro de los 5 minutos de la recepción del pedido.{'\n'}
                         • En caso de error en el cobro, contactanos para resolverlo.
                     </Text>
 
-                    {/* 6. Puntos */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 6. PUNTOS */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         ⭐ 6. Programa de Puntos
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Los puntos se acumulan por cada compra realizada.{'\n'}
                         • Los puntos tienen una validez de <Text style={styles.bold}>1 año</Text> desde su obtención.{'\n'}
                         • Los puntos no son transferibles ni canjeables por dinero en efectivo.
                     </Text>
 
-                    {/* 7. Entregas */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 7. ENTREGAS */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         🚚 7. Entregas
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Los tiempos de entrega son estimados y pueden variar.{'\n'}
                         • La distancia de entrega está limitada a <Text style={styles.bold}>7 km</Text> del local.{'\n'}
                         • El costo de envío se calcula automáticamente según la distancia.
                     </Text>
 
-                    {/* 8. Privacidad */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 8. PRIVACIDAD */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         🔒 8. Privacidad
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         • Tus datos personales están protegidos según la <Text style={styles.bold}>Ley 25.326</Text>.{'\n'}
                         • No compartimos tus datos con terceros sin tu consentimiento.{'\n'}
                         • Podés solicitar la eliminación de tus datos en cualquier momento.
                     </Text>
 
-                    {/* 9. Responsabilidad */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 9. RESPONSABILIDAD */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         🛠️ 9. Responsabilidad de Agencia Powa
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         <Text style={styles.bold}>Agencia Powa</Text> actúa como el socio tecnológico encargado del desarrollo y mantenimiento de la aplicación.
                         {'\n\n'}• No se responsabiliza por la calidad del producto final, la cual recae exclusivamente en Krusty Burger.
                     </Text>
 
-                    {/* 10. Ley */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 10. LEY APLICABLE */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         ⚖️ 10. Ley Aplicable
                     </Text>
-                    <Text style={[styles.text, { fontSize: isTablet ? 15 : 13 }]}>
+                    <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
                         Estos Términos se rigen por las leyes de la <Text style={styles.bold}>República Argentina</Text>.
                         {'\n'}Cualquier disputa será resuelta en los tribunales de la Ciudad Autónoma de Buenos Aires.
                     </Text>
 
-                    {/* 11. Contacto */}
-                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 20 : 16 }]}>
+                    {/* ============================================== */}
+                    {/* 11. CONTACTO */}
+                    {/* ============================================== */}
+                    <Text style={[styles.sectionTitle, { fontSize: isTablet ? 17 : 15 }]}>
                         📞 11. Contacto
                     </Text>
                     <View style={styles.contactContainer}>
@@ -301,8 +325,10 @@ Estos Términos se rigen por las leyes de la República Argentina.
                             onPress={() => Linking.openURL('mailto:agenciadigitalpowa@gmail.com')}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="mail-outline" size={20} color={DISENO.colors.accent} />
-                            <Text style={[styles.contactText, { fontSize: isTablet ? 15 : 13 }]}>
+                            <View style={[styles.contactIconWrapper, { backgroundColor: DISENO.colors.accent + '15' }]}>
+                                <Ionicons name="mail-outline" size={18} color={DISENO.colors.accent} />
+                            </View>
+                            <Text style={[styles.contactText, { fontSize: isTablet ? 14 : 13 }]}>
                                 agenciadigitalpowa@gmail.com
                             </Text>
                         </TouchableOpacity>
@@ -311,8 +337,10 @@ Estos Términos se rigen por las leyes de la República Argentina.
                             onPress={() => Linking.openURL('tel:1138305837')}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="call-outline" size={20} color={DISENO.colors.accent} />
-                            <Text style={[styles.contactText, { fontSize: isTablet ? 15 : 13 }]}>
+                            <View style={[styles.contactIconWrapper, { backgroundColor: DISENO.colors.success + '15' }]}>
+                                <Ionicons name="call-outline" size={18} color={DISENO.colors.success} />
+                            </View>
+                            <Text style={[styles.contactText, { fontSize: isTablet ? 14 : 13 }]}>
                                 11-3830-5837
                             </Text>
                         </TouchableOpacity>
@@ -347,6 +375,9 @@ Estos Términos se rigen por las leyes de la República Argentina.
     );
 }
 
+// ============================================================
+// 🎨 ESTILOS - CON SIMPSONFONT
+// ============================================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -377,8 +408,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // ✅ TÍTULO CON SIMPSONFONT
     title: {
-        fontWeight: '700',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: DISENO.colors.surface,
         flex: 1,
         textAlign: 'center',
@@ -412,35 +445,52 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.border,
     },
+    // ✅ VERSION BADGE CON FUENTE REGULAR
     versionBadgeText: {
+        fontFamily: FUENTES.regular,
         color: DISENO.colors.textTertiary,
         fontWeight: '500',
     },
+    // ✅ SECTION TITLE CON SIMPSONFONT
     sectionTitle: {
-        fontWeight: '700',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: DISENO.colors.text,
         marginTop: 20,
         marginBottom: 8,
     },
+    // ✅ TEXT CON FUENTE REGULAR
     text: {
+        fontFamily: FUENTES.regular,
         color: DISENO.colors.textSecondary,
         lineHeight: 22,
     },
+    // ✅ BOLD CON SIMPSONFONT
     bold: {
-        fontWeight: '700',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: DISENO.colors.accent,
     },
     contactContainer: {
-        marginTop: 4,
-        gap: 8,
+        marginTop: 8,
+        gap: 10,
     },
     contactItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         paddingVertical: 4,
     },
+    contactIconWrapper: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    // ✅ CONTACT TEXT CON FUENTE REGULAR
     contactText: {
+        fontFamily: FUENTES.regular,
         color: DISENO.colors.textSecondary,
         fontWeight: '500',
     },
@@ -460,12 +510,15 @@ const styles = StyleSheet.create({
     footerLink: {
         paddingVertical: 4,
     },
+    // ✅ FOOTER LINK CON FUENTE REGULAR
     footerLinkText: {
+        fontFamily: FUENTES.regular,
         color: DISENO.colors.accent,
         fontWeight: '500',
         textDecorationLine: 'underline',
     },
     version: {
+        fontFamily: FUENTES.regular,
         color: DISENO.colors.textTertiary,
         textAlign: 'center',
         opacity: 0.6,

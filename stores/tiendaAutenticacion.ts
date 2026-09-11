@@ -1,3 +1,4 @@
+// stores/tiendaAutenticacion.ts - ACTUALIZADO
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Perfil, UbicacionGuardada } from '../lib/tipos';
@@ -34,9 +35,12 @@ interface EstadoAutenticacion {
   registrarCliente: (datos: { correo: string; contrasena: string; nombre: string; telefono: string }) => Promise<{ success: boolean; error?: string }>;
   cerrarSesion: () => Promise<void>;
   actualizarPerfil: (datos: Partial<Perfil>) => Promise<{ success: boolean; error?: string }>;
+  cargarPerfil: (id: string) => Promise<void>;
+
   guardarUbicacionTemporal: (ubicacion: UbicacionGuardada) => Promise<void>;
   cargarUbicacionTemporal: () => Promise<UbicacionGuardada | null>;
   limpiarUbicacionTemporal: () => Promise<void>;
+
   resetearContrasena: (correo: string) => Promise<{ success: boolean; error?: string; errorType?: string }>;
   actualizarContrasena: (nuevaContrasena: string) => Promise<{ success: boolean; error?: string }>;
   limpiarError: () => void;
@@ -71,7 +75,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       }
 
       if (session) {
-        // ✅ Cargar perfil del usuario
         const { data: perfil, error: perfilError } = await supabase
           .from('perfiles')
           .select('*')
@@ -84,7 +87,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
           return;
         }
 
-        // ✅ Actualizar estado
         set({
           sesion: session,
           perfil: perfil as Perfil,
@@ -94,13 +96,12 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
           error: null
         });
 
-        // ✅ Registrar token FCM después de restaurar sesión
         try {
           const service = await getNotificacionService();
           await service.registrarToken(session.user.id);
           console.log('✅ Token FCM registrado al restaurar sesión');
         } catch (error) {
-          console.warn('⚠️ No se pudo registrar token FCM al restaurar sesión:', error);
+          console.warn('⚠️ No se pudo registrar token FCM:', error);
         }
       } else {
         set({ cargando: false, sesion: null, perfil: null });
@@ -112,7 +113,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 🔐 INICIAR SESIÓN
+  // 🔐 INICIAR SESIÓN - CORREGIDO (sin console.error innecesario)
   // ============================================================
   iniciarSesion: async (correo: string, contrasena: string) => {
     set({ error: null });
@@ -141,9 +142,10 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       });
 
       if (error) {
-        console.error('❌ [Login] Error de autenticación:', error.message);
-        // ✅ Siempre devolver string
-        return { success: false, error: String(error.message) };
+        // ✅ NO imprimir en consola errores de autenticación (son esperados)
+        // Solo devolvemos el error para que la UI lo maneje
+        console.log('🔑 [Login] Error de autenticación:', error.message);
+        return { success: false, error: error.message };
       }
 
       console.log('✅ [Login] Usuario autenticado:', data.user.id);
@@ -190,8 +192,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     } catch (error: any) {
       console.error('❌ [Login] Error catastrófico:', error);
       set({ error: error.message });
-      // ✅ Siempre devolver string
-      return { success: false, error: String(error.message || 'Error inesperado') };
+      return { success: false, error: error.message || 'Error inesperado' };
     }
   },
 
@@ -202,7 +203,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     set({ error: null });
 
     try {
-      // ✅ Validaciones
       if (!correo || !contrasena || !nombre || !telefono) {
         return { success: false, error: 'Completa todos los campos' };
       }
@@ -220,7 +220,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return { success: false, error: 'Ingresa un número de teléfono válido' };
       }
 
-      // ✅ Crear usuario en Supabase
       const { data, error } = await supabase.auth.signUp({
         email: correo,
         password: contrasena,
@@ -228,14 +227,13 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
       if (error) {
         console.error('❌ Error en signUp:', error);
-        return { success: false, error: String(error.message) };
+        return { success: false, error: error.message };
       }
 
       if (!data.user) {
         return { success: false, error: 'Error al crear usuario' };
       }
 
-      // ✅ Crear perfil
       const { error: errorPerfil } = await supabase.from('perfiles').insert({
         id: data.user.id,
         nombre_cliente: nombre,
@@ -257,7 +255,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
       if (errorPerfil) {
         console.error('❌ Error creando perfil:', errorPerfil);
-        return { success: false, error: String(errorPerfil.message) };
+        return { success: false, error: errorPerfil.message };
       }
 
       console.log('✅ [Registro] Usuario creado:', data.user.id);
@@ -265,7 +263,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     } catch (error: any) {
       console.error('❌ Error en registro:', error);
       set({ error: error.message });
-      return { success: false, error: String(error.message || 'Error inesperado') };
+      return { success: false, error: error.message || 'Error inesperado' };
     }
   },
 
@@ -327,7 +325,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
       if (error) {
         console.error('❌ Error actualizando perfil:', error);
-        return { success: false, error: String(error.message) };
+        return { success: false, error: error.message };
       }
 
       const perfilActualizado = { ...perfil, ...datos };
@@ -337,7 +335,37 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       return { success: true };
     } catch (error: any) {
       console.error('❌ Error en actualizarPerfil:', error);
-      return { success: false, error: String(error.message || 'Error inesperado') };
+      return { success: false, error: error.message || 'Error inesperado' };
+    }
+  },
+
+  // ============================================================
+  // ✅ CARGAR PERFIL
+  // ============================================================
+  cargarPerfil: async (id: string) => {
+    try {
+      if (!id) {
+        console.warn('⚠️ [cargarPerfil] ID no proporcionado');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        console.error('❌ [cargarPerfil] Error:', error);
+        return;
+      }
+
+      if (data) {
+        set({ perfil: data });
+        console.log('✅ [cargarPerfil] Perfil recargado correctamente');
+      }
+    } catch (error) {
+      console.error('❌ [cargarPerfil] Error inesperado:', error);
     }
   },
 
@@ -390,13 +418,11 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     try {
       console.log('📧 [Reset] Intentando para:', correo);
 
-      // ✅ Validar email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(correo)) {
         return { success: false, error: 'Ingresa un correo electrónico válido' };
       }
 
-      // ✅ Verificar que el correo existe
       const { data: perfil, error: errorPerfil } = await supabase
         .from('perfiles')
         .select('email')
@@ -411,18 +437,15 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         };
       }
 
-      // ✅ Enviar correo de reset
       const { error } = await supabase.auth.resetPasswordForEmail(correo, {
-        redirectTo: 'https://www.krustyburger.com.ar/reset-password',
+        redirectTo: 'krustyburger://nueva-contrasena',
       });
 
       if (error) {
         const mensaje = error.message || '';
         const mensajeLower = mensaje.toLowerCase();
 
-        // ✅ Manejo de errores específicos
-        if (mensajeLower.includes('rate limit') ||
-          mensajeLower.includes('too many requests')) {
+        if (mensajeLower.includes('rate limit') || mensajeLower.includes('too many requests')) {
           return {
             success: false,
             errorType: 'rate_limit',
@@ -475,12 +498,10 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     try {
       console.log('🔄 [Update] Intentando actualizar contraseña...');
 
-      // ✅ Validaciones
       if (!nuevaContrasena || nuevaContrasena.length < 6) {
         return { success: false, error: 'La contraseña debe tener al menos 6 caracteres' };
       }
 
-      // ✅ Verificar sesión activa
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
@@ -495,14 +516,13 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
       console.log('✅ Sesión activa verificada');
 
-      // ✅ Actualizar contraseña
       const { error } = await supabase.auth.updateUser({
         password: nuevaContrasena,
       });
 
       if (error) {
         console.error('❌ Error actualizando contraseña:', error);
-        return { success: false, error: String(error.message) };
+        return { success: false, error: error.message };
       }
 
       console.log('✅ Contraseña actualizada correctamente');
@@ -510,7 +530,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     } catch (error: any) {
       console.error('❌ Error en actualizarContrasena:', error);
       set({ error: error.message });
-      return { success: false, error: String(error.message || 'Error al actualizar la contraseña') };
+      return { success: false, error: error.message || 'Error al actualizar la contraseña' };
     }
   },
 

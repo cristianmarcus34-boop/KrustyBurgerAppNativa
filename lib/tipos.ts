@@ -1,6 +1,87 @@
-﻿// lib/tipos.ts
+﻿// lib/tipos.ts - COMPLETO Y ACTUALIZADO CON TODAS LAS PROPIEDADES
 export type EstadoPedido = 'pendiente' | 'confirmado' | 'preparando' | 'listo' | 'en_camino' | 'entregado' | 'cancelado';
 export type RolUsuario = 'cliente' | 'admin' | 'repartidor';
+
+// ============================================================
+// 🆕 TIPOS PARA CUPONES
+// ============================================================
+
+export type TipoCupon = 'descuento' | 'envio_gratis' | 'producto_gratis' | '2x1';
+
+export interface Cupon {
+    id: number;
+    codigo: string;
+    titulo: string;
+    descripcion: string | null;
+    tipo: TipoCupon;
+    valor_descuento: number | null;
+    es_porcentaje: boolean;
+    producto_id: number | null;
+    cantidad_maxima: number;
+    usos_totales: number;
+    usos_maximos: number | null;
+    fecha_inicio: string;
+    fecha_expiracion: string;
+    activo: boolean;
+    created_at: string;
+    updated_at: string;
+    producto?: Producto | null;
+}
+
+export interface CuponUsuario {
+    id: number;
+    cupon_id: number;
+    usuario_id: string;
+    codigo_canje: string;
+    cantidad_usos: number;
+    fecha_canje: string | null;
+    usado_en_pedido: boolean;
+    pedido_id: number | null;
+    created_at: string;
+    cupon?: Cupon;
+}
+
+export interface CrearCuponDTO {
+    titulo: string;
+    descripcion?: string;
+    tipo: TipoCupon;
+    valor_descuento?: number | null;
+    es_porcentaje?: boolean;
+    producto_id?: number | null;
+    cantidad_maxima?: number;
+    usos_maximos?: number | null;
+    fecha_inicio: string;
+    fecha_expiracion: string;
+    activo?: boolean;
+}
+
+export interface CanjearCuponDTO {
+    codigo: string;
+    usuarioId: string;
+    pedidoId?: number;
+}
+
+export interface ResultadoCanje {
+    success: boolean;
+    mensaje: string;
+    cupon?: Cupon;
+    descuento_aplicado?: number;
+    producto_gratis?: {
+        id: number;
+        nombre: string;
+    };
+}
+
+export interface DatosQR {
+    codigo: string;
+    titulo: string;
+    tipo: TipoCupon;
+    valor_descuento: number | null;
+}
+
+// ============================================================
+// TIPOS DE PRODUCTOS Y PEDIDOS
+// ============================================================
 
 export interface Producto {
     id: number;
@@ -59,7 +140,23 @@ export interface Pedido {
     tiempo_estimado?: number | null;
     monto_pago?: number | null;
     vuelto?: number | null;
+
+    // Descuentos y beneficios
+    descuento_nivel?: number | null;
+    descuento_cupon?: number | null;
+    descuento_puntos?: number | null;
+    nivel_cliente?: string | null;
+    envio_gratis?: boolean | null;
+
+    // ✅ Cupón aplicado
+    cupon_aplicado_id?: number | null;
+    cupon_aplicado_codigo?: string | null;
+    cupon_descuento?: number | null;
 }
+
+// ============================================================
+// TIPOS DE PERFIL Y USUARIO
+// ============================================================
 
 export interface Perfil {
     id: string;
@@ -95,7 +192,7 @@ export interface ElementoCarrito {
 }
 
 // ============================================================
-// 🆕 INTERFACES PARA CONFIGURACIÓN DE ENVÍOS
+// CONFIGURACIÓN DE ENVÍOS
 // ============================================================
 
 export interface ConfiguracionEnvio {
@@ -122,7 +219,7 @@ export interface ConfiguracionLocal {
 }
 
 // ============================================================
-// 🆕 INTERFAZ PARA UBICACIÓN GUARDADA
+// UBICACIÓN GUARDADA
 // ============================================================
 
 export interface UbicacionGuardada {
@@ -133,7 +230,7 @@ export interface UbicacionGuardada {
 }
 
 // ============================================================
-// 🆕 INTERFACES PARA RECOMPENSAS (ACTUALIZADAS)
+// RECOMPENSAS
 // ============================================================
 
 export interface Recompensa {
@@ -177,7 +274,7 @@ export interface CanjeConRecompensa {
     } | null;
 }
 
-export interface ResultadoCanje {
+export interface ResultadoCanjeRecompensa {
     exito: boolean;
     mensaje: string;
     canje_id: number;
@@ -195,7 +292,7 @@ export interface CanjeCompleto extends Canje {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA EL SISTEMA DE NOTIFICACIONES
+// NOTIFICACIONES
 // ============================================================
 
 export interface Notificacion {
@@ -210,7 +307,7 @@ export interface Notificacion {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA ESTADÍSTICAS DE ADMIN
+// ESTADÍSTICAS DE ADMIN
 // ============================================================
 
 export interface EstadisticasAdmin {
@@ -229,7 +326,7 @@ export interface EstadisticasAdmin {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA EL SISTEMA DE REPARTIDOR
+// REPARTIDOR
 // ============================================================
 
 export interface RepartidorInfo {
@@ -244,7 +341,7 @@ export interface RepartidorInfo {
 }
 
 // ============================================================
-// 🆕 SISTEMA DE PAGOS CON MERCADO PAGO
+// SISTEMA DE PAGOS CON MERCADO PAGO
 // ============================================================
 
 export type EstadoTransaccion = 'pendiente' | 'aprobado' | 'rechazado' | 'cancelado' | 'expirado';
@@ -349,7 +446,7 @@ export interface DatosPago {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA ACTIVIDAD RECIENTE (PERFIL)
+// ACTIVIDAD RECIENTE (PERFIL)
 // ============================================================
 
 export interface ActividadReciente {
@@ -362,7 +459,7 @@ export interface ActividadReciente {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA NIVELES Y PROGRESO
+// NIVELES Y PROGRESO
 // ============================================================
 
 export interface NivelCliente {
@@ -426,7 +523,7 @@ export function obtenerNivel(puntos: number): NivelCliente {
 }
 
 // ============================================================
-// 🆕 TIPOS PARA ESTADÍSTICAS DEL PERFIL
+// ESTADÍSTICAS DEL PERFIL
 // ============================================================
 
 export interface EstadisticasPerfil {
@@ -438,7 +535,7 @@ export interface EstadisticasPerfil {
 }
 
 // ============================================================
-// 🆕 🆕 🆕 TIPOS PARA EL SISTEMA DE ELIMINACIÓN DE CUENTA
+// ELIMINACIÓN DE CUENTA
 // ============================================================
 
 export type EstadoSolicitudEliminacion = 'pendiente' | 'cancelada' | 'completada';
@@ -468,9 +565,8 @@ export interface EstadoEliminacion {
 }
 
 // ============================================================
-// 🆕 🆕 🆕 TIPOS PARA BENEFICIOS POR NIVEL
+// BENEFICIOS POR NIVEL
 // ============================================================
-
 
 export interface BeneficiosNivel {
     descuento: number;
@@ -482,5 +578,75 @@ export interface BeneficiosNivel {
     accesoAnticipadoOfertas: boolean;
     soportePrioritario: boolean;
     prioridadEntrega: number;
-    descripcion: string;  // ✅ NUEVO: Descripción para mostrar
+    descripcion: string;
 }
+
+// ============================================================
+// 🆕 RESULTADOS DE SERVICIOS
+// ============================================================
+
+export interface ResultadoServicio {
+    success: boolean;
+    error?: string;
+    data?: any;
+}
+
+export interface ResultadoCupon {
+    success: boolean;
+    error?: string;
+    yaAsignado?: boolean;
+    cupon?: Cupon;
+}
+
+// ============================================================
+// 🆕 ROOT STACK PARAM LIST PARA NAVEGACIÓN
+// ============================================================
+
+export type RootStackParamList = {
+    // ============================================================
+    // 🔐 AUTENTICACIÓN
+    // ============================================================
+    Login: undefined;
+    Registro: undefined;              // ✅ AGREGADO
+    ResetPassword: undefined;
+    NuevaContrasena: { token?: string };
+    Bienvenida: undefined;
+
+    // ============================================================
+    // 👤 CLIENTE
+    // ============================================================
+    Principal: undefined;
+    Carrito: { cuponAplicado?: any } | undefined;  // ✅ Con params opcionales
+    Ofertas: undefined;
+    Seguimiento: { pedidoId?: number } | undefined;
+    DetalleProducto: { productoId?: number } | undefined;
+    DetalleOferta: { ofertaId?: number } | undefined;
+    Recompensas: undefined;
+    Checkout: undefined;
+    NotificacionesUsuario: undefined;
+    MisCupones: undefined;
+    CanjearCupon: { codigo?: string } | undefined;
+    Terminos: undefined;
+    Privacidad: undefined;
+
+    // ============================================================
+    // 👑 ADMIN
+    // ============================================================
+    PanelAdmin: undefined;
+    GestionPedidos: undefined;
+    GestionMenu: undefined;
+    GestionClientes: undefined;
+    Estadisticas: undefined;
+    GestionOfertas: undefined;
+    ConfiguracionEnvios: undefined;
+    GestionRecompensas: undefined;
+    NotificacionesAdmin: undefined;
+    ListaCupones: undefined;
+    CrearCupon: undefined;
+    EditarCupon: { cuponId: number };
+
+    // ============================================================
+    // 🛵 REPARTIDOR
+    // ============================================================
+    Transmision: undefined;
+};

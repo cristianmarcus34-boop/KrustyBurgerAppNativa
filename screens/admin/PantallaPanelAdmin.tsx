@@ -40,6 +40,8 @@ const DESIGN = {
     rosa: '#EC407A',
     azul: '#1A237E',
     azulClaro: '#3949AB',
+    platino: '#78909C',
+    morado: '#7B1FA2',
   },
   spacing: {
     xs: 4,
@@ -247,10 +249,10 @@ export default function PantallaPanelAdmin(props: any) {
   const botonSize = isTablet ? 50 : isSmallPhone ? 40 : 44;
   const botonIconSize = isTablet ? 26 : isSmallPhone ? 18 : 22;
 
-  // ✅ Calcular ancho de las tarjetas (2 columnas para mejor legibilidad)
+  // ✅ Calcular ancho de las tarjetas (2 columnas)
   const cardWidth = (responsive.width - paddingHorizontal * 2 - gap) / 2;
 
-  // ✅ MENU ITEMS
+  // ✅ MENU ITEMS - ACTUALIZADO CON CUPONES
   const menuItems: MenuItem[] = [
     {
       id: 'notificaciones',
@@ -316,6 +318,15 @@ export default function PantallaPanelAdmin(props: any) {
       icono: 'car-outline',
       color: DESIGN.colors.verde,
       navigate: 'ConfiguracionEnvios'
+    },
+    // ✅ NUEVO: CUPONES
+    {
+      id: 'cupones',
+      label: 'Cupones',
+      sub: 'Crear y gestionar',
+      icono: 'ticket-outline',
+      color: DESIGN.colors.morado,
+      navigate: 'ListaCupones'
     },
   ];
 

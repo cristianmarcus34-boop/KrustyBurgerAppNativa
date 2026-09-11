@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx - CON DISEÑO CENTRALIZADO
+﻿// screens/cliente/PantallaInicio.tsx - CON SIMPSONFONT Y DISEÑO CENTRALIZADO
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -21,8 +21,10 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { supabase } from '../../lib/supabase';
-// ✅ IMPORTAMOS DESDE EL ARCHIVO CENTRALIZADO
+// ✅ IMPORTAMOS DISEÑO CENTRALIZADO
 import { DISENO, useResponsive } from '../../lib/colores';
+// ✅ IMPORTAMOS FUENTES
+import { FUENTES, TAMANOS_DISPLAY } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
 
 // ✅ IMPORTAR IMÁGENES DE CATEGORÍAS
@@ -63,7 +65,7 @@ const CATEGORIAS: CategoriaData[] = [
     esOferta: true,
   },
   {
-    id: 'hamburguesas',
+    id: 'burgers',   // ✅ Cambiado para que coincida con Menu y DB
     nombre: 'Burgers',
     imagen: hamburguesasImg,
     color: DISENO.colors.danger,
@@ -227,6 +229,7 @@ export default function PantallaInicio(props: any) {
           if (item.esOferta) {
             props.navigation.navigate('Ofertas');
           } else {
+            // ✅ Pasamos la categoría a PantallaMenu para que haga scroll a esa categoría
             props.navigation.navigate('Menu', { categoria: item.id });
           }
         }}
@@ -236,10 +239,28 @@ export default function PantallaInicio(props: any) {
           <Image source={item.imagen} style={styles.categoriaImagen} resizeMode="cover" />
         </View>
         <View style={styles.categoriaInfo}>
-          <Text style={[styles.categoriaNombre, { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) }]} numberOfLines={1}>
+          {/* ✅ NOMBRE DE CATEGORÍA CON SIMPSONFONT */}
+          <Text
+            style={[
+              styles.categoriaNombre,
+              {
+                fontSize: responsive.getValor({ tablet: 16, normal: 12, small: 12 })
+              }
+            ]}
+            numberOfLines={1}
+          >
             {item.nombre}
           </Text>
-          <Text style={[styles.categoriaDesc, { fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 8 }) }]} numberOfLines={1}>
+          {/* ✅ DESCRIPCIÓN CON FUENTE REGULAR */}
+          <Text
+            style={[
+              styles.categoriaDesc,
+              {
+                fontSize: responsive.getValor({ tablet: 11, normal: 8, small: 8 })
+              }
+            ]}
+            numberOfLines={1}
+          >
             {item.descripcion}
           </Text>
         </View>
@@ -321,10 +342,26 @@ export default function PantallaInicio(props: any) {
             </Animated.View>
 
             <View style={styles.saludoContainer}>
-              <Text style={[styles.headerGreeting, { fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 11 }) }]}>
-                Buenos días
+              {/* ✅ GREETING CON FUENTE REGULAR */}
+              <Text
+                style={[
+                  styles.headerGreeting,
+                  {
+                    fontSize: responsive.getValor({ tablet: 15, normal: 12, small: 11 })
+                  }
+                ]}
+              >
+                Hola, bienvenido a Krusty Burger!
               </Text>
-              <Text style={[styles.headerName, { fontSize: responsive.getValor({ tablet: 28, normal: 24, small: 20 }) }]}>
+              {/* ✅ NOMBRE CON SIMPSONFONT */}
+              <Text
+                style={[
+                  styles.headerName,
+                  {
+                    fontSize: responsive.getValor({ tablet: 30, normal: 24, small: 22 })
+                  }
+                ]}
+              >
                 {perfil?.nombre_cliente || 'Cliente'}
               </Text>
             </View>
@@ -351,7 +388,15 @@ export default function PantallaInicio(props: any) {
 
         {/* CATEGORÍAS */}
         <View style={[styles.categoriasContainer, { paddingHorizontal: padding }]}>
-          <Text style={[styles.sectionTitle, { fontSize: responsive.getValor({ tablet: 20, normal: 18, small: 15 }) }]}>
+          {/* ✅ TÍTULO "CATEGORÍAS" CON SIMPSONFONT */}
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 17 })
+              }
+            ]}
+          >
             Categorías
           </Text>
 
@@ -375,7 +420,7 @@ export default function PantallaInicio(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - USANDO DISENO CENTRALIZADO
+// 🎨 ESTILOS - USANDO DISENO CENTRALIZADO Y FUENTES
 // ============================================================
 const styles = StyleSheet.create({
   container: {
@@ -427,13 +472,17 @@ const styles = StyleSheet.create({
   saludoContainer: {
     marginTop: 4,
   },
+  // ✅ GREETING CON FUENTE REGULAR
   headerGreeting: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     letterSpacing: 0.3,
     fontWeight: '400',
   },
+  // ✅ NOMBRE CON SIMPSONFONT
   headerName: {
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     letterSpacing: -0.5,
     marginTop: 2,
@@ -454,9 +503,11 @@ const styles = StyleSheet.create({
   categoriasContainer: {
     marginVertical: 8,
   },
+  // ✅ TÍTULO DE SECCIÓN CON SIMPSONFONT
   sectionTitle: {
-    fontWeight: '600',
-    color: DISENO.colors.text,
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.verde,
     letterSpacing: -0.3,
     marginBottom: 14,
   },
@@ -484,12 +535,16 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
   },
+  // ✅ NOMBRE DE CATEGORÍA CON SIMPSONFONT
   categoriaNombre: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     textAlign: 'center',
   },
+  // ✅ DESCRIPCIÓN CON FUENTE REGULAR
   categoriaDesc: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     textAlign: 'center',
     opacity: 0.6,

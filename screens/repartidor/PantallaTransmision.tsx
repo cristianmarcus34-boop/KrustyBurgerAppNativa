@@ -1,8 +1,16 @@
-// screens/repartidor/PantallaTransmision.tsx - CORREGIDO
+// screens/repartidor/PantallaTransmision.tsx - COMPLETO CON PREVISUALIZACIÓN DE RUTA
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, FlatList,
-  Modal, Dimensions, RefreshControl, Animated, ScrollView
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Modal,
+  Dimensions,
+  RefreshControl,
+  Animated,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +21,12 @@ import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
-import { obtenerRuta, guardarRutaPedido, obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
+import {
+  obtenerRuta,
+  guardarRutaPedido,
+  obtenerRutaPedido,
+  obtenerInfoRutaPedido,
+} from '../../lib/directions';
 
 // ✅ IMPORTAR MARCADORES
 import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
@@ -49,13 +62,14 @@ const COLORS = {
 
 const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) => {
   if (!coords || coords.length < 2) return false;
-  return coords.every(coord =>
-    coord.latitude !== undefined &&
-    coord.longitude !== undefined &&
-    !isNaN(coord.latitude) &&
-    !isNaN(coord.longitude) &&
-    Math.abs(coord.latitude) <= 90 &&
-    Math.abs(coord.longitude) <= 180
+  return coords.every(
+    (coord) =>
+      coord.latitude !== undefined &&
+      coord.longitude !== undefined &&
+      !isNaN(coord.latitude) &&
+      !isNaN(coord.longitude) &&
+      Math.abs(coord.latitude) <= 90 &&
+      Math.abs(coord.longitude) <= 180
   );
 };
 
@@ -68,7 +82,7 @@ export default function PantallaTransmision(props: any) {
   const [transmitiendo, setTransmitiendo] = useState(false);
   const [ubicacionActual, setUbicacionActual] = useState({
     lat: -34.776484410467525,
-    lng: -58.29220250409459
+    lng: -58.29220250409459,
   });
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -79,6 +93,7 @@ export default function PantallaTransmision(props: any) {
   const [rutaPuntos, setRutaPuntos] = useState<{ latitude: number; longitude: number }[]>([]);
   const [distanciaReal, setDistanciaReal] = useState<string>('');
   const [tiempoReal, setTiempoReal] = useState<string>('');
+  const [cargandoRuta, setCargandoRuta] = useState(false);
 
   const mapRef = useRef<MapView>(null);
   const watchRef = useRef<any>(null);
@@ -119,13 +134,13 @@ export default function PantallaTransmision(props: any) {
         { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
         {
           latitude: pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-          longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-        }
+          longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude,
+        },
       ];
     }
     return [
       { latitude: ubicacionActual.lat, longitude: ubicacionActual.lng },
-      { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude }
+      { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude },
     ];
   };
 
@@ -191,7 +206,7 @@ export default function PantallaTransmision(props: any) {
           console.warn('⚠️ Usando línea recta como fallback');
           const puntosLineaRecta = [
             { latitude: origenLat, longitude: origenLng },
-            { latitude: destinoLat, longitude: destinoLng }
+            { latitude: destinoLat, longitude: destinoLng },
           ];
           setRutaPuntos(puntosLineaRecta);
           setDistanciaReal('0.0 km');
@@ -206,12 +221,74 @@ export default function PantallaTransmision(props: any) {
     }
   }, [transmitiendo, pedidoSeleccionado]);
 
+  // ✅ PREVISUALIZAR RUTA (NUEVA FUNCIÓN)
+  const previsualizarRuta = async (pedido: Pedido) => {
+    setCargandoRuta(true);
+    try {
+      const origenLat = UBICACION_KRUSTY.latitude;
+      const origenLng = UBICACION_KRUSTY.longitude;
+      const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
+      const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
+
+      // ✅ PRIMERO: Intentar cargar ruta guardada
+      const rutaGuardada = await obtenerRutaPedido(pedido.id);
+      if (rutaGuardada && rutaGuardada.length > 1) {
+        console.log('📦 Ruta previsualizada desde DB:', rutaGuardada.length, 'puntos');
+        setRutaPuntos(rutaGuardada);
+        const infoRuta = await obtenerInfoRutaPedido(pedido.id);
+        if (infoRuta) {
+          setDistanciaReal(infoRuta.distancia);
+          setTiempoReal(infoRuta.duracion);
+        }
+        setCargandoRuta(false);
+        return;
+      }
+
+      // ✅ SEGUNDO: Obtener nueva ruta de Google Maps
+      console.log('🔄 Obteniendo ruta para previsualización...');
+      const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
+
+      if (ruta && ruta.points.length > 1) {
+        console.log('✅ Ruta previsualizada:', ruta.points.length, 'puntos');
+        setRutaPuntos(ruta.points);
+        setDistanciaReal(ruta.distance);
+        setTiempoReal(ruta.duration);
+        // ✅ Guardar la ruta para que esté disponible
+        await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
+        console.log('💾 Ruta previsualizada guardada en la DB');
+      } else {
+        console.warn('⚠️ No se pudo obtener ruta para previsualización');
+        // ✅ Usar línea recta como fallback
+        const puntosLineaRecta = [
+          { latitude: origenLat, longitude: origenLng },
+          { latitude: destinoLat, longitude: destinoLng },
+        ];
+        setRutaPuntos(puntosLineaRecta);
+        setDistanciaReal('0.0 km');
+        setTiempoReal('0 min');
+        await guardarRutaPedido(pedido.id, puntosLineaRecta, '0.0 km', '0 min');
+      }
+    } catch (error) {
+      console.error('❌ Error previsualizando ruta:', error);
+    } finally {
+      setCargandoRuta(false);
+    }
+  };
+
+  // ✅ FUNCIÓN PARA SELECCIONAR PEDIDO Y PREVISUALIZAR RUTA
+  const seleccionarPedido = (pedido: Pedido) => {
+    setPedidoSeleccionado(pedido);
+    if (!transmitiendo) {
+      previsualizarRuta(pedido);
+    }
+  };
+
   // ✅ ZOOM MEJORADO
   useEffect(() => {
     if (transmitiendo && ubicacionActual && mapRef.current) {
       if (rutaPuntos.length > 1) {
-        const lats = rutaPuntos.map(p => p.latitude);
-        const lngs = rutaPuntos.map(p => p.longitude);
+        const lats = rutaPuntos.map((p) => p.latitude);
+        const lngs = rutaPuntos.map((p) => p.longitude);
         const minLat = Math.min(...lats);
         const maxLat = Math.max(...lats);
         const minLng = Math.min(...lngs);
@@ -220,19 +297,25 @@ export default function PantallaTransmision(props: any) {
         const latDelta = (maxLat - minLat) * 1.5 + 0.005;
         const lngDelta = (maxLng - minLng) * 1.5 + 0.005;
 
-        mapRef.current.animateToRegion({
-          latitude: (minLat + maxLat) / 2,
-          longitude: (minLng + maxLng) / 2,
-          latitudeDelta: Math.max(latDelta, 0.02),
-          longitudeDelta: Math.max(lngDelta, 0.02),
-        }, 1000);
+        mapRef.current.animateToRegion(
+          {
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2,
+            latitudeDelta: Math.max(latDelta, 0.02),
+            longitudeDelta: Math.max(lngDelta, 0.02),
+          },
+          1000
+        );
       } else {
-        mapRef.current.animateToRegion({
-          latitude: ubicacionActual.lat,
-          longitude: ubicacionActual.lng,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }, 1000);
+        mapRef.current.animateToRegion(
+          {
+            latitude: ubicacionActual.lat,
+            longitude: ubicacionActual.lng,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          },
+          1000
+        );
       }
     }
   }, [ubicacionActual, transmitiendo, rutaPuntos]);
@@ -277,9 +360,9 @@ export default function PantallaTransmision(props: any) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLng / 2) ** 2;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
@@ -297,7 +380,7 @@ export default function PantallaTransmision(props: any) {
         .from('pedidos')
         .update({
           lat_repartidor: lat,
-          repartidor_de_lng: lng
+          repartidor_de_lng: lng,
         })
         .eq('id', pedidoId);
 
@@ -346,7 +429,7 @@ export default function PantallaTransmision(props: any) {
         console.warn('⚠️ Usando línea recta como fallback');
         const puntosLineaRecta = [
           { latitude: origenLat, longitude: origenLng },
-          { latitude: destinoLat, longitude: destinoLng }
+          { latitude: destinoLat, longitude: destinoLng },
         ];
         setRutaPuntos(puntosLineaRecta);
         setDistanciaReal('0.0 km');
@@ -365,7 +448,7 @@ export default function PantallaTransmision(props: any) {
         .update({
           estado: 'en_camino',
           repartidor_id: perfil?.id,
-          encabezado_repartidor: perfil?.nombre_cliente || 'Repartidor Krusty'
+          encabezado_repartidor: perfil?.nombre_cliente || 'Repartidor Krusty',
         })
         .eq('id', pedido.id);
 
@@ -384,7 +467,7 @@ export default function PantallaTransmision(props: any) {
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 3000,
-          distanceInterval: 5
+          distanceInterval: 5,
         },
         async (loc) => {
           const { latitude, longitude } = loc.coords;
@@ -450,6 +533,7 @@ export default function PantallaTransmision(props: any) {
     }
     setTransmitiendo(false);
     setPedidoSeleccionado(null);
+    // ✅ No limpiar la ruta para que se mantenga visible
   };
 
   const confirmarCerrarSesion = async () => {
@@ -465,21 +549,30 @@ export default function PantallaTransmision(props: any) {
     const c: any = {
       listo: COLORS.listo,
       en_camino: COLORS.enCamino,
-      entregado: COLORS.entregado
+      entregado: COLORS.entregado,
     };
     return c[estado] || COLORS.grisClaro;
   };
 
   const renderPedido = ({ item }: { item: Pedido }) => (
-    <View style={[
-      estilos.tarjeta,
-      {
-        borderColor: estadoColor(item.estado) + '40',
-        padding: tarjetaPadding,
-        borderRadius: tarjetaBorderRadius,
-        marginBottom: gap,
-      }
-    ]}>
+    <TouchableOpacity
+      style={[
+        estilos.tarjeta,
+        {
+          borderColor: estadoColor(item.estado) + '40',
+          padding: tarjetaPadding,
+          borderRadius: tarjetaBorderRadius,
+          marginBottom: gap,
+        },
+        pedidoSeleccionado?.id === item.id && {
+          borderColor: COLORS.amarillo,
+          borderWidth: 2,
+          backgroundColor: COLORS.amarillo + '05',
+        },
+      ]}
+      onPress={() => seleccionarPedido(item)}
+      activeOpacity={0.8}
+    >
       <View style={estilos.tarjetaHeader}>
         <View style={{ flex: 1 }}>
           <Text style={[estilos.pedidoId, { fontSize: pedidoIdSize }]} numberOfLines={1}>
@@ -489,61 +582,76 @@ export default function PantallaTransmision(props: any) {
             {item.cliente_nombre || 'Cliente'}
           </Text>
         </View>
-        <View style={[
-          estilos.estadoBadge,
-          {
-            backgroundColor: estadoColor(item.estado) + '20',
-            paddingHorizontal: isTablet ? 10 : isSmallPhone ? 4 : 6,
-            paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
-            borderRadius: isTablet ? 10 : isSmallPhone ? 4 : 6,
-          }
-        ]}>
-          <Text style={[
-            estilos.estadoTexto,
+        <View
+          style={[
+            estilos.estadoBadge,
             {
-              color: estadoColor(item.estado),
-              fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
-            }
-          ]}>
-            {item.estado === 'listo' ? '📦' :
-              item.estado === 'en_camino' ? '🚲' : '✅'}
+              backgroundColor: estadoColor(item.estado) + '20',
+              paddingHorizontal: isTablet ? 10 : isSmallPhone ? 4 : 6,
+              paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
+              borderRadius: isTablet ? 10 : isSmallPhone ? 4 : 6,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              estilos.estadoTexto,
+              {
+                color: estadoColor(item.estado),
+                fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
+              },
+            ]}
+          >
+            {item.estado === 'listo' ? '📦' : item.estado === 'en_camino' ? '🚲' : '✅'}
           </Text>
         </View>
       </View>
 
-      <View style={[
-        estilos.infoEnvioContainer,
-        {
-          flexDirection: 'row',
-          justifyContent: 'space-around',
-          backgroundColor: COLORS.negro + '30',
-          paddingVertical: isTablet ? 6 : isSmallPhone ? 3 : 4,
-          paddingHorizontal: isTablet ? 8 : isSmallPhone ? 4 : 6,
-          borderRadius: isTablet ? 8 : isSmallPhone ? 4 : 6,
-          marginBottom: isTablet ? 6 : isSmallPhone ? 3 : 4,
-          borderWidth: 1,
-          borderColor: COLORS.blanco + '5',
-          flexWrap: 'wrap',
-        }
-      ]}>
+      <View
+        style={[
+          estilos.infoEnvioContainer,
+          {
+            flexDirection: 'row',
+            justifyContent: 'space-around',
+            backgroundColor: COLORS.negro + '30',
+            paddingVertical: isTablet ? 6 : isSmallPhone ? 3 : 4,
+            paddingHorizontal: isTablet ? 8 : isSmallPhone ? 4 : 6,
+            borderRadius: isTablet ? 8 : isSmallPhone ? 4 : 6,
+            marginBottom: isTablet ? 6 : isSmallPhone ? 3 : 4,
+            borderWidth: 1,
+            borderColor: COLORS.blanco + '5',
+            flexWrap: 'wrap',
+          },
+        ]}
+      >
         {item.distancia_km !== undefined && item.distancia_km !== null ? (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="navigate" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
-            <Text style={[estilos.infoEnvioTexto, {
-              fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-              color: COLORS.grisClaro,
-            }]}>
+            <Text
+              style={[
+                estilos.infoEnvioTexto,
+                {
+                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                  color: COLORS.grisClaro,
+                },
+              ]}
+            >
               {item.distancia_km.toFixed(1)} km
             </Text>
           </View>
         ) : (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="navigate" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
-            <Text style={[estilos.infoEnvioTexto, {
-              fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-              color: COLORS.grisClaro,
-              opacity: 0.5,
-            }]}>
+            <Text
+              style={[
+                estilos.infoEnvioTexto,
+                {
+                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                  color: COLORS.grisClaro,
+                  opacity: 0.5,
+                },
+              ]}
+            >
               ---
             </Text>
           </View>
@@ -552,21 +660,31 @@ export default function PantallaTransmision(props: any) {
         {item.tiempo_estimado !== undefined && item.tiempo_estimado !== null ? (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="time" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
-            <Text style={[estilos.infoEnvioTexto, {
-              fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-              color: COLORS.grisClaro,
-            }]}>
+            <Text
+              style={[
+                estilos.infoEnvioTexto,
+                {
+                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                  color: COLORS.grisClaro,
+                },
+              ]}
+            >
               {item.tiempo_estimado} min
             </Text>
           </View>
         ) : (
           <View style={estilos.infoEnvioItem}>
             <Ionicons name="time" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
-            <Text style={[estilos.infoEnvioTexto, {
-              fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-              color: COLORS.grisClaro,
-              opacity: 0.5,
-            }]}>
+            <Text
+              style={[
+                estilos.infoEnvioTexto,
+                {
+                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                  color: COLORS.grisClaro,
+                  opacity: 0.5,
+                },
+              ]}
+            >
               ---
             </Text>
           </View>
@@ -574,30 +692,50 @@ export default function PantallaTransmision(props: any) {
 
         <View style={estilos.infoEnvioItem}>
           <Ionicons name="cash" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.verdeClaro} />
-          <Text style={[estilos.infoEnvioTexto, {
-            fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-            color: item.costo_envio && item.costo_envio > 0 ? COLORS.verdeClaro : COLORS.grisClaro,
-          }]}>
+          <Text
+            style={[
+              estilos.infoEnvioTexto,
+              {
+                fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                color: item.costo_envio && item.costo_envio > 0 ? COLORS.verdeClaro : COLORS.grisClaro,
+              },
+            ]}
+          >
             {item.costo_envio && item.costo_envio > 0 ? `$${item.costo_envio.toFixed(2)}` : 'Gratis'}
           </Text>
         </View>
 
         <View style={estilos.infoEnvioItem}>
-          <Ionicons name={item.tipo_entrega === 'retiro' ? 'storefront' : 'home'} size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
-          <Text style={[estilos.infoEnvioTexto, {
-            fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-            color: COLORS.grisClaro,
-          }]}>
+          <Ionicons
+            name={item.tipo_entrega === 'retiro' ? 'storefront' : 'home'}
+            size={isTablet ? 14 : isSmallPhone ? 10 : 12}
+            color={COLORS.grisClaro}
+          />
+          <Text
+            style={[
+              estilos.infoEnvioTexto,
+              {
+                fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
+                color: COLORS.grisClaro,
+              },
+            ]}
+          >
             {item.tipo_entrega === 'retiro' ? 'Retiro' : 'Domicilio'}
           </Text>
         </View>
       </View>
 
       <View style={estilos.tarjetaInfo}>
-        <Text style={[estilos.tarjetaDireccion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]} numberOfLines={1}>
+        <Text
+          style={[estilos.tarjetaDireccion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
+          numberOfLines={1}
+        >
           📍 {item.direccion || 'Retiro en local'}
         </Text>
-        <Text style={[estilos.tarjetaTelefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]} numberOfLines={1}>
+        <Text
+          style={[estilos.tarjetaTelefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
+          numberOfLines={1}
+        >
           📱 {item.telefono || 'Sin teléfono'}
         </Text>
         <Text style={[estilos.tarjetaTotal, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
@@ -605,14 +743,14 @@ export default function PantallaTransmision(props: any) {
         </Text>
       </View>
 
-      {item.estado !== 'entregado' && !transmitiendo && (
+      {item.estado === 'listo' && !transmitiendo && (
         <TouchableOpacity
           style={[
             estilos.botonIniciar,
             {
               paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
               borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-            }
+            },
           ]}
           onPress={() => iniciarTransmision(item)}
           activeOpacity={0.7}
@@ -624,13 +762,20 @@ export default function PantallaTransmision(props: any) {
             end={{ x: 1, y: 0 }}
           >
             <Ionicons name="play-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.negro} />
-            <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>
-              Iniciar Entrega
-            </Text>
+            <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>Iniciar Entrega</Text>
           </LinearGradient>
         </TouchableOpacity>
       )}
-    </View>
+
+      {item.estado === 'en_camino' && (
+        <View style={estilos.enCaminoBadge}>
+          <Ionicons name="bicycle" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.enCamino} />
+          <Text style={[estilos.enCaminoTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
+            En camino 🚲
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 
   return (
@@ -648,7 +793,7 @@ export default function PantallaTransmision(props: any) {
           estilos.scrollContent,
           {
             paddingBottom: insets.bottom + 80,
-          }
+          },
         ]}
         showsVerticalScrollIndicator={true}
         refreshControl={
@@ -660,16 +805,18 @@ export default function PantallaTransmision(props: any) {
           />
         }
       >
-        <View style={[
-          estilos.encabezado,
-          {
-            paddingTop: insets.top + headerPaddingTop,
-            paddingHorizontal: paddingHorizontal,
-            paddingBottom: paddingVertical,
-            borderBottomWidth: 1,
-            borderBottomColor: COLORS.blanco + '10',
-          }
-        ]}>
+        <View
+          style={[
+            estilos.encabezado,
+            {
+              paddingTop: insets.top + headerPaddingTop,
+              paddingHorizontal: paddingHorizontal,
+              paddingBottom: paddingVertical,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.blanco + '10',
+            },
+          ]}
+        >
           <View style={{ flex: 1 }}>
             <Text style={[estilos.titulo, { fontSize: tituloSize }]} numberOfLines={1}>
               🚲 Reparto
@@ -685,7 +832,7 @@ export default function PantallaTransmision(props: any) {
               {
                 padding: isTablet ? 8 : isSmallPhone ? 4 : 6,
                 borderRadius: isTablet ? 24 : isSmallPhone ? 16 : 18,
-              }
+              },
             ]}
             activeOpacity={0.7}
           >
@@ -693,14 +840,16 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        <View style={[
-          estilos.stats,
-          {
-            paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-            paddingHorizontal: paddingHorizontal,
-            gap: statsGap,
-          }
-        ]}>
+        <View
+          style={[
+            estilos.stats,
+            {
+              paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
+              paddingHorizontal: paddingHorizontal,
+              gap: statsGap,
+            },
+          ]}
+        >
           <View style={estilos.statItem}>
             <Text style={[estilos.statValor, { fontSize: statValorSize }]}>{pedidosActivos.length}</Text>
             <Text style={[estilos.statLabel, { fontSize: statLabelSize }]}>Pend.</Text>
@@ -719,14 +868,16 @@ export default function PantallaTransmision(props: any) {
           </View>
         </View>
 
-        <View style={[
-          estilos.pestanas,
-          {
-            paddingHorizontal: paddingHorizontal,
-            marginVertical: isTablet ? 10 : isSmallPhone ? 4 : 6,
-            gap: isTablet ? 8 : isSmallPhone ? 4 : 5,
-          }
-        ]}>
+        <View
+          style={[
+            estilos.pestanas,
+            {
+              paddingHorizontal: paddingHorizontal,
+              marginVertical: isTablet ? 10 : isSmallPhone ? 4 : 6,
+              gap: isTablet ? 8 : isSmallPhone ? 4 : 5,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[
               estilos.pestana,
@@ -736,19 +887,21 @@ export default function PantallaTransmision(props: any) {
                 backgroundColor: pestana === 'activos' ? COLORS.amarillo : COLORS.negro + '40',
                 borderWidth: 1,
                 borderColor: pestana === 'activos' ? COLORS.amarillo : COLORS.blanco + '8',
-              }
+              },
             ]}
             onPress={() => setPestana('activos')}
             activeOpacity={0.7}
           >
-            <Text style={[
-              estilos.pestanaTexto,
-              {
-                fontSize: pestanaTextSize,
-                color: pestana === 'activos' ? COLORS.negro : COLORS.grisClaro,
-                fontWeight: pestana === 'activos' ? '700' : '500',
-              }
-            ]}>
+            <Text
+              style={[
+                estilos.pestanaTexto,
+                {
+                  fontSize: pestanaTextSize,
+                  color: pestana === 'activos' ? COLORS.negro : COLORS.grisClaro,
+                  fontWeight: pestana === 'activos' ? '700' : '500',
+                },
+              ]}
+            >
               🚀 Activos
             </Text>
           </TouchableOpacity>
@@ -761,65 +914,87 @@ export default function PantallaTransmision(props: any) {
                 backgroundColor: pestana === 'historial' ? COLORS.amarillo : COLORS.negro + '40',
                 borderWidth: 1,
                 borderColor: pestana === 'historial' ? COLORS.amarillo : COLORS.blanco + '8',
-              }
+              },
             ]}
             onPress={() => setPestana('historial')}
             activeOpacity={0.7}
           >
-            <Text style={[
-              estilos.pestanaTexto,
-              {
-                fontSize: pestanaTextSize,
-                color: pestana === 'historial' ? COLORS.negro : COLORS.grisClaro,
-                fontWeight: pestana === 'historial' ? '700' : '500',
-              }
-            ]}>
+            <Text
+              style={[
+                estilos.pestanaTexto,
+                {
+                  fontSize: pestanaTextSize,
+                  color: pestana === 'historial' ? COLORS.negro : COLORS.grisClaro,
+                  fontWeight: pestana === 'historial' ? '700' : '500',
+                },
+              ]}
+            >
               📋 Historial
             </Text>
           </TouchableOpacity>
         </View>
 
-        {transmitiendo && pedidoSeleccionado && (
-          <Animated.View style={[
-            estilos.mapaContenedor,
-            {
-              marginHorizontal: paddingHorizontal,
-              borderRadius: mapaBorderRadius,
-              padding: mapaPadding,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideUpAnim }],
-              marginBottom: gap,
-            }
-          ]}>
+        {/* ✅ MAPA CON PREVISUALIZACIÓN DE RUTA */}
+        {pedidoSeleccionado && (
+          <Animated.View
+            style={[
+              estilos.mapaContenedor,
+              {
+                marginHorizontal: paddingHorizontal,
+                borderRadius: mapaBorderRadius,
+                padding: mapaPadding,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideUpAnim }],
+                marginBottom: gap,
+              },
+            ]}
+          >
             <MapView
               ref={mapRef}
-              style={[estilos.mapa, { height: mapaHeight, borderRadius: isTablet ? 14 : isSmallPhone ? 6 : 8 }]}
+              style={[
+                estilos.mapa,
+                { height: mapaHeight, borderRadius: isTablet ? 14 : isSmallPhone ? 6 : 8 },
+              ]}
               provider={PROVIDER_GOOGLE}
               initialRegion={{
-                latitude: ubicacionActual.lat,
-                longitude: ubicacionActual.lng,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
+                latitude: UBICACION_KRUSTY.latitude,
+                longitude: UBICACION_KRUSTY.longitude,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
               }}
-              showsUserLocation={true}
-              showsMyLocationButton={true}
+              showsUserLocation={transmitiendo}
+              showsMyLocationButton={transmitiendo}
             >
-              <Marker coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}>
-                <MarcadorMoto size="normal" animated={true} scale={pulseAnim} />
+              {/* 📍 Krusty Burger */}
+              <Marker coordinate={UBICACION_KRUSTY}>
+                <View style={estilos.marcadorKrusty}>
+                  <Text style={estilos.marcadorKrustyTexto}>🍔</Text>
+                </View>
               </Marker>
 
+              {/* 🛵 REPARTIDOR (si está transmitiendo) */}
+              {transmitiendo && (
+                <Marker
+                  coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}
+                >
+                  <MarcadorMoto size="normal" animated={true} scale={pulseAnim} />
+                </Marker>
+              )}
+
+              {/* 📍 DESTINO CLIENTE */}
               {pedidoSeleccionado && (
                 <Marker
                   coordinate={{
                     latitude: pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-                    longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
+                    longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude,
                   }}
                 >
                   <MarcadorDestino size="normal" />
                 </Marker>
               )}
 
-              {puntosValidos && pedidoSeleccionado && rutaPuntos.length > 1 && (
+              {/* 🗺️ RUTA */}
+              {puntosValidos && rutaPuntos.length > 1 && (
                 <>
                   <Polyline
                     coordinates={rutaPuntos}
@@ -846,135 +1021,177 @@ export default function PantallaTransmision(props: any) {
               )}
             </MapView>
 
-            <View style={[
-              estilos.mapaInfo,
-              {
-                marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
-              }
-            ]}>
+            {/* ✅ INFO DE RUTA */}
+            <View
+              style={[
+                estilos.mapaInfo,
+                {
+                  marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
+                  gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
+                },
+              ]}
+            >
               <View style={estilos.mapaInfoItem}>
                 <Ionicons name="navigate" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
                 <Text style={[estilos.mapaInfoTexto, { fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10 }]}>
-                  {distanciaReal ||
-                    (pedidoSeleccionado && calcularDistancia(
-                      ubicacionActual.lat,
-                      ubicacionActual.lng,
-                      pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-                      pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-                    ).toFixed(1) + ' km')}
+                  {cargandoRuta
+                    ? 'Cargando...'
+                    : distanciaReal ||
+                    (pedidoSeleccionado &&
+                      calcularDistancia(
+                        UBICACION_KRUSTY.latitude,
+                        UBICACION_KRUSTY.longitude,
+                        pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
+                        pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
+                      ).toFixed(1) + ' km')}
                 </Text>
               </View>
               <View style={estilos.mapaInfoItem}>
                 <Ionicons name="time" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
                 <Text style={[estilos.mapaInfoTexto, { fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10 }]}>
-                  {tiempoReal ||
-                    (pedidoSeleccionado && Math.ceil(
-                      calcularDistancia(
-                        ubicacionActual.lat,
-                        ubicacionActual.lng,
-                        pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-                        pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-                      ) * 15
-                    ) + ' min')}
+                  {cargandoRuta
+                    ? 'Cargando...'
+                    : tiempoReal ||
+                    (pedidoSeleccionado &&
+                      Math.ceil(
+                        calcularDistancia(
+                          UBICACION_KRUSTY.latitude,
+                          UBICACION_KRUSTY.longitude,
+                          pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
+                          pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
+                        ) * 15
+                      ) + ' min')}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[
-                estilos.botonDetenerMapa,
-                {
-                  paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                  borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                  marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                }
-              ]}
-              onPress={detenerTransmision}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[COLORS.rojo, COLORS.rojoOscuro]}
-                style={estilos.botonDetenerGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+            {transmitiendo && (
+              <TouchableOpacity
+                style={[
+                  estilos.botonDetenerMapa,
+                  {
+                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
+                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                    marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
+                  },
+                ]}
+                onPress={detenerTransmision}
+                activeOpacity={0.7}
               >
-                <Ionicons name="stop-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.blanco} />
-                <Text style={[estilos.botonDetenerMapaTexto, { fontSize: botonTextSize }]}>
-                  Detener
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={[COLORS.rojo, COLORS.rojoOscuro]}
+                  style={estilos.botonDetenerGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="stop-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.blanco} />
+                  <Text style={[estilos.botonDetenerMapaTexto, { fontSize: botonTextSize }]}>Detener</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
           </Animated.View>
         )}
 
+        {/* ✅ TARJETA DE TRANSMISIÓN ACTIVA */}
         {transmitiendo && pedidoSeleccionado && (
-          <Animated.View style={[
-            estilos.tarjetaTransmision,
-            {
-              marginHorizontal: paddingHorizontal,
-              borderRadius: tarjetaBorderRadius,
-              padding: tarjetaPadding,
-              borderColor: COLORS.amarillo + '40',
-              opacity: fadeAnim,
-              transform: [{ translateY: slideUpAnim }],
-              marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
-              marginBottom: gap,
-              minHeight: isTablet ? 100 : isSmallPhone ? 70 : 80,
-            }
-          ]}>
+          <Animated.View
+            style={[
+              estilos.tarjetaTransmision,
+              {
+                marginHorizontal: paddingHorizontal,
+                borderRadius: tarjetaBorderRadius,
+                padding: tarjetaPadding,
+                borderColor: COLORS.amarillo + '40',
+                opacity: fadeAnim,
+                transform: [{ translateY: slideUpAnim }],
+                marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
+                marginBottom: gap,
+                minHeight: isTablet ? 100 : isSmallPhone ? 70 : 80,
+              },
+            ]}
+          >
             <View style={[estilos.transmisionHeader, { marginBottom: isTablet ? 4 : isSmallPhone ? 1 : 2 }]}>
               <View style={estilos.puntoVivo} />
-              <Text style={[estilos.transmitiendoTexto, {
-                fontSize: isTablet ? 14 : isSmallPhone ? 10 : 11,
-                flex: 1,
-                flexWrap: 'wrap',
-              }]}>
+              <Text
+                style={[
+                  estilos.transmitiendoTexto,
+                  {
+                    fontSize: isTablet ? 14 : isSmallPhone ? 10 : 11,
+                    flex: 1,
+                    flexWrap: 'wrap',
+                  },
+                ]}
+              >
                 Transmitiendo
               </Text>
             </View>
-            <Text style={[estilos.pedidoTransmision, {
-              fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
-              marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
-            }]}>
+            <Text
+              style={[
+                estilos.pedidoTransmision,
+                {
+                  fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
+                  marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
+                },
+              ]}
+            >
               Pedido #{pedidoSeleccionado.id}
             </Text>
-            <Text style={[estilos.clienteTransmision, {
-              fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10,
-              marginTop: isTablet ? 1 : isSmallPhone ? 0 : 1,
-            }]}>
+            <Text
+              style={[
+                estilos.clienteTransmision,
+                {
+                  fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10,
+                  marginTop: isTablet ? 1 : isSmallPhone ? 0 : 1,
+                },
+              ]}
+            >
               {pedidoSeleccionado.cliente_nombre}
             </Text>
             <Text
-              style={[estilos.direccionTransmision, {
-                fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10,
-                marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
-                flexWrap: 'wrap',
-              }]}
+              style={[
+                estilos.direccionTransmision,
+                {
+                  fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10,
+                  marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
+                  flexWrap: 'wrap',
+                },
+              ]}
               numberOfLines={1}
             >
               📍 {pedidoSeleccionado.direccion || 'Sin dirección'}
             </Text>
-            <View style={[estilos.gpsInfo, {
-              marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
-              padding: isTablet ? 6 : isSmallPhone ? 3 : 4,
-            }]}>
-              <Text style={[estilos.gpsTexto, {
-                fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
-              }]}>
+            <View
+              style={[
+                estilos.gpsInfo,
+                {
+                  marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
+                  padding: isTablet ? 6 : isSmallPhone ? 3 : 4,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  estilos.gpsTexto,
+                  {
+                    fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
+                  },
+                ]}
+              >
                 GPS: {ubicacionActual.lat.toFixed(6)}, {ubicacionActual.lng.toFixed(6)}
               </Text>
             </View>
           </Animated.View>
         )}
 
-        <View style={[
-          estilos.listaContainer,
-          {
-            paddingHorizontal: paddingHorizontal,
-            paddingTop: isTablet ? 6 : 2,
-          }
-        ]}>
+        <View
+          style={[
+            estilos.listaContainer,
+            {
+              paddingHorizontal: paddingHorizontal,
+              paddingTop: isTablet ? 6 : 2,
+            },
+          ]}
+        >
           {pedidosActivos.length === 0 && pedidosEntregados.length === 0 ? (
             <View style={estilos.vacio}>
               <Ionicons
@@ -993,9 +1210,7 @@ export default function PantallaTransmision(props: any) {
             </View>
           ) : (
             (pestana === 'activos' ? pedidosActivos : pedidosEntregados).map((item) => (
-              <View key={item.id}>
-                {renderPedido({ item })}
-              </View>
+              <View key={item.id}>{renderPedido({ item })}</View>
             ))
           )}
         </View>
@@ -1003,122 +1218,163 @@ export default function PantallaTransmision(props: any) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* ✅ MODAL CERRAR SESIÓN */}
       <Modal
         visible={mostrarModalCerrar}
         transparent
         animationType="fade"
         statusBarTranslucent={true}
       >
-        <View style={[
-          estilos.modalFondo,
-          {
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 16,
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9999,
-          }
-        ]}>
-          <View style={[
-            estilos.modal,
+        <View
+          style={[
+            estilos.modalFondo,
             {
-              padding: modalPadding,
-              borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
-              borderColor: COLORS.rojo + '40',
-              width: isTablet ? '55%' : '90%',
-              maxWidth: 380,
-              backgroundColor: COLORS.grisOscuro,
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              justifyContent: 'center',
               alignItems: 'center',
-              borderWidth: 2,
-              shadowColor: COLORS.negro,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.5,
-              shadowRadius: 20,
-              elevation: 10,
-            }
-          ]}>
+              padding: 16,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9999,
+            },
+          ]}
+        >
+          <View
+            style={[
+              estilos.modal,
+              {
+                padding: modalPadding,
+                borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
+                borderColor: COLORS.rojo + '40',
+                width: isTablet ? '55%' : '90%',
+                maxWidth: 380,
+                backgroundColor: COLORS.grisOscuro,
+                alignItems: 'center',
+                borderWidth: 2,
+                shadowColor: COLORS.negro,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.5,
+                shadowRadius: 20,
+                elevation: 10,
+              },
+            ]}
+          >
             <Text style={[estilos.modalIcono, { fontSize: isTablet ? 56 : isSmallPhone ? 40 : 48 }]}>🚪</Text>
-            <Text style={[estilos.modalTitulo, {
-              fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
-              fontWeight: 'bold',
-              color: COLORS.blanco,
-              marginBottom: 6,
-            }]}>
+            <Text
+              style={[
+                estilos.modalTitulo,
+                {
+                  fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
+                  fontWeight: 'bold',
+                  color: COLORS.blanco,
+                  marginBottom: 6,
+                },
+              ]}
+            >
               Cerrar Sesión
             </Text>
-            <Text style={[estilos.modalTexto, {
-              fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-              color: COLORS.grisClaro,
-              textAlign: 'center',
-              marginBottom: 18,
-            }]}>
+            <Text
+              style={[
+                estilos.modalTexto,
+                {
+                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                  color: COLORS.grisClaro,
+                  textAlign: 'center',
+                  marginBottom: 18,
+                },
+              ]}
+            >
               ¿Estás seguro de que quieres salir?
             </Text>
-            <View style={[estilos.modalBotones, {
-              flexDirection: 'row',
-              gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
-              width: '100%',
-            }]}>
+            <View
+              style={[
+                estilos.modalBotones,
+                {
+                  flexDirection: 'row',
+                  gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
+                  width: '100%',
+                },
+              ]}
+            >
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalCancelar, {
-                  flex: 1,
-                  paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                  borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                  backgroundColor: COLORS.negro + '50',
-                  borderWidth: 1,
-                  borderColor: COLORS.blanco + '10',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }]}
+                style={[
+                  estilos.modalBoton,
+                  estilos.modalCancelar,
+                  {
+                    flex: 1,
+                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
+                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                    backgroundColor: COLORS.negro + '50',
+                    borderWidth: 1,
+                    borderColor: COLORS.blanco + '10',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
                 onPress={() => setMostrarModalCerrar(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[estilos.modalCancelarTexto, {
-                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  color: COLORS.blanco,
-                  fontWeight: '600',
-                }]}>
+                <Text
+                  style={[
+                    estilos.modalCancelarTexto,
+                    {
+                      fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                      color: COLORS.blanco,
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
                   Cancelar
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalConfirmar, {
-                  flex: 1,
-                  paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                  borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                  overflow: 'hidden',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }]}
+                style={[
+                  estilos.modalBoton,
+                  estilos.modalConfirmar,
+                  {
+                    flex: 1,
+                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
+                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+                    overflow: 'hidden',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  },
+                ]}
                 onPress={confirmarCerrarSesion}
                 activeOpacity={0.7}
               >
                 <LinearGradient
                   colors={[COLORS.rojo, COLORS.rojoOscuro]}
-                  style={[estilos.modalConfirmarGradient, {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 4,
-                    paddingHorizontal: 14,
-                    width: '100%',
-                    height: '100%',
-                  }]}
+                  style={[
+                    estilos.modalConfirmarGradient,
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      paddingHorizontal: 14,
+                      width: '100%',
+                      height: '100%',
+                    },
+                  ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   <Ionicons name="log-out-outline" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.blanco} />
-                  <Text style={[estilos.modalConfirmarTexto, {
-                    fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                    color: COLORS.blanco,
-                    fontWeight: 'bold',
-                  }]}>
+                  <Text
+                    style={[
+                      estilos.modalConfirmarTexto,
+                      {
+                        fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                        color: COLORS.blanco,
+                        fontWeight: 'bold',
+                      },
+                    ]}
+                  >
                     Salir
                   </Text>
                 </LinearGradient>
@@ -1128,61 +1384,76 @@ export default function PantallaTransmision(props: any) {
         </View>
       </Modal>
 
+      {/* ✅ MODAL ÉXITO */}
       <Modal
         visible={mostrarModalExito}
         transparent
         animationType="fade"
         statusBarTranslucent={true}
       >
-        <View style={[
-          estilos.modalFondo,
-          {
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 16,
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 9999,
-          }
-        ]}>
-          <View style={[
-            estilos.modal,
-            estilos.modalExito,
+        <View
+          style={[
+            estilos.modalFondo,
             {
-              padding: modalPadding,
-              borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
-              borderColor: COLORS.verdeClaro + '40',
-              width: isTablet ? '55%' : '90%',
-              maxWidth: 380,
-              backgroundColor: COLORS.grisOscuro,
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.85)',
+              justifyContent: 'center',
               alignItems: 'center',
-              borderWidth: 2,
-              shadowColor: COLORS.negro,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.5,
-              shadowRadius: 20,
-              elevation: 10,
-            }
-          ]}>
+              padding: 16,
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9999,
+            },
+          ]}
+        >
+          <View
+            style={[
+              estilos.modal,
+              estilos.modalExito,
+              {
+                padding: modalPadding,
+                borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
+                borderColor: COLORS.verdeClaro + '40',
+                width: isTablet ? '55%' : '90%',
+                maxWidth: 380,
+                backgroundColor: COLORS.grisOscuro,
+                alignItems: 'center',
+                borderWidth: 2,
+                shadowColor: COLORS.negro,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.5,
+                shadowRadius: 20,
+                elevation: 10,
+              },
+            ]}
+          >
             <Text style={[estilos.modalIcono, { fontSize: isTablet ? 56 : isSmallPhone ? 40 : 48 }]}>🎉</Text>
-            <Text style={[estilos.modalTitulo, {
-              fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
-              fontWeight: 'bold',
-              color: COLORS.verdeClaro,
-              marginBottom: 6,
-            }]}>
+            <Text
+              style={[
+                estilos.modalTitulo,
+                {
+                  fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
+                  fontWeight: 'bold',
+                  color: COLORS.verdeClaro,
+                  marginBottom: 6,
+                },
+              ]}
+            >
               ¡Éxito!
             </Text>
-            <Text style={[estilos.modalTexto, {
-              fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-              color: COLORS.grisClaro,
-              textAlign: 'center',
-            }]}>
+            <Text
+              style={[
+                estilos.modalTexto,
+                {
+                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                  color: COLORS.grisClaro,
+                  textAlign: 'center',
+                },
+              ]}
+            >
               {mensajeExito}
             </Text>
           </View>
@@ -1214,12 +1485,30 @@ const estilos = StyleSheet.create({
   mapaInfo: { flexDirection: 'row', justifyContent: 'space-around' },
   mapaInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   mapaInfoTexto: { color: COLORS.blanco, fontWeight: 'bold' },
+  marcadorKrusty: {
+    backgroundColor: COLORS.rojo,
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 2,
+    borderColor: COLORS.blanco,
+  },
+  marcadorKrustyTexto: { fontSize: 14 },
   botonDetenerMapa: { overflow: 'hidden' },
   botonDetenerGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
   botonDetenerMapaTexto: { color: COLORS.blanco, fontWeight: 'bold', letterSpacing: 0.3 },
   tarjetaTransmision: { backgroundColor: COLORS.amarillo + '10', borderWidth: 1 },
   transmisionHeader: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  puntoVivo: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.amarillo, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 6, elevation: 3 },
+  puntoVivo: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.amarillo,
+    shadowColor: COLORS.amarillo,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   transmitiendoTexto: { fontWeight: 'bold', color: COLORS.amarillo },
   pedidoTransmision: { fontWeight: 'bold', color: COLORS.blanco },
   clienteTransmision: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
@@ -1233,7 +1522,14 @@ const estilos = StyleSheet.create({
   clienteNombre: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
   estadoBadge: { borderWidth: 1, borderColor: COLORS.blanco + '10' },
   estadoTexto: { fontWeight: 'bold', textTransform: 'capitalize' },
-  infoEnvioContainer: { flexDirection: 'row', justifyContent: 'space-around', flexWrap: 'wrap', backgroundColor: COLORS.negro + '30', borderWidth: 1, borderColor: COLORS.blanco + '5' },
+  infoEnvioContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    backgroundColor: COLORS.negro + '30',
+    borderWidth: 1,
+    borderColor: COLORS.blanco + '5',
+  },
   infoEnvioItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   infoEnvioTexto: { color: COLORS.grisClaro, fontWeight: '500' },
   tarjetaInfo: { marginBottom: 4 },
@@ -1243,6 +1539,8 @@ const estilos = StyleSheet.create({
   botonIniciar: { overflow: 'hidden', elevation: 3, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8 },
   botonIniciarGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
   botonIniciarTexto: { color: COLORS.negro, fontWeight: 'bold', letterSpacing: 0.3 },
+  enCaminoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  enCaminoTexto: { color: COLORS.enCamino, fontWeight: '600' },
   vacio: { alignItems: 'center', paddingVertical: 30 },
   vacioTexto: { color: COLORS.blanco, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
   vacioSubtexto: { color: COLORS.grisClaro, textAlign: 'center', marginTop: 2, opacity: 0.6 },

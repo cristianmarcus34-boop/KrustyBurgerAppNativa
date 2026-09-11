@@ -99,11 +99,11 @@ export default function PantallaRegistro(props: any) {
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
 
-  const logoSize = responsive.getValor({ tablet: 100, normal: 85, small: 70 });
+  const logoSize = responsive.getValor({ tablet: 180, normal: 150, small: 120 });
   const tituloSize = responsive.getValor({ tablet: 36, normal: 30, small: 26 });
-  const subtituloSize = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
-  const labelSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
-  const inputSize = responsive.getValor({ tablet: 17, normal: 15, small: 14 });
+
+  const labelSize = responsive.getValor({ tablet: 15, normal: 14, small: 12 });
+  const inputSize = responsive.getValor({ tablet: 17, normal: 13, small: 14 });
   const buttonTextSize = responsive.getValor({ tablet: 19, normal: 17, small: 15 });
   const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
   const paddingTop = insets.top + responsive.spacing(15);
@@ -127,321 +127,357 @@ export default function PantallaRegistro(props: any) {
                 paddingHorizontal: paddingHorizontal,
                 paddingTop: paddingTop,
                 paddingBottom: insets.bottom + 20,
+                flexGrow: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '100%',
               },
             ]}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            <Animated.View
-              style={[
-                estilos.logoContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ scale: scaleAnim }],
-                },
-              ]}
-            >
-              <View style={estilos.logoWrapper}>
-                <Image
-                  source={logoImage}
-                  style={[
-                    estilos.logoImage,
-                    {
-                      width: logoSize,
-                      height: logoSize,
-                    },
-                  ]}
-                  resizeMode="contain"
-                />
-              </View>
+            {/* ✅ CONTENEDOR CENTRAL */}
+            <View style={estilos.contenidoCentral}>
 
-              <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-                ¡Crear Cuenta!
-              </Text>
-              <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
-                "Glaaaven! Un nuevo usuario!" 🧪
-              </Text>
-            </Animated.View>
-
-            <View style={estilos.bannerPuntosContainer}>
-              <LinearGradient
-                colors={[DISENO.colors.accentSecondary, DISENO.colors.accentSecondaryLight]}
-                style={estilos.bannerPuntosGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              {/* LOGO */}
+              <Animated.View
+                style={[
+                  estilos.logoContainer,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ scale: scaleAnim }],
+                  },
+                ]}
               >
-                <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
-                <View style={estilos.bannerPuntosTextos}>
-                  <Text
+                <View style={estilos.logoWrapper}>
+                  <Image
+                    source={logoImage}
                     style={[
-                      estilos.bannerPuntosTitulo,
-                      { fontSize: isTablet ? 17 : 14 },
+                      estilos.logoImage,
+                      {
+                        width: logoSize,
+                        height: logoSize,
+                      },
                     ]}
-                  >
-                    ¡Regístrate y obtén 500 puntos!
-                  </Text>
-                  <Text
-                    style={[
-                      estilos.bannerPuntosDesc,
-                      { fontSize: isTablet ? 13 : 11 },
-                    ]}
-                  >
-                    Canjealos por descuentos, envíos gratis y más
-                  </Text>
-                </View>
-              </LinearGradient>
-            </View>
-
-            <Animated.View
-              style={[
-                estilos.formulario,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideUpAnim }],
-                },
-              ]}
-            >
-              <Text style={[estilos.label, { fontSize: labelSize }]}>
-                Nombre completo
-              </Text>
-              <View style={estilos.inputContainer}>
-                <Ionicons
-                  name="person-outline"
-                  size={22}
-                  color={DISENO.colors.textTertiary}
-                  style={estilos.inputIcon}
-                />
-                <TextInput
-                  style={[estilos.input, { fontSize: inputSize }]}
-                  value={nombre}
-                  onChangeText={setNombre}
-                  placeholder="Tu nombre completo"
-                  placeholderTextColor={DISENO.colors.textTertiary}
-                  selectionColor={DISENO.colors.accent}
-                />
-              </View>
-
-              <Text
-                style={[
-                  estilos.label,
-                  { fontSize: labelSize, marginTop: 16 },
-                ]}
-              >
-                Correo electrónico
-              </Text>
-              <View style={estilos.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={22}
-                  color={DISENO.colors.textTertiary}
-                  style={estilos.inputIcon}
-                />
-                <TextInput
-                  style={[estilos.input, { fontSize: inputSize }]}
-                  value={correo}
-                  onChangeText={setCorreo}
-                  placeholder="tucorreo@ejemplo.com"
-                  placeholderTextColor={DISENO.colors.textTertiary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  selectionColor={DISENO.colors.accent}
-                />
-              </View>
-
-              <Text
-                style={[
-                  estilos.label,
-                  { fontSize: labelSize, marginTop: 16 },
-                ]}
-              >
-                Teléfono
-              </Text>
-              <View style={estilos.inputContainer}>
-                <Ionicons
-                  name="call-outline"
-                  size={22}
-                  color={DISENO.colors.textTertiary}
-                  style={estilos.inputIcon}
-                />
-                <TextInput
-                  style={[estilos.input, { fontSize: inputSize }]}
-                  value={telefono}
-                  onChangeText={setTelefono}
-                  placeholder="Tu número de teléfono"
-                  placeholderTextColor={DISENO.colors.textTertiary}
-                  keyboardType="phone-pad"
-                  selectionColor={DISENO.colors.accent}
-                />
-              </View>
-
-              <Text
-                style={[
-                  estilos.label,
-                  { fontSize: labelSize, marginTop: 16 },
-                ]}
-              >
-                Contraseña
-              </Text>
-              <View style={estilos.inputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={22}
-                  color={DISENO.colors.textTertiary}
-                  style={estilos.inputIcon}
-                />
-                <TextInput
-                  style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
-                  value={contrasena}
-                  onChangeText={setContrasena}
-                  placeholder="Mínimo 6 caracteres"
-                  placeholderTextColor={DISENO.colors.textTertiary}
-                  secureTextEntry={!mostrarContrasena}
-                  selectionColor={DISENO.colors.accent}
-                />
-                <TouchableOpacity
-                  onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                  style={estilos.eyeButton}
-                >
-                  <Ionicons
-                    name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
-                    size={22}
-                    color={DISENO.colors.textTertiary}
+                    resizeMode="contain"
                   />
-                </TouchableOpacity>
-              </View>
-
-              {/* ✅ CHECKBOX DE TÉRMINOS */}
-              <TouchableOpacity
-                style={estilos.terminosCheckboxContainer}
-                onPress={() => setTerminosAceptados(!terminosAceptados)}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    estilos.checkbox,
-                    terminosAceptados && estilos.checkboxActivo,
-                    {
-                      borderColor: terminosAceptados
-                        ? DISENO.colors.accent
-                        : DISENO.colors.border,
-                      backgroundColor: terminosAceptados
-                        ? DISENO.colors.accent
-                        : 'transparent',
-                    },
-                  ]}
-                >
-                  {terminosAceptados && (
-                    <Ionicons
-                      name="checkmark"
-                      size={16}
-                      color={DISENO.colors.surface}
-                    />
-                  )}
                 </View>
-                <Text style={[estilos.terminosCheckboxTexto, { fontSize: isTablet ? 14 : 12 }]}>
-                  Acepto los{' '}
-                  <Text
-                    style={estilos.terminosLink}
-                    onPress={() => props.navigation.navigate('Terminos')}
-                  >
-                    Términos y Condiciones
-                  </Text>
-                </Text>
-              </TouchableOpacity>
 
-              {/* ✅ ENLACE A POLÍTICA DE PRIVACIDAD */}
-              <TouchableOpacity
-                style={estilos.privacidadContainer}
-                onPress={() => props.navigation.navigate('Privacidad')}
-                activeOpacity={0.7}
-              >
-                <Text style={[estilos.privacidadTexto, { fontSize: isTablet ? 12 : 10 }]}>
-                  📄 Ver <Text style={estilos.privacidadDestacado}>Política de Privacidad</Text>
+                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
+                  ¡Crear Cuenta!
                 </Text>
-              </TouchableOpacity>
+              </Animated.View>
 
-              <TouchableOpacity
-                style={estilos.boton}
-                onPress={manejarRegistro}
-                disabled={cargando}
-                activeOpacity={0.8}
-              >
+              {/* BANNER DE PUNTOS */}
+              <View style={estilos.bannerPuntosContainer}>
                 <LinearGradient
-                  colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                  style={estilos.botonGradient}
+                  colors={[DISENO.colors.accentSecondary, DISENO.colors.accentSecondaryLight]}
+                  style={estilos.bannerPuntosGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  {cargando ? (
-                    <ActivityIndicator
-                      color={DISENO.colors.surface}
-                      size="small"
-                    />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="person-add"
-                        size={buttonTextSize + 4}
-                        color={DISENO.colors.surface}
-                      />
-                      <Text
-                        style={[
-                          estilos.textoBoton,
-                          { fontSize: buttonTextSize },
-                        ]}
-                      >
-                        Crear Cuenta
-                      </Text>
-                    </>
-                  )}
+                  <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
+                  <View style={estilos.bannerPuntosTextos}>
+                    <Text
+                      style={[
+                        estilos.bannerPuntosTitulo,
+                        { fontSize: isTablet ? 17 : 14 },
+                      ]}
+                    >
+                      ¡Regístrate y obtén 500 puntos!
+                    </Text>
+                    <Text
+                      style={[
+                        estilos.bannerPuntosDesc,
+                        { fontSize: isTablet ? 13 : 11 },
+                      ]}
+                    >
+                      Canjealos por descuentos, envíos gratis y más
+                    </Text>
+                  </View>
                 </LinearGradient>
-              </TouchableOpacity>
+              </View>
 
-              <View style={estilos.enlacesContainer}>
+              {/* FORMULARIO */}
+              <Animated.View
+                style={[
+                  estilos.formulario,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideUpAnim }],
+                    width: '100%',
+                    maxWidth: 500,
+                    alignSelf: 'center',
+                  },
+                ]}
+              >
+                <Text style={[estilos.label, { fontSize: labelSize }]}>
+                  Nombre
+                </Text>
+                <View style={estilos.inputContainer}>
+                  <Ionicons
+                    name="person-outline"
+                    size={22}
+                    color={DISENO.colors.textTertiary}
+                    style={estilos.inputIcon}
+                  />
+                  <TextInput
+                    style={[estilos.input, { fontSize: inputSize }]}
+                    value={nombre}
+                    onChangeText={setNombre}
+                    placeholder="Tu nombre completo"
+                    placeholderTextColor={DISENO.colors.textTertiary}
+                    selectionColor={DISENO.colors.accent}
+                  />
+                </View>
+
+                <Text
+                  style={[
+                    estilos.label,
+                    { fontSize: labelSize, marginTop: 16 },
+                  ]}
+                >
+                  Correo electrónico
+                </Text>
+                <View style={estilos.inputContainer}>
+                  <Ionicons
+                    name="mail-outline"
+                    size={22}
+                    color={DISENO.colors.textTertiary}
+                    style={estilos.inputIcon}
+                  />
+                  <TextInput
+                    style={[estilos.input, { fontSize: inputSize }]}
+                    value={correo}
+                    onChangeText={setCorreo}
+                    placeholder="tucorreo@ejemplo.com"
+                    placeholderTextColor={DISENO.colors.textTertiary}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    selectionColor={DISENO.colors.accent}
+                  />
+                </View>
+
+                <Text
+                  style={[
+                    estilos.label,
+                    { fontSize: labelSize, marginTop: 16 },
+                  ]}
+                >
+                  Teléfono
+                </Text>
+                <View style={estilos.inputContainer}>
+                  <Ionicons
+                    name="call-outline"
+                    size={22}
+                    color={DISENO.colors.textTertiary}
+                    style={estilos.inputIcon}
+                  />
+                  <TextInput
+                    style={[estilos.input, { fontSize: inputSize }]}
+                    value={telefono}
+                    onChangeText={setTelefono}
+                    placeholder="Tu teléfono"
+                    placeholderTextColor={DISENO.colors.textTertiary}
+                    keyboardType="phone-pad"
+                    selectionColor={DISENO.colors.accent}
+                  />
+                </View>
+
+                <Text
+                  style={[
+                    estilos.label,
+                    { fontSize: labelSize, marginTop: 16 },
+                  ]}
+                >
+                  Contraseña
+                </Text>
+                <View style={estilos.inputContainer}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={22}
+                    color={DISENO.colors.textTertiary}
+                    style={estilos.inputIcon}
+                  />
+                  <TextInput
+                    style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
+                    value={contrasena}
+                    onChangeText={setContrasena}
+                    placeholder="Mínimo 6 caracteres"
+                    placeholderTextColor={DISENO.colors.textTertiary}
+                    secureTextEntry={!mostrarContrasena}
+                    selectionColor={DISENO.colors.accent}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setMostrarContrasena(!mostrarContrasena)}
+                    style={estilos.eyeButton}
+                  >
+                    <Ionicons
+                      name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
+                      size={22}
+                      color={DISENO.colors.textTertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* ✅ TÉRMINOS Y PRIVACIDAD - DISEÑO ORGANIZADO */}
+                <View style={estilos.legalContainer}>
+
+                  {/* Checkbox de términos */}
+                  <TouchableOpacity
+                    style={estilos.terminosCheckboxContainer}
+                    onPress={() => setTerminosAceptados(!terminosAceptados)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        estilos.checkbox,
+                        {
+                          borderColor: terminosAceptados
+                            ? DISENO.colors.accent
+                            : DISENO.colors.azul,
+                          backgroundColor: terminosAceptados
+                            ? DISENO.colors.accent
+                            : 'transparent',
+                        },
+                      ]}
+                    >
+                      {terminosAceptados && (
+                        <Ionicons
+                          name="checkmark"
+                          size={14}
+                          color={DISENO.colors.surface}
+                        />
+                      )}
+                    </View>
+
+                    <Text style={[estilos.terminosCheckboxTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                      Acepto los{' '}
+                      <Text
+                        style={estilos.terminosLink}
+                        onPress={() => props.navigation.navigate('Terminos')}
+                      >
+                        Términos y Condiciones
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Divisor sutil */}
+                  <View style={estilos.legalDivisor} />
+
+                  {/* Enlaces legales */}
+                  <View style={estilos.legalLinksContainer}>
+                    <TouchableOpacity
+                      style={estilos.legalLinkItem}
+                      onPress={() => props.navigation.navigate('Terminos')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="document-text-outline" size={14} color={DISENO.colors.accent} />
+                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>
+                        Términos
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={estilos.legalLinkSeparador} />
+
+                    <TouchableOpacity
+                      style={estilos.legalLinkItem}
+                      onPress={() => props.navigation.navigate('Privacidad')}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="shield-checkmark-outline" size={14} color={DISENO.colors.accent} />
+                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>
+                        Privacidad
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                </View>
+
                 <TouchableOpacity
-                  onPress={() => props.navigation.goBack()}
+                  style={estilos.boton}
+                  onPress={manejarRegistro}
+                  disabled={cargando}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
+                    style={estilos.botonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    {cargando ? (
+                      <ActivityIndicator
+                        color={DISENO.colors.surface}
+                        size="small"
+                      />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="person-add"
+                          size={buttonTextSize + 4}
+                          color={DISENO.colors.surface}
+                        />
+                        <Text
+                          style={[
+                            estilos.textoBoton,
+                            { fontSize: buttonTextSize },
+                          ]}
+                        >
+                          Crear Cuenta
+                        </Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <View style={estilos.enlacesContainer}>
+                  <TouchableOpacity
+                    onPress={() => props.navigation.goBack()}
+                    activeOpacity={0.6}
+                  >
+                    <Text
+                      style={[
+                        estilos.enlace,
+                        { fontSize: isTablet ? 16 : 14 },
+                      ]}
+                    >
+                      ¿Ya tienes cuenta?{' '}
+                      <Text style={estilos.enlaceDestacado}>
+                        Inicia sesión
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={estilos.separadorContainer}>
+                  <View style={estilos.separador} />
+                  <Text style={estilos.separadorTexto}>o</Text>
+                  <View style={estilos.separador} />
+                </View>
+
+                <TouchableOpacity
+                  style={estilos.botonInvitado}
+                  onPress={() => props.navigation.navigate('Principal')}
                   activeOpacity={0.6}
                 >
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color={DISENO.colors.textTertiary}
+                  />
                   <Text
                     style={[
-                      estilos.enlace,
+                      estilos.botonInvitadoTexto,
                       { fontSize: isTablet ? 16 : 14 },
                     ]}
                   >
-                    ¿Ya tienes cuenta?{' '}
-                    <Text style={estilos.enlaceDestacado}>
-                      Inicia sesión
-                    </Text>
+                    Continuar como invitado
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </Animated.View>
 
-              <View style={estilos.separadorContainer}>
-                <View style={estilos.separador} />
-                <Text style={estilos.separadorTexto}>o</Text>
-                <View style={estilos.separador} />
-              </View>
-
-              <TouchableOpacity
-                style={estilos.botonInvitado}
-                onPress={() => props.navigation.navigate('Principal')}
-                activeOpacity={0.6}
-              >
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={DISENO.colors.textTertiary}
-                />
-                <Text
-                  style={[
-                    estilos.botonInvitadoTexto,
-                    { fontSize: isTablet ? 16 : 14 },
-                  ]}
-                >
-                  Continuar como invitado
-                </Text>
-              </TouchableOpacity>
-            </Animated.View>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>
@@ -467,10 +503,22 @@ const estilos = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100%',
+  },
+  // ✅ CONTENEDOR CENTRAL
+  contenidoCentral: {
+    width: '100%',
+    maxWidth: 500,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 30,
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 20,
   },
   logoWrapper: {
     marginBottom: 12,
@@ -486,6 +534,8 @@ const estilos = StyleSheet.create({
     fontWeight: '900',
     color: DISENO.colors.accent,
     letterSpacing: 2,
+    textAlign: 'center',      // ✅ Centra el texto horizontalmente
+    width: '70%',            // ✅ Ocupa todo el ancho disponible
   },
   subtitulo: {
     color: DISENO.colors.textSecondary,
@@ -495,7 +545,10 @@ const estilos = StyleSheet.create({
     fontStyle: 'italic',
   },
   bannerPuntosContainer: {
-    marginVertical: 12,
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    marginBottom: 12,
     borderRadius: 14,
     overflow: 'hidden',
     ...DISENO.shadow.md,
@@ -524,6 +577,8 @@ const estilos = StyleSheet.create({
   },
   formulario: {
     width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
     backgroundColor: DISENO.colors.surface,
     borderRadius: 24,
     padding: 24,
@@ -532,7 +587,7 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.border,
   },
   label: {
-    fontWeight: '600',
+    fontWeight: '500',
     color: DISENO.colors.text,
     marginBottom: 6,
     letterSpacing: 0.5,
@@ -559,12 +614,23 @@ const estilos = StyleSheet.create({
   eyeButton: {
     padding: 4,
   },
-  // ✅ CHECKBOX
+  // ============================================================
+  // ✅ TÉRMINOS Y PRIVACIDAD - DISEÑO ORGANIZADO
+  // ============================================================
+  legalContainer: {
+    marginTop: 20,
+    width: '100%',
+    backgroundColor: DISENO.colors.fondo,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: DISENO.colors.border,
+  },
   terminosCheckboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
     gap: 10,
+    width: '100%',
   },
   checkbox: {
     width: 22,
@@ -573,34 +639,47 @@ const estilos = StyleSheet.create({
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  checkboxActivo: {
-    borderWidth: 2,
+    flexShrink: 0,
   },
   terminosCheckboxTexto: {
     color: DISENO.colors.textSecondary,
     fontWeight: '400',
     flex: 1,
+    lineHeight: 18,
   },
   terminosLink: {
     color: DISENO.colors.accent,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
-  // ✅ PRIVACIDAD
-  privacidadContainer: {
-    marginTop: 8,
+  legalDivisor: {
+    height: 1,
+    backgroundColor: DISENO.colors.border,
+    marginVertical: 12,
+    width: '100%',
+  },
+  legalLinksContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    gap: 8,
   },
-  privacidadTexto: {
-    color: DISENO.colors.textTertiary,
-    textAlign: 'center',
-    fontWeight: '400',
+  legalLinkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  privacidadDestacado: {
+  legalLinkTexto: {
     color: DISENO.colors.accent,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+    fontWeight: '500',
+  },
+  legalLinkSeparador: {
+    width: 1,
+    height: 14,
+    backgroundColor: DISENO.colors.border,
   },
   boton: {
     marginTop: 16,

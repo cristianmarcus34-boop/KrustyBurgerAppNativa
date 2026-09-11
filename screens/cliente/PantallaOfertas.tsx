@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaOfertas.tsx
+﻿// screens/cliente/PantallaOfertas.tsx - TEMA CLARO UNIFICADO
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -7,62 +7,18 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Animated,
   RefreshControl,
   Image,
-  useWindowDimensions
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
+import { DISENO } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F5F2ED',
-    surface: '#FFFFFF',
-    surfaceHover: '#F8F6F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.04)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentLight: '#FF6B6B',
-    accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    rosa: '#EC407A',
-    azul: '#1A237E',
-    azulClaro: '#3949AB',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 999,
-  },
-};
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -161,24 +117,29 @@ export default function PantallaOfertas(props: any) {
     await cargarOfertas();
   };
 
-  const isTablet = responsive.isTablet;
-  const isSmallPhone = responsive.isSmallPhone;
+  // ✅ Tamaños unificados con el resto de pantallas
+  const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
+  const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 17 });
+  const tarjetaPadding = responsive.getValor({ tablet: 20, normal: 16, small: 12 });
+  const ofertaTituloSize = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
+  const precioOfertaSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
+  const descuentoSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
+  const descSize = responsive.getValor({ tablet: 13, normal: 12, small: 11 });
+  const precioOriginalSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
 
-  const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
-  const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
-  const tarjetaPadding = isTablet ? 20 : isSmallPhone ? 12 : 16;
-  const ofertaTituloSize = isTablet ? 20 : isSmallPhone ? 15 : 17;
-  const precioOfertaSize = isTablet ? 28 : isSmallPhone ? 20 : 24;
-  const descuentoSize = isTablet ? 16 : isSmallPhone ? 12 : 14;
+  // ✅ Paleta de marca (sin naranja)
+  const PALETA_OFERTAS = [
+    DISENO.colors.accent,          // 🔴 Rojo Krusty
+    DISENO.colors.accentSecondary, // 🟡 Amarillo Krusty
+    DISENO.colors.verde,           // 🟢 Verde
+    DISENO.colors.rosa,            // 🌸 Rosa
+    DISENO.colors.azul,            // 🔵 Azul
+    DISENO.colors.verdeClaro,      // 🟢 Verde claro
+    DISENO.colors.azulClaro,       // 🔵 Azul claro
+    DISENO.colors.accentLight,     // 🔴 Rojo claro
+  ];
 
-  const getColorPorId = (id: number) => {
-    const colores = [
-      '#FF5722', '#4CAF50', '#2196F3', '#9C27B0',
-      '#FF9800', '#E91E63', '#00BCD4', '#8BC34A',
-      '#FF6F00', '#2E7D32', '#00695C', '#4A148C'
-    ];
-    return colores[id % colores.length];
-  };
+  const getColorPorId = (id: number) => PALETA_OFERTAS[id % PALETA_OFERTAS.length];
 
   const navegarADetalle = (oferta: Oferta) => {
     console.log(`👉 [PantallaOfertas] Navegando a detalle de oferta: ${oferta.titulo}`);
@@ -196,8 +157,8 @@ export default function PantallaOfertas(props: any) {
     });
     const colorOferta = getColorPorId(item.id);
 
-    const imagenSize = isTablet ? 100 : isSmallPhone ? 70 : 80;
-    const imagenRadius = isTablet ? 16 : isSmallPhone ? 10 : 12;
+    const imagenSize = responsive.getValor({ tablet: 100, normal: 80, small: 70 });
+    const imagenRadius = responsive.getValor({ tablet: 16, normal: 12, small: 10 });
 
     return (
       <Animated.View
@@ -212,39 +173,41 @@ export default function PantallaOfertas(props: any) {
             styles.card,
             {
               padding: tarjetaPadding,
-              borderRadius: isTablet ? 20 : isSmallPhone ? 14 : 16,
+              borderRadius: responsive.getValor({ tablet: 20, normal: 16, small: 14 }),
               borderColor: colorOferta + '40',
-              backgroundColor: DESIGN.colors.surface,
-              shadowColor: DESIGN.colors.cardShadow,
-              shadowOffset: { width: 0, height: 2 },
+              borderWidth: 1,
+              backgroundColor: DISENO.colors.surface,
+              shadowColor: colorOferta + '25',
+              shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 1,
-              shadowRadius: 8,
-              elevation: 3,
+              shadowRadius: 12,
+              elevation: 4,
             }
           ]}
           activeOpacity={0.8}
           onPress={() => navegarADetalle(item)}
         >
-          {/* ✅ BADGE DE DESCUENTO */}
-          <View style={[
-            styles.descuentoBadge,
-            {
-              paddingHorizontal: isTablet ? 18 : isSmallPhone ? 10 : 14,
-              paddingVertical: isTablet ? 10 : isSmallPhone ? 6 : 8,
-              borderBottomLeftRadius: isTablet ? 18 : isSmallPhone ? 10 : 14,
-              backgroundColor: colorOferta,
-            }
-          ]}>
+          {/* ✅ BADGE DE DESCUENTO CON GRADIENTE */}
+          <LinearGradient
+            colors={[colorOferta, colorOferta + 'CC']}
+            style={[
+              styles.descuentoBadge,
+              {
+                paddingHorizontal: responsive.getValor({ tablet: 18, normal: 14, small: 10 }),
+                paddingVertical: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                borderBottomLeftRadius: responsive.getValor({ tablet: 18, normal: 14, small: 10 }),
+              }
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <Text style={[
               styles.descuentoTexto,
-              {
-                fontSize: descuentoSize,
-                color: DESIGN.colors.surface,
-              }
+              { fontSize: descuentoSize, color: DISENO.colors.surface }
             ]}>
               🔥 {item.descuento}
             </Text>
-          </View>
+          </LinearGradient>
 
           <View style={styles.cardContent}>
             {/* ✅ IMAGEN */}
@@ -282,51 +245,44 @@ export default function PantallaOfertas(props: any) {
 
             {/* ✅ INFORMACIÓN */}
             <View style={styles.info}>
-              <Text style={[
-                styles.ofertaTitulo,
-                {
-                  fontSize: ofertaTituloSize,
-                  color: colorOferta,
-                }
-              ]}>
+              <Text
+                style={[
+                  styles.ofertaTitulo,
+                  { fontSize: ofertaTituloSize, color: colorOferta }
+                ]}
+                numberOfLines={1}
+              >
                 {item.titulo}
               </Text>
-              <Text style={[
-                styles.ofertaDesc,
-                {
-                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  color: DESIGN.colors.textSecondary,
-                }
-              ]} numberOfLines={2}>
+              <Text
+                style={[
+                  styles.ofertaDesc,
+                  { fontSize: descSize, color: DISENO.colors.textSecondary }
+                ]}
+                numberOfLines={2}
+              >
                 {item.descripcion || 'Descripción no disponible'}
               </Text>
               <View style={styles.precios}>
                 <Text style={[
                   styles.precioOriginal,
-                  {
-                    fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                    color: DESIGN.colors.textTertiary,
-                  }
+                  { fontSize: precioOriginalSize, color: DISENO.colors.textTertiary }
                 ]}>
                   {formatearPrecio(item.precio_original)}
                 </Text>
                 <Text style={[
                   styles.precioOferta,
-                  {
-                    fontSize: precioOfertaSize,
-                    color: colorOferta,
-                  }
+                  { fontSize: precioOfertaSize, color: colorOferta }
                 ]}>
                   {formatearPrecio(item.precio_oferta)}
                 </Text>
               </View>
             </View>
 
-            {/* ✅ FLECHA */}
             <Ionicons
               name="chevron-forward"
-              size={isTablet ? 28 : isSmallPhone ? 18 : 24}
-              color={DESIGN.colors.textTertiary}
+              size={responsive.getValor({ tablet: 28, normal: 24, small: 18 })}
+              color={DISENO.colors.textTertiary}
             />
           </View>
         </TouchableOpacity>
@@ -336,9 +292,18 @@ export default function PantallaOfertas(props: any) {
 
   return (
     <View style={styles.container}>
+      {/* ✅ FONDO CLARO (igual que Menu/Recompensas) */}
       <LinearGradient
-        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+
+      {/* ✅ GRADIENTE SOLO EN EL HEADER */}
+      <LinearGradient
+        colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
+        style={styles.headerGradiente}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
@@ -347,9 +312,9 @@ export default function PantallaOfertas(props: any) {
       <View style={[
         styles.header,
         {
-          paddingTop: insets.top + (isTablet ? 20 : 10),
+          paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 12, small: 10 }),
           paddingHorizontal: paddingHorizontal,
-          paddingBottom: isTablet ? 16 : 12,
+          paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
         }
       ]}>
         <TouchableOpacity
@@ -357,13 +322,26 @@ export default function PantallaOfertas(props: any) {
           onPress={() => props.navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
+          <Ionicons
+            name="arrow-back"
+            size={responsive.getValor({ tablet: 28, normal: 24, small: 22 })}
+            color={DISENO.colors.surface}
+          />
         </TouchableOpacity>
-        <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+
+        {/* ✅ TÍTULO CON SIMPSONFONT */}
+        <Text style={[styles.title, { fontSize: tituloSize, color: DISENO.colors.surface }]}>
           🎫 Ofertas
         </Text>
+
         <View style={styles.headerRight}>
-          <Text style={[styles.counter, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.surface + '60' }]}>
+          <Text style={[
+            styles.counter,
+            {
+              fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
+              color: DISENO.colors.surface + 'CC',
+            }
+          ]}>
             {ofertas.length} {ofertas.length === 1 ? 'oferta' : 'ofertas'}
           </Text>
         </View>
@@ -372,8 +350,14 @@ export default function PantallaOfertas(props: any) {
       {/* ✅ CONTENIDO */}
       {cargando ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
-          <Text style={[styles.loadingText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.surface + '70' }]}>
+          <ActivityIndicator size="large" color={DISENO.colors.accent} />
+          <Text style={[
+            styles.loadingText,
+            {
+              fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 13 }),
+              color: DISENO.colors.textSecondary,
+            }
+          ]}>
             Cargando ofertas...
           </Text>
         </View>
@@ -384,7 +368,7 @@ export default function PantallaOfertas(props: any) {
             {
               paddingHorizontal: paddingHorizontal,
               paddingBottom: insets.bottom + 150,
-              paddingTop: isTablet ? 8 : 4,
+              paddingTop: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
             }
           ]}
           showsVerticalScrollIndicator={false}
@@ -392,18 +376,36 @@ export default function PantallaOfertas(props: any) {
             <RefreshControl
               refreshing={refrescando}
               onRefresh={manejarRefresh}
-              tintColor={DESIGN.colors.accentSecondary}
-              colors={[DESIGN.colors.accentSecondary]}
+              tintColor={DISENO.colors.accent}
+              colors={[DISENO.colors.accent]}
             />
           }
         >
           {ofertas.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Ionicons name="pricetag-outline" size={isTablet ? 80 : 60} color={DESIGN.colors.surface + '20'} />
-              <Text style={[styles.emptyText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.surface }]}>
+              <Ionicons
+                name="pricetag-outline"
+                size={responsive.getValor({ tablet: 80, normal: 70, small: 60 })}
+                color={DISENO.colors.textTertiary + '40'}
+              />
+              {/* ✅ EMPTY CON SIMPSONFONT */}
+              <Text style={[
+                styles.emptyText,
+                {
+                  fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }),
+                  color: DISENO.colors.text,
+                }
+              ]}>
                 No hay ofertas disponibles
               </Text>
-              <Text style={[styles.emptySubText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.surface + '60' }]}>
+              {/* ✅ SUBTEXT CON FUENTE REGULAR */}
+              <Text style={[
+                styles.emptySubText,
+                {
+                  fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                  color: DISENO.colors.textSecondary,
+                }
+              ]}>
                 Vuelve pronto para ver nuevas promociones 🚀
               </Text>
             </View>
@@ -417,12 +419,12 @@ export default function PantallaOfertas(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
+    backgroundColor: DISENO.colors.fondo,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -431,29 +433,45 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  // ✅ GRADIENTE SOLO DEL HEADER (mismo tamaño que en Menú)
+  headerGradiente: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    height: '19%',
+    shadowColor: DISENO.colors.cardShadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: DESIGN.colors.surface + '10',
   },
   backButton: {
     padding: 4,
     marginRight: 8,
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   title: {
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    letterSpacing: 0.5,
     flex: 1,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  // ✅ CONTADOR CON FUENTE REGULAR
   counter: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
-    opacity: 0.6,
   },
   loadingContainer: {
     flex: 1,
@@ -461,7 +479,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
+  // ✅ LOADING CON FUENTE REGULAR
   loadingText: {
+    fontFamily: FUENTES.regular,
     fontWeight: '400',
     opacity: 0.7,
   },
@@ -470,7 +490,6 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 12,
-    borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -480,17 +499,20 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1,
   },
+  // ✅ DESCUENTO CON SIMPSONFONT
   descuentoTexto: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    letterSpacing: 0.3,
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   ofertaImagen: {
-    backgroundColor: DESIGN.colors.surfaceHover,
+    backgroundColor: DISENO.colors.surfaceHover,
     borderWidth: 1,
-    borderColor: DESIGN.colors.border,
+    borderColor: DISENO.colors.border,
   },
   emojiContainer: {
     justifyContent: 'center',
@@ -500,12 +522,17 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
+  // ✅ TÍTULO OFERTA CON SIMPSONFONT
   ofertaTitulo: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
+  // ✅ DESCRIPCIÓN CON FUENTE REGULAR
   ofertaDesc: {
+    fontFamily: FUENTES.regular,
     marginTop: 2,
     opacity: 0.7,
+    lineHeight: 16,
   },
   precios: {
     flexDirection: 'row',
@@ -513,12 +540,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 6,
   },
+  // ✅ PRECIO ORIGINAL CON FUENTE REGULAR
   precioOriginal: {
+    fontFamily: FUENTES.regular,
     textDecorationLine: 'line-through',
     opacity: 0.5,
   },
+  // ✅ PRECIO OFERTA CON SIMPSONFONT
   precioOferta: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   emptyContainer: {
     flex: 1,
@@ -526,14 +557,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 80,
   },
+  // ✅ EMPTY CON SIMPSONFONT
   emptyText: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     marginTop: 16,
     textAlign: 'center',
   },
+  // ✅ SUBTEXT CON FUENTE REGULAR
   emptySubText: {
+    fontFamily: FUENTES.regular,
     textAlign: 'center',
     marginTop: 4,
-    opacity: 0.6,
+    opacity: 0.7,
   },
 });

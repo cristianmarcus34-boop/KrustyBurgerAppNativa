@@ -1,5 +1,5 @@
 // components/BarraInferiorProfesional.tsx - VERSIÓN ULTRA RÁPIDA
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -52,40 +52,12 @@ export default function BarraInferiorProfesional({ state, descriptors, navigatio
     const translateY = useRef(new Animated.Value(50)).current;
     const opacity = useRef(new Animated.Value(0)).current;
 
-    // ✅ ESTADO LOCAL CON VALOR INICIAL
-    const [cantidadCarrito, setCantidadCarrito] = useState(0);
-
-    // ✅ FUNCIÓN PARA OBTENER LA CANTIDAD DIRECTAMENTE DEL STORE
-    const obtenerCantidad = useCallback(() => {
-        return tiendaCarrito.getState().cantidadTotal();
-    }, []);
-
-    // ✅ ACTUALIZAR EL BADGE INMEDIATAMENTE
-    const actualizarBadge = useCallback(() => {
-        const nuevaCantidad = obtenerCantidad();
-        if (nuevaCantidad !== cantidadCarrito) {
-            console.log('🛒 [Barra] Badge actualizado:', nuevaCantidad);
-            setCantidadCarrito(nuevaCantidad);
-        }
-    }, [cantidadCarrito, obtenerCantidad]);
-
-    // ✅ SUSCRIPCIÓN AL STORE - REACCIONA INMEDIATAMENTE
-    useEffect(() => {
-        // ✅ VALOR INICIAL
-        actualizarBadge();
-
-        // ✅ SUSCRIBIRSE A CAMBIOS DEL STORE
-        const unsubscribe = tiendaCarrito.subscribe(
-            () => {
-
-                actualizarBadge();
-            }
-        );
-
-        return () => {
-            unsubscribe();
-        };
-    }, [actualizarBadge]);
+    // ✅ HOOK REACTIVO DE ZUSTAND: solo re-renderiza si el número cambia.
+    //    Mucho más eficiente que subscribe + setState manual (usa
+    //    useSyncExternalStore por dentro, respeta prioridades de React).
+    const cantidadCarrito = tiendaCarrito((state) =>
+        state.elementos.reduce((sum, e) => sum + e.cantidad, 0)
+    );
 
     // ✅ ANIMACIÓN DE ENTRADA
     useEffect(() => {

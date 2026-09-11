@@ -1,4 +1,4 @@
-﻿// screens/auth/PantallaLogin.tsx - CON ENLACES LEGALES
+﻿// screens/auth/PantallaLogin.tsx - CON SIMPSONFONT Y TIPOS CENTRALIZADOS
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -14,25 +14,58 @@ import {
   Animated,
   Image,
   Keyboard,
+  Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { notificacionService } from '../../services/notificacionService';
 import { supabase } from '../../lib/supabase';
 import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES, TAMANOS_DISPLAY } from '../../lib/fuentes';
+import { RootStackParamList } from '../../lib/tipos';
 
 const logoImage = require('../../assets/logo-krusty.png');
+
+// ✅ TIPADO DE NAVEGACIÓN
+type Navigation = {
+  navigate: <T extends keyof RootStackParamList>(
+    screen: T,
+    params?: RootStackParamList[T]
+  ) => void;
+  goBack: () => void;
+};
+
+// ✅ CLAVES PARA SECURE STORE Y ASYNC STORAGE
+const STORAGE_KEYS = {
+  REMEMBER_EMAIL: 'krusty_remember_email',
+  REMEMBER_PASSWORD: 'krusty_remember_password',
+  REMEMBER_ME: 'krusty_remember_me',
+  LOGIN_ATTEMPTS: 'krusty_login_attempts',
+  LOGIN_BLOCKED_UNTIL: 'krusty_login_blocked_until',
+};
+
+// ✅ CONFIGURACIÓN DE BLOQUEO
+const MAX_INTENTOS = 5;
+const TIEMPO_BLOQUEO_SEGUNDOS = 60;
 
 export default function PantallaLogin(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const navigation = useNavigation<Navigation>();
 
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
+  const [recordarUsuario, setRecordarUsuario] = useState(false);
+  const [cargandoRecordatorio, setCargandoRecordatorio] = useState(true);
   const [errores, setErrores] = useState<{ correo?: string; contrasena?: string }>({});
   const [intentosFallidos, setIntentosFallidos] = useState(0);
   const [bloqueado, setBloqueado] = useState(false);
@@ -49,7 +82,13 @@ export default function PantallaLogin(props: any) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<number | null>(null);
 
+  // ============================================================
+  // ✅ CARGAR CREDENCIALES Y ESTADO DE BLOQUEO
+  // ============================================================
   useEffect(() => {
+    cargarCredencialesGuardadas();
+    cargarEstadoBloqueo();
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       Animated.timing(slideUpAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
@@ -60,6 +99,122 @@ export default function PantallaLogin(props: any) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // ✅ CARGAR ESTADO DE BLOQUEO
+  const cargarEstadoBloqueo = async () => {
+    try {
+      const [attemptsStr, blockedUntilStr] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.LOGIN_ATTEMPTS),
+        AsyncStorage.getItem(STORAGE_KEYS.LOGIN_BLOCKED_UNTIL),
+      ]);
+
+      if (blockedUntilStr) {
+        const blockedUntil = parseInt(blockedUntilStr, 10);
+        const now = Date.now();
+
+        if (blockedUntil > now) {
+          const segundosRestantes = Math.ceil((blockedUntil - now) / 1000);
+          setBloqueado(true);
+          setTiempoRestante(segundosRestantes);
+          setIntentosFallidos(MAX_INTENTOS);
+          iniciarContadorBloqueo(segundosRestantes);
+        } else {
+          await AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+          await AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_BLOCKED_UNTIL);
+          setIntentosFallidos(0);
+          setBloqueado(false);
+        }
+      }
+
+      if (attemptsStr) {
+        const attempts = parseInt(attemptsStr, 10);
+        if (!bloqueado && attempts < MAX_INTENTOS) {
+          setIntentosFallidos(attempts);
+        }
+      }
+    } catch (error) {
+      console.error('Error cargando estado de bloqueo:', error);
+    }
+  };
+
+  const guardarEstadoBloqueo = async (intentos: number, bloqueadoHasta?: number) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LOGIN_ATTEMPTS, String(intentos));
+      if (bloqueadoHasta) {
+        await AsyncStorage.setItem(STORAGE_KEYS.LOGIN_BLOCKED_UNTIL, String(bloqueadoHasta));
+      } else {
+        await AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_BLOCKED_UNTIL);
+      }
+    } catch (error) {
+      console.error('Error guardando estado de bloqueo:', error);
+    }
+  };
+
+  const iniciarContadorBloqueo = (segundos: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      setTiempoRestante(prev => {
+        if (prev <= 1) {
+          setBloqueado(false);
+          setIntentosFallidos(0);
+          AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+          AsyncStorage.removeItem(STORAGE_KEYS.LOGIN_BLOCKED_UNTIL);
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const iniciarBloqueo = (segundos: number = TIEMPO_BLOQUEO_SEGUNDOS) => {
+    const bloqueadoHasta = Date.now() + (segundos * 1000);
+    setBloqueado(true);
+    setTiempoRestante(segundos);
+    guardarEstadoBloqueo(MAX_INTENTOS, bloqueadoHasta);
+    iniciarContadorBloqueo(segundos);
+  };
+
+  const cargarCredencialesGuardadas = async () => {
+    try {
+      const [rememberMe, email, password] = await Promise.all([
+        SecureStore.getItemAsync(STORAGE_KEYS.REMEMBER_ME),
+        SecureStore.getItemAsync(STORAGE_KEYS.REMEMBER_EMAIL),
+        SecureStore.getItemAsync(STORAGE_KEYS.REMEMBER_PASSWORD),
+      ]);
+
+      if (rememberMe === 'true') {
+        setRecordarUsuario(true);
+        if (email) setCorreo(email);
+        if (password) setContrasena(password);
+      }
+    } catch (error) {
+      console.error('Error cargando credenciales:', error);
+    } finally {
+      setCargandoRecordatorio(false);
+    }
+  };
+
+  const guardarCredenciales = async (email: string, password: string, remember: boolean) => {
+    try {
+      if (remember) {
+        await Promise.all([
+          SecureStore.setItemAsync(STORAGE_KEYS.REMEMBER_EMAIL, email),
+          SecureStore.setItemAsync(STORAGE_KEYS.REMEMBER_PASSWORD, password),
+          SecureStore.setItemAsync(STORAGE_KEYS.REMEMBER_ME, 'true'),
+        ]);
+      } else {
+        await Promise.all([
+          SecureStore.deleteItemAsync(STORAGE_KEYS.REMEMBER_EMAIL),
+          SecureStore.deleteItemAsync(STORAGE_KEYS.REMEMBER_PASSWORD),
+          SecureStore.deleteItemAsync(STORAGE_KEYS.REMEMBER_ME),
+        ]);
+      }
+    } catch (error) {
+      console.error('Error guardando credenciales:', error);
+    }
+  };
 
   const shake = () => {
     Animated.sequence([
@@ -117,23 +272,55 @@ export default function PantallaLogin(props: any) {
     }
   };
 
-  const iniciarBloqueo = (segundos: number = 30) => {
-    setBloqueado(true);
-    setTiempoRestante(segundos);
+  const obtenerMensajeErrorAmigable = (error: string): { titulo: string; mensaje: string } => {
+    const errorLower = error.toLowerCase();
 
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (errorLower.includes('invalid login credentials')) {
+      return {
+        titulo: '❌ Credenciales inválidas',
+        mensaje: 'El correo o la contraseña son incorrectos.\n\n📌 Verifica que:\n• El correo esté escrito correctamente\n• La contraseña sea la correcta\n• No tengas mayúsculas accidentales'
+      };
+    }
 
-    timerRef.current = setInterval(() => {
-      setTiempoRestante(prev => {
-        if (prev <= 1) {
-          setBloqueado(false);
-          setIntentosFallidos(0);
-          if (timerRef.current) clearInterval(timerRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (errorLower.includes('user not found')) {
+      return {
+        titulo: '👤 Usuario no encontrado',
+        mensaje: 'No encontramos una cuenta con este correo.\n\n📌 ¿Quieres crear una cuenta nueva?'
+      };
+    }
+
+    if (errorLower.includes('email not confirmed')) {
+      return {
+        titulo: '📧 Correo no confirmado',
+        mensaje: 'Tu correo aún no ha sido confirmado.\n\n📌 Revisa tu bandeja de entrada y haz clic en el enlace de confirmación.'
+      };
+    }
+
+    if (errorLower.includes('invalid email')) {
+      return {
+        titulo: '📧 Correo inválido',
+        mensaje: 'El formato del correo electrónico no es válido.\n\n📌 Ejemplo: usuario@dominio.com'
+      };
+    }
+
+    if (errorLower.includes('too many requests') || errorLower.includes('rate limit')) {
+      return {
+        titulo: '⏳ Demasiados intentos',
+        mensaje: 'Has superado el límite de intentos.\n\n⏱️ Espera 1 minuto y vuelve a intentarlo.'
+      };
+    }
+
+    if (errorLower.includes('network') || errorLower.includes('connection')) {
+      return {
+        titulo: '📡 Sin conexión',
+        mensaje: 'No pudimos conectar con el servidor.\n\n📌 Verifica tu conexión a internet.'
+      };
+    }
+
+    return {
+      titulo: '⚠️ Error al iniciar sesión',
+      mensaje: error || 'Ocurrió un error inesperado. Intenta nuevamente.'
+    };
   };
 
   const manejarLogin = async () => {
@@ -158,37 +345,30 @@ export default function PantallaLogin(props: any) {
     try {
       const resultado = await iniciarSesion(correo.trim(), contrasena);
 
-      if (!resultado.success) {
+      if (!resultado || !resultado.success) {
         const nuevosIntentos = intentosFallidos + 1;
         setIntentosFallidos(nuevosIntentos);
+        await guardarEstadoBloqueo(nuevosIntentos);
 
-        if (nuevosIntentos >= 5) {
-          iniciarBloqueo(30);
+        if (nuevosIntentos >= MAX_INTENTOS) {
+          iniciarBloqueo(TIEMPO_BLOQUEO_SEGUNDOS);
           setCargando(false);
-          Alert.alert('🔒 Demasiados intentos', 'Espera 30 segundos.');
+          Alert.alert('🔒 Demasiados intentos', `Espera ${TIEMPO_BLOQUEO_SEGUNDOS} segundos.`);
           return;
         }
 
-        let mensajeError = resultado.error || 'Error al iniciar sesión';
-        let tituloError = '⚠️ Error';
-
-        if (mensajeError.includes('Invalid login credentials')) {
-          mensajeError = '❌ Correo o contraseña incorrectos.';
-          tituloError = 'Credenciales inválidas';
-        } else if (mensajeError.includes('User not found')) {
-          mensajeError = '❌ No encontramos una cuenta con este correo.';
-          tituloError = 'Usuario no encontrado';
-        } else if (mensajeError.includes('Email not confirmed')) {
-          mensajeError = '📧 Tu correo aún no ha sido confirmado.';
-          tituloError = 'Correo no confirmado';
-        }
+        const errorOriginal = resultado?.error || 'Error al iniciar sesión';
+        const errorAmigable = obtenerMensajeErrorAmigable(errorOriginal);
 
         shake();
-        setMensajeErrorGeneral(mensajeError);
-        Alert.alert(tituloError, mensajeError);
+        setMensajeErrorGeneral(errorAmigable.mensaje);
+        Alert.alert(errorAmigable.titulo, errorAmigable.mensaje);
         setCargando(false);
         return;
       }
+
+      await guardarEstadoBloqueo(0);
+      await guardarCredenciales(correo.trim(), contrasena, recordarUsuario);
 
       setIntentosFallidos(0);
       setMensajeErrorGeneral(null);
@@ -205,8 +385,18 @@ export default function PantallaLogin(props: any) {
     } catch (error: any) {
       console.error('❌ Error en login:', error);
       shake();
-      setMensajeErrorGeneral('Ocurrió un error inesperado.');
-      Alert.alert('Error inesperado', 'Intenta nuevamente.');
+
+      let mensajeError = 'Ocurrió un error inesperado.';
+      let tituloError = '⚠️ Error';
+
+      if (error?.message && typeof error.message === 'string') {
+        const errorAmigable = obtenerMensajeErrorAmigable(error.message);
+        tituloError = errorAmigable.titulo;
+        mensajeError = errorAmigable.mensaje;
+      }
+
+      setMensajeErrorGeneral(mensajeError);
+      Alert.alert(tituloError, mensajeError);
     } finally {
       setCargando(false);
     }
@@ -221,7 +411,7 @@ export default function PantallaLogin(props: any) {
     } catch (error) {
       console.log('⚠️ Error en invitado:', error);
     }
-    props.navigation.navigate('Principal');
+    navigation.navigate('Principal');
   };
 
   const handleCorreoChange = (text: string) => {
@@ -236,16 +426,28 @@ export default function PantallaLogin(props: any) {
     if (mensajeErrorGeneral) setMensajeErrorGeneral(null);
   };
 
+  // ============================================================
+  // ✅ RESPONSIVE
+  // ============================================================
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
 
-  const logoSize = responsive.getValor({ tablet: 120, normal: 100, small: 80 });
-  const tituloSize = responsive.getValor({ tablet: 40, normal: 34, small: 28 });
-  const subtituloSize = responsive.getValor({ tablet: 18, normal: 15, small: 13 });
-  const inputSize = responsive.getValor({ tablet: 18, normal: 13, small: 12 });
-  const buttonTextSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
+  // ✅ LOGO MÁS GRANDE
+  const logoSize = responsive.getValor({ tablet: 220, normal: 180, small: 150 });
+  const inputSize = responsive.getValor({ tablet: 14, normal: 13, small: 12 });
+  const buttonTextSize = responsive.getValor({ tablet: 22, normal: 20, small: 18 });
   const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
   const paddingTop = insets.top + responsive.spacing(20);
+
+  const isSmallScreen = screenWidth < 380;
+
+  if (cargandoRecordatorio) {
+    return (
+      <View style={[estilos.contenedor, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={DISENO.colors.accent} />
+      </View>
+    );
+  }
 
   return (
     <View style={estilos.contenedor}>
@@ -269,11 +471,15 @@ export default function PantallaLogin(props: any) {
               paddingHorizontal: paddingHorizontal,
               paddingTop: paddingTop,
               paddingBottom: insets.bottom + 30,
+              flexGrow: 1,
+              justifyContent: 'center',
+              minHeight: '100%',
             }
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ✅ LOGO GRANDE SOLO */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -287,10 +493,6 @@ export default function PantallaLogin(props: any) {
                 resizeMode="contain"
               />
             </View>
-            <Text style={[estilos.titulo, { fontSize: tituloSize }]}>Krusty Burger</Text>
-            <Text style={[estilos.subtitulo, { fontSize: subtituloSize }]}>
-              "El Jefe tiene la última palabra" 🦈
-            </Text>
           </Animated.View>
 
           <Animated.View
@@ -299,6 +501,9 @@ export default function PantallaLogin(props: any) {
               {
                 opacity: fadeAnim,
                 transform: [{ translateY: slideUpAnim }, { translateX: shakeAnim }],
+                width: '100%',
+                maxWidth: 500,
+                alignSelf: 'center',
               }
             ]}
           >
@@ -374,11 +579,34 @@ export default function PantallaLogin(props: any) {
             </View>
             {errores.contrasena && <Text style={estilos.textoError}>{errores.contrasena}</Text>}
 
-            {intentosFallidos > 0 && intentosFallidos < 5 && (
+            <View style={estilos.recordarContainer}>
+              <View style={estilos.recordarLeft}>
+                <Switch
+                  value={recordarUsuario}
+                  onValueChange={setRecordarUsuario}
+                  trackColor={{ false: DISENO.colors.border, true: DISENO.colors.accent }}
+                  thumbColor={recordarUsuario ? DISENO.colors.surface : DISENO.colors.surface}
+                />
+                <Text style={[estilos.recordarTexto, { fontSize: isSmallScreen ? 11 : inputSize - 1 }]}>
+                  Recordar usuario
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ResetPassword')}
+                activeOpacity={0.6}
+                style={estilos.olvidoContainer}
+              >
+                <Text style={[estilos.olvidoTexto, { fontSize: isSmallScreen ? 10 : inputSize - 2 }]}>
+                  ¿Olvidaste tu contraseña?
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {intentosFallidos > 0 && intentosFallidos < MAX_INTENTOS && (
               <View style={estilos.intentosContainer}>
                 <Ionicons name="warning-outline" size={14} color={DISENO.colors.danger + '80'} />
                 <Text style={estilos.intentosTexto}>
-                  {intentosFallidos} de 5 intentos disponibles
+                  {intentosFallidos} de {MAX_INTENTOS} intentos disponibles
                 </Text>
               </View>
             )}
@@ -425,18 +653,9 @@ export default function PantallaLogin(props: any) {
             </TouchableOpacity>
 
             <View style={estilos.enlacesContainer}>
-              <TouchableOpacity onPress={() => props.navigation.navigate('Registro')} activeOpacity={0.6}>
+              <TouchableOpacity onPress={() => navigation.navigate('Registro')} activeOpacity={0.6}>
                 <Text style={[estilos.enlace, { fontSize: inputSize }]}>
                   ¿No tienes cuenta? <Text style={estilos.enlaceDestacado}>Regístrate</Text>
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => props.navigation.navigate('ResetPassword')}
-                activeOpacity={0.6}
-                style={estilos.olvidoContainer}
-              >
-                <Text style={[estilos.olvidoTexto, { fontSize: inputSize - 2 }]}>
-                  ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
             </View>
@@ -449,7 +668,7 @@ export default function PantallaLogin(props: any) {
 
             <TouchableOpacity
               style={estilos.bannerLogin}
-              onPress={() => props.navigation.navigate('Registro')}
+              onPress={() => navigation.navigate('Registro')}
               activeOpacity={0.7}
             >
               <Ionicons name="gift-outline" size={18} color={DISENO.colors.accentSecondary} />
@@ -471,10 +690,9 @@ export default function PantallaLogin(props: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* ✅ ENLACES LEGALES EN EL FOOTER */}
             <View style={estilos.legalContainer}>
               <TouchableOpacity
-                onPress={() => props.navigation.navigate('Terminos')}
+                onPress={() => navigation.navigate('Terminos')}
                 activeOpacity={0.6}
               >
                 <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
@@ -483,7 +701,7 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
               <Text style={estilos.legalSeparador}>•</Text>
               <TouchableOpacity
-                onPress={() => props.navigation.navigate('Privacidad')}
+                onPress={() => navigation.navigate('Privacidad')}
                 activeOpacity={0.6}
               >
                 <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
@@ -500,8 +718,14 @@ export default function PantallaLogin(props: any) {
   );
 }
 
+// ============================================================
+// 🎨 ESTILOS
+// ============================================================
 const estilos = StyleSheet.create({
-  contenedor: { flex: 1, backgroundColor: DISENO.colors.fondo },
+  contenedor: {
+    flex: 1,
+    backgroundColor: DISENO.colors.fondo,
+  },
   background: {
     position: 'absolute',
     top: 0,
@@ -519,28 +743,34 @@ const estilos = StyleSheet.create({
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
   },
-  keyboardView: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center' },
-  logoContainer: { alignItems: 'center', marginBottom: 36 },
-  logoWrapper: { marginBottom: 16, ...DISENO.shadow.lg },
-  logoImage: { backgroundColor: 'transparent' },
-  titulo: {
-    fontWeight: '800',
-    color: DISENO.colors.surface,
-    letterSpacing: 2,
-    textShadowColor: 'rgba(0,0,0,0.1)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  keyboardView: {
+    flex: 1,
   },
-  subtitulo: {
-    color: DISENO.colors.surface + '80',
-    marginTop: 4,
-    fontWeight: '300',
-    letterSpacing: 0.5,
-    fontStyle: 'italic',
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100%',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 24,
+  },
+  logoWrapper: {
+    ...DISENO.shadow.lg,
+    shadowColor: DISENO.colors.accent,
+    shadowOpacity: 0.25,
+  },
+  logoImage: {
+    backgroundColor: 'transparent',
+    borderRadius: 999,
   },
   formulario: {
     width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
     backgroundColor: DISENO.colors.surface,
     borderRadius: 24,
     padding: 24,
@@ -549,6 +779,7 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.border,
   },
   label: {
+    fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.text,
     marginBottom: 4,
@@ -568,10 +799,28 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.danger,
     backgroundColor: DISENO.colors.danger + '10',
   },
-  inputIcon: { marginRight: 12, flexShrink: 0 },
-  input: { color: DISENO.colors.text, paddingVertical: 12, paddingTop: 15, flex: 1 },
-  eyeButton: { padding: 4, flexShrink: 0 },
-  textoError: { color: DISENO.colors.danger, fontSize: 12, marginTop: 4, marginLeft: 4 },
+  inputIcon: {
+    marginRight: 12,
+    flexShrink: 0,
+  },
+  input: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    paddingVertical: 12,
+    paddingTop: 15,
+    flex: 1,
+  },
+  eyeButton: {
+    padding: 4,
+    flexShrink: 0,
+  },
+  textoError: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.danger,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+  },
   errorGeneralContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -584,10 +833,41 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.danger + '30',
   },
   errorGeneralTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
     fontSize: 13,
     flex: 1,
     fontWeight: '500',
+  },
+  recordarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingHorizontal: 4,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  recordarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  recordarTexto: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    fontWeight: '500',
+  },
+  olvidoContainer: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  olvidoTexto: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textTertiary,
+    textDecorationLine: 'underline',
+    fontWeight: '400',
   },
   intentosContainer: {
     flexDirection: 'row',
@@ -597,6 +877,7 @@ const estilos = StyleSheet.create({
     gap: 4,
   },
   intentosTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.danger + '80',
     fontSize: 12,
     fontWeight: '500',
@@ -613,6 +894,7 @@ const estilos = StyleSheet.create({
     borderRadius: 8,
   },
   bloqueoTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.accent,
     fontSize: 13,
     fontWeight: '600',
@@ -633,15 +915,25 @@ const estilos = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
   },
-  textoBoton: { fontWeight: '600', color: DISENO.colors.surface, letterSpacing: 1 },
-  enlacesContainer: { marginTop: 18, alignItems: 'center', gap: 10 },
-  enlace: { color: DISENO.colors.textSecondary, fontWeight: '500' },
-  enlaceDestacado: { color: DISENO.colors.accent, fontWeight: '700' },
-  olvidoContainer: { paddingVertical: 4 },
-  olvidoTexto: {
-    color: DISENO.colors.textTertiary,
-    textDecorationLine: 'underline',
+  textoBoton: {
+    fontFamily: FUENTES.display,  // ✅ Simpsonfont
     fontWeight: '400',
+    color: DISENO.colors.surface,
+    letterSpacing: 1,
+  },
+  enlacesContainer: {
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  enlace: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    fontWeight: '500',
+  },
+  enlaceDestacado: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.accent,
+    fontWeight: '700',
   },
   separadorContainer: {
     flexDirection: 'row',
@@ -649,8 +941,13 @@ const estilos = StyleSheet.create({
     marginTop: 22,
     marginBottom: 14,
   },
-  separador: { flex: 1, height: 1, backgroundColor: DISENO.colors.border },
+  separador: {
+    flex: 1,
+    height: 1,
+    backgroundColor: DISENO.colors.border,
+  },
   separadorTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
     paddingHorizontal: 16,
     fontSize: 12,
@@ -670,12 +967,14 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.accentSecondary + '20',
   },
   bannerLoginTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '400',
     flex: 1,
     textAlign: 'center',
   },
   bannerLoginDestacado: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.accentSecondary,
     fontWeight: '700',
   },
@@ -691,11 +990,11 @@ const estilos = StyleSheet.create({
     backgroundColor: DISENO.colors.surfaceHover,
   },
   botonInvitadoTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
-  // ✅ ENLACES LEGALES
   legalContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -704,6 +1003,7 @@ const estilos = StyleSheet.create({
     gap: 8,
   },
   legalTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
     fontWeight: '400',
     textDecorationLine: 'underline',
@@ -714,6 +1014,7 @@ const estilos = StyleSheet.create({
     opacity: 0.5,
   },
   versionTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
     fontSize: 10,
     textAlign: 'center',

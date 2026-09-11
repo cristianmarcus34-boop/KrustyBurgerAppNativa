@@ -1,4 +1,4 @@
-// screens/cliente/PantallaPerfil.tsx - COMPLETA CON ELIMINACIÓN DE CUENTA Y BENEFICIOS
+// screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -13,11 +13,12 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { supabase } from '../../lib/supabase';
@@ -33,8 +34,8 @@ import {
   obtenerNivel,
   Perfil,
 } from '../../lib/tipos';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// ✅ IMPORTAMOS FUENTES
+import { FUENTES } from '../../lib/fuentes';
 
 // ============================================================
 // 📋 TIPOS LOCALES
@@ -53,10 +54,11 @@ interface MenuItem {
 // 🏠 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaPerfil(props: any) {
-  const { perfil, sesion, cerrarSesion, actualizarPerfil } = tiendaAutenticacion();
+  const { perfil, sesion, cerrarSesion, actualizarPerfil, cargarPerfil } = tiendaAutenticacion();
   const { favoritos } = tiendaFavoritos();
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   // ✅ HOOK DE BENEFICIOS
   const { nivel, beneficios } = useBeneficios(
@@ -91,14 +93,6 @@ export default function PantallaPerfil(props: any) {
   const [metodoPago, setMetodoPago] = useState('');
   const [geocodificando, setGeocodificando] = useState(false);
 
-  // ✅ ESTADOS PARA ELIMINACIÓN DE CUENTA
-  const [mostrarModalEliminar, setMostrarModalEliminar] = useState(false);
-  const [passwordConfirmacion, setPasswordConfirmacion] = useState('');
-  const [motivoEliminacion, setMotivoEliminacion] = useState('');
-  const [cargandoEliminar, setCargandoEliminar] = useState(false);
-  const [mostrarPassword, setMostrarPassword] = useState(false);
-  const [tieneSolicitudEliminacion, setTieneSolicitudEliminacion] = useState(false);
-  const [diasRestantes, setDiasRestantes] = useState(0);
 
   // ✅ ANIMACIONES
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -109,14 +103,15 @@ export default function PantallaPerfil(props: any) {
   const isSmallPhone = responsive.isSmallPhone;
   const padding = responsive.getEspaciado('LG');
 
+  // ✅ TAMAÑOS REDUCIDOS PARA SIMPSONFONT
   const avatarSize = responsive.getValor({ tablet: 120, normal: 90, small: 80 });
-  const nombreSize = responsive.getValor({ tablet: 28, normal: 24, small: 20 });
-  const correoSize = responsive.getValor({ tablet: 17, normal: 14, small: 12 });
-  const statValorSize = responsive.getValor({ tablet: 26, normal: 22, small: 18 });
-  const statLabelSize = responsive.getValor({ tablet: 14, normal: 12, small: 10 });
-  const menuTextSize = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
-  const labelSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
-  const inputSize = responsive.getValor({ tablet: 16, normal: 15, small: 14 });
+  const nombreSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
+  const correoSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
+  const statValorSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
+  const statLabelSize = responsive.getValor({ tablet: 12, normal: 11, small: 10 });
+  const menuTextSize = responsive.getValor({ tablet: 14, normal: 13, small: 12 });
+  const labelSize = responsive.getValor({ tablet: 14, normal: 13, small: 12 });
+  const inputSize = responsive.getValor({ tablet: 15, normal: 14, small: 13 });
 
   // ============================================================
   // 🎬 EFECTOS
@@ -126,16 +121,25 @@ export default function PantallaPerfil(props: any) {
       cargarTotalPedidos();
       cargarDatosPerfil();
       cargarEstadisticas();
-      verificarEstadoEliminacion();
+
       if (perfil.avatar_url) {
         setImagenPerfil(perfil.avatar_url);
       }
     }
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, [perfil]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (perfil?.id) {
+        cargarPerfil(perfil.id);
+      }
+    }, [perfil?.id])
+  );
 
   // ============================================================
   // 🔄 FUNCIONES DE CARGA
@@ -198,11 +202,7 @@ export default function PantallaPerfil(props: any) {
           puntos_usados,
           usado_en_pedido,
           created_at,
-          recompensas (
-            nombre,
-            tipo,
-            valor_descuento
-          )
+          recompensas (nombre, tipo, valor_descuento)
         `)
         .eq('usuario_id', perfil.id)
         .order('created_at', { ascending: false })
@@ -220,7 +220,6 @@ export default function PantallaPerfil(props: any) {
       }
 
       await cargarActividadReciente();
-
     } catch (error) {
       console.error('❌ Error cargando estadísticas:', error);
     } finally {
@@ -230,7 +229,6 @@ export default function PantallaPerfil(props: any) {
 
   const cargarActividadReciente = async () => {
     if (!perfil?.id) return;
-
     try {
       const actividades: ActividadReciente[] = [];
 
@@ -251,7 +249,6 @@ export default function PantallaPerfil(props: any) {
             'en_camino': { icono: 'bicycle', texto: '🚴 En camino', color: DISENO.colors.azul },
           };
           const estadoInfo = estadoMap[p.estado] || estadoMap.pendiente;
-
           actividades.push({
             id: `pedido-${p.id}`,
             tipo: 'pedido',
@@ -273,8 +270,7 @@ export default function PantallaPerfil(props: any) {
       if (canjesRecientes) {
         canjesRecientes.forEach((c: any) => {
           const nombreRecompensa = c.recompensas && c.recompensas.length > 0
-            ? c.recompensas[0]?.nombre
-            : 'Recompensa';
+            ? c.recompensas[0]?.nombre : 'Recompensa';
           actividades.push({
             id: `canje-${c.id}`,
             tipo: 'canje',
@@ -288,7 +284,6 @@ export default function PantallaPerfil(props: any) {
 
       actividades.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       setActividadesRecientes(actividades.slice(0, 5));
-
     } catch (error) {
       console.error('❌ Error cargando actividad reciente:', error);
     }
@@ -300,46 +295,37 @@ export default function PantallaPerfil(props: any) {
       cargarTotalPedidos(),
       cargarDatosPerfil(),
       cargarEstadisticas(),
-      verificarEstadoEliminacion(),
     ]);
     setRefrescando(false);
   };
 
-  // ✅ VERIFICAR ESTADO DE ELIMINACIÓN
-  const verificarEstadoEliminacion = async () => {
-    if (!perfil?.id) return;
-    const estado = await servicioEliminacionCuenta.obtenerEstadoEliminacion(perfil.id);
-    setTieneSolicitudEliminacion(estado.tieneSolicitud);
-    setDiasRestantes(estado.diasRestantes || 0);
-  };
 
-  // ✅ FUNCIÓN PARA OBTENER COORDENADAS
-  const obtenerCoordenadasDesdeDireccion = async (calle: string, numero: string): Promise<{ lat: number | null; lng: number | null }> => {
-    if (!calle || !numero) {
-      return { lat: null, lng: null };
-    }
 
+  // ============================================================
+  // 📍 FUNCIÓN PARA OBTENER COORDENADAS
+  // ============================================================
+  const obtenerCoordenadasDesdeDireccion = async (
+    calle: string,
+    numero: string
+  ): Promise<{ lat: number | null; lng: number | null }> => {
+    if (!calle || !numero) return { lat: null, lng: null };
     try {
       const direccionCompleta = `${calle} ${numero}`;
-      console.log('📍 Geocodificando:', direccionCompleta);
-
       const geocodeResultados = await Location.geocodeAsync(direccionCompleta);
-
       if (geocodeResultados && geocodeResultados.length > 0) {
         const { latitude, longitude } = geocodeResultados[0];
-        console.log('✅ Coordenadas obtenidas:', latitude, longitude);
         return { lat: latitude, lng: longitude };
-      } else {
-        console.warn('⚠️ No se encontraron coordenadas para:', direccionCompleta);
-        return { lat: null, lng: null };
       }
+      return { lat: null, lng: null };
     } catch (error) {
       console.error('❌ Error en geocodificación:', error);
       return { lat: null, lng: null };
     }
   };
 
-  // ✅ ACTUALIZAR PERFIL CON GEOCODIFICACIÓN
+  // ============================================================
+  // 💾 ACTUALIZAR PERFIL
+  // ============================================================
   const actualizarDatosPerfil = async () => {
     if (!perfil || !perfil.id) {
       Alert.alert('❌ Error', 'No se pudo identificar tu cuenta.');
@@ -380,33 +366,16 @@ export default function PantallaPerfil(props: any) {
       if (lat !== null && lng !== null) {
         datosActualizados.lat_cliente = lat;
         datosActualizados.lng_cliente = lng;
-        console.log('📍 Guardando coordenadas en perfil:', lat, lng);
-      } else if (direccionCalle && direccionNumero) {
-        Alert.alert(
-          '⚠️ Coordenadas no encontradas',
-          'No se pudieron obtener las coordenadas de la dirección ingresada. La dirección se guardará pero no podrás calcular distancias de envío.',
-          [{ text: 'Entendido' }]
-        );
       }
 
-      const { error } = await supabase
-        .from('perfiles')
-        .update(datosActualizados)
-        .eq('id', perfil.id);
-
+      const { error } = await supabase.from('perfiles').update(datosActualizados).eq('id', perfil.id);
       if (error) {
         Alert.alert('Error', 'No se pudo actualizar el perfil: ' + error.message);
         return;
       }
 
       await actualizarPerfil({ ...perfil, ...datosActualizados });
-
-      if (lat !== null && lng !== null) {
-        Alert.alert('✅ Éxito', 'Perfil actualizado correctamente con ubicación');
-      } else {
-        Alert.alert('✅ Éxito', 'Perfil actualizado correctamente');
-      }
-
+      Alert.alert('✅ Éxito', 'Perfil actualizado correctamente');
       setModoEdicion(false);
     } catch (error) {
       console.error('❌ Error actualizando perfil:', error);
@@ -417,115 +386,11 @@ export default function PantallaPerfil(props: any) {
     }
   };
 
-  // ✅ SOLICITAR ELIMINACIÓN DE CUENTA
-  const solicitarEliminacionCuenta = async () => {
-    if (!perfil || !perfil.id || !perfil.email) {
-      Alert.alert(
-        '❌ Error',
-        'No se pudo identificar tu cuenta. Por favor, cerrá sesión y volvé a iniciar.'
-      );
-      return;
-    }
 
-    if (!motivoEliminacion || motivoEliminacion.trim().length < 10) {
-      Alert.alert(
-        '📝 Motivo requerido',
-        'Por favor, contanos con más detalle por qué querés eliminar tu cuenta. Esto nos ayuda a mejorar.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
 
-    if (!passwordConfirmacion || passwordConfirmacion.length < 6) {
-      Alert.alert(
-        '🔒 Contraseña requerida',
-        'Ingresá tu contraseña para confirmar la eliminación de tu cuenta.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    setCargandoEliminar(true);
-
-    try {
-      const resultado = await servicioEliminacionCuenta.solicitarEliminacion(
-        perfil.id,
-        perfil.email,
-        motivoEliminacion.trim(),
-        passwordConfirmacion
-      );
-
-      if (!resultado.success) {
-        Alert.alert('❌ Error', resultado.error || 'Ocurrió un error. Intentá nuevamente.');
-        setCargandoEliminar(false);
-        return;
-      }
-
-      const fechaEliminacion = new Date(resultado.solicitud!.fecha_eliminacion);
-      const fechaFormateada = fechaEliminacion.toLocaleDateString('es-AR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-
-      Alert.alert(
-        '✅ Solicitud enviada',
-        `Tu solicitud de eliminación fue recibida.\n\n📅 Tu cuenta será eliminada el ${fechaFormateada}.\n\nSi iniciás sesión antes de esa fecha, la eliminación se cancelará automáticamente.\n\nGracias por habernos elegido 🍔`,
-        [
-          {
-            text: 'Entendido',
-            onPress: () => {
-              setMostrarModalEliminar(false);
-              setPasswordConfirmacion('');
-              setMotivoEliminacion('');
-              cerrarSesion();
-              props.navigation.reset({
-                index: 0,
-                routes: [{ name: 'Bienvenida' }],
-              });
-            }
-          }
-        ]
-      );
-
-    } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('❌ Error', 'Ocurrió un error inesperado. Intentá nuevamente.');
-    } finally {
-      setCargandoEliminar(false);
-    }
-  };
-
-  // ✅ CANCELAR ELIMINACIÓN
-  const cancelarEliminacion = async () => {
-    if (!perfil || !perfil.id) {
-      Alert.alert('❌ Error', 'No se pudo identificar tu cuenta.');
-      return;
-    }
-
-    Alert.alert(
-      '🔄 Cancelar eliminación',
-      '¿Estás seguro que querés cancelar la eliminación de tu cuenta?',
-      [
-        {
-          text: 'Sí, cancelar',
-          onPress: async () => {
-            const resultado = await servicioEliminacionCuenta.cancelarEliminacion(perfil.id);
-            if (resultado.success) {
-              setTieneSolicitudEliminacion(false);
-              setDiasRestantes(0);
-              Alert.alert('✅ Cancelado', 'Tu cuenta ya no será eliminada.');
-            } else {
-              Alert.alert('❌ Error', resultado.error || 'No se pudo cancelar.');
-            }
-          },
-          style: 'destructive'
-        },
-        { text: 'No', style: 'cancel' }
-      ]
-    );
-  };
-
+  // ============================================================
+  // 📷 IMÁGENES
+  // ============================================================
   const seleccionarImagen = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -547,7 +412,6 @@ export default function PantallaPerfil(props: any) {
         await subirImagenPerfil(uri);
       }
     } catch (error) {
-      console.error('Error seleccionando imagen:', error);
       Alert.alert('Error', 'No se pudo seleccionar la imagen');
     }
   };
@@ -572,22 +436,17 @@ export default function PantallaPerfil(props: any) {
         await subirImagenPerfil(uri);
       }
     } catch (error) {
-      console.error('Error tomando foto:', error);
       Alert.alert('Error', 'No se pudo tomar la foto');
     }
   };
 
   const subirImagenPerfil = async (uri: string) => {
-    if (!perfil || !perfil.id) {
-      Alert.alert('Error', 'Debes iniciar sesión para cambiar la foto');
-      return;
-    }
-
+    if (!perfil || !perfil.id) return;
     setSubiendoImagen(true);
+
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-
       const fileExt = uri.split('.').pop() || 'jpg';
       const fileName = `${perfil.id}.${fileExt}`;
 
@@ -613,10 +472,9 @@ export default function PantallaPerfil(props: any) {
 
       await actualizarPerfil({ ...perfil, avatar_url: publicUrl });
       setImagenPerfil(publicUrl);
-      Alert.alert('✅ Éxito', 'Foto de perfil actualizada correctamente');
+      Alert.alert('✅ Éxito', 'Foto de perfil actualizada');
     } catch (error: any) {
-      console.error('Error subiendo imagen:', error);
-      Alert.alert('Error', `No se pudo subir la imagen: ${error.message || 'Error desconocido'}`);
+      Alert.alert('Error', `No se pudo subir la imagen: ${error.message}`);
     } finally {
       setSubiendoImagen(false);
     }
@@ -630,8 +488,7 @@ export default function PantallaPerfil(props: any) {
         { text: '📷 Tomar foto', onPress: tomarFoto },
         { text: '🖼️ Elegir de galería', onPress: seleccionarImagen },
         { text: 'Cancelar', style: 'cancel' },
-      ],
-      { cancelable: true }
+      ]
     );
   };
 
@@ -656,52 +513,26 @@ export default function PantallaPerfil(props: any) {
     return partes.length > 0 ? partes.join(', ') : 'No especificada';
   };
 
-  // ✅ OBTENER NIVEL (fallback si useBeneficios no carga)
+  // ============================================================
+  // ⭐ NIVEL
+  // ============================================================
   const nivelFallback = obtenerNivel(perfil?.puntos_acumulados || 0);
   const nivelActual = nivel || nivelFallback;
 
-  // ✅ MENU ITEMS
+  // ============================================================
+  // 📋 MENU ITEMS
+  // ============================================================
   const menuItems: MenuItem[] = [
-    {
-      id: 'pedidos',
-      label: 'Mis Pedidos',
-      icono: 'receipt-outline',
-      color: DISENO.colors.success,
-      navigate: 'Pedidos',
-      show: true,
-    },
-    {
-      id: 'recompensas',
-      label: 'Recompensas',
-      icono: 'star-outline',
-      color: DISENO.colors.rosa,
-      subtitle: 'Canjear puntos',
-      navigate: 'Recompensas',
-      show: true,
-    },
-    {
-      id: 'privacidad',
-      label: '🔒 Privacidad',
-      icono: 'lock-closed-outline',
-      color: DISENO.colors.info,
-      navigate: 'Privacidad',
-      show: true,
-    },
-    {
-      id: 'terminos',
-      label: '📋 Términos',
-      icono: 'document-text-outline',
-      color: DISENO.colors.textSecondary,
-      navigate: 'Terminos',
-      show: true,
-    },
+    { id: 'pedidos', label: 'Mis Pedidos', icono: 'receipt-outline', color: DISENO.colors.success, navigate: 'Pedidos', show: true },
+    { id: 'cupones', label: 'Mis Cupones', icono: 'ticket-outline', color: DISENO.colors.accent, subtitle: 'Ver mis cupones disponibles', navigate: 'MisCupones', show: true },
+    { id: 'recompensas', label: 'Recompensas', icono: 'star-outline', color: DISENO.colors.rosa, subtitle: 'Canjear puntos', navigate: 'Recompensas', show: true },
+    { id: 'privacidad', label: '🔒 Privacidad', icono: 'lock-closed-outline', color: DISENO.colors.info, navigate: 'Privacidad', show: true },
+    { id: 'terminos', label: '📋 Términos', icono: 'document-text-outline', color: DISENO.colors.textSecondary, navigate: 'Terminos', show: true },
   ];
 
   const handleNavigate = (item: MenuItem) => {
     if (item.id === 'pedidos') {
-      props.navigation.navigate('Principal', {
-        screen: 'Pedidos',
-      });
+      props.navigation.navigate('Principal', { screen: 'Pedidos' });
     } else {
       props.navigation.navigate(item.navigate);
     }
@@ -716,10 +547,7 @@ export default function PantallaPerfil(props: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 120 }
-        ]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         refreshControl={
           <RefreshControl
             refreshing={refrescando}
@@ -747,43 +575,24 @@ export default function PantallaPerfil(props: any) {
             activeOpacity={0.8}
             disabled={!perfil?.id}
           >
-            <View
-              style={[
-                styles.avatarContainer,
-                {
-                  width: avatarSize,
-                  height: avatarSize,
-                  borderRadius: avatarSize / 2,
-                  borderColor: DISENO.colors.border,
-                },
-              ]}
-            >
+            <View style={[
+              styles.avatarContainer,
+              { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }
+            ]}>
               {imagenPerfil ? (
                 <Image
                   source={{ uri: imagenPerfil }}
-                  style={{
-                    width: avatarSize,
-                    height: avatarSize,
-                    borderRadius: avatarSize / 2,
-                  }}
+                  style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
                 />
               ) : (
-                <Text
-                  style={[
-                    styles.avatarEmoji,
-                    { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 },
-                  ]}
-                >
+                <Text style={[styles.avatarEmoji, { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 }]}>
                   {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
                 </Text>
               )}
+
               {perfil?.id && (
                 <View style={styles.cameraIcon}>
-                  <Ionicons
-                    name="camera"
-                    size={isTablet ? 18 : 14}
-                    color={DISENO.colors.surface}
-                  />
+                  <Ionicons name="camera" size={isTablet ? 18 : 14} color={DISENO.colors.surface} />
                 </View>
               )}
             </View>
@@ -796,10 +605,12 @@ export default function PantallaPerfil(props: any) {
             </View>
           )}
 
+          {/* ✅ NOMBRE CON SIMPSONFONT */}
           <Text style={[styles.name, { fontSize: nombreSize }]}>
             {perfil?.nombre_cliente || 'Invitado'}
           </Text>
 
+          {/* ✅ EMAIL CON FUENTE REGULAR */}
           <Text style={[styles.email, { fontSize: correoSize }]}>
             {perfil?.email || 'Inicia sesión para ver tus datos'}
           </Text>
@@ -809,37 +620,30 @@ export default function PantallaPerfil(props: any) {
               <View style={styles.pointsContainer}>
                 <View style={styles.pointsWrapper}>
                   <Text style={styles.pointsIcon}>⭐</Text>
-                  <Text style={[styles.pointsText, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>
+                  {/* ✅ PUNTOS CON SIMPSONFONT */}
+                  <Text style={[styles.pointsText, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                     {perfil?.puntos_acumulados || 0} Krusty Points
                   </Text>
                 </View>
               </View>
 
-              <View
-                style={[
-                  styles.levelBadge,
-                  {
-                    paddingHorizontal: isTablet ? 20 : isSmallPhone ? 12 : 16,
-                    paddingVertical: isTablet ? 8 : isSmallPhone ? 5 : 6,
-                    borderRadius: isTablet ? 24 : isSmallPhone ? 14 : 18,
-                    borderColor: nivelActual.color + '30',
-                    width: '100%',
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.levelText,
-                    {
-                      color: nivelActual.color,
-                      fontSize: isTablet ? 17 : isSmallPhone ? 13 : 15,
-                      marginBottom: 4,
-                    },
-                  ]}
-                >
+              <View style={[styles.levelBadge, {
+                paddingHorizontal: isTablet ? 20 : isSmallPhone ? 12 : 16,
+                paddingVertical: isTablet ? 8 : isSmallPhone ? 5 : 6,
+                borderRadius: isTablet ? 24 : isSmallPhone ? 14 : 18,
+                borderColor: nivelActual.color + '30',
+                width: '100%',
+              }]}>
+                {/* ✅ NIVEL CON SIMPSONFONT */}
+                <Text style={[styles.levelText, {
+                  color: nivelActual.color,
+                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                  marginBottom: 4,
+                }]}>
                   {nivelActual.icono} Nivel {nivelActual.nombre}
                   {nivelActual.siguiente !== '—' && ` → ${nivelActual.siguiente}`}
                 </Text>
+
                 <BarraProgreso
                   progreso={nivelActual.progreso}
                   color={nivelActual.color}
@@ -848,10 +652,11 @@ export default function PantallaPerfil(props: any) {
                 />
               </View>
 
-              {/* ✅ SECCIÓN DE BENEFICIOS - NUEVA */}
+              {/* ✅ SECCIÓN DE BENEFICIOS */}
               {beneficios && (
                 <View style={styles.beneficiosContainer}>
-                  <Text style={[styles.beneficiosTitle, { fontSize: isTablet ? 16 : 14 }]}>
+                  {/* ✅ TÍTULO CON SIMPSONFONT */}
+                  <Text style={[styles.beneficiosTitle, { fontSize: isTablet ? 14 : 12 }]}>
                     🎁 Beneficios de tu nivel
                   </Text>
 
@@ -860,7 +665,7 @@ export default function PantallaPerfil(props: any) {
                     <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.accent + '15' }]}>
                       <Ionicons name="pricetag-outline" size={isTablet ? 18 : 16} color={DISENO.colors.accent} />
                     </View>
-                    <Text style={[styles.beneficioText, { fontSize: isTablet ? 14 : 13 }]}>
+                    <Text style={[styles.beneficioText, { fontSize: isTablet ? 13 : 12 }]}>
                       {beneficios.descuento > 0
                         ? `${beneficios.descuento}% de descuento en todos tus pedidos`
                         : 'Acumulá puntos para obtener descuentos'}
@@ -872,7 +677,7 @@ export default function PantallaPerfil(props: any) {
                     <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.success + '15' }]}>
                       <Ionicons name="bicycle-outline" size={isTablet ? 18 : 16} color={DISENO.colors.success} />
                     </View>
-                    <Text style={[styles.beneficioText, { fontSize: isTablet ? 14 : 13 }]}>
+                    <Text style={[styles.beneficioText, { fontSize: isTablet ? 13 : 12 }]}>
                       {beneficios.envioGratis
                         ? (beneficios.envioGratisMinimo
                           ? `Envío gratis en pedidos > $${formatearPrecio(beneficios.envioGratisMinimo)}`
@@ -881,15 +686,13 @@ export default function PantallaPerfil(props: any) {
                     </Text>
                   </View>
 
-
-
-                  {/* Acceso anticipado a ofertas */}
+                  {/* Acceso anticipado */}
                   {beneficios.accesoAnticipadoOfertas && (
                     <View style={styles.beneficioItem}>
                       <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.info + '15' }]}>
                         <Ionicons name="rocket-outline" size={isTablet ? 18 : 16} color={DISENO.colors.info} />
                       </View>
-                      <Text style={[styles.beneficioText, { fontSize: isTablet ? 14 : 13 }]}>
+                      <Text style={[styles.beneficioText, { fontSize: isTablet ? 13 : 12 }]}>
                         🚀 Acceso anticipado a ofertas exclusivas
                       </Text>
                     </View>
@@ -899,6 +702,7 @@ export default function PantallaPerfil(props: any) {
 
               <View style={styles.stats}>
                 <View style={styles.statItem}>
+                  {/* ✅ STAT VALOR CON SIMPSONFONT */}
                   <Text style={[styles.statValue, { fontSize: statValorSize }]}>
                     {totalPedidos}
                   </Text>
@@ -906,7 +710,9 @@ export default function PantallaPerfil(props: any) {
                     Pedidos
                   </Text>
                 </View>
+
                 <View style={styles.statDivider} />
+
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { fontSize: statValorSize }]}>
                     {formatearPrecio(totalGastado)}
@@ -915,7 +721,9 @@ export default function PantallaPerfil(props: any) {
                     Gastado
                   </Text>
                 </View>
+
                 <View style={styles.statDivider} />
+
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { fontSize: statValorSize }]}>
                     {totalCanjes}
@@ -928,15 +736,11 @@ export default function PantallaPerfil(props: any) {
             </>
           ) : (
             <View style={styles.guestMessage}>
-              <Ionicons
-                name="person-outline"
-                size={isTablet ? 50 : 40}
-                color={DISENO.colors.textTertiary}
-              />
-              <Text style={[styles.guestText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18 }]}>
+              <Ionicons name="person-outline" size={isTablet ? 50 : 40} color={DISENO.colors.textTertiary} />
+              <Text style={[styles.guestText, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
                 Estás viendo como invitado
               </Text>
-              <Text style={[styles.guestSubText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
+              <Text style={[styles.guestSubText, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12 }]}>
                 Inicia sesión para acceder a tus pedidos, puntos y recompensas
               </Text>
             </View>
@@ -945,47 +749,37 @@ export default function PantallaPerfil(props: any) {
 
         {/* Actividad Reciente */}
         {perfil?.id && actividadesRecientes.length > 0 && (
-          <Animated.View
-            style={[
-              styles.actividadContainer,
-              {
-                paddingHorizontal: padding,
-                marginTop: 8,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
-          >
-            <Text style={[styles.actividadTitulo, { fontSize: isTablet ? 18 : 16 }]}>
+          <Animated.View style={[
+            styles.actividadContainer,
+            {
+              paddingHorizontal: padding,
+              marginTop: 8,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}>
+            {/* ✅ TÍTULO CON SIMPSONFONT */}
+            <Text style={[styles.actividadTitulo, { fontSize: isTablet ? 15 : 13 }]}>
               📈 Actividad reciente
             </Text>
 
             {actividadesRecientes.slice(0, 4).map((actividad, index) => (
-              <View
-                key={actividad.id}
-                style={[
-                  styles.actividadItem,
-                  {
-                    paddingVertical: isTablet ? 12 : 10,
-                    borderBottomWidth: index < actividadesRecientes.length - 1 ? 1 : 0,
-                    borderBottomColor: DISENO.colors.border,
-                  },
-                ]}
-              >
+              <View key={actividad.id} style={[styles.actividadItem, {
+                paddingVertical: isTablet ? 12 : 10,
+                borderBottomWidth: index < actividadesRecientes.length - 1 ? 1 : 0,
+                borderBottomColor: DISENO.colors.border,
+              }]}>
                 <View style={styles.actividadIcono}>
                   <Ionicons name={actividad.icono as any} size={20} color={actividad.color} />
                 </View>
                 <View style={styles.actividadInfo}>
-                  <Text style={[styles.actividadDesc, { fontSize: isTablet ? 14 : 13 }]}>
+                  <Text style={[styles.actividadDesc, { fontSize: isTablet ? 13 : 12 }]}>
                     {actividad.descripcion}
                   </Text>
-                  <Text style={[styles.actividadFecha, { fontSize: isTablet ? 12 : 11 }]}>
+                  <Text style={[styles.actividadFecha, { fontSize: isTablet ? 11 : 10 }]}>
                     {new Date(actividad.fecha).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
                     })}
                   </Text>
                 </View>
@@ -996,26 +790,22 @@ export default function PantallaPerfil(props: any) {
 
         {/* Info del Perfil */}
         {perfil?.id && (
-          <Animated.View
-            style={[
-              styles.infoContainer,
-              {
-                paddingHorizontal: padding,
-                marginTop: 12,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
-          >
+          <Animated.View style={[
+            styles.infoContainer,
+            {
+              paddingHorizontal: padding,
+              marginTop: 12,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}>
             <View style={styles.infoHeader}>
-              <Text style={[styles.infoTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                📋 Información de contacto
+              {/* ✅ TÍTULO CON SIMPSONFONT */}
+              <Text style={[styles.infoTitulo, { fontSize: isTablet ? 15 : 13 }]}>
+                📋 Info contacto
               </Text>
-              <TouchableOpacity
-                onPress={() => setModoEdicion(!modoEdicion)}
-                style={styles.editButton}
-              >
-                <Text style={[styles.editButtonText, { fontSize: isTablet ? 14 : 12 }]}>
+              <TouchableOpacity onPress={() => setModoEdicion(!modoEdicion)} style={styles.editButton}>
+                <Text style={[styles.editButtonText, { fontSize: isTablet ? 13 : 11 }]}>
                   {modoEdicion ? 'Cancelar' : '✏️ Editar'}
                 </Text>
               </TouchableOpacity>
@@ -1124,12 +914,12 @@ export default function PantallaPerfil(props: any) {
                     {cargandoActualizacion || geocodificando ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <ActivityIndicator size="small" color="#FFFFFF" />
-                        <Text style={[styles.saveButtonText, { fontSize: isTablet ? 18 : 16 }]}>
+                        <Text style={[styles.saveButtonText, { fontSize: isTablet ? 15 : 13 }]}>
                           {geocodificando ? '📍 Obteniendo ubicación...' : 'Guardando...'}
                         </Text>
                       </View>
                     ) : (
-                      <Text style={[styles.saveButtonText, { fontSize: isTablet ? 18 : 16 }]}>
+                      <Text style={[styles.saveButtonText, { fontSize: isTablet ? 15 : 13 }]}>
                         ✅ Guardar cambios
                       </Text>
                     )}
@@ -1163,50 +953,42 @@ export default function PantallaPerfil(props: any) {
 
         {/* Últimos Canjes */}
         {perfil?.id && ultimosCanjes.length > 0 && (
-          <Animated.View
-            style={[
-              styles.canjesContainer,
-              {
-                paddingHorizontal: padding,
-                marginTop: 12,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
-          >
-            <Text style={[styles.canjesTitulo, { fontSize: isTablet ? 18 : 16 }]}>
+          <Animated.View style={[
+            styles.canjesContainer,
+            {
+              paddingHorizontal: padding,
+              marginTop: 12,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}>
+            {/* ✅ TÍTULO CON SIMPSONFONT */}
+            <Text style={[styles.canjesTitulo, { fontSize: isTablet ? 15 : 13 }]}>
               🎁 Últimas recompensas canjeadas
             </Text>
 
             {ultimosCanjes.map((canje, index) => (
-              <View
-                key={canje.id}
-                style={[
-                  styles.canjeItem,
-                  {
-                    paddingVertical: isTablet ? 12 : 10,
-                    borderBottomWidth: index < ultimosCanjes.length - 1 ? 1 : 0,
-                    borderBottomColor: DISENO.colors.border,
-                  },
-                ]}
-              >
+              <View key={canje.id} style={[styles.canjeItem, {
+                paddingVertical: isTablet ? 12 : 10,
+                borderBottomWidth: index < ultimosCanjes.length - 1 ? 1 : 0,
+                borderBottomColor: DISENO.colors.border,
+              }]}>
                 <View style={styles.canjeIcono}>
                   <Text style={styles.canjeEmoji}>🎯</Text>
                 </View>
                 <View style={styles.canjeInfo}>
-                  <Text style={[styles.canjeNombre, { fontSize: isTablet ? 14 : 13 }]}>
+                  <Text style={[styles.canjeNombre, { fontSize: isTablet ? 13 : 12 }]}>
                     {canje.recompensas?.nombre || 'Recompensa'}
                   </Text>
-                  <Text style={[styles.canjeDetalle, { fontSize: isTablet ? 12 : 11 }]}>
+                  <Text style={[styles.canjeDetalle, { fontSize: isTablet ? 11 : 10 }]}>
                     {canje.puntos_usados} pts • {canje.recompensas?.tipo === 'descuento'
                       ? `${canje.recompensas?.valor_descuento}% OFF`
                       : 'Producto gratis'}
                   </Text>
                 </View>
-                <Text style={[styles.canjeFecha, { fontSize: isTablet ? 11 : 10 }]}>
+                <Text style={[styles.canjeFecha, { fontSize: isTablet ? 10 : 9 }]}>
                   {new Date(canje.created_at).toLocaleDateString('es-AR', {
-                    day: '2-digit',
-                    month: '2-digit',
+                    day: '2-digit', month: '2-digit',
                   })}
                 </Text>
               </View>
@@ -1214,170 +996,63 @@ export default function PantallaPerfil(props: any) {
           </Animated.View>
         )}
 
-        {/* Menú de navegación */}
-        <Animated.View
-          style={[
-            styles.menuContainer,
-            {
-              paddingHorizontal: padding,
-              marginTop: 12,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideUpAnim }],
-            },
-          ]}
-        >
+        {/* MENÚ DE NAVEGACIÓN */}
+        <Animated.View style={[
+          styles.menuContainer,
+          {
+            paddingHorizontal: padding,
+            marginTop: 12,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideUpAnim }],
+          },
+        ]}>
           {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={[
-                styles.menuItem,
-                {
-                  paddingVertical: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                  paddingHorizontal: isTablet ? 20 : 16,
-                  backgroundColor: DISENO.colors.surface,
-                  borderRadius: DISENO.radius.md,
-                  marginBottom: 8,
-                  ...DISENO.shadow.sm,
-                },
-              ]}
+              style={[styles.menuItem, {
+                paddingVertical: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                paddingHorizontal: isTablet ? 20 : 16,
+              }]}
               onPress={() => handleNavigate(item)}
             >
               <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.menuIcon,
-                    { backgroundColor: item.color + '15' },
-                  ]}
-                >
-                  <Ionicons name={item.icono as any} size={isTablet ? 24 : 20} color={item.color} />
+                <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                  <Ionicons name={item.icono as any} size={isTablet ? 22 : 20} color={item.color} />
                 </View>
                 <View style={styles.menuLabelContainer}>
+                  {/* ✅ MENU LABEL CON SIMPSONFONT */}
                   <Text style={[styles.menuLabel, { fontSize: menuTextSize }]} numberOfLines={1}>
                     {item.label}
                   </Text>
                   {item.subtitle && (
-                    <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 13 : 11 }]} numberOfLines={1}>
+                    <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 12 : 10 }]} numberOfLines={1}>
                       {item.subtitle}
                     </Text>
                   )}
                 </View>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={isTablet ? 22 : 18}
-                color={DISENO.colors.textTertiary}
-              />
+              <Ionicons name="chevron-forward" size={isTablet ? 22 : 18} color={DISENO.colors.textTertiary} />
             </TouchableOpacity>
           ))}
 
-          {/* ✅ BOTÓN DE ELIMINAR CUENTA */}
-          {perfil?.id && (
-            <TouchableOpacity
-              style={[
-                styles.menuItem,
-                {
-                  paddingVertical: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                  paddingHorizontal: isTablet ? 20 : 16,
-                  backgroundColor: DISENO.colors.surface,
-                  borderRadius: DISENO.radius.md,
-                  marginBottom: 8,
-                  borderWidth: 1,
-                  borderColor: tieneSolicitudEliminacion ? DISENO.colors.accentSecondary + '30' : DISENO.colors.danger + '30',
-                  ...DISENO.shadow.sm,
-                },
-              ]}
-              onPress={() => {
-                if (tieneSolicitudEliminacion) {
-                  Alert.alert(
-                    '⏳ Eliminación programada',
-                    `Tu cuenta está programada para eliminarse en ${diasRestantes} días.\n\n¿Querés cancelar la eliminación?`,
-                    [
-                      {
-                        text: 'Cancelar eliminación',
-                        onPress: cancelarEliminacion,
-                        style: 'destructive',
-                      },
-                      {
-                        text: 'Seguir así',
-                        style: 'cancel',
-                      },
-                    ]
-                  );
-                } else {
-                  setMostrarModalEliminar(true);
-                }
-              }}
-            >
-              <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.menuIcon,
-                    {
-                      backgroundColor: tieneSolicitudEliminacion
-                        ? DISENO.colors.accentSecondary + '15'
-                        : DISENO.colors.danger + '15'
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={tieneSolicitudEliminacion ? "time-outline" : "trash-outline"}
-                    size={isTablet ? 24 : 20}
-                    color={tieneSolicitudEliminacion ? DISENO.colors.accentSecondary : DISENO.colors.danger}
-                  />
-                </View>
-                <View style={styles.menuLabelContainer}>
-                  <Text
-                    style={[
-                      styles.menuLabel,
-                      {
-                        fontSize: menuTextSize,
-                        color: tieneSolicitudEliminacion ? DISENO.colors.accentSecondary : DISENO.colors.danger,
-                      }
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {tieneSolicitudEliminacion
-                      ? `⏳ Eliminación en ${diasRestantes} días`
-                      : 'Eliminar cuenta'
-                    }
-                  </Text>
-                  <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 13 : 11 }]} numberOfLines={1}>
-                    {tieneSolicitudEliminacion
-                      ? 'Tu cuenta será eliminada automáticamente'
-                      : 'Eliminá permanentemente tu cuenta y datos'
-                    }
-                  </Text>
-                </View>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={isTablet ? 22 : 18}
-                color={DISENO.colors.textTertiary}
-              />
-            </TouchableOpacity>
-          )}
         </Animated.View>
 
         {/* Cerrar Sesión */}
         {perfil?.id && (
-          <Animated.View
-            style={[
-              styles.logoutContainer,
-              {
-                paddingHorizontal: padding,
-                marginTop: 16,
-                marginBottom: 20,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={() => setMostrarModal(true)}
-            >
+          <Animated.View style={[
+            styles.logoutContainer,
+            {
+              paddingHorizontal: padding,
+              marginTop: 16,
+              marginBottom: 20,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}>
+            <TouchableOpacity style={styles.logoutButton} onPress={() => setMostrarModal(true)}>
               <Ionicons name="log-out-outline" size={22} color={DISENO.colors.danger} />
-              <Text style={[styles.logoutText, { fontSize: isTablet ? 17 : 15 }]}>
+              {/* ✅ LOGOUT CON SIMPSONFONT */}
+              <Text style={[styles.logoutText, { fontSize: isTablet ? 14 : 13 }]}>
                 Cerrar sesión
               </Text>
             </TouchableOpacity>
@@ -1385,194 +1060,9 @@ export default function PantallaPerfil(props: any) {
         )}
       </ScrollView>
 
-      {/* ============================================================
-      🚨 MODAL DE ELIMINACIÓN DE CUENTA
-      ============================================================ */}
-      <Modal
-        visible={mostrarModalEliminar}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => {
-          setMostrarModalEliminar(false);
-          setPasswordConfirmacion('');
-          setMotivoEliminacion('');
-        }}
-      >
-        <View style={styles.modalEliminarOverlay}>
-          <View style={[
-            styles.modalEliminarContainer,
-            {
-              width: isTablet ? 480 : SCREEN_WIDTH - 32,
-              maxWidth: 480,
-            }
-          ]}>
-            {/* Header con gradiente */}
-            <LinearGradient
-              colors={['#E53935', '#C62828']}
-              style={styles.modalEliminarHeader}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <View style={styles.modalEliminarHeaderContent}>
-                <View style={styles.modalEliminarIconContainer}>
-                  <Ionicons name="trash-outline" size={28} color="#FFFFFF" />
-                </View>
-                <Text style={styles.modalEliminarTitle}>Eliminar cuenta</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setMostrarModalEliminar(false);
-                  setPasswordConfirmacion('');
-                  setMotivoEliminacion('');
-                }}
-                style={styles.modalEliminarClose}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </LinearGradient>
 
-            <ScrollView
-              style={styles.modalEliminarBodyScroll}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalEliminarBodyContent}
-            >
-              {/* ⚠️ Advertencia */}
-              <View style={styles.modalEliminarWarning}>
-                <Ionicons name="warning-outline" size={22} color="#E53935" />
-                <Text style={styles.modalEliminarWarningText}>
-                  Esta acción es <Text style={{ fontWeight: '700', color: '#E53935' }}>permanente e irreversible</Text>
-                </Text>
-              </View>
 
-              <Text style={styles.modalEliminarSubtitle}>
-                Tu cuenta será eliminada <Text style={{ fontWeight: '700', color: '#F5C518' }}>en 30 días</Text>.
-                Si iniciás sesión durante este período, la eliminación se cancelará automáticamente.
-                {'\n\n'}
-                Perderás acceso a:
-                {'\n'}• Todos tus pedidos e historial
-                {'\n'}• Tus puntos y recompensas acumulados
-                {'\n'}• Tus datos personales guardados
-              </Text>
-
-              {/* ✅ CONTRASEÑA */}
-              <View style={styles.modalEliminarInputGroup}>
-                <Text style={styles.modalEliminarLabel}>
-                  <Ionicons name="lock-closed-outline" size={16} color="#F5C518" />
-                  {' '}Confirmá tu contraseña <Text style={{ color: '#E53935' }}>*</Text>
-                </Text>
-                <View style={styles.modalEliminarPasswordContainer}>
-                  <TextInput
-                    style={styles.modalEliminarInput}
-                    placeholder="Ingresá tu contraseña"
-                    placeholderTextColor="#94A3B8"
-                    secureTextEntry={!mostrarPassword}
-                    value={passwordConfirmacion}
-                    onChangeText={setPasswordConfirmacion}
-                    autoCapitalize="none"
-                    selectionColor="#F5C518"
-                  />
-                  <TouchableOpacity
-                    onPress={() => setMostrarPassword(!mostrarPassword)}
-                    style={styles.modalEliminarPasswordToggle}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={mostrarPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#94A3B8"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* ✅ MOTIVO - OBLIGATORIO */}
-              <View style={styles.modalEliminarInputGroup}>
-                <Text style={styles.modalEliminarLabel}>
-                  <Ionicons name="chatbubble-outline" size={16} color="#F5C518" />
-                  {' '}¿Por qué te vas? <Text style={{ color: '#E53935' }}>*</Text>
-                </Text>
-                <TextInput
-                  style={[styles.modalEliminarInput, styles.modalEliminarTextArea]}
-                  placeholder="Ayudanos a mejorar contándonos tu experiencia..."
-                  placeholderTextColor="#94A3B8"
-                  value={motivoEliminacion}
-                  onChangeText={setMotivoEliminacion}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  selectionColor="#F5C518"
-                />
-                {motivoEliminacion.length > 0 && (
-                  <Text style={[
-                    styles.modalEliminarContador,
-                    { color: motivoEliminacion.length >= 10 ? '#43A047' : '#E53935' }
-                  ]}>
-                    {motivoEliminacion.length}/500 caracteres
-                  </Text>
-                )}
-              </View>
-
-              {/* ✅ VALIDACIONES */}
-              {motivoEliminacion.length > 0 && motivoEliminacion.length < 10 && (
-                <Text style={styles.modalEliminarError}>
-                  <Ionicons name="alert-circle-outline" size={14} color="#E53935" />
-                  {' '}El motivo debe tener al menos 10 caracteres
-                </Text>
-              )}
-
-              {/* ✅ BOTONES */}
-              <View style={styles.modalEliminarBotones}>
-                <TouchableOpacity
-                  style={[styles.modalEliminarBoton, styles.modalEliminarBotonSecundario]}
-                  onPress={() => {
-                    setMostrarModalEliminar(false);
-                    setPasswordConfirmacion('');
-                    setMotivoEliminacion('');
-                  }}
-                  activeOpacity={0.7}
-                  disabled={cargandoEliminar}
-                >
-                  <Text style={styles.modalEliminarBotonSecundarioText}>
-                    Cancelar
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.modalEliminarBoton,
-                    styles.modalEliminarBotonPeligro,
-                    (!passwordConfirmacion || motivoEliminacion.length < 10) && styles.modalEliminarBotonDisabled
-                  ]}
-                  onPress={solicitarEliminacionCuenta}
-                  activeOpacity={0.7}
-                  disabled={cargandoEliminar || !passwordConfirmacion || motivoEliminacion.length < 10}
-                >
-                  {cargandoEliminar ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-                      <Text style={styles.modalEliminarBotonPeligroText}>
-                        Solicitar eliminación
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.modalEliminarFooter}>
-                🔒 Tendrás 30 días para cancelar la eliminación si cambias de opinión
-              </Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ============================================================
-      🚪 MODAL DE CONFIRMACIÓN DE CIERRE DE SESIÓN
-      ============================================================ */}
+      {/* MODAL DE CONFIRMACIÓN DE CIERRE DE SESIÓN */}
       <Modal
         visible={mostrarModal}
         transparent
@@ -1580,23 +1070,19 @@ export default function PantallaPerfil(props: any) {
         onRequestClose={() => setMostrarModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              {
-                width: isTablet ? 400 : SCREEN_WIDTH - 40,
-                padding: isTablet ? 32 : 24,
-                borderRadius: DISENO.radius.xl,
-              },
-            ]}
-          >
+          <View style={[styles.modalContent, {
+            width: isTablet ? 400 : screenWidth - 40,
+            padding: isTablet ? 32 : 24,
+            borderRadius: DISENO.radius.xl,
+          }]}>
             <View style={styles.modalIcon}>
               <Ionicons name="log-out-outline" size={48} color={DISENO.colors.danger} />
             </View>
-            <Text style={[styles.modalTitle, { fontSize: isTablet ? 22 : 18 }]}>
+            {/* ✅ MODAL TITLE CON SIMPSONFONT */}
+            <Text style={[styles.modalTitle, { fontSize: isTablet ? 20 : 18 }]}>
               ¿Cerrar sesión?
             </Text>
-            <Text style={[styles.modalText, { fontSize: isTablet ? 16 : 14 }]}>
+            <Text style={[styles.modalText, { fontSize: isTablet ? 14 : 13 }]}>
               ¿Estás seguro que querés cerrar sesión? Podrás volver a iniciar sesión cuando quieras.
             </Text>
             <View style={styles.modalButtons}>
@@ -1604,7 +1090,7 @@ export default function PantallaPerfil(props: any) {
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setMostrarModal(false)}
               >
-                <Text style={[styles.modalButtonText, { fontSize: isTablet ? 16 : 14 }]}>
+                <Text style={[styles.modalButtonText, { fontSize: isTablet ? 14 : 13 }]}>
                   Cancelar
                 </Text>
               </TouchableOpacity>
@@ -1612,7 +1098,7 @@ export default function PantallaPerfil(props: any) {
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={confirmarCerrarSesion}
               >
-                <Text style={[styles.modalButtonText, styles.modalButtonConfirmText, { fontSize: isTablet ? 16 : 14 }]}>
+                <Text style={[styles.modalButtonText, styles.modalButtonConfirmText, { fontSize: isTablet ? 14 : 13 }]}>
                   Sí, cerrar sesión
                 </Text>
               </TouchableOpacity>
@@ -1625,7 +1111,7 @@ export default function PantallaPerfil(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS - CON SIMPSONFONT
 // ============================================================
 const styles = StyleSheet.create({
   container: {
@@ -1659,7 +1145,6 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: {
     textAlign: 'center',
-    lineHeight: undefined,
     color: DISENO.colors.text,
   },
   cameraIcon: {
@@ -1682,15 +1167,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   uploadingText: {
+    fontFamily: FUENTES.regular,
     fontSize: 12,
     color: DISENO.colors.textSecondary,
   },
+  // ✅ NOMBRE CON SIMPSONFONT
   name: {
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     marginTop: 12,
   },
+  // ✅ EMAIL CON FUENTE REGULAR
   email: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     marginTop: 2,
   },
@@ -1705,9 +1195,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  pointsIcon: { fontSize: 18 },
+  pointsIcon: {
+    fontSize: 18,
+  },
+  // ✅ PUNTOS CON SIMPSONFONT
   pointsText: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accentSecondary,
   },
   levelBadge: {
@@ -1716,11 +1210,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     ...DISENO.shadow.sm,
   },
+  // ✅ NIVEL CON SIMPSONFONT
   levelText: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     textAlign: 'center',
   },
-  // ✅ ESTILOS PARA BENEFICIOS
   beneficiosContainer: {
     marginTop: 12,
     padding: 16,
@@ -1729,8 +1224,10 @@ const styles = StyleSheet.create({
     width: '100%',
     ...DISENO.shadow.sm,
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   beneficiosTitle: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     marginBottom: 10,
   },
@@ -1748,7 +1245,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
+  // ✅ BENEFICIO CON FUENTE REGULAR
   beneficioText: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     flex: 1,
   },
@@ -1766,11 +1265,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  // ✅ STAT VALOR CON SIMPSONFONT
   statValue: {
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
   },
+  // ✅ STAT LABEL CON FUENTE REGULAR
   statLabel: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     marginTop: 2,
     fontWeight: '500',
@@ -1784,12 +1287,15 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 20,
   },
+  // ✅ GUEST TEXT CON SIMPSONFONT
   guestText: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
-    fontWeight: '600',
     marginTop: 8,
   },
   guestSubText: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     textAlign: 'center',
     marginTop: 4,
@@ -1801,8 +1307,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     ...DISENO.shadow.sm,
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   actividadTitulo: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     paddingHorizontal: 16,
     marginBottom: 8,
@@ -1821,12 +1329,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  actividadInfo: { flex: 1 },
+  actividadInfo: {
+    flex: 1,
+  },
   actividadDesc: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
     fontWeight: '500',
   },
   actividadFecha: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
     marginTop: 1,
   },
@@ -1843,8 +1355,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   infoTitulo: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
   },
   editButton: {
@@ -1853,9 +1367,11 @@ const styles = StyleSheet.create({
     backgroundColor: DISENO.colors.fondo,
     borderRadius: DISENO.radius.sm,
   },
+  // ✅ EDIT BUTTON CON SIMPSONFONT
   editButtonText: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accent,
-    fontWeight: '500',
   },
   infoDisplay: {
     paddingHorizontal: 16,
@@ -1867,7 +1383,9 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 4,
   },
+  // ✅ INFO CON FUENTE REGULAR
   infoText: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
     flex: 1,
     fontWeight: '400',
@@ -1878,12 +1396,16 @@ const styles = StyleSheet.create({
   formGroup: {
     marginBottom: 14,
   },
+  // ✅ FORM LABEL CON FUENTE REGULAR
   formLabel: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
     color: DISENO.colors.textSecondary,
     marginBottom: 4,
   },
+  // ✅ FORM INPUT CON FUENTE REGULAR
   formInput: {
+    fontFamily: FUENTES.regular,
     backgroundColor: DISENO.colors.fondo,
     borderRadius: DISENO.radius.sm,
     paddingHorizontal: 12,
@@ -1917,9 +1439,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // ✅ SAVE BUTTON CON SIMPSONFONT
   saveButtonText: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.surface,
-    fontWeight: '600',
   },
   canjesContainer: {
     backgroundColor: DISENO.colors.surface,
@@ -1927,8 +1451,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     ...DISENO.shadow.sm,
   },
+  // ✅ TÍTULO CON SIMPSONFONT
   canjesTitulo: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     paddingHorizontal: 16,
     marginBottom: 8,
@@ -1949,15 +1475,19 @@ const styles = StyleSheet.create({
   },
   canjeEmoji: { fontSize: 18 },
   canjeInfo: { flex: 1 },
+  // ✅ CANJE NOMBRE CON FUENTE REGULAR
   canjeNombre: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
     fontWeight: '500',
   },
   canjeDetalle: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     marginTop: 1,
   },
   canjeFecha: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
   },
   menuContainer: {
@@ -1989,11 +1519,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
+  // ✅ MENU LABEL CON SIMPSONFONT
   menuLabel: {
-    fontWeight: '500',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
   },
+  // ✅ MENU SUBTITLE CON FUENTE REGULAR
   menuSubtitle: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
     marginTop: 1,
   },
@@ -2011,8 +1545,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DISENO.colors.danger + '30',
   },
+  // ✅ LOGOUT CON SIMPSONFONT
   logoutText: {
-    fontWeight: '500',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.danger,
   },
   modalOverlay: {
@@ -2027,14 +1563,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...DISENO.shadow.lg,
   },
-  modalIcon: { marginBottom: 12 },
+  modalIcon: {
+    marginBottom: 12,
+  },
+  // ✅ MODAL TITLE CON SIMPSONFONT
   modalTitle: {
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
+  // ✅ MODAL TEXT CON FUENTE REGULAR
   modalText: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 20,
@@ -2057,16 +1599,16 @@ const styles = StyleSheet.create({
   modalButtonConfirm: {
     backgroundColor: DISENO.colors.danger,
   },
+  // ✅ MODAL BUTTON CON SIMPSONFONT
   modalButtonText: {
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
   },
   modalButtonConfirmText: {
     color: DISENO.colors.surface,
   },
-  // ============================================================
-  // 🎨 ESTILOS PARA EL MODAL DE ELIMINACIÓN
-  // ============================================================
+  // ESTILOS MODAL ELIMINAR
   modalEliminarOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -2104,8 +1646,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalEliminarTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontSize: 16,
+    fontWeight: '400',
     color: '#FFFFFF',
   },
   modalEliminarClose: {
@@ -2130,11 +1673,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalEliminarWarningText: {
+    fontFamily: FUENTES.regular,
     fontSize: 14,
     color: '#B0B0B0',
     flex: 1,
   },
   modalEliminarSubtitle: {
+    fontFamily: FUENTES.regular,
     fontSize: 14,
     color: '#94A3B8',
     lineHeight: 22,
@@ -2144,6 +1689,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalEliminarLabel: {
+    fontFamily: FUENTES.regular,
     fontSize: 13,
     fontWeight: '500',
     color: '#B0B0B0',
@@ -2159,6 +1705,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   modalEliminarInput: {
+    fontFamily: FUENTES.regular,
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
@@ -2173,17 +1720,11 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   modalEliminarContador: {
+    fontFamily: FUENTES.regular,
     fontSize: 11,
     textAlign: 'right',
     marginTop: 4,
     opacity: 0.7,
-  },
-  modalEliminarError: {
-    fontSize: 12,
-    color: '#E53935',
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   modalEliminarBotones: {
     flexDirection: 'row',
@@ -2205,22 +1746,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   modalEliminarBotonSecundarioText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    fontWeight: '400',
     color: '#B0B0B0',
   },
   modalEliminarBotonPeligro: {
     backgroundColor: '#E53935',
   },
   modalEliminarBotonPeligroText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    fontWeight: '400',
     color: '#FFFFFF',
   },
   modalEliminarBotonDisabled: {
     opacity: 0.5,
   },
   modalEliminarFooter: {
+    fontFamily: FUENTES.regular,
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',

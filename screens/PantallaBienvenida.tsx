@@ -1,4 +1,4 @@
-// screens/PantallaBienvenida.tsx - CORREGIDO
+// screens/PantallaBienvenida.tsx - CON SIMPSONFONT (SIN TÍTULO/SUBTÍTULO)
 import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colores, Sizes, getTematica } from '../lib/colores';
+import { FUENTES, TAMANOS_DISPLAY } from '../lib/fuentes';
 
 const { width, height } = Dimensions.get('window');
 const logoImage = require('../assets/logo-krusty.png');
@@ -43,7 +44,7 @@ export default function PantallaBienvenida({ navigation }: any) {
         {
             icon: 'star',
             text: 'Ganá puntos Krusty',
-            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos y envíos sin costo. ⭐',
+            desc: 'Cada compra te acerca a increíbles recompensas. Acumulá puntos y canjealos por descuentos exclusivos y envíos sin costo. ¡Mientras más sumás, más beneficios desbloqueás! ⭐',
             color: Colores.primario,
             iconBg: Colores.primario + '20',
         },
@@ -80,12 +81,13 @@ export default function PantallaBienvenida({ navigation }: any) {
     const isTablet = winWidth >= 768;
     const isSmallPhone = winWidth < 375;
 
-    const logoSize = isTablet ? 180 : isSmallPhone ? 120 : 150;
-    const buttonTextSize = isTablet ? 17 : isSmallPhone ? 13 : 15;
-    const buttonPadding = isTablet ? 16 : isSmallPhone ? 12 : 14;
-    const featureIconSize = isTablet ? 22 : isSmallPhone ? 18 : 20;
+    // ✅ Tamaños más compactos
+    const logoSize = isTablet ? 150 : isSmallPhone ? 110 : 130;
+    const buttonTextSize = isTablet ? 16 : isSmallPhone ? 13 : 15;
+    const buttonPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
+    const featureIconSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
     const paddingHorizontal = isTablet ? 48 : isSmallPhone ? 20 : 24;
-    const paddingTop = isTablet ? 48 : isSmallPhone ? 24 : 32;
+    const paddingTop = isTablet ? 40 : isSmallPhone ? 20 : 28;
 
     const abrirWebAgencia = async () => {
         const url = 'https://www.agenciadigitalpowa.com.ar';
@@ -129,12 +131,12 @@ export default function PantallaBienvenida({ navigation }: any) {
                 showsVerticalScrollIndicator={false}
                 bounces={false}
             >
-                {/* ✅ LOGO */}
+                {/* ✅ LOGO SOLO (sin título ni subtítulo) */}
                 <Animated.View
                     style={[
                         estilos.logo,
                         {
-                            marginBottom: isTablet ? 32 : 24,
+                            marginBottom: isTablet ? 24 : 20,
                             opacity: fadeAnim,
                             transform: [{ scale: scaleAnim }, { translateY: translateY }],
                         }
@@ -151,13 +153,10 @@ export default function PantallaBienvenida({ navigation }: any) {
                         ]}
                         resizeMode="contain"
                     />
-                    <Text style={[estilos.logoSubtext, { fontSize: isTablet ? 14 : 11 }]}>
-                        🍔 Desde Springfield para el mundo
-                    </Text>
                 </Animated.View>
 
                 {/* ✅ FEATURES EXPANDIBLES */}
-                <View style={[estilos.features, { marginBottom: isTablet ? 28 : 20 }]}>
+                <View style={[estilos.features, { marginBottom: isTablet ? 24 : 18 }]}>
                     {featuresData.map((item, index) => {
                         const expandido = featureExpandido === index;
 
@@ -180,7 +179,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                                             borderColor: expandido
                                                 ? item.color + '40'
                                                 : Colores.fondoClaro,
-                                            paddingVertical: expandido ? 16 : 12,
+                                            paddingVertical: expandido ? 14 : 10,
                                         }
                                     ]}
                                 >
@@ -192,12 +191,18 @@ export default function PantallaBienvenida({ navigation }: any) {
                                                 color={item.color}
                                             />
                                         </View>
-                                        <Text style={[estilos.featureTexto, {
-                                            fontSize: isTablet ? 15 : 13,
-                                            color: Colores.textoOscuro,
-                                        }]}>
+
+                                        {/* ✅ TÍTULO DEL FEATURE CON SIMPSONFONT - MÁS CHICO */}
+                                        <Text style={[
+                                            estilos.featureTexto,
+                                            {
+                                                fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15,
+                                                color: Colores.textoOscuro,
+                                            }
+                                        ]}>
                                             {item.text}
                                         </Text>
+
                                         <Ionicons
                                             name={expandido ? "chevron-up" : "chevron-down"}
                                             size={18}
@@ -207,8 +212,9 @@ export default function PantallaBienvenida({ navigation }: any) {
 
                                     {expandido && (
                                         <View style={estilos.featureDescContainer}>
+                                            {/* ✅ DESCRIPCIÓN CON FUENTE REGULAR - MÁS CHICA */}
                                             <Text style={[estilos.featureDesc, {
-                                                fontSize: isTablet ? 14 : 12,
+                                                fontSize: isTablet ? 13 : 11,
                                                 color: Colores.textoOscuro,
                                             }]}>
                                                 {item.desc}
@@ -218,12 +224,13 @@ export default function PantallaBienvenida({ navigation }: any) {
                                                     estilos.featureDescBoton,
                                                     {
                                                         backgroundColor: item.color,
-                                                        paddingHorizontal: isTablet ? 20 : 14,
-                                                        paddingVertical: isTablet ? 8 : 6,
+                                                        paddingHorizontal: isTablet ? 18 : 12,
+                                                        paddingVertical: isTablet ? 6 : 5,
                                                     }
                                                 ]}
                                                 onPress={() => setFeatureExpandido(null)}
                                             >
+                                                {/* ✅ BOTÓN "ENTENDIDO" CON SIMPSONFONT - MÁS CHICO */}
                                                 <Text style={[estilos.featureDescBotonTexto, { fontSize: isTablet ? 13 : 11 }]}>
                                                     Entendido
                                                 </Text>
@@ -243,8 +250,8 @@ export default function PantallaBienvenida({ navigation }: any) {
                         {
                             opacity: fadeAnim,
                             transform: [{ translateY: translateY }],
-                            gap: isTablet ? 12 : 10,
-                            marginBottom: isTablet ? 28 : 20,
+                            gap: isTablet ? 10 : 8,
+                            marginBottom: isTablet ? 24 : 18,
                         }
                     ]}
                 >
@@ -266,7 +273,13 @@ export default function PantallaBienvenida({ navigation }: any) {
                             end={{ x: 1, y: 0 }}
                         >
                             <Ionicons name="log-in" size={buttonTextSize} color={Colores.textoClaro} />
-                            <Text style={[estilos.botonIngresarTexto, { fontSize: buttonTextSize }]}>
+                            {/* ✅ BOTÓN "INICIAR SESIÓN" CON SIMPSONFONT - MÁS CHICO */}
+                            <Text style={[
+                                estilos.botonIngresarTexto,
+                                {
+                                    fontSize: isTablet ? 18 : isSmallPhone ? 15 : 16,
+                                }
+                            ]}>
                                 Iniciar Sesión
                             </Text>
                         </LinearGradient>
@@ -286,7 +299,13 @@ export default function PantallaBienvenida({ navigation }: any) {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="person-add" size={buttonTextSize + 2} color={Colores.primario} />
-                        <Text style={[estilos.botonRegistroTexto, { fontSize: buttonTextSize }]}>
+                        {/* ✅ BOTÓN "CREAR CUENTA" CON SIMPSONFONT - MÁS CHICO */}
+                        <Text style={[
+                            estilos.botonRegistroTexto,
+                            {
+                                fontSize: isTablet ? 18 : isSmallPhone ? 15 : 16,
+                            }
+                        ]}>
                             Crear Cuenta
                         </Text>
                     </TouchableOpacity>
@@ -296,7 +315,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                         onPress={() => navigation.navigate('Principal')}
                         activeOpacity={0.6}
                     >
-                        <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 14 : 12 }]}>
+                        <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 13 : 11 }]}>
                             Ver menú como invitado
                         </Text>
                     </TouchableOpacity>
@@ -307,14 +326,14 @@ export default function PantallaBienvenida({ navigation }: any) {
                     <View style={estilos.footerDivider} />
 
                     <Text style={[estilos.footer, {
-                        fontSize: isTablet ? 12 : 10,
+                        fontSize: isTablet ? 11 : 9,
                         color: Colores.textoGris,
                     }]}>
                         © 2026 Krusty Burger
                     </Text>
 
                     <Text style={[estilos.version, {
-                        fontSize: isTablet ? 10 : 8,
+                        fontSize: isTablet ? 9 : 8,
                         color: Colores.textoGris + '60',
                     }]}>
                         v1.0.0
@@ -329,20 +348,20 @@ export default function PantallaBienvenida({ navigation }: any) {
                             <Image
                                 source={require('../assets/logo-agencia.png')}
                                 style={{
-                                    width: isTablet ? 18 : 14,
-                                    height: isTablet ? 18 : 14,
+                                    width: isTablet ? 35 : 30,
+                                    height: isTablet ? 35 : 30,
                                     resizeMode: 'contain',
                                 }}
                             />
                             <Text style={[estilos.agenciaTexto, {
-                                fontSize: isTablet ? 12 : 10,
+                                fontSize: isTablet ? 11 : 9,
                                 color: Colores.textoGris,
                             }]}>
                                 Desarrollo Digital Powa
                             </Text>
                             <Ionicons
                                 name="open-outline"
-                                size={isTablet ? 14 : 10}
+                                size={isTablet ? 12 : 10}
                                 color={Colores.primario}
                             />
                         </TouchableOpacity>
@@ -354,7 +373,7 @@ export default function PantallaBienvenida({ navigation }: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CORREGIDOS
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
     featureTouch: {
@@ -420,26 +439,20 @@ const estilos = StyleSheet.create({
         backgroundColor: 'transparent',
         borderRadius: 999,
     },
-    logoSubtext: {
-        color: Colores.textoGris,
-        fontWeight: '400',
-        letterSpacing: 0.5,
-        marginTop: 4,
-    },
 
     // ============================================================
     // FEATURES
     // ============================================================
     features: {
         width: '100%',
-        gap: 10,
+        gap: 8,
     },
     featureItem: {
         borderRadius: Sizes.radius.md,
         borderWidth: 1,
         position: 'relative',
         overflow: 'hidden',
-        paddingHorizontal: 14,
+        paddingHorizontal: 12,
         backgroundColor: Colores.fondoBlanco,
         shadowColor: Colores.textoOscuro + '06',
         shadowOffset: { width: 0, height: 2 },
@@ -450,42 +463,49 @@ const estilos = StyleSheet.create({
     featureHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
     },
     featureIconWrapper: {
-        width: 40,
-        height: 40,
-        borderRadius: Sizes.radius.md,
+        width: 36,
+        height: 36,
+        borderRadius: Sizes.radius.sm,
         justifyContent: 'center',
         alignItems: 'center',
         flexShrink: 0,
     },
+    // ✅ TÍTULO DEL FEATURE CON SIMPSONFONT
     featureTexto: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         flex: 1,
-        fontWeight: '600',
         color: Colores.textoOscuro,
         letterSpacing: 0.2,
     },
     featureDescContainer: {
-        marginTop: 10,
-        paddingTop: 10,
+        marginTop: 8,
+        paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: Colores.fondoClaro,
     },
+    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     featureDesc: {
+        fontFamily: FUENTES.regular,
         color: Colores.textoOscuro,
-        lineHeight: 22,
+        lineHeight: 18,
         opacity: 0.85,
     },
     featureDescBoton: {
         alignSelf: 'flex-end',
-        marginTop: 10,
+        marginTop: 8,
         marginBottom: 2,
         borderRadius: Sizes.radius.full,
     },
+    // ✅ BOTÓN "ENTENDIDO" CON SIMPSONFONT
     featureDescBotonTexto: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: Colores.textoClaro,
-        fontWeight: '600',
+        letterSpacing: 0.3,
     },
 
     // ============================================================
@@ -493,7 +513,7 @@ const estilos = StyleSheet.create({
     // ============================================================
     botones: {
         width: '100%',
-        gap: 10,
+        gap: 8,
     },
     botonIngresar: {
         overflow: 'hidden',
@@ -512,9 +532,11 @@ const estilos = StyleSheet.create({
         width: '100%',
         paddingHorizontal: 20,
     },
+    // ✅ BOTÓN "INICIAR SESIÓN" CON SIMPSONFONT
     botonIngresarTexto: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: Colores.textoClaro,
-        fontWeight: '700',
         letterSpacing: 0.5,
     },
     botonRegistro: {
@@ -532,16 +554,20 @@ const estilos = StyleSheet.create({
         shadowRadius: 4,
         elevation: 2,
     },
+    // ✅ BOTÓN "CREAR CUENTA" CON SIMPSONFONT
     botonRegistroTexto: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         color: Colores.primario,
-        fontWeight: '600',
         letterSpacing: 0.5,
     },
     botonInvitado: {
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 8,
     },
+    // ✅ BOTÓN "INVITADO" CON FUENTE REGULAR
     botonInvitadoTexto: {
+        fontFamily: FUENTES.regular,
         color: Colores.textoGris,
         textDecorationLine: 'underline',
         fontWeight: '400',
@@ -553,31 +579,33 @@ const estilos = StyleSheet.create({
     footerContainer: {
         width: '100%',
         alignItems: 'center',
-        paddingTop: 8,
-        marginTop: 8,
+        paddingTop: 6,
+        marginTop: 6,
     },
     footerDivider: {
         width: '60%',
         height: 1,
-        marginBottom: 12,
+        marginBottom: 10,
         backgroundColor: Colores.fondoClaro,
     },
     footer: {
+        fontFamily: FUENTES.regular,
         color: Colores.textoGris,
         textAlign: 'center',
         fontWeight: '500',
     },
     version: {
+        fontFamily: FUENTES.regular,
         color: Colores.textoGris + '60',
         textAlign: 'center',
-        marginTop: 4,
+        marginTop: 3,
     },
 
     // ============================================================
     // AGENCIA
     // ============================================================
     agenciaContainer: {
-        marginTop: 12,
+        marginTop: 10,
         alignItems: 'center',
         width: '100%',
     },
@@ -586,8 +614,8 @@ const estilos = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
         backgroundColor: Colores.fondoBlanco,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
         borderRadius: Sizes.radius.full,
         borderWidth: 1,
         borderColor: Colores.fondoClaro,
@@ -598,6 +626,7 @@ const estilos = StyleSheet.create({
         elevation: 2,
     },
     agenciaTexto: {
+        fontFamily: FUENTES.regular,
         color: Colores.textoGris,
         fontWeight: '500',
         letterSpacing: 0.3,

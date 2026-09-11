@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaCarrito.tsx
+﻿// screens/cliente/PantallaCarrito.tsx - CON DESCUENTO POR NIVEL Y AHORRO TOTAL
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -22,54 +22,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
+import { DISENO } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 import { UbicacionGuardada } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F5F2ED',
-    surface: '#FFFFFF',
-    surfaceHover: '#F8F6F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.04)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentLight: '#FF6B6B',
-    accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    rosa: '#EC407A',
-    azul: '#1A237E',
-    azulClaro: '#3949AB',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 999,
-  },
-};
+import { cuponService } from '../../lib/cupones/cuponService';
+import { useBeneficios } from '../../hooks/useBeneficios';
+import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -86,13 +46,7 @@ const useResponsive = () => {
     return valores.normal;
   }, [isDesktop, isTablet, isSmallPhone]);
 
-  const spacing = (base: number) => {
-    if (isTablet) return base * 1.5;
-    if (isSmallPhone) return base * 0.75;
-    return base;
-  };
-
-  return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+  return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
 };
 
 export default function PantallaCarrito(props: any) {
@@ -107,6 +61,13 @@ export default function PantallaCarrito(props: any) {
     limpiarUbicacionTemporal
   } = tiendaAutenticacion();
 
+  const {
+    nivel,
+    beneficios,
+    calcularDescuento,
+    tieneEnvioGratis,
+  } = useBeneficios(perfil?.puntos_acumulados || 0, perfil?.id);
+
   // ✅ Estados
   const [mostrarModalLogin, setMostrarModalLogin] = useState(false);
   const [mostrarModalPuntos, setMostrarModalPuntos] = useState(false);
@@ -116,6 +77,10 @@ export default function PantallaCarrito(props: any) {
   const [puntosOriginalesAntesCanje, setPuntosOriginalesAntesCanje] = useState(0);
   const [canjeandoPuntos, setCanjeandoPuntos] = useState(false);
   const [cuponPuntosAplicado, setCuponPuntosAplicado] = useState<any>(null);
+  const [cuponAplicado, setCuponAplicado] = useState<any>(
+    () => props.route?.params?.cuponAplicado || null
+  );
+  const intentoRecuperarCupon = useRef(false);
   const [inputPuntos, setInputPuntos] = useState('');
 
   const [costoEnvioEstimado, setCostoEnvioEstimado] = useState(0);
@@ -127,40 +92,52 @@ export default function PantallaCarrito(props: any) {
   const [ubicacionGuardada, setUbicacionGuardada] = useState<UbicacionGuardada | null>(null);
   const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
-  // ✅ Cálculos
   const total = calcularTotal();
   const totalProductos = elementos.reduce((sum, item) => sum + item.cantidad, 0);
   const tieneProductos = elementos.length > 0;
 
+  // ✅ Porcentaje de descuento del nivel actual
+  const porcentajeDescuentoNivel = useMemo(() => {
+    if (!beneficios) return 0;
+    return beneficios.descuento || 0;
+  }, [beneficios]);
+
   // ✅ Efectos
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideUpAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
   }, []);
 
   useEffect(() => {
-    if (perfil) {
-      cargarPuntosUsuario();
-    }
+    if (perfil) cargarPuntosUsuario();
   }, [perfil]);
 
   useEffect(() => {
-    cargarUbicacionDesdeStore();
-  }, []);
+    const cuponRecibido = props.route?.params?.cuponAplicado;
+    if (cuponRecibido) {
+      setCuponAplicado(cuponRecibido);
+    }
+  }, [props.route?.params?.cuponAplicado]);
+
+  useEffect(() => {
+    if (!perfil?.id || cuponAplicado || intentoRecuperarCupon.current) return;
+    intentoRecuperarCupon.current = true;
+
+    const recuperarCuponDisponible = async () => {
+      const cuponesDisponibles = await cuponService.obtenerCuponesDisponibles(perfil.id);
+      const cuponReservado = cuponesDisponibles[0]?.cupon;
+      if (cuponReservado) setCuponAplicado(cuponReservado);
+    };
+
+    recuperarCuponDisponible();
+  }, [perfil?.id, cuponAplicado]);
+
+  useEffect(() => { cargarUbicacionDesdeStore(); }, []);
 
   useEffect(() => {
     if (ubicacionGuardada && elementos.length > 0) {
@@ -174,13 +151,9 @@ export default function PantallaCarrito(props: any) {
     }
   }, [ubicacionGuardada, elementos.length]);
 
-  // ✅ RECARGAR UBICACIÓN CUANDO LA PANTALLA OBTIENE FOCO
   useFocusEffect(
     useCallback(() => {
       const recargarUbicacion = async () => {
-        console.log('🔄 [Carrito] Recargando ubicación al obtener foco...');
-
-        // ✅ PRIORIDAD 1: Usar la dirección del perfil SIEMPRE si existe
         if (perfil) {
           const partesDireccion = [];
           if (perfil.direccion_calle) partesDireccion.push(perfil.direccion_calle);
@@ -194,15 +167,12 @@ export default function PantallaCarrito(props: any) {
           const direccionCompleta = partesDireccion.length > 0 ? partesDireccion.join(', ') : '';
 
           if (direccionCompleta) {
-            console.log('📍 [Carrito] Usando dirección del perfil (prioridad máxima):', direccionCompleta);
-
             const ubicacionPerfil: UbicacionGuardada = {
               latitude: perfil.lat_cliente || -34.776484410467525,
               longitude: perfil.lng_cliente || -58.29220250409459,
               direccion: direccionCompleta,
               seleccionadaPorUsuario: false,
             };
-
             setUbicacionGuardada(ubicacionPerfil);
             await guardarUbicacionTemporal(ubicacionPerfil);
             setCargandoUbicacion(false);
@@ -210,18 +180,13 @@ export default function PantallaCarrito(props: any) {
           }
         }
 
-        // 2️⃣ Si no hay dirección en perfil, intentar cargar desde el store
         const ubicacionCargada = await cargarUbicacionTemporal();
-
         if (ubicacionCargada) {
-          console.log('📍 [Carrito] Usando ubicación del store (sin perfil):', ubicacionCargada);
           setUbicacionGuardada(ubicacionCargada);
           setCargandoUbicacion(false);
           return;
         }
 
-        // 3️⃣ Si no hay ubicación en perfil ni en store, usar local por defecto
-        console.log('📍 [Carrito] No hay ubicación, usando local por defecto');
         const ubicacionDefault: UbicacionGuardada = {
           latitude: -34.776484410467525,
           longitude: -58.29220250409459,
@@ -234,34 +199,26 @@ export default function PantallaCarrito(props: any) {
       };
 
       recargarUbicacion();
-    }, [perfil]) // ✅ Dependencia: perfil
+    }, [perfil])
   );
 
   // ============================================================
   // 🔄 FUNCIONES DE CARGA
   // ============================================================
   const cargarUbicacionDesdeStore = async () => {
-    console.log('📍 [Carrito] Cargando ubicación desde store...');
     setCargandoUbicacion(true);
-
     try {
       const ubicacionCargada = await cargarUbicacionTemporal();
-
       if (ubicacionCargada) {
-        console.log('📍 [Carrito] Ubicación cargada desde AsyncStorage:', ubicacionCargada);
         setUbicacionGuardada(ubicacionCargada);
         setCargandoUbicacion(false);
         return;
       }
-
       if (ubicacionStore) {
-        console.log('📍 [Carrito] Usando ubicación del store:', ubicacionStore);
         setUbicacionGuardada(ubicacionStore);
         setCargandoUbicacion(false);
         return;
       }
-
-      console.log('📍 [Carrito] No hay ubicación guardada, usando local por defecto');
       const ubicacionDefault: UbicacionGuardada = {
         latitude: -34.776484410467525,
         longitude: -58.29220250409459,
@@ -270,16 +227,8 @@ export default function PantallaCarrito(props: any) {
       };
       setUbicacionGuardada(ubicacionDefault);
       await guardarUbicacionTemporal(ubicacionDefault);
-
     } catch (error) {
       console.error('❌ [Carrito] Error cargando ubicación:', error);
-      const ubicacionDefault: UbicacionGuardada = {
-        latitude: -34.776484410467525,
-        longitude: -58.29220250409459,
-        direccion: 'Local Krusty Burger',
-        seleccionadaPorUsuario: false,
-      };
-      setUbicacionGuardada(ubicacionDefault);
     } finally {
       setCargandoUbicacion(false);
     }
@@ -333,36 +282,24 @@ export default function PantallaCarrito(props: any) {
       console.error('Error cargando puntos:', error);
       setPuntosMaximos(0);
       setPuntosOriginales(0);
-      setPuntosOriginalesAntesCanje(0);
     }
   };
 
   // ============================================================
   // 🎯 MANEJADORES DE PUNTOS
   // ============================================================
-
-  // ✅ Función para restaurar puntos - SILENCIOSA
   const restaurarPuntos = async () => {
     if (!perfil?.id) return;
-
     const puntosARestaurar = cuponPuntosAplicado?.puntos_antes_canje || puntosOriginalesAntesCanje || puntosOriginales;
-
     if (puntosARestaurar === 0) return;
-
-    console.log('🔄 Restaurando puntos a:', puntosARestaurar);
 
     try {
       const { error: updateError } = await supabase
         .from('perfiles')
-        .update({
-          puntos_acumulados: puntosARestaurar,
-        })
+        .update({ puntos_acumulados: puntosARestaurar })
         .eq('id', perfil.id);
 
-      if (updateError) {
-        console.error('❌ Error restaurando puntos:', updateError);
-        return;
-      }
+      if (updateError) { console.error('❌ Error restaurando puntos:', updateError); return; }
 
       setPuntosMaximos(puntosARestaurar);
       setPuntosOriginales(puntosARestaurar);
@@ -370,21 +307,14 @@ export default function PantallaCarrito(props: any) {
       setCuponPuntosAplicado(null);
       setPuntosSeleccionados(0);
       setInputPuntos('');
-
       await cargarPuntosUsuario();
-      console.log('✅ Puntos restaurados correctamente');
-
     } catch (error) {
       console.error('❌ Error restaurando puntos:', error);
     }
   };
 
-  // ✅ Función para quitar el descuento - SIN ALERTA
-  const quitarDescuento = () => {
-    restaurarPuntos();
-  };
+  const quitarDescuento = () => { restaurarPuntos(); };
 
-  // ✅ Función para validar y seleccionar puntos desde el input
   const handleInputPuntos = (text: string) => {
     const num = parseInt(text) || 0;
     if (num < 0) return;
@@ -392,13 +322,11 @@ export default function PantallaCarrito(props: any) {
     setPuntosSeleccionados(num);
   };
 
-  // ✅ Función de canje mejorada
   const canjearPuntos = async () => {
     if (puntosSeleccionados < 100) {
       Alert.alert('Mínimo 100 puntos', 'Necesitas al menos 100 puntos para canjear ($100 de descuento)');
       return;
     }
-
     if (puntosSeleccionados > puntosMaximos) {
       Alert.alert('Puntos insuficientes', `Tenés ${puntosMaximos} puntos disponibles`);
       return;
@@ -419,9 +347,7 @@ export default function PantallaCarrito(props: any) {
 
       const { error: updateError } = await supabase
         .from('perfiles')
-        .update({
-          puntos_acumulados: puntosMaximos - puntosSeleccionados,
-        })
+        .update({ puntos_acumulados: puntosMaximos - puntosSeleccionados })
         .eq('id', perfil!.id);
 
       if (updateError) throw updateError;
@@ -466,7 +392,6 @@ export default function PantallaCarrito(props: any) {
       );
 
       await cargarPuntosUsuario();
-
     } catch (error) {
       console.error('Error canjeando puntos:', error);
       Alert.alert('❌ Error', 'No se pudo canjear los puntos. Intentá de nuevo.');
@@ -475,7 +400,6 @@ export default function PantallaCarrito(props: any) {
     }
   };
 
-  // ✅ Función para cancelar el modal
   const cancelarCanje = () => {
     setPuntosSeleccionados(0);
     setInputPuntos('');
@@ -483,33 +407,42 @@ export default function PantallaCarrito(props: any) {
   };
 
   // ============================================================
-  // 📊 CÁLCULOS DE PRECIOS
+  // 📊 CÁLCULOS
   // ============================================================
-  const calcularDescuento = useCallback(() => {
-    if (!cuponPuntosAplicado || !cuponPuntosAplicado.recompensas) return 0;
-    const r = cuponPuntosAplicado.recompensas;
+  const descuentoNivel = beneficios ? calcularDescuento(total) : 0;
+  const envioGratisNivel = beneficios ? tieneEnvioGratis(total) : false;
 
-    if (r.tipo === 'DESCUENTO_FIJO') {
-      return Math.min(r.valor_descuento || 0, total);
-    }
-    if (r.tipo === 'DESCUENTO') {
-      return (total * r.valor_descuento) / 100;
-    }
-    if (r.tipo === 'ENVIO_GRATIS') return costoEnvioEstimado;
-    return 0;
-  }, [cuponPuntosAplicado, total, costoEnvioEstimado]);
+  const resumenPedido = calcularResumenPedido({
+    subtotal: total,
+    cuponAplicado,
+    cuponPuntosAplicado,
+    descuentoNivel,
+    costoEnvio: envioDisponible ? costoEnvioEstimado : 0,
+    tipoEntrega: 'domicilio',
+    envioGratisNivel,
+  });
 
-  const costoEnvioFinal = cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
-    ? 0
-    : (envioDisponible ? costoEnvioEstimado : 0);
+  const descuentoPuntos = resumenPedido.descuentoPuntos;
+  const descuentoCupon = resumenPedido.descuentoCupon;
+  const descuento = resumenPedido.descuentoTotal;
+  const cuponEsEnvioGratis = resumenPedido.envioGratisPorCupon;
+  const cuponEsDescuento = String(cuponAplicado?.tipo || '').toLowerCase() === 'descuento';
+  const envioGratisPorPuntos = resumenPedido.envioGratisPorPuntos;
+  const envioGratisPorCupon = resumenPedido.envioGratisPorCupon;
+  const costoEnvioFinal = resumenPedido.costoEnvioFinal;
+  const totalFinal = resumenPedido.totalFinal;
 
-  const descuento = calcularDescuento();
-  const totalFinal = total + costoEnvioFinal - descuento;
+  // ✅ Cálculo del ahorro total (descuentos + envío gratis)
+  const ahorroPorEnvio = (envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel)
+    ? costoEnvioEstimado
+    : 0;
+  const ahorroTotal = descuento + ahorroPorEnvio;
+  const mostrarAhorro = ahorroTotal > 0;
 
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
   const padding = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
-  const tituloSize = responsive.getValor({ tablet: 28, normal: 22, small: 18 });
+  const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 17 });
 
   // ============================================================
   // 🖼️ RENDER DE PRODUCTOS
@@ -517,33 +450,20 @@ export default function PantallaCarrito(props: any) {
   const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
 
   const renderItem = useCallback(({ item, index }: { item: any; index: number }) => {
-    const itemFade = fadeAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    });
+    const itemFade = fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
     return (
-      <Animated.View
-        style={{
-          opacity: itemFade,
-          transform: [{ translateY: slideUpAnim }],
-        }}
-      >
+      <Animated.View style={{ opacity: itemFade, transform: [{ translateY: slideUpAnim }] }}>
         <View style={[
           styles.item,
           {
             padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
             borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-            backgroundColor: DESIGN.colors.surface,
-            borderColor: DESIGN.colors.border,
-            shadowColor: DESIGN.colors.cardShadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 1,
-            shadowRadius: 4,
-            elevation: 2,
+            backgroundColor: DISENO.colors.surface,
+            borderColor: DISENO.colors.border,
+            ...DISENO.shadow.sm,
           }
         ]}>
-          {/* Imagen */}
           {item.producto.imagen ? (
             <Image
               source={{ uri: item.producto.imagen }}
@@ -564,7 +484,7 @@ export default function PantallaCarrito(props: any) {
                 width: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
                 height: responsive.getValor({ tablet: 80, normal: 70, small: 60 }),
                 borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
-                backgroundColor: DESIGN.colors.surfaceHover,
+                backgroundColor: DISENO.colors.surfaceHover,
               }
             ]}>
               <Text style={[styles.emoji, { fontSize: responsive.getValor({ tablet: 32, normal: 28, small: 24 }) }]}>
@@ -573,23 +493,21 @@ export default function PantallaCarrito(props: any) {
             </View>
           )}
 
-          {/* Info */}
           <View style={styles.itemInfo}>
             <Text style={[
               styles.itemNombre,
-              { fontSize: responsive.getValor({ tablet: 16, normal: 15, small: 13 }), color: DESIGN.colors.text }
+              { fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }), color: DISENO.colors.text }
             ]} numberOfLines={1}>
               {item.producto.nombre}
             </Text>
             <Text style={[
               styles.itemPrecioTotal,
-              { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }), color: DESIGN.colors.accentSecondary }
+              { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 13 }), color: DISENO.colors.accent }
             ]}>
               {formatearPrecio(precioUnitario(item.producto.precio) * item.cantidad)}
             </Text>
           </View>
 
-          {/* Controles */}
           <View style={styles.controles}>
             <TouchableOpacity
               onPress={() => disminuirCantidad(item.producto.id)}
@@ -599,17 +517,17 @@ export default function PantallaCarrito(props: any) {
                   width: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   height: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-                  backgroundColor: DESIGN.colors.accentSecondary,
+                  backgroundColor: DISENO.colors.accentSecondary,
                 }
               ]}
               activeOpacity={0.7}
             >
-              <Ionicons name="remove" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.text} />
+              <Ionicons name="remove" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.text} />
             </TouchableOpacity>
 
             <Text style={[
               styles.cantidad,
-              { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.text }
+              { fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 12 }), color: DISENO.colors.text }
             ]}>
               {item.cantidad}
             </Text>
@@ -622,20 +540,16 @@ export default function PantallaCarrito(props: any) {
                   width: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   height: responsive.getValor({ tablet: 32, normal: 28, small: 24 }),
                   borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-                  backgroundColor: DESIGN.colors.accentSecondary,
+                  backgroundColor: DISENO.colors.accentSecondary,
                 }
               ]}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.text} />
+              <Ionicons name="add" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.text} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => quitarProducto(item.producto.id)}
-              style={styles.botonEliminar}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DESIGN.colors.accent} />
+            <TouchableOpacity onPress={() => quitarProducto(item.producto.id)} style={styles.botonEliminar} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.accent} />
             </TouchableOpacity>
           </View>
         </View>
@@ -651,38 +565,51 @@ export default function PantallaCarrito(props: any) {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+          colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
           style={styles.backgroundGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
         <View style={styles.emptyContainer}>
-          <Ionicons name="cart-outline" size={responsive.getValor({ tablet: 100, normal: 80, small: 60 })} color={DESIGN.colors.surface + '30'} />
+          <Ionicons name="cart-outline" size={responsive.getValor({ tablet: 100, normal: 80, small: 60 })} color={DISENO.colors.textTertiary} />
           <Text style={[
             styles.emptyText,
-            { fontSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }), color: DESIGN.colors.surface }
+            { fontSize: responsive.getValor({ tablet: 20, normal: 17, small: 15 }), color: DISENO.colors.text }
           ]}>
             Tu carrito está vacío
           </Text>
           <Text style={[
             styles.emptySubtext,
-            { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.surface + '60' }
+            { fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }), color: DISENO.colors.textSecondary }
           ]}>
             Agrega productos del menú 🍔
           </Text>
+          {cuponAplicado && (
+            <View style={styles.cuponVacioCard}>
+              <Ionicons name="ticket-outline" size={22} color={DISENO.colors.accent} />
+              <View style={styles.cuponVacioContenido}>
+                <Text style={styles.cuponVacioTitulo}>
+                  Cupón listo para usar: {cuponAplicado.codigo || 'Cupón aplicado'}
+                </Text>
+                <Text style={styles.cuponVacioDetalle}>
+                  {cuponAplicado.titulo || 'Agregá productos y se aplicará al confirmar tu pedido.'}
+                </Text>
+              </View>
+            </View>
+          )}
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => props.navigation.navigate('Principal', { screen: 'Menu' })}
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+              colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
               style={styles.emptyButtonGradient}
             >
-              <Ionicons name="restaurant" size={responsive.getValor({ tablet: 24, normal: 20, small: 18 })} color={DESIGN.colors.text} />
+              <Ionicons name="restaurant" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DISENO.colors.text} />
               <Text style={[
                 styles.emptyButtonText,
-                { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }), color: DESIGN.colors.text }
+                { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 13 }), color: DISENO.colors.text }
               ]}>
                 Ir al Menú
               </Text>
@@ -696,7 +623,7 @@ export default function PantallaCarrito(props: any) {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -709,20 +636,12 @@ export default function PantallaCarrito(props: any) {
           paddingTop: insets.top + responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
           paddingHorizontal: padding,
           paddingBottom: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-          borderBottomColor: DESIGN.colors.surface + '10',
         }
       ]}>
-        <TouchableOpacity
-          onPress={() => props.navigation.goBack()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 28, normal: 24, small: 20 })} color={DESIGN.colors.surface} />
+        <TouchableOpacity onPress={() => props.navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={responsive.getValor({ tablet: 26, normal: 22, small: 20 })} color={DISENO.colors.text} />
         </TouchableOpacity>
-        <Text style={[
-          styles.headerTitle,
-          { fontSize: tituloSize, color: DESIGN.colors.surface }
-        ]}>
+        <Text style={[styles.headerTitle, { fontSize: tituloSize, color: DISENO.colors.text }]}>
           🛒 Carrito
         </Text>
         <View style={{ width: 30 }} />
@@ -737,7 +656,7 @@ export default function PantallaCarrito(props: any) {
           {
             paddingHorizontal: padding,
             paddingTop: responsive.getValor({ tablet: 8, normal: 6, small: 4 }),
-            paddingBottom: responsive.getValor({ tablet: 240, normal: 220, small: 200 }),
+            paddingBottom: responsive.getValor({ tablet: 260, normal: 240, small: 220 }),
           }
         ]}
         showsVerticalScrollIndicator={true}
@@ -749,13 +668,9 @@ export default function PantallaCarrito(props: any) {
               marginTop: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
               padding: responsive.getValor({ tablet: 20, normal: 16, small: 14 }),
               borderRadius: responsive.getValor({ tablet: 18, normal: 14, small: 12 }),
-              backgroundColor: DESIGN.colors.surface + '90',
-              borderColor: DESIGN.colors.border,
-              shadowColor: DESIGN.colors.cardShadow,
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 1,
-              shadowRadius: 8,
-              elevation: 5,
+              backgroundColor: DISENO.colors.surface,
+              borderColor: DISENO.colors.border,
+              ...DISENO.shadow.md,
             }
           ]}>
             {/* ✅ BOTÓN DE PUNTOS */}
@@ -763,18 +678,14 @@ export default function PantallaCarrito(props: any) {
               style={[
                 styles.puntosButton,
                 {
-                  backgroundColor: DESIGN.colors.accentSecondary + '15',
-                  borderColor: DESIGN.colors.accent,
-                  borderWidth: 2.5,
+                  backgroundColor: DISENO.colors.accentSecondary + '10',
+                  borderColor: DISENO.colors.accentSecondary + '40',
+                  borderWidth: 1.5,
                   paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
                   paddingHorizontal: responsive.getValor({ tablet: 20, normal: 16, small: 16 }),
                   borderRadius: 14,
-                  flex: 1,
-                  shadowColor: DESIGN.colors.accent,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 6,
-                  elevation: 3,
+                  marginBottom: 10,
+                  ...DISENO.shadow.sm,
                 }
               ]}
               onPress={() => {
@@ -790,78 +701,209 @@ export default function PantallaCarrito(props: any) {
               <View style={styles.puntosButtonContent}>
                 <View style={styles.puntosButtonLeft}>
                   <Text style={[styles.actionButtonText, {
-                    color: DESIGN.colors.text,
-                    fontWeight: '700',
-                    fontSize: responsive.getValor({ tablet: 16, normal: 12, small: 13 }),
+                    color: DISENO.colors.text,
+                    fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
                   }]}>
-                    {puntosMaximos} pts
+                    ⭐ {puntosMaximos} pts
                   </Text>
                 </View>
                 <View style={styles.puntosButtonRight}>
                   <Text style={[styles.puntosButtonLabel, {
-                    color: DESIGN.colors.accent,
-                    fontWeight: '700',
-                    fontSize: responsive.getValor({ tablet: 13, normal: 10, small: 11 }),
-                    backgroundColor: DESIGN.colors.accent + '10',
+                    color: DISENO.colors.accent,
+                    fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }),
+                    backgroundColor: DISENO.colors.accent + '10',
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 6,
                   }]}>
-                    💰 Canjear por descuento
+                    Canjear X descuento
                   </Text>
-                  <Ionicons name="chevron-forward" size={responsive.getValor({ tablet: 20, normal: 16, small: 14 })} color={DESIGN.colors.accent} />
+                  <Ionicons name="chevron-forward" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.accent} />
                 </View>
               </View>
             </TouchableOpacity>
 
+            {/* ✅ BADGE DE NIVEL DEL USUARIO */}
+            {nivel && (
+              <View style={[
+                styles.nivelBadge,
+                {
+                  backgroundColor: (nivel.color || DISENO.colors.accentSecondary) + '12',
+                  borderColor: (nivel.color || DISENO.colors.accentSecondary) + '40',
+                  padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                  borderRadius: 12,
+                }
+              ]}>
+                <Text style={[styles.nivelBadgeEmoji, { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }) }]}>
+                  {nivel.icono || '🏆'}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[
+                    styles.nivelBadgeTitulo,
+                    {
+                      color: nivel.color || DISENO.colors.accentSecondary,
+                      fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                    }
+                  ]}>
+                    Nivel {nivel.nombre || 'Sin nivel'}
+                  </Text>
+                  {porcentajeDescuentoNivel > 0 ? (
+                    <Text style={[
+                      styles.nivelBadgeDetalle,
+                      {
+                        color: DISENO.colors.textSecondary,
+                        fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
+                      }
+                    ]}>
+                      Tenés {porcentajeDescuentoNivel}% de descuento en todos tus pedidos
+                    </Text>
+                  ) : (
+                    <Text style={[
+                      styles.nivelBadgeDetalle,
+                      {
+                        color: DISENO.colors.textSecondary,
+                        fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
+                      }
+                    ]}>
+                      Sumá puntos para desbloquear descuentos 🎯
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* RESUMEN */}
-            <View style={[styles.summary, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
+            <View style={[styles.summary, { backgroundColor: DISENO.colors.surfaceHover, borderColor: DISENO.colors.border }]}>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: DESIGN.colors.textSecondary }]}>Productos ({totalProductos})</Text>
-                <Text style={[styles.summaryValue, { color: DESIGN.colors.text }]}>{formatearPrecio(total)}</Text>
+                <Text style={[styles.summaryLabel, { color: DISENO.colors.textSecondary }]}>Productos ({totalProductos})</Text>
+                <Text style={[styles.summaryValue, { color: DISENO.colors.text }]}>{formatearPrecio(total)}</Text>
               </View>
 
               {!calculandoEnvio && (
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: DESIGN.colors.textSecondary }]}>
-                    {cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? '🚚 Envío (gratis)' : '🚚 Envío'}
+                  <Text style={[styles.summaryLabel, { color: DISENO.colors.textSecondary }]}>
+                    {envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel
+                      ? '🚚 Envío '
+                      : '🚚 Envío'}
                   </Text>
-                  <Text style={[
-                    styles.summaryValue,
-                    cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' && { color: DESIGN.colors.verde }
-                  ]}>
-                    {cuponPuntosAplicado?.recompensas?.tipo === 'ENVIO_GRATIS'
-                      ? 'GRATIS'
-                      : (envioDisponible ? formatearPrecio(costoEnvioEstimado) : mensajeEnvio || '$0')
-                    }
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[
+                      styles.summaryValue,
+                      (envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel) && { color: DISENO.colors.success }
+                    ]}>
+                      {envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel
+                        ? 'GRATIS'
+                        : (envioDisponible ? formatearPrecio(costoEnvioEstimado) : mensajeEnvio || '$0')
+                      }
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ✅ DESCUENTO POR NIVEL */}
+              {descuentoNivel > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: DISENO.colors.success }]}>
+                    🏆 Descuento {nivel?.nombre || ''}
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: DISENO.colors.success }]}>
+                    -{formatearPrecio(descuentoNivel)}
                   </Text>
                 </View>
               )}
 
-              {descuento > 0 && (
+              {descuentoPuntos > 0 && (
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: DESIGN.colors.verde }]}>🎯 Descuento</Text>
-                  <Text style={[styles.summaryValue, { color: DESIGN.colors.verde }]}>-{formatearPrecio(descuento)}</Text>
+                  <Text style={[styles.summaryLabel, { color: DISENO.colors.success }]}>
+                    🎯 Descuento por puntos
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: DISENO.colors.success }]}>
+                    -{formatearPrecio(descuentoPuntos)}
+                  </Text>
+                </View>
+              )}
+
+              {descuentoCupon > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.summaryLabel, { color: DISENO.colors.success }]}>
+                    🎟️ Descuento cupón
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: DISENO.colors.success }]}>
+                    -{formatearPrecio(descuentoCupon)}
+                  </Text>
                 </View>
               )}
 
               {cuponPuntosAplicado && (
-                <View style={[styles.cuponAplicado, { backgroundColor: DESIGN.colors.verde + '15', borderColor: DESIGN.colors.verde + '20' }]}>
-                  <Text style={[styles.cuponAplicadoText, { color: DESIGN.colors.verde }]} numberOfLines={1}>
+                <View style={[styles.cuponAplicado, { backgroundColor: DISENO.colors.success + '15', borderColor: DISENO.colors.success + '20' }]}>
+                  <Text style={[styles.cuponAplicadoText, { color: DISENO.colors.success }]} numberOfLines={1}>
                     {cuponPuntosAplicado.recompensas?.nombre}
                   </Text>
-                  <TouchableOpacity
-                    onPress={quitarDescuento}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close-circle" size={18} color={DESIGN.colors.accent} />
+                  <TouchableOpacity onPress={quitarDescuento} activeOpacity={0.7}>
+                    <Ionicons name="close-circle" size={18} color={DISENO.colors.accent} />
                   </TouchableOpacity>
                 </View>
               )}
 
+              {cuponAplicado && (
+                <View style={[styles.cuponAplicado, { backgroundColor: DISENO.colors.success + '15', borderColor: DISENO.colors.success + '20' }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.cuponAplicadoText, { color: DISENO.colors.success }]} numberOfLines={1}>
+                      🎟️ {cuponAplicado.codigo || 'Cupón aplicado'}
+                    </Text>
+                    <Text style={[styles.cuponAplicadoSubtext, { color: DISENO.colors.textSecondary }]} numberOfLines={1}>
+                      {cuponAplicado.titulo || 'Cupón disponible'}
+                      {cuponEsEnvioGratis ? ' · Envío gratis' : ''}
+                      {cuponEsDescuento && cuponAplicado.es_porcentaje
+                        ? ` · ${cuponAplicado.valor_descuento}% de descuento`
+                        : ''}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => { setCuponAplicado(null); }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close-circle" size={18} color={DISENO.colors.accent} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ✅ AHORRO TOTAL */}
+              {mostrarAhorro && (
+                <View style={[
+                  styles.ahorroContainer,
+                  {
+                    backgroundColor: DISENO.colors.success + '12',
+                    borderColor: DISENO.colors.success + '30',
+                    paddingVertical: responsive.getValor({ tablet: 10, normal: 8, small: 7 }),
+                    paddingHorizontal: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                    borderRadius: 10,
+                    marginTop: 8,
+                    marginBottom: 6,
+                  }
+                ]}>
+                  <Text style={[
+                    styles.ahorroEmoji,
+                    { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 13 }) }
+                  ]}>
+                    🎉
+                  </Text>
+                  <Text style={[
+                    styles.ahorroTexto,
+                    {
+                      fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
+                      color: DISENO.colors.success,
+                    }
+                  ]}>
+                    ¡Ahorrás {formatearPrecio(ahorroTotal)}!
+                  </Text>
+                </View>
+              )}
+
               <View style={[styles.summaryRow, styles.summaryTotal]}>
-                <Text style={[styles.totalLabel, { color: DESIGN.colors.text }]}>Total</Text>
-                <Text style={[styles.totalPrice, { color: DESIGN.colors.accentSecondary }]}>{formatearPrecio(totalFinal)}</Text>
+                <Text style={[styles.totalLabel, { color: DISENO.colors.text }]}>Total</Text>
+                <Text style={[styles.totalPrice, { color: DISENO.colors.accent }]}>{formatearPrecio(totalFinal)}</Text>
               </View>
             </View>
 
@@ -875,31 +917,29 @@ export default function PantallaCarrito(props: any) {
                 }
                 props.navigation.navigate('Checkout', {
                   cuponPuntosAplicado,
-                  descuento,
-                  costoEnvio: costoEnvioFinal,
-                  totalFinal,
+                  cuponAplicado,
                   ubicacionGuardada,
                 });
               }}
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
                 style={styles.checkoutButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Ionicons name="cart" size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })} color={DESIGN.colors.text} />
+                <Ionicons name="cart" size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })} color={DISENO.colors.text} />
                 <Text style={[
                   styles.checkoutButtonText,
-                  { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }), color: DESIGN.colors.text }
+                  { fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 12 }), color: DISENO.colors.text }
                 ]}>
                   Finalizar compra
                 </Text>
-                <View style={[styles.checkoutPrice, { backgroundColor: DESIGN.colors.text + '15' }]}>
+                <View style={[styles.checkoutPrice, { backgroundColor: DISENO.colors.text + '15' }]}>
                   <Text style={[
                     styles.checkoutPriceText,
-                    { fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }), color: DESIGN.colors.text }
+                    { fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 10 }), color: DISENO.colors.text }
                   ]}>
                     {formatearPrecio(totalFinal)}
                   </Text>
@@ -908,14 +948,10 @@ export default function PantallaCarrito(props: any) {
             </TouchableOpacity>
 
             {/* VACIAR CARRITO */}
-            <TouchableOpacity
-              style={styles.emptyCartButton}
-              onPress={vaciarCarrito}
-              activeOpacity={0.6}
-            >
+            <TouchableOpacity style={styles.emptyCartButton} onPress={vaciarCarrito} activeOpacity={0.6}>
               <Text style={[
                 styles.emptyCartText,
-                { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }), color: DESIGN.colors.textTertiary }
+                { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }), color: DISENO.colors.textTertiary }
               ]}>
                 Vaciar carrito
               </Text>
@@ -931,66 +967,61 @@ export default function PantallaCarrito(props: any) {
       {/* Modal de Login */}
       <Modal visible={mostrarModalLogin} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modal, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.accent + '30' }]}>
+          <View style={[styles.modal, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border, borderWidth: 1, ...DISENO.shadow.lg }]}>
             <Text style={[styles.modalIcon, { fontSize: 60 }]}>🔐</Text>
-            <Text style={[styles.modalTitle, { fontSize: 22, color: DESIGN.colors.text }]}>Inicia sesión</Text>
-            <Text style={[styles.modalText, { color: DESIGN.colors.textSecondary }]}>
+            <Text style={[styles.modalTitle, { fontSize: 18, color: DISENO.colors.text }]}>Inicia sesión</Text>
+            <Text style={[styles.modalText, { color: DISENO.colors.textSecondary }]}>
               Debes iniciar sesión para realizar pedidos
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancel, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}
+                style={[styles.modalButton, styles.modalCancel, { backgroundColor: DISENO.colors.surfaceHover, borderColor: DISENO.colors.border }]}
                 onPress={() => setMostrarModalLogin(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.modalCancelText, { color: DESIGN.colors.textSecondary }]}>Cancelar</Text>
+                <Text style={[styles.modalCancelText, { color: DISENO.colors.textSecondary }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: DESIGN.colors.accentSecondary }]}
-                onPress={() => {
-                  setMostrarModalLogin(false);
-                  props.navigation.navigate('Login');
-                }}
+                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: DISENO.colors.accentSecondary }]}
+                onPress={() => { setMostrarModalLogin(false); props.navigation.navigate('Login'); }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-in" size={18} color={DESIGN.colors.text} />
-                <Text style={[styles.modalConfirmText, { color: DESIGN.colors.text }]}>Iniciar sesión</Text>
+                <Ionicons name="log-in" size={18} color={DISENO.colors.text} />
+                <Text style={[styles.modalConfirmText, { color: DISENO.colors.text }]}>Iniciar sesión</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ✅ MODAL DE PUNTOS SIMPLIFICADO Y CORREGIDO */}
+      {/* ✅ MODAL DE PUNTOS */}
       <Modal visible={mostrarModalPuntos} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[
             styles.modalPuntos,
             {
-              backgroundColor: DESIGN.colors.surface,
-              borderColor: DESIGN.colors.accent + '20',
+              backgroundColor: DISENO.colors.surface,
+              borderColor: DISENO.colors.border,
               borderRadius: 24,
               width: responsive.getValor({ tablet: '60%', normal: '92%', small: '95%' }),
               maxWidth: 450,
               padding: responsive.getValor({ tablet: 28, normal: 20, small: 16 }),
-              borderWidth: 2,
+              borderWidth: 1,
               alignSelf: 'center',
+              ...DISENO.shadow.lg,
             }
           ]}>
-
-            {/* HEADER */}
             <View style={styles.modalPuntosHeader}>
               <Text style={[styles.modalPuntosTitle, {
-                fontSize: responsive.getValor({ tablet: 24, normal: 20, small: 18 }),
-                fontWeight: 'bold',
-                color: DESIGN.colors.text,
+                fontSize: responsive.getValor({ tablet: 20, normal: 17, small: 15 }),
+                color: DISENO.colors.text,
                 textAlign: 'center',
               }]}>
                 ⭐ Canjear Puntos
               </Text>
               <Text style={[styles.modalPuntosSubtitle, {
-                fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
-                color: DESIGN.colors.textSecondary,
+                fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
+                color: DISENO.colors.textSecondary,
                 textAlign: 'center',
                 marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
               }]}>
@@ -998,64 +1029,52 @@ export default function PantallaCarrito(props: any) {
               </Text>
             </View>
 
-            {/* INFO DE PUNTOS DISPONIBLES */}
             <View style={[styles.modalPuntosInfoContainer, {
-              backgroundColor: DESIGN.colors.accentSecondary + '08',
+              backgroundColor: DISENO.colors.accentSecondary + '08',
               borderRadius: 12,
               padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
               marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
               borderWidth: 1,
-              borderColor: DESIGN.colors.accentSecondary + '20',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              borderColor: DISENO.colors.accentSecondary + '20',
             }]}>
               <View>
                 <Text style={[styles.modalPuntosInfoLabel, {
-                  fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
-                  color: DESIGN.colors.textSecondary,
+                  fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }),
+                  color: DISENO.colors.textSecondary,
                   fontWeight: '500',
                 }]}>
                   Puntos disponibles
                 </Text>
                 <Text style={[styles.modalPuntosInfoValue, {
-                  fontSize: responsive.getValor({ tablet: 26, normal: 22, small: 20 }),
-                  fontWeight: 'bold',
-                  color: DESIGN.colors.accentSecondary,
+                  fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }),
+                  color: DISENO.colors.accentSecondary,
                 }]}>
                   {puntosMaximos} pts
                 </Text>
               </View>
-
             </View>
 
-            {/* INPUT DE PUNTOS */}
-            <View style={[styles.inputContainer, {
-              marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
-            }]}>
+            <View style={[styles.inputContainer, { marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }) }]}>
               <Text style={[styles.inputLabel, {
-                fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
-                color: DESIGN.colors.textSecondary,
+                fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
+                color: DISENO.colors.textSecondary,
                 marginBottom: 6,
               }]}>
                 Cantidad de puntos
               </Text>
               <View style={[styles.inputWrapper, {
-                borderColor: DESIGN.colors.border,
-                backgroundColor: DESIGN.colors.surfaceHover,
-                borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                borderColor: DISENO.colors.border,
+                backgroundColor: DISENO.colors.surfaceHover,
+                borderRadius: 10,
                 borderWidth: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                overflow: 'hidden',
               }]}>
                 <TouchableOpacity
                   style={[styles.inputButton, {
                     paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
                     paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
-                    backgroundColor: DESIGN.colors.surface,
+                    backgroundColor: DISENO.colors.surface,
                     borderRightWidth: 1,
-                    borderRightColor: DESIGN.colors.border,
+                    borderRightColor: DISENO.colors.border,
                   }]}
                   onPress={() => {
                     const nuevo = Math.max(0, puntosSeleccionados - 100);
@@ -1064,35 +1083,34 @@ export default function PantallaCarrito(props: any) {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="remove" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DESIGN.colors.text} />
+                  <Ionicons name="remove" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DISENO.colors.text} />
                 </TouchableOpacity>
 
                 <TextInput
                   style={[styles.inputField, {
-                    fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
-                    color: DESIGN.colors.text,
+                    fontSize: responsive.getValor({ tablet: 20, normal: 18, small: 16 }),
+                    color: DISENO.colors.text,
                     paddingHorizontal: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
                     paddingVertical: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
                     flex: 1,
                     textAlign: 'center',
-                    fontWeight: 'bold',
                     minWidth: 60,
                   }]}
                   value={inputPuntos}
                   onChangeText={handleInputPuntos}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={DESIGN.colors.textTertiary}
-                  selectionColor={DESIGN.colors.accent}
+                  placeholderTextColor={DISENO.colors.textTertiary}
+                  selectionColor={DISENO.colors.accent}
                 />
 
                 <TouchableOpacity
                   style={[styles.inputButton, {
                     paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
                     paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
-                    backgroundColor: DESIGN.colors.surface,
+                    backgroundColor: DISENO.colors.surface,
                     borderLeftWidth: 1,
-                    borderLeftColor: DESIGN.colors.border,
+                    borderLeftColor: DISENO.colors.border,
                   }]}
                   onPress={() => {
                     const nuevo = Math.min(puntosMaximos, puntosSeleccionados + 100);
@@ -1101,89 +1119,80 @@ export default function PantallaCarrito(props: any) {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="add" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DESIGN.colors.text} />
+                  <Ionicons name="add" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DISENO.colors.text} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* RESUMEN DEL DESCUENTO */}
             {puntosSeleccionados > 0 && (
               <View style={[styles.modalPuntosDescuentoContainer, {
-                backgroundColor: DESIGN.colors.accentSecondary + '08',
+                backgroundColor: DISENO.colors.accentSecondary + '08',
                 borderRadius: 12,
                 padding: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
                 marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
                 borderWidth: 1,
-                borderColor: DESIGN.colors.accentSecondary + '20',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
+                borderColor: DISENO.colors.accentSecondary + '20',
               }]}>
                 <Text style={[styles.modalPuntosDescuentoLabel, {
-                  fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
-                  color: DESIGN.colors.text,
+                  fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
+                  color: DISENO.colors.text,
                   fontWeight: '500',
                 }]}>
                   💰 Descuento:
                 </Text>
                 <Text style={[styles.modalPuntosDescuento, {
-                  fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }),
-                  fontWeight: 'bold',
-                  color: DESIGN.colors.accentSecondary,
+                  fontSize: responsive.getValor({ tablet: 20, normal: 17, small: 15 }),
+                  color: DISENO.colors.accent,
                 }]}>
                   {formatearPrecio(Math.floor(puntosSeleccionados / 100) * 100)}
                 </Text>
               </View>
             )}
 
-            {/* BOTONES DE ACCIÓN */}
-            <View style={[styles.modalPuntosBotones, {
-              flexDirection: 'row',
-              gap: 12,
-            }]}>
+            <View style={[styles.modalPuntosBotones, { flexDirection: 'row', gap: 12 }]}>
               <TouchableOpacity
-                style={[styles.puntosAction, styles.puntosCancel, {
+                style={[styles.puntosAction, {
                   flex: 1,
                   paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
                   borderRadius: 12,
                   alignItems: 'center',
-                  backgroundColor: DESIGN.colors.surfaceHover,
+                  backgroundColor: DISENO.colors.surfaceHover,
                   borderWidth: 1,
-                  borderColor: DESIGN.colors.border,
+                  borderColor: DISENO.colors.border,
                 }]}
                 onPress={cancelarCanje}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.puntosCancelText, {
-                  color: DESIGN.colors.textSecondary,
+                  color: DISENO.colors.textSecondary,
                   fontWeight: '600',
-                  fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                  fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
                 }]}>
                   Cancelar
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.puntosAction, styles.puntosConfirm, {
+                style={[styles.puntosAction, {
                   flex: 1,
                   paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
                   borderRadius: 12,
                   alignItems: 'center',
-                  backgroundColor: puntosSeleccionados >= 100 ? DESIGN.colors.accentSecondary : DESIGN.colors.surfaceHover,
+                  backgroundColor: puntosSeleccionados >= 100 ? DISENO.colors.accentSecondary : DISENO.colors.surfaceHover,
                   borderWidth: 1,
-                  borderColor: puntosSeleccionados >= 100 ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
+                  borderColor: puntosSeleccionados >= 100 ? DISENO.colors.accentSecondary : DISENO.colors.border,
                 }]}
                 onPress={canjearPuntos}
                 disabled={canjeandoPuntos || puntosSeleccionados < 100}
                 activeOpacity={0.7}
               >
                 {canjeandoPuntos ? (
-                  <ActivityIndicator size="small" color={DESIGN.colors.text} />
+                  <ActivityIndicator size="small" color={DISENO.colors.text} />
                 ) : (
                   <Text style={[styles.puntosConfirmText, {
-                    color: puntosSeleccionados >= 100 ? DESIGN.colors.text : DESIGN.colors.textTertiary,
+                    color: puntosSeleccionados >= 100 ? DISENO.colors.text : DISENO.colors.textTertiary,
                     fontWeight: 'bold',
-                    fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }),
+                    fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
                   }]}>
                     {puntosSeleccionados < 100 ? 'Mínimo 100 pts' : '✅ Canjear'}
                   </Text>
@@ -1191,11 +1200,10 @@ export default function PantallaCarrito(props: any) {
               </TouchableOpacity>
             </View>
 
-            {/* MENSAJE INFORMATIVO */}
             {puntosSeleccionados < 100 && puntosSeleccionados > 0 && (
               <Text style={[styles.modalPuntosMinimo, {
-                fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }),
-                color: DESIGN.colors.accent,
+                fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
+                color: DISENO.colors.accent,
                 textAlign: 'center',
                 marginTop: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
               }]}>
@@ -1210,12 +1218,12 @@ export default function PantallaCarrito(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS - CON SIMPSONFONT Y TEMA CLARO
 // ============================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
+    backgroundColor: DISENO.colors.fondo,
   },
   backgroundGradient: {
     position: 'absolute',
@@ -1228,14 +1236,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    backgroundColor: DESIGN.colors.surface + '10',
   },
   backButton: {
-    padding: 4,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: DISENO.colors.surface,
+    ...DISENO.shadow.sm,
   },
   headerTitle: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     letterSpacing: 0.5,
   },
   emptyContainer: {
@@ -1245,25 +1255,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     marginTop: 16,
     textAlign: 'center',
-    opacity: 0.8,
   },
   emptySubtext: {
+    fontFamily: FUENTES.regular,
     marginTop: 8,
     textAlign: 'center',
-    opacity: 0.5,
+  },
+  cuponVacioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 380,
+    marginTop: 20,
+    marginBottom: 4,
+    padding: 14,
+    gap: 10,
+    borderRadius: 12,
+    backgroundColor: DISENO.colors.surface,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '30',
+    ...DISENO.shadow.sm,
+  },
+  cuponVacioContenido: { flex: 1 },
+  cuponVacioTitulo: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.text,
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  cuponVacioDetalle: {
+    fontFamily: FUENTES.regular,
+    marginTop: 3,
+    color: DISENO.colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
   },
   emptyButton: {
     marginTop: 24,
     overflow: 'hidden',
     borderRadius: 12,
-    elevation: 4,
-    shadowColor: DESIGN.colors.accentSecondary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    ...DISENO.shadow.md,
   },
   emptyButtonGradient: {
     flexDirection: 'row',
@@ -1273,11 +1308,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   emptyButtonText: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
-  list: {
-    flexGrow: 1,
-  },
+  list: { flexGrow: 1 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1286,25 +1320,25 @@ const styles = StyleSheet.create({
   },
   imagen: {
     marginRight: 10,
-    backgroundColor: DESIGN.colors.surfaceHover,
+    backgroundColor: DISENO.colors.surfaceHover,
   },
   imagenPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
     borderWidth: 1,
-    borderColor: DESIGN.colors.border,
+    borderColor: DISENO.colors.border,
   },
   emoji: {},
-  itemInfo: {
-    flex: 1,
-  },
+  itemInfo: { flex: 1 },
   itemNombre: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     letterSpacing: 0.3,
   },
   itemPrecioTotal: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     marginTop: 2,
   },
   controles: {
@@ -1317,17 +1351,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: DESIGN.colors.border,
+    borderColor: DISENO.colors.border,
   },
   cantidad: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     minWidth: 24,
     textAlign: 'center',
   },
-  botonEliminar: {
-    padding: 4,
-    marginLeft: 2,
-  },
+  botonEliminar: { padding: 4, marginLeft: 2 },
   footerContainer: {
     borderWidth: 1,
     marginBottom: 20,
@@ -1347,8 +1379,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   actionButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   summary: {
     borderRadius: 10,
@@ -1362,25 +1394,29 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   summaryLabel: {
-    fontSize: 13,
+    fontFamily: FUENTES.regular,
+    fontSize: 11,
   },
   summaryValue: {
-    fontSize: 13,
+    fontFamily: FUENTES.regular,
+    fontSize: 11,
     fontWeight: '500',
   },
   summaryTotal: {
     borderTopWidth: 1,
-    borderTopColor: DESIGN.colors.border,
+    borderTopColor: DISENO.colors.border,
     paddingTop: 6,
     marginTop: 4,
   },
   totalLabel: {
-    fontSize: 15,
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    fontSize: 14,
   },
   totalPrice: {
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    fontSize: 16,
   },
   cuponAplicado: {
     flexDirection: 'row',
@@ -1393,18 +1429,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cuponAplicadoText: {
+    fontFamily: FUENTES.regular,
     fontSize: 12,
     fontWeight: '500',
     flex: 1,
   },
+  cuponAplicadoSubtext: {
+    fontFamily: FUENTES.regular,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  // ✅ NUEVO: Ahorro total
+  ahorroContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+  },
+  ahorroEmoji: {},
+  ahorroTexto: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+  },
   checkoutButton: {
     overflow: 'hidden',
-    elevation: 6,
-    shadowColor: DESIGN.colors.accentSecondary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
     marginBottom: 6,
+    borderRadius: 12,
+    ...DISENO.shadow.md,
   },
   checkoutButtonGradient: {
     flexDirection: 'row',
@@ -1415,7 +1468,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   checkoutButtonText: {
-    fontWeight: '700',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     letterSpacing: 0.3,
   },
   checkoutPrice: {
@@ -1423,22 +1477,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DESIGN.colors.text + '10',
+    borderColor: DISENO.colors.text + '10',
   },
   checkoutPriceText: {
-    fontWeight: '800',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   emptyCartButton: {
     alignItems: 'center',
     paddingVertical: 6,
   },
   emptyCartText: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
     opacity: 0.5,
   },
-  puntosButton: {
-    flex: 1,
-  },
+  puntosButton: { flex: 1 },
   puntosButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1456,13 +1510,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   puntosButtonLabel: {
+    fontFamily: FUENTES.regular,
     fontWeight: '600',
+    marginLeft: 6,
   },
-  // ✅ ESTILOS DEL INPUT
-  inputContainer: {
-    width: '100%',
-  },
+  inputContainer: { width: '100%' },
   inputLabel: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
   },
   inputWrapper: {
@@ -1475,20 +1529,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inputField: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     minWidth: 60,
   },
-  // ✅ ESTILOS DEL MODAL PUNTOS
   modalPuntos: {
     alignSelf: 'center',
   },
-  modalPuntosHeader: {
-    marginBottom: 4,
-  },
+  modalPuntosHeader: { marginBottom: 4 },
   modalPuntosTitle: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   modalPuntosSubtitle: {
+    fontFamily: FUENTES.regular,
     fontWeight: '400',
   },
   modalPuntosInfoContainer: {
@@ -1497,10 +1551,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   modalPuntosInfoLabel: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
   },
   modalPuntosInfoValue: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   modalPuntosEquivalencia: {
     paddingHorizontal: 12,
@@ -1508,9 +1564,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modalPuntosEquivalenciaText: {
+    fontFamily: FUENTES.regular,
     fontWeight: '600',
   },
   modalPuntosMinimo: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
     marginTop: 8,
   },
@@ -1522,10 +1580,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalPuntosDescuentoLabel: {
+    fontFamily: FUENTES.regular,
     fontWeight: '500',
   },
   modalPuntosDescuento: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   modalPuntosBotones: {
     flexDirection: 'row',
@@ -1536,22 +1596,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
   },
-  puntosCancel: {
-    borderWidth: 1,
-  },
+  puntosCancel: { borderWidth: 1 },
   puntosCancelText: {
+    fontFamily: FUENTES.regular,
     fontWeight: '600',
   },
   puntosConfirm: {
     borderWidth: 1,
-    borderColor: DESIGN.colors.accentSecondary,
+    borderColor: DISENO.colors.accentSecondary,
   },
   puntosConfirmText: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1562,16 +1622,16 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     padding: 30,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
   },
-  modalIcon: {
-    marginBottom: 12,
-  },
+  modalIcon: { marginBottom: 12 },
   modalTitle: {
-    fontWeight: 'bold',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     marginBottom: 8,
   },
   modalText: {
+    fontFamily: FUENTES.regular,
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 24,
@@ -1591,19 +1651,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  modalCancel: {
-    borderWidth: 1,
-  },
+  modalCancel: { borderWidth: 1 },
   modalCancelText: {
-    fontWeight: '600',
-    fontSize: 14,
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    fontSize: 13,
   },
   modalConfirm: {
     borderWidth: 1,
-    borderColor: DESIGN.colors.accentSecondary,
+    borderColor: DISENO.colors.accentSecondary,
   },
   modalConfirmText: {
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    fontSize: 13,
+  },
+
+  // ✅ BADGE DE NIVEL
+  nivelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  nivelBadgeEmoji: {},
+  nivelBadgeTitulo: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+  },
+  nivelBadgeDetalle: {
+    fontFamily: FUENTES.regular,
+    marginTop: 2,
+  },
+  envioGratisTag: {
+    fontFamily: FUENTES.regular,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
 });

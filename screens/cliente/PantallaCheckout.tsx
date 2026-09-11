@@ -1,4 +1,4 @@
-// screens/cliente/PantallaCheckout.tsx
+// screens/cliente/PantallaCheckout.tsx - CON SIMPSONFONT Y TEMA CLARO
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
@@ -24,64 +24,17 @@ import * as Location from 'expo-location';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
+import { DISENO } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 import { useToast, Toast } from '../../components/Toast';
 import { UbicacionGuardada } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
 import { useBeneficios } from '../../hooks/useBeneficios';
+import { cuponService } from '../../lib/cupones/cuponService';
+import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
 
-// ✅ IMPORTAR MAPA SELECTOR
 import MapaSelector from '../../components/Mapa';
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-    colors: {
-        fondo: '#F5F2ED',
-        surface: '#FFFFFF',
-        surfaceHover: '#F8F6F2',
-        card: '#FFFFFF',
-        cardShadow: 'rgba(0,0,0,0.06)',
-        border: 'rgba(0,0,0,0.06)',
-        borderLight: 'rgba(0,0,0,0.04)',
-        text: '#1A1A1A',
-        textSecondary: 'rgba(0,0,0,0.55)',
-        textTertiary: 'rgba(0,0,0,0.30)',
-        accent: '#E53935',
-        accentLight: '#FF6B6B',
-        accentSecondary: '#F5C518',
-        accentSecondaryLight: '#FFE135',
-        gradientStart: '#E53935',
-        gradientEnd: '#F5C518',
-        verde: '#43A047',
-        verdeClaro: '#66BB6A',
-        rosa: '#EC407A',
-        azul: '#1A237E',
-        azulClaro: '#3949AB',
-        platino: '#78909C',
-        oro: '#F9A825',
-        plata: '#BDBDBD',
-        bronce: '#A1887F',
-    },
-    spacing: {
-        xs: 4,
-        sm: 8,
-        md: 16,
-        lg: 24,
-        xl: 32,
-        '2xl': 48,
-    },
-    radius: {
-        sm: 8,
-        md: 12,
-        lg: 16,
-        xl: 20,
-        full: 999,
-    },
-};
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -98,16 +51,9 @@ const useResponsive = () => {
         return valores.normal;
     }, [isDesktop, isTablet, isSmallPhone]);
 
-    const spacing = (base: number) => {
-        if (isTablet) return base * 1.5;
-        if (isSmallPhone) return base * 0.75;
-        return base;
-    };
-
-    return { isTablet, isDesktop, isSmallPhone, width, height, getValor, spacing };
+    return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
 };
 
-// ✅ ALIAS DE TRANSFERENCIA
 const ALIAS_TRANSFERENCIA = 'krustyburger2025';
 const CUENTA_TRANSFERENCIA = 'CBU: 0000003100088376133432';
 
@@ -125,28 +71,20 @@ export default function PantallaCheckout(props: any) {
         limpiarUbicacionTemporal
     } = tiendaAutenticacion();
 
-    // ✅ HOOK DE BENEFICIOS
     const {
         nivel,
         beneficios,
-
         calcularDescuento,
         tieneEnvioGratis,
-
         descripcionBeneficios
-    } = useBeneficios(
-        perfil?.puntos_acumulados || 0,
-        perfil?.id
-    );
+    } = useBeneficios(perfil?.puntos_acumulados || 0, perfil?.id);
 
     const toast = useToast();
 
-    // ✅ Recibir datos del carrito
     const cuponAplicado = props.route?.params?.cuponAplicado || null;
-    const descuento = props.route?.params?.descuento || 0;
+    const cuponPuntosAplicado = props.route?.params?.cuponPuntosAplicado || null;
     const ubicacionRecibida = props.route?.params?.ubicacionGuardada || null;
 
-    // ✅ Estado del total final
     const [totalFinal, setTotalFinal] = useState(0);
     const [subtotal, setSubtotal] = useState(0);
     const [descuentoNivelAplicado, setDescuentoNivelAplicado] = useState(0);
@@ -164,16 +102,13 @@ export default function PantallaCheckout(props: any) {
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
     const [cargandoUbicacion, setCargandoUbicacion] = useState(true);
 
-    // ✅ ESTADO PARA PAGO EN EFECTIVO
     const [montoConQuePaga, setMontoConQuePaga] = useState<string>('');
     const [vueltoCalculado, setVueltoCalculado] = useState<number>(0);
     const [mostrarVuelto, setMostrarVuelto] = useState(false);
 
-    // ✅ ESTADO PARA MODAL DE TRANSFERENCIA
     const [mostrarModalTransferencia, setMostrarModalTransferencia] = useState(false);
     const [pedidoIdTransferencia, setPedidoIdTransferencia] = useState<number | null>(null);
 
-    // ✅ ESTADO PARA EL MAPA
     const [mostrarMapa, setMostrarMapa] = useState(false);
     const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<{
         latitude: number;
@@ -205,15 +140,8 @@ export default function PantallaCheckout(props: any) {
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
 
-    // ✅ FUNCIÓN PARA OBTENER PRECIO UNITARIO
     const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
 
-    // ✅ FUNCIÓN PARA OBTENER EL TOTAL ACTUAL DEL CARRITO
-    const obtenerTotalActual = useCallback(() => {
-        return calcularTotal();
-    }, [calcularTotal]);
-
-    // ✅ CALCULAR VUELTO
     const calcularVuelto = (montoPago: string) => {
         const pago = parseFloat(montoPago.replace(',', '.'));
         if (isNaN(pago) || pago <= 0) {
@@ -221,10 +149,8 @@ export default function PantallaCheckout(props: any) {
             setMostrarVuelto(false);
             return;
         }
-
         const totalAPagar = totalFinal;
         const vuelto = pago - totalAPagar;
-
         if (vuelto >= 0) {
             setVueltoCalculado(vuelto);
             setMostrarVuelto(true);
@@ -234,35 +160,22 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ EFECTO PARA MOSTRAR MODAL CUANDO SE SETEA EL ID
     useEffect(() => {
         if (pedidoIdTransferencia !== null) {
-            console.log('🔴 useEffect: Mostrando modal para pedido:', pedidoIdTransferencia);
             setMostrarModalTransferencia(true);
         }
     }, [pedidoIdTransferencia]);
 
-    // ✅ CARGA INICIAL
     useEffect(() => {
         cargarDatosPerfil();
         servicioEnvios.inicializar();
 
         Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 600,
-                useNativeDriver: true,
-            }),
-            Animated.timing(slideUpAnim, {
-                toValue: 0,
-                duration: 500,
-                useNativeDriver: true,
-            }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
         ]).start();
 
-        // ✅ Si recibimos ubicación del carrito, usarla
         if (ubicacionRecibida) {
-            console.log('📍 Usando ubicación recibida del carrito:', ubicacionRecibida);
             setUbicacionSeleccionada({
                 latitude: ubicacionRecibida.latitude,
                 longitude: ubicacionRecibida.longitude,
@@ -272,23 +185,16 @@ export default function PantallaCheckout(props: any) {
             setDireccionDelPerfil(false);
             calcularCostoEnvio(ubicacionRecibida.latitude, ubicacionRecibida.longitude);
             setCargandoUbicacion(false);
-            if (ubicacionRecibida.direccion) {
-                guardarUbicacionTemporal(ubicacionRecibida);
-            }
+            if (ubicacionRecibida.direccion) guardarUbicacionTemporal(ubicacionRecibida);
         } else {
             cargarUbicacionDesdeStore();
         }
     }, []);
 
-    // ✅ ESCUCHAR CAMBIOS EN EL PERFIL (cuando se actualiza desde otra pantalla)
     useEffect(() => {
         if (perfil) {
-            // Actualizar teléfono si está vacío
-            if (perfil.telefono && !telefono) {
-                setTelefono(perfil.telefono);
-            }
+            if (perfil.telefono && !telefono) setTelefono(perfil.telefono);
 
-            // Construir dirección completa desde el perfil
             const partesDireccion = [];
             if (perfil.direccion_calle) partesDireccion.push(perfil.direccion_calle);
             if (perfil.direccion_numero) partesDireccion.push(perfil.direccion_numero);
@@ -300,9 +206,7 @@ export default function PantallaCheckout(props: any) {
 
             const direccionCompletaPerfil = partesDireccion.length > 0 ? partesDireccion.join(', ') : '';
 
-            // ✅ Solo actualizar si hay dirección y no hay una ubicación seleccionada
             if (direccionCompletaPerfil && !ubicacionSeleccionada && !ubicacionRecibida) {
-                console.log('📍 Actualizando dirección desde perfil (cambio detectado):', direccionCompletaPerfil);
                 setDireccion(direccionCompletaPerfil);
                 setDireccionCompleta(direccionCompletaPerfil);
                 setDireccionDelPerfil(true);
@@ -310,74 +214,51 @@ export default function PantallaCheckout(props: any) {
         }
     }, [perfil]);
 
-    // ✅ RECALCULAR TOTAL FINAL CON BENEFICIOS
     useEffect(() => {
         const totalActual = calcularTotal();
-        setSubtotal(totalActual);
-
-        // Calcular descuento por nivel
         const descuentoNivel = beneficios ? calcularDescuento(totalActual) : 0;
-        setDescuentoNivelAplicado(descuentoNivel);
+        const envioGratisNivel = beneficios ? tieneEnvioGratis(totalActual) : false;
 
-        // Verificar envío gratis
-        const envioGratis = beneficios ? tieneEnvioGratis(totalActual) : false;
-        setEnvioGratisAplicado(envioGratis);
-
-        // Calcular costo de envío final
-        const costoEnvioFinal = tipoEntrega === 'retiro'
-            ? 0
-            : (envioGratis ? 0 : costoEnvioCalculado);
-
-        // Total final: subtotal - descuento nivel - descuento cupon + costo envio
-        const nuevoTotal = totalActual - descuentoNivel - descuento + costoEnvioFinal;
-
-        setTotalFinal(Math.max(0, nuevoTotal));
-
-        console.log('📊 Total recalculado (con beneficios):', {
+        const resumen = calcularResumenPedido({
             subtotal: totalActual,
+            cuponAplicado,
+            cuponPuntosAplicado,
             descuentoNivel,
-            descuentoCupon: descuento,
-            costoEnvio: costoEnvioFinal,
-            envioGratis,
-            totalFinal: nuevoTotal
+            costoEnvio: tipoEntrega === 'retiro' ? 0 : costoEnvioCalculado,
+            tipoEntrega,
+            envioGratisNivel,
         });
-    }, [costoEnvioCalculado, tipoEntrega, descuento, calcularTotal, beneficios]);
 
-    // ✅ GUARDAR DIRECCIÓN EN EL STORE (con bandera)
+        setSubtotal(resumen.subtotal);
+        setDescuentoNivelAplicado(resumen.descuentoNivel);
+        setEnvioGratisAplicado(resumen.envioGratis);
+        setTotalFinal(resumen.totalFinal);
+    }, [
+        costoEnvioCalculado, tipoEntrega, calcularTotal, beneficios,
+        cuponAplicado, cuponPuntosAplicado, calcularDescuento, tieneEnvioGratis,
+    ]);
+
     const guardarDireccionEnStore = async (ubicacion: { latitude: number; longitude: number }) => {
         try {
-            const direccionObtenida = await obtenerDireccionDesdeCoordenadas(
-                ubicacion.latitude,
-                ubicacion.longitude
-            );
-
+            const direccionObtenida = await obtenerDireccionDesdeCoordenadas(ubicacion.latitude, ubicacion.longitude);
             const ubicacionCompleta: UbicacionGuardada = {
                 latitude: ubicacion.latitude,
                 longitude: ubicacion.longitude,
                 direccion: direccionObtenida || `${ubicacion.latitude}, ${ubicacion.longitude}`,
-                seleccionadaPorUsuario: true, // ✅ BANDERA
+                seleccionadaPorUsuario: true,
             };
-
             await guardarUbicacionTemporal(ubicacionCompleta);
-            console.log('✅ Dirección guardada en el store');
         } catch (error) {
             console.error('Error guardando dirección:', error);
         }
     };
 
     const cargarUbicacionDesdeStore = async () => {
-        console.log('📍 Cargando ubicación desde store...');
         setCargandoUbicacion(true);
-
         try {
             const ubicacionCargada = await cargarUbicacionTemporal();
-
             if (ubicacionCargada) {
-                console.log('📍 Ubicación cargada desde AsyncStorage:', ubicacionCargada);
-                setUbicacionSeleccionada({
-                    latitude: ubicacionCargada.latitude,
-                    longitude: ubicacionCargada.longitude,
-                });
+                setUbicacionSeleccionada({ latitude: ubicacionCargada.latitude, longitude: ubicacionCargada.longitude });
                 setDireccion(ubicacionCargada.direccion || '');
                 setDireccionCompleta(ubicacionCargada.direccion || '');
                 setDireccionDelPerfil(false);
@@ -385,13 +266,8 @@ export default function PantallaCheckout(props: any) {
                 setCargandoUbicacion(false);
                 return;
             }
-
             if (ubicacionStore) {
-                console.log('📍 Usando ubicación del store:', ubicacionStore);
-                setUbicacionSeleccionada({
-                    latitude: ubicacionStore.latitude,
-                    longitude: ubicacionStore.longitude,
-                });
+                setUbicacionSeleccionada({ latitude: ubicacionStore.latitude, longitude: ubicacionStore.longitude });
                 setDireccion(ubicacionStore.direccion || '');
                 setDireccionCompleta(ubicacionStore.direccion || '');
                 setDireccionDelPerfil(false);
@@ -399,10 +275,7 @@ export default function PantallaCheckout(props: any) {
                 setCargandoUbicacion(false);
                 return;
             }
-
-            console.log('📍 No hay ubicación guardada, usando GPS');
             await obtenerUbicacionActual();
-
         } catch (error) {
             console.error('❌ Error cargando ubicación guardada:', error);
             await obtenerUbicacionActual();
@@ -414,7 +287,6 @@ export default function PantallaCheckout(props: any) {
     const cargarDatosPerfil = () => {
         if (perfil) {
             setTelefono(perfil.telefono || '');
-
             const partesDireccion = [];
             if (perfil.direccion_calle) partesDireccion.push(perfil.direccion_calle);
             if (perfil.direccion_numero) partesDireccion.push(perfil.direccion_numero);
@@ -425,7 +297,6 @@ export default function PantallaCheckout(props: any) {
             if (perfil.direccion_codigo_postal) partesDireccion.push(`CP ${perfil.direccion_codigo_postal}`);
 
             const direccionCompletaPerfil = partesDireccion.length > 0 ? partesDireccion.join(', ') : '';
-
             if (direccionCompletaPerfil && !ubicacionStore && !ubicacionRecibida) {
                 setDireccion(direccionCompletaPerfil);
                 setDireccionCompleta(direccionCompletaPerfil);
@@ -436,19 +307,12 @@ export default function PantallaCheckout(props: any) {
 
     const guardarDireccionEnPerfil = async () => {
         if (!perfil?.id) return;
-
         setGuardandoPerfil(true);
         try {
             const datosActualizados: any = {};
             if (telefono) datosActualizados.telefono = telefono;
-            if (direccion && direccionDelPerfil === false) {
-                datosActualizados.direccion_calle = direccion;
-            }
-
-            if (Object.keys(datosActualizados).length > 0) {
-                await actualizarPerfil(datosActualizados);
-                console.log('✅ Perfil actualizado con los datos de checkout');
-            }
+            if (direccion && direccionDelPerfil === false) datosActualizados.direccion_calle = direccion;
+            if (Object.keys(datosActualizados).length > 0) await actualizarPerfil(datosActualizados);
         } catch (error) {
             console.error('❌ Error actualizando perfil:', error);
         } finally {
@@ -460,7 +324,6 @@ export default function PantallaCheckout(props: any) {
         setCalculandoEnvio(true);
         try {
             const resultado = await servicioEnvios.calcularCostoEnvio(lat, lng);
-
             if (resultado.esValido && resultado.dentroCobertura) {
                 setCostoEnvioCalculado(resultado.costo);
                 setDistanciaCliente(resultado.distancia);
@@ -482,13 +345,9 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    // ✅ USEFFECT PARA ACTUALIZAR ENVÍO CUANDO CAMBIA LA UBICACIÓN
     useEffect(() => {
         if (ubicacionSeleccionada && tipoEntrega === 'domicilio') {
-            calcularCostoEnvio(
-                ubicacionSeleccionada.latitude,
-                ubicacionSeleccionada.longitude
-            );
+            calcularCostoEnvio(ubicacionSeleccionada.latitude, ubicacionSeleccionada.longitude);
         } else if (tipoEntrega === 'retiro') {
             setCostoEnvioCalculado(0);
             setEnvioDisponible(true);
@@ -503,16 +362,8 @@ export default function PantallaCheckout(props: any) {
                 return Animated.loop(
                     Animated.sequence([
                         Animated.delay(delay),
-                        Animated.timing(anim, {
-                            toValue: 1,
-                            duration: 400,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(anim, {
-                            toValue: 0.3,
-                            duration: 400,
-                            useNativeDriver: true,
-                        }),
+                        Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+                        Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
                         Animated.delay(200),
                     ])
                 );
@@ -533,23 +384,15 @@ export default function PantallaCheckout(props: any) {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status === 'granted') {
-                const ubicacion = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.High,
-                });
+                const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
                 const { latitude, longitude } = ubicacion.coords;
                 setUbicacionSeleccionada({ latitude, longitude });
-
                 const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
                 if (direccionObtenida) {
                     setDireccionCompleta(direccionObtenida);
                     setDireccion(direccionObtenida);
                     setDireccionDelPerfil(false);
-
-                    await guardarUbicacionTemporal({
-                        latitude,
-                        longitude,
-                        direccion: direccionObtenida,
-                    });
+                    await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionObtenida });
                 }
             }
         } catch (error) {
@@ -559,24 +402,14 @@ export default function PantallaCheckout(props: any) {
 
     const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
         try {
-            const resultados = await Location.reverseGeocodeAsync({
-                latitude: lat,
-                longitude: lng,
-            });
+            const resultados = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
             if (resultados && resultados.length > 0) {
                 const lugar = resultados[0];
-                const partes = [
-                    lugar.street || lugar.name,
-                    lugar.streetNumber,
-                    lugar.district,
-                    lugar.city,
-                    lugar.region,
-                ].filter(Boolean);
+                const partes = [lugar.street || lugar.name, lugar.streetNumber, lugar.district, lugar.city, lugar.region].filter(Boolean);
                 return partes.join(', ') || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
             }
             return null;
         } catch (error) {
-            console.log('Error en geocodificación:', error);
             return null;
         }
     };
@@ -586,10 +419,8 @@ export default function PantallaCheckout(props: any) {
             toast.advertencia('Dirección muy corta - Ingresa al menos 3 caracteres');
             return;
         }
-
         setBuscandoDireccion(true);
         setDireccionSugerida('');
-
         try {
             const resultados = await Location.geocodeAsync(busquedaManual);
             if (resultados && resultados.length > 0) {
@@ -601,19 +432,13 @@ export default function PantallaCheckout(props: any) {
                     setDireccionCompleta(direccionFormateada);
                     setDireccion(direccionFormateada);
                     setDireccionDelPerfil(false);
-
-                    await guardarUbicacionTemporal({
-                        latitude,
-                        longitude,
-                        direccion: direccionFormateada,
-                    });
+                    await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionFormateada });
                 }
                 setMostrarMapa(true);
             } else {
                 toast.error('No se pudo encontrar la dirección ingresada');
             }
         } catch (error) {
-            console.log('Error buscando dirección:', error);
             toast.error('No se pudo buscar la dirección');
         } finally {
             setBuscandoDireccion(false);
@@ -623,56 +448,32 @@ export default function PantallaCheckout(props: any) {
     const seleccionarUbicacionEnMapa = async (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setUbicacionSeleccionada({ latitude, longitude });
-
         const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
         if (direccionObtenida) {
             setDireccionCompleta(direccionObtenida);
             setDireccion(direccionObtenida);
             setDireccionDelPerfil(false);
-
-            await guardarUbicacionTemporal({
-                latitude,
-                longitude,
-                direccion: direccionObtenida,
-            });
-            console.log('✅ Ubicación guardada desde el mapa');
+            await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionObtenida });
         }
     };
 
     const handleVolverAlCarrito = async () => {
-        if (ubicacionSeleccionada) {
-            await guardarDireccionEnStore(ubicacionSeleccionada);
-        }
+        if (ubicacionSeleccionada) await guardarDireccionEnStore(ubicacionSeleccionada);
         props.navigation.goBack();
     };
 
-
-    // ✅ FUNCIÓN PARA CONFIRMAR UBICACIÓN DESDE EL MAPA - CON BANDERA
     const handleConfirmarUbicacion = async (ubicacion: { latitude: number; longitude: number; direccion: string }) => {
-        console.log('📍 Ubicación confirmada desde el mapa:', ubicacion);
-
-        // ✅ Guardar ubicación seleccionada
-        setUbicacionSeleccionada({
-            latitude: ubicacion.latitude,
-            longitude: ubicacion.longitude,
-        });
-
-        // ✅ Guardar dirección COMPLETA
+        setUbicacionSeleccionada({ latitude: ubicacion.latitude, longitude: ubicacion.longitude });
         setDireccion(ubicacion.direccion);
         setDireccionCompleta(ubicacion.direccion);
         setDireccionDelPerfil(false);
-
-        // ✅ Guardar en el store con la bandera de "seleccionada por usuario"
         await guardarUbicacionTemporal({
             latitude: ubicacion.latitude,
             longitude: ubicacion.longitude,
             direccion: ubicacion.direccion,
-            seleccionadaPorUsuario: true, // ✅ BANDERA
+            seleccionadaPorUsuario: true,
         });
-
-        // ✅ Calcular envío con la nueva ubicación
         calcularCostoEnvio(ubicacion.latitude, ubicacion.longitude);
-
         setMostrarMapa(false);
         toast.exito('📍 Ubicación seleccionada correctamente');
     };
@@ -683,14 +484,7 @@ export default function PantallaCheckout(props: any) {
     };
 
     const abrirBanco = async () => {
-        // Esquemas correctos de Mercado Pago
-        const schemes = [
-            'mercadopago://',           // Esquema principal
-            'mercadopago.com.ar://',    // Con dominio
-            'mp://',                    // Alternativo
-            'mercadopago://home',       // Con acción específica
-        ];
-
+        const schemes = ['mercadopago://', 'mercadopago.com.ar://', 'mp://', 'mercadopago://home'];
         for (const scheme of schemes) {
             try {
                 const puedeAbrir = await Linking.canOpenURL(scheme);
@@ -699,12 +493,8 @@ export default function PantallaCheckout(props: any) {
                     toast.exito('📱 Abriendo Mercado Pago');
                     return;
                 }
-            } catch (error) {
-                console.log(`Falló ${scheme}`);
-            }
+            } catch (error) { }
         }
-
-        // Si todos fallaron, ir a web
         try {
             await Linking.openURL('https://www.mercadopago.com.ar/');
             toast.info('🌐 Abriendo Mercado Pago web');
@@ -718,31 +508,31 @@ export default function PantallaCheckout(props: any) {
             toast.advertencia('Ingresa una dirección de entrega');
             return;
         }
-
         if (!telefono) {
             toast.advertencia('Ingresa un número de teléfono');
             return;
         }
 
-        // ✅ Obtener total actual del carrito
         const totalActual = calcularTotal();
-
-        // ✅ Calcular descuento por nivel
         const descuentoNivel = beneficios ? calcularDescuento(totalActual) : 0;
+        const envioGratisNivel = beneficios ? tieneEnvioGratis(totalActual) : false;
 
-        // ✅ Verificar envío gratis
-        const envioGratis = beneficios ? tieneEnvioGratis(totalActual) : false;
-        const costoEnvioFinal = tipoEntrega === 'retiro'
-            ? 0
-            : (envioGratis || cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS' ? 0 : costoEnvioCalculado);
+        const resumen = calcularResumenPedido({
+            subtotal: totalActual,
+            cuponAplicado,
+            cuponPuntosAplicado,
+            descuentoNivel,
+            costoEnvio: tipoEntrega === 'retiro' ? 0 : costoEnvioCalculado,
+            tipoEntrega,
+            envioGratisNivel,
+        });
 
-        // ✅ Total final
-        const totalFinalActual = totalActual - descuentoNivel - descuento + costoEnvioFinal;
+        const totalFinalActual = resumen.totalFinal;
+        setSubtotal(resumen.subtotal);
+        setDescuentoNivelAplicado(resumen.descuentoNivel);
+        setEnvioGratisAplicado(resumen.envioGratis);
+        setTotalFinal(totalFinalActual);
 
-        // ✅ Actualizar total final
-        setTotalFinal(Math.max(0, totalFinalActual));
-
-        // ✅ Validar pago en efectivo
         if (metodoPago === 'efectivo') {
             const pago = parseFloat(montoConQuePaga.replace(',', '.'));
             if (isNaN(pago) || pago < totalFinalActual) {
@@ -764,46 +554,36 @@ export default function PantallaCheckout(props: any) {
             imagen: e.producto.imagen || '',
         }));
 
-        // ✅ Asegurar que se guarda la dirección completa
         const datosPedido: any = {
             id_de_usuario: perfil?.id,
             cliente_nombre: perfil?.nombre_cliente,
             telefono: telefono,
-            direccion: tipoEntrega === 'retiro'
-                ? 'Retiro en local'
-                : direccionCompleta || direccion || 'Sin dirección',
+            direccion: tipoEntrega === 'retiro' ? 'Retiro en local' : direccionCompleta || direccion || 'Sin dirección',
             estado: 'pendiente',
-            total_parcial: totalActual,
-            total: Math.max(0, totalFinalActual),
-            costo_envio: costoEnvioFinal,
+            total_parcial: resumen.subtotal,
+            total: resumen.totalFinal,
+            costo_envio: resumen.costoEnvioFinal,
             items_json: items,
             metodo_pago: metodoPago,
             tipo_entrega: tipoEntrega,
             notas: notas,
-            puntos_usados: cuponAplicado?.puntos_usados || 0,
+            puntos_usados: cuponPuntosAplicado?.puntos_usados || 0,
             lat_cliente: ubicacionSeleccionada?.latitude || null,
             lng_cliente: ubicacionSeleccionada?.longitude || null,
             distancia_km: distanciaCliente,
             tiempo_estimado: tiempoEstimado,
-            // ✅ Guardar beneficios aplicados
-            descuento_nivel: descuentoNivel,
-            descuento_cupon: descuento,
-            envio_gratis: envioGratis || cuponAplicado?.recompensas?.tipo === 'ENVIO_GRATIS',
+            descuento_nivel: resumen.descuentoNivel,
+            descuento_cupon: resumen.descuentoCupon,
+            envio_gratis: resumen.envioGratis,
             nivel_cliente: nivel?.nombre || 'Bronce',
         };
 
-        // ✅ Si es efectivo, guardar el vuelto
         if (metodoPago === 'efectivo' && montoConQuePaga && mostrarVuelto) {
             datosPedido.monto_pago = parseFloat(montoConQuePaga.replace(',', '.'));
             datosPedido.vuelto = vueltoCalculado;
         }
 
-        if (cuponAplicado) {
-            await supabase.from('canjes').update({ usado_en_pedido: true }).eq('id', cuponAplicado.id);
-        }
-
         const resultado = await crearPedido(datosPedido);
-
         if (resultado.error) {
             toast.error(resultado.error);
             setCargando(false);
@@ -811,31 +591,29 @@ export default function PantallaCheckout(props: any) {
         }
 
         const pedidoId = resultado.id;
-
         if (!pedidoId) {
             toast.error('Error: No se pudo obtener el ID del pedido');
             setCargando(false);
             return;
         }
 
-        console.log(`✅ Pedido creado con ID: ${pedidoId}`);
-        console.log(`📍 Dirección guardada en pedido: ${datosPedido.direccion}`);
-        console.log(`📍 Coordenadas: lat=${datosPedido.lat_cliente}, lng=${datosPedido.lng_cliente}`);
-        console.log(`💰 Descuento nivel: ${descuentoNivel}, Descuento cupón: ${descuento}`);
+        if (cuponAplicado?.id && perfil?.id) {
+            const resultadoCupon = await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
+            if (!resultadoCupon.success) {
+                toast.advertencia(`El pedido #${pedidoId} fue creado, pero el cupón no pudo aplicarse: ${resultadoCupon.mensaje}`);
+            }
+        }
 
         vaciarCarrito();
         await limpiarUbicacionTemporal();
 
         if (metodoPago === 'transferencia') {
-            // ✅ Usar el total calculado al inicio de la función
-            console.log('🔴 TRANSFERENCIA - Total final:', totalFinalActual);
             setCargando(false);
             setPedidoIdTransferencia(pedidoId);
             return;
         }
 
         setCargando(false);
-
         setMostrarModalExito(true);
         setTimeout(() => {
             setMostrarModalExito(false);
@@ -847,18 +625,26 @@ export default function PantallaCheckout(props: any) {
         setMostrarModalTransferencia(false);
         const pedidoId = pedidoIdTransferencia;
         setPedidoIdTransferencia(null);
-
         if (pedidoId) {
-            props.navigation.replace('Seguimiento', {
-                pedidoId,
-                transferenciaPendiente: true
-            });
+            props.navigation.replace('Seguimiento', { pedidoId, transferenciaPendiente: true });
         }
     };
 
+    const resumenUI = calcularResumenPedido({
+        subtotal: calcularTotal(),
+        cuponAplicado,
+        cuponPuntosAplicado,
+        descuentoNivel: beneficios ? calcularDescuento(calcularTotal()) : 0,
+        costoEnvio: tipoEntrega === 'retiro' ? 0 : costoEnvioCalculado,
+        tipoEntrega,
+        envioGratisNivel: beneficios ? tieneEnvioGratis(calcularTotal()) : false,
+    });
+    const descuentoPuntos = resumenUI.descuentoPuntos;
+    const descuentoCuponUI = resumenUI.descuentoCupon;
+    const envioGratisCupon = resumenUI.envioGratisPorCupon;
+
     const metodosPago = [
         { id: 'efectivo', label: 'Efectivo', icono: 'cash-outline' },
-        //{ id: 'tarjeta', label: 'Tarjeta', icono: 'card-outline' },
         { id: 'transferencia', label: 'Transferencia', icono: 'swap-horizontal-outline' },
     ];
 
@@ -869,19 +655,14 @@ export default function PantallaCheckout(props: any) {
             icono: 'home-outline',
             costo: envioGratisAplicado ? 0 : (envioDisponible && costoEnvioCalculado > 0 ? costoEnvioCalculado : 0)
         },
-        {
-            id: 'retiro',
-            label: 'Retiro en local',
-            icono: 'storefront-outline',
-            costo: 0
-        },
+        { id: 'retiro', label: 'Retiro en local', icono: 'storefront-outline', costo: 0 },
     ];
 
     const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
-    const tituloSize = responsive.getValor({ tablet: 28, normal: 24, small: 18 });
-    const seccionTituloSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
-    const inputSize = responsive.getValor({ tablet: 16, normal: 14, small: 13 });
-    const buttonTextSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
+    const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 17 });
+    const seccionTituloSize = responsive.getValor({ tablet: 16, normal: 14, small: 13 });
+    const inputSize = responsive.getValor({ tablet: 15, normal: 14, small: 13 });
+    const buttonTextSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
 
     const renderLoaderDots = () => {
         const dots = [
@@ -890,24 +671,12 @@ export default function PantallaCheckout(props: any) {
             { anim: dot3Anim, delay: 400 },
         ];
         return dots.map((dot, index) => {
-            const opacity = dot.anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.3, 1],
-            });
-            const scale = dot.anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.8, 1.2],
-            });
+            const opacity = dot.anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+            const scale = dot.anim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.2] });
             return (
                 <Animated.View
                     key={index}
-                    style={[
-                        styles.modalLoaderDot,
-                        {
-                            opacity,
-                            transform: [{ scale }],
-                        }
-                    ]}
+                    style={[styles.modalLoaderDot, { opacity, transform: [{ scale }] }]}
                 />
             );
         });
@@ -915,8 +684,9 @@ export default function PantallaCheckout(props: any) {
 
     return (
         <View style={styles.container}>
+            {/* ✅ FONDO TEMA CLARO */}
             <LinearGradient
-                colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
+                colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
                 style={styles.backgroundGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -930,17 +700,13 @@ export default function PantallaCheckout(props: any) {
                     paddingBottom: isTablet ? 16 : 12,
                 }
             ]}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={handleVolverAlCarrito}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
+                <TouchableOpacity style={styles.backButton} onPress={handleVolverAlCarrito} activeOpacity={0.7}>
+                    <Ionicons name="arrow-back" size={isTablet ? 26 : 22} color={DISENO.colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+                <Text style={[styles.title, { fontSize: tituloSize, color: DISENO.colors.text }]}>
                     Confirmar Pedido
                 </Text>
-                <View style={{ width: isTablet ? 28 : 24 }} />
+                <View style={{ width: isTablet ? 26 : 22 }} />
             </View>
 
             <ScrollView
@@ -954,82 +720,57 @@ export default function PantallaCheckout(props: any) {
                     }
                 ]}
             >
-                {/* ✅ SECCIÓN DE BENEFICIOS - NUEVO */}
+                {/* ✅ SECCIÓN DE BENEFICIOS */}
                 {perfil && beneficios && (
-                    <Animated.View style={[
-                        styles.beneficiosSection,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideUpAnim }],
-                        }
-                    ]}>
-                        <View style={[
-                            styles.beneficiosCard,
-                            {
-                                padding: isTablet ? 16 : 12,
-                                borderRadius: isTablet ? 14 : 12,
-                                backgroundColor: DESIGN.colors.accentSecondary + '08',
-                                borderWidth: 1,
-                                borderColor: DESIGN.colors.accentSecondary + '20',
-                            }
-                        ]}>
+                    <Animated.View style={[styles.beneficiosSection, {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                    }]}>
+                        <View style={[styles.beneficiosCard, {
+                            padding: isTablet ? 16 : 12,
+                            borderRadius: isTablet ? 14 : 12,
+                            backgroundColor: DISENO.colors.surface,
+                            borderWidth: 1,
+                            borderColor: DISENO.colors.accentSecondary + '30',
+                            ...DISENO.shadow.sm,
+                        }]}>
                             <View style={styles.beneficiosHeader}>
                                 <View style={styles.beneficiosIconContainer}>
                                     <Text style={styles.beneficiosIcon}>{nivel?.icono || '⭐'}</Text>
                                 </View>
                                 <View style={styles.beneficiosInfo}>
-                                    <Text style={[
-                                        styles.beneficiosTitle,
-                                        {
-                                            fontSize: isTablet ? 16 : 14,
-                                            color: DESIGN.colors.accentSecondary,
-                                        }
-                                    ]}>
+                                    <Text style={[styles.beneficiosTitle, {
+                                        fontSize: isTablet ? 14 : 13,
+                                        color: DISENO.colors.accentSecondary,
+                                    }]}>
                                         {nivel?.nombre || 'Cliente'} {beneficios.descuento > 0 && `• ${beneficios.descuento}% OFF`}
                                     </Text>
-                                    <Text style={[
-                                        styles.beneficiosDesc,
-                                        {
-                                            fontSize: isTablet ? 13 : 12,
-                                            color: DESIGN.colors.textSecondary,
-                                        }
-                                    ]}>
+                                    <Text style={[styles.beneficiosDesc, {
+                                        fontSize: isTablet ? 12 : 11,
+                                        color: DISENO.colors.textSecondary,
+                                    }]}>
                                         {descripcionBeneficios || 'Acumulá puntos para subir de nivel'}
                                     </Text>
                                 </View>
                             </View>
 
-                            {/* Beneficios aplicados */}
                             <View style={styles.beneficiosList}>
                                 {beneficios.descuento > 0 && (
                                     <View style={styles.beneficioTag}>
-                                        <Ionicons name="pricetag-outline" size={14} color={DESIGN.colors.accent} />
+                                        <Ionicons name="pricetag-outline" size={14} color={DISENO.colors.accent} />
                                         <Text style={[styles.beneficioTagText, { fontSize: isTablet ? 12 : 11 }]}>
                                             {beneficios.descuento}% de descuento
                                         </Text>
-                                        {beneficios.descuentoMinimo !== null && beneficios.descuentoMinimo > 0 && (
-                                            <Text style={[styles.beneficioTagSub, { fontSize: isTablet ? 10 : 9 }]}>
-                                                (mín. {formatearPrecio(beneficios.descuentoMinimo)})
-                                            </Text>
-                                        )}
                                     </View>
                                 )}
-
                                 {beneficios.envioGratis && (
                                     <View style={styles.beneficioTag}>
-                                        <Ionicons name="bicycle-outline" size={14} color={DESIGN.colors.verde} />
+                                        <Ionicons name="bicycle-outline" size={14} color={DISENO.colors.success} />
                                         <Text style={[styles.beneficioTagText, { fontSize: isTablet ? 12 : 11 }]}>
                                             Envío gratis
                                         </Text>
-                                        {beneficios.envioGratisMinimo !== null && beneficios.envioGratisMinimo > 0 && (
-                                            <Text style={[styles.beneficioTagSub, { fontSize: isTablet ? 10 : 9 }]}>
-                                                (mín. {formatearPrecio(beneficios.envioGratisMinimo)})
-                                            </Text>
-                                        )}
                                     </View>
                                 )}
-
-
                             </View>
                         </View>
                     </Animated.View>
@@ -1037,101 +778,83 @@ export default function PantallaCheckout(props: any) {
 
                 {cargandoUbicacion && (
                     <View style={styles.loadingUbicacion}>
-                        <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
-                        <Text style={[styles.loadingUbicacionText, { color: DESIGN.colors.textSecondary }]}>
+                        <ActivityIndicator size="small" color={DISENO.colors.accent} />
+                        <Text style={[styles.loadingUbicacionText, { color: DISENO.colors.textSecondary }]}>
                             Cargando ubicación...
                         </Text>
                     </View>
                 )}
 
                 {/* ✅ DATOS DE CONTACTO */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }],
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         📞 Datos de contacto
                     </Text>
-                    <View style={[styles.inputContainer, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}>
-                        <Ionicons name="call-outline" size={22} color={DESIGN.colors.accent} style={styles.inputIcon} />
+                    <View style={[styles.inputContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
+                        <Ionicons name="call-outline" size={22} color={DISENO.colors.accent} style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, { fontSize: inputSize, color: DESIGN.colors.text }]}
+                            style={[styles.input, { fontSize: inputSize, color: DISENO.colors.text }]}
                             value={telefono}
                             onChangeText={setTelefono}
                             placeholder="Teléfono"
-                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            placeholderTextColor={DISENO.colors.textTertiary}
                             keyboardType="phone-pad"
-                            selectionColor={DESIGN.colors.accent}
+                            selectionColor={DISENO.colors.accent}
                         />
                     </View>
                     {perfil?.telefono && (
-                        <Text style={[styles.datosGuardados, { color: DESIGN.colors.verde }]}>
+                        <Text style={[styles.datosGuardados, { color: DISENO.colors.success }]}>
                             📌 Cargado desde tu perfil
                         </Text>
                     )}
                 </Animated.View>
 
                 {guardandoPerfil && (
-                    <View style={[styles.guardandoPerfilContainer, { backgroundColor: DESIGN.colors.accentSecondary + '15', borderColor: DESIGN.colors.accentSecondary + '20' }]}>
-                        <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
-                        <Text style={[styles.guardandoPerfilText, { color: DESIGN.colors.accentSecondary }]}>
+                    <View style={[styles.guardandoPerfilContainer, { backgroundColor: DISENO.colors.accentSecondary + '15', borderColor: DISENO.colors.accentSecondary + '20' }]}>
+                        <ActivityIndicator size="small" color={DISENO.colors.accentSecondary} />
+                        <Text style={[styles.guardandoPerfilText, { color: DISENO.colors.accentSecondary }]}>
                             Guardando en tu perfil...
                         </Text>
                     </View>
                 )}
 
                 {/* ✅ TIPO DE ENTREGA */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         🚚 Tipo de entrega
                     </Text>
                     <View style={[styles.options, { gap: isTablet ? 12 : 8 }]}>
                         {tiposEntrega.map(t => (
                             <TouchableOpacity
                                 key={t.id}
-                                style={[
-                                    styles.option,
-                                    {
-                                        padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
-                                        borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: tipoEntrega === t.id ? DESIGN.colors.accentSecondary : DESIGN.colors.surface + '80',
-                                        borderColor: tipoEntrega === t.id ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
-                                    }
-                                ]}
+                                style={[styles.option, {
+                                    padding: isTablet ? 18 : isSmallPhone ? 12 : 14,
+                                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                    backgroundColor: tipoEntrega === t.id ? DISENO.colors.accentSecondary : DISENO.colors.surface,
+                                    borderColor: tipoEntrega === t.id ? DISENO.colors.accentSecondary : DISENO.colors.border,
+                                }]}
                                 onPress={() => setTipoEntrega(t.id)}
                                 activeOpacity={0.7}
                             >
                                 <Ionicons
                                     name={t.icono as any}
                                     size={isTablet ? 28 : 22}
-                                    color={tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary}
+                                    color={tipoEntrega === t.id ? DISENO.colors.text : DISENO.colors.textSecondary}
                                 />
-                                <Text style={[
-                                    styles.optionText,
-                                    {
-                                        fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                                        color: tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
-                                    }
-                                ]}>
+                                <Text style={[styles.optionText, {
+                                    fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                                    color: tipoEntrega === t.id ? DISENO.colors.text : DISENO.colors.textSecondary,
+                                }]}>
                                     {t.label}
                                 </Text>
-                                <Text style={[
-                                    styles.optionPrice,
-                                    {
-                                        fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: tipoEntrega === t.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
-                                    }
-                                ]}>
+                                <Text style={[styles.optionPrice, {
+                                    fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                                    color: tipoEntrega === t.id ? DISENO.colors.text : DISENO.colors.textSecondary,
+                                }]}>
                                     {t.costo === 0 ? 'GRATIS' : formatearPrecio(t.costo)}
                                 </Text>
                             </TouchableOpacity>
@@ -1141,101 +864,75 @@ export default function PantallaCheckout(props: any) {
 
                 {/* ✅ DIRECCIÓN DE ENTREGA */}
                 {tipoEntrega === 'domicilio' && (
-                    <Animated.View style={[
-                        styles.section,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideUpAnim }],
-                            marginTop: 12,
-                        }
-                    ]}>
-                        <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                    <Animated.View style={[styles.section, {
+                        opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                    }]}>
+                        <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                             📍 Dirección de entrega
                         </Text>
 
-                        <View style={[
-                            styles.direccionPerfilContainer,
-                            {
-                                padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                backgroundColor: direccionDelPerfil ? DESIGN.colors.verde + '15' : DESIGN.colors.surface + '80',
-                                borderColor: direccionDelPerfil ? DESIGN.colors.verde + '30' : DESIGN.colors.border,
-                            }
-                        ]}>
+                        <View style={[styles.direccionPerfilContainer, {
+                            padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                            borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                            backgroundColor: direccionDelPerfil ? DISENO.colors.success + '15' : DISENO.colors.surface,
+                            borderColor: direccionDelPerfil ? DISENO.colors.success + '30' : DISENO.colors.border,
+                        }]}>
                             <View style={styles.direccionPerfilHeader}>
                                 <Ionicons
                                     name={direccionDelPerfil ? "checkmark-circle" : "location-outline"}
                                     size={isTablet ? 22 : 18}
-                                    color={direccionDelPerfil ? DESIGN.colors.verde : DESIGN.colors.accent}
+                                    color={direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent}
                                 />
-                                <Text style={[
-                                    styles.direccionPerfilLabel,
-                                    {
-                                        fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                        color: direccionDelPerfil ? DESIGN.colors.verde : DESIGN.colors.accent,
-                                    }
-                                ]}>
+                                <Text style={[styles.direccionPerfilLabel, {
+                                    fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                    color: direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent,
+                                }]}>
                                     {direccionDelPerfil ? 'Dirección de tu perfil' : 'Dirección personalizada'}
                                 </Text>
                                 {ubicacionSeleccionada && !direccionDelPerfil && (
-                                    <View style={[styles.ubicacionConfirmada, { backgroundColor: DESIGN.colors.verde + '15' }]}>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={DESIGN.colors.verde} />
-                                        <Text style={[styles.ubicacionConfirmadaText, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DESIGN.colors.verde }]}>
+                                    <View style={[styles.ubicacionConfirmada, { backgroundColor: DISENO.colors.success + '15' }]}>
+                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={DISENO.colors.success} />
+                                        <Text style={[styles.ubicacionConfirmadaText, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DISENO.colors.success }]}>
                                             Confirmada
                                         </Text>
                                     </View>
                                 )}
                             </View>
-                            <Text style={[
-                                styles.direccionPerfilTexto,
-                                {
-                                    fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
-                                    color: DESIGN.colors.text,
-                                }
-                            ]}>
+                            <Text style={[styles.direccionPerfilTexto, {
+                                fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14,
+                                color: DISENO.colors.text,
+                            }]}>
                                 {direccion || 'No hay dirección cargada'}
                             </Text>
-                            {direccionDelPerfil && (
-                                <Text style={[
-                                    styles.direccionPerfilSubtexto,
-                                    {
-                                        fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
-                                        color: DESIGN.colors.textSecondary,
-                                    }
-                                ]}>
-                                    💡 Para cambiar, usa el buscador o el mapa
-                                </Text>
-                            )}
                         </View>
 
                         {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={[styles.infoEnvioContainer, { backgroundColor: DESIGN.colors.surface + '80', borderColor: DESIGN.colors.border }]}>
+                            <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
                                 <View style={styles.infoEnvioFila}>
-                                    <Ionicons name="navigate" size={18} color={DESIGN.colors.accent} />
-                                    <Text style={[styles.infoEnvioText, { color: DESIGN.colors.textSecondary }]}>
+                                    <Ionicons name="navigate" size={18} color={DISENO.colors.accent} />
+                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>
                                         📏 Distancia: {distanciaFormateada || 'Calculando...'}
                                     </Text>
                                 </View>
-
                                 {envioDisponible ? (
                                     <>
                                         <View style={styles.infoEnvioFila}>
-                                            <Ionicons name="cash" size={18} color={DESIGN.colors.verde} />
-                                            <Text style={[styles.infoEnvioText, { color: DESIGN.colors.verde }]}>
+                                            <Ionicons name="cash" size={18} color={DISENO.colors.success} />
+                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.success }]}>
                                                 💰 Costo de envío: {envioGratisAplicado ? 'GRATIS' : formatearPrecio(costoEnvioCalculado)}
                                             </Text>
                                         </View>
                                         <View style={styles.infoEnvioFila}>
-                                            <Ionicons name="time-outline" size={18} color={DESIGN.colors.accent} />
-                                            <Text style={[styles.infoEnvioText, { color: DESIGN.colors.accent }]}>
+                                            <Ionicons name="time-outline" size={18} color={DISENO.colors.accent} />
+                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
                                                 ⏱️ Tiempo estimado: {tiempoEstimado} min
                                             </Text>
                                         </View>
                                     </>
                                 ) : (
                                     <View style={styles.infoEnvioFila}>
-                                        <Ionicons name="warning" size={18} color={DESIGN.colors.accent} />
-                                        <Text style={[styles.infoEnvioText, { color: DESIGN.colors.accent }]}>
+                                        <Ionicons name="warning" size={18} color={DISENO.colors.accent} />
+                                        <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
                                             ⚠️ {mensajeEnvio}
                                         </Text>
                                     </View>
@@ -1244,41 +941,41 @@ export default function PantallaCheckout(props: any) {
                         )}
 
                         {calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={[styles.infoEnvioContainer, { backgroundColor: DESIGN.colors.surface + '80', borderColor: DESIGN.colors.border }]}>
+                            <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
                                 <View style={styles.infoEnvioFila}>
-                                    <ActivityIndicator size="small" color={DESIGN.colors.accentSecondary} />
-                                    <Text style={[styles.infoEnvioText, { color: DESIGN.colors.textSecondary }]}>Calculando envío...</Text>
+                                    <ActivityIndicator size="small" color={DISENO.colors.accent} />
+                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>Calculando envío...</Text>
                                 </View>
                             </View>
                         )}
 
                         <View style={styles.buscadorManualContainer}>
-                            <Text style={[styles.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
+                            <Text style={[styles.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.textSecondary }]}>
                                 🔍 Buscar dirección en el mapa
                             </Text>
                             <View style={styles.buscadorManualFila}>
                                 <TextInput
-                                    style={[styles.buscadorManualInput, { fontSize: inputSize, color: DESIGN.colors.text, backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}
+                                    style={[styles.buscadorManualInput, { fontSize: inputSize, color: DISENO.colors.text, backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}
                                     value={busquedaManual}
                                     onChangeText={setBusquedaManual}
                                     placeholder="Ej: Av. Corrientes 1234, CABA"
-                                    placeholderTextColor={DESIGN.colors.textTertiary}
-                                    selectionColor={DESIGN.colors.accent}
+                                    placeholderTextColor={DISENO.colors.textTertiary}
+                                    selectionColor={DISENO.colors.accent}
                                 />
                                 <TouchableOpacity
                                     style={[styles.botonBuscar, {
                                         padding: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                         borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                        backgroundColor: DESIGN.colors.accentSecondary,
+                                        backgroundColor: DISENO.colors.accentSecondary,
                                     }]}
                                     onPress={buscarDireccionManual}
                                     activeOpacity={0.7}
                                     disabled={buscandoDireccion}
                                 >
                                     {buscandoDireccion ? (
-                                        <ActivityIndicator size="small" color={DESIGN.colors.text} />
+                                        <ActivityIndicator size="small" color={DISENO.colors.text} />
                                     ) : (
-                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={DESIGN.colors.text} />
+                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={DISENO.colors.text} />
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -1289,17 +986,18 @@ export default function PantallaCheckout(props: any) {
                                 padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
                                 borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                 marginTop: 8,
-                                backgroundColor: DESIGN.colors.accent + '10',
-                                borderColor: DESIGN.colors.accent + '30',
+                                backgroundColor: DISENO.colors.surface,
+                                borderColor: DISENO.colors.accent + '40',
+                                borderWidth: 1,
                             }]}
                             onPress={() => setMostrarMapa(true)}
                             activeOpacity={0.7}
                         >
-                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={DESIGN.colors.accent} />
-                            <Text style={[styles.botonMapaText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.accent }]}>
+                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={DISENO.colors.accent} />
+                            <Text style={[styles.botonMapaText, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DISENO.colors.accent }]}>
                                 📍 Seleccionar ubicación en el mapa
                             </Text>
-                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={DESIGN.colors.textTertiary} />
+                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={DISENO.colors.textTertiary} />
                         </TouchableOpacity>
 
                         {direccionSugerida !== '' && direccion !== direccionSugerida && (
@@ -1307,8 +1005,9 @@ export default function PantallaCheckout(props: any) {
                                 style={[styles.sugerenciaContainer, {
                                     padding: isTablet ? 14 : isSmallPhone ? 8 : 10,
                                     borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                    backgroundColor: DESIGN.colors.verde + '15',
-                                    borderColor: DESIGN.colors.verde + '20',
+                                    backgroundColor: DISENO.colors.success + '15',
+                                    borderColor: DISENO.colors.success + '20',
+                                    borderWidth: 1,
                                 }]}
                                 onPress={() => {
                                     setDireccion(direccionSugerida);
@@ -1319,8 +1018,8 @@ export default function PantallaCheckout(props: any) {
                                 }}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="location" size={isTablet ? 20 : 16} color={DESIGN.colors.verde} />
-                                <Text style={[styles.sugerenciaText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
+                                <Ionicons name="location" size={isTablet ? 20 : 16} color={DISENO.colors.success} />
+                                <Text style={[styles.sugerenciaText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
                                     {direccionSugerida}
                                 </Text>
                             </TouchableOpacity>
@@ -1328,7 +1027,6 @@ export default function PantallaCheckout(props: any) {
                     </Animated.View>
                 )}
 
-                {/* ✅ MAPA SELECTOR */}
                 <MapaSelector
                     visible={mostrarMapa}
                     onClose={() => setMostrarMapa(false)}
@@ -1338,34 +1036,25 @@ export default function PantallaCheckout(props: any) {
                     titulo="📍 Selecciona tu ubicación"
                 />
 
-                {/* ✅ MÉTODO DE PAGO CON EFECTIVO Y VUELTO */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                {/* ✅ MÉTODO DE PAGO */}
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         💳 Método de pago
                     </Text>
                     <View style={[styles.options, { flexDirection: 'row', gap: isTablet ? 12 : 8 }]}>
                         {metodosPago.map(m => (
                             <TouchableOpacity
                                 key={m.id}
-                                style={[
-                                    styles.optionPago,
-                                    {
-                                        padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                        backgroundColor: metodoPago === m.id ? DESIGN.colors.accentSecondary : DESIGN.colors.surface + '80',
-                                        borderColor: metodoPago === m.id ? DESIGN.colors.accentSecondary : DESIGN.colors.border,
-                                    }
-                                ]}
+                                style={[styles.optionPago, {
+                                    padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                    borderRadius: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                    backgroundColor: metodoPago === m.id ? DISENO.colors.accentSecondary : DISENO.colors.surface,
+                                    borderColor: metodoPago === m.id ? DISENO.colors.accentSecondary : DISENO.colors.border,
+                                }]}
                                 onPress={() => {
                                     setMetodoPago(m.id);
-                                    // ✅ Reiniciar campos de efectivo al cambiar
                                     if (m.id !== 'efectivo') {
                                         setMontoConQuePaga('');
                                         setVueltoCalculado(0);
@@ -1377,69 +1066,62 @@ export default function PantallaCheckout(props: any) {
                                 <Ionicons
                                     name={m.icono as any}
                                     size={isTablet ? 26 : 20}
-                                    color={metodoPago === m.id ? DESIGN.colors.text : DESIGN.colors.textSecondary}
+                                    color={metodoPago === m.id ? DISENO.colors.text : DISENO.colors.textSecondary}
                                 />
-                                <Text style={[
-                                    styles.optionText,
-                                    {
-                                        fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                                        color: metodoPago === m.id ? DESIGN.colors.text : DESIGN.colors.textSecondary,
-                                    }
-                                ]}>
+                                <Text style={[styles.optionText, {
+                                    fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+                                    color: metodoPago === m.id ? DISENO.colors.text : DISENO.colors.textSecondary,
+                                }]}>
                                     {m.label}
                                 </Text>
                                 {metodoPago === m.id && (
-                                    <Ionicons name="checkmark-circle" size={isTablet ? 20 : 16} color={DESIGN.colors.text} />
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 20 : 16} color={DISENO.colors.text} />
                                 )}
                             </TouchableOpacity>
                         ))}
                     </View>
 
-                    {/* ✅ SECCIÓN DE PAGO EN EFECTIVO CON VUELTO */}
                     {metodoPago === 'efectivo' && (
                         <View style={[styles.efectivoContainer, {
                             marginTop: 12,
                             padding: isTablet ? 16 : isSmallPhone ? 12 : 14,
                             borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                            backgroundColor: DESIGN.colors.surface + '90',
+                            backgroundColor: DISENO.colors.surface,
                             borderWidth: 1,
-                            borderColor: DESIGN.colors.accentSecondary + '30',
+                            borderColor: DISENO.colors.accentSecondary + '30',
                         }]}>
                             <Text style={[styles.efectivoTitle, {
-                                fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14,
-                                color: DESIGN.colors.text,
-                                fontWeight: '600',
+                                fontSize: isTablet ? 14 : isSmallPhone ? 13 : 13,
+                                color: DISENO.colors.text,
                                 marginBottom: 8,
                             }]}>
                                 💰 Pago en efectivo
                             </Text>
 
                             <Text style={[styles.efectivoSubtitle, {
-                                fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                color: DESIGN.colors.textSecondary,
+                                fontSize: isTablet ? 12 : isSmallPhone ? 11 : 11,
+                                color: DISENO.colors.textSecondary,
                                 marginBottom: 6,
                             }]}>
-                                Total a pagar: <Text style={{ fontWeight: 'bold', color: DESIGN.colors.accentSecondary }}>
+                                Total a pagar: <Text style={{ fontWeight: 'bold', color: DISENO.colors.accentSecondary }}>
                                     {formatearPrecio(totalFinal)}
                                 </Text>
                             </Text>
 
-                            {/* ✅ Campo para ingresar el monto con el que paga */}
                             <View style={[styles.efectivoInputContainer, {
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                backgroundColor: DESIGN.colors.surfaceHover,
+                                backgroundColor: DISENO.colors.surfaceHover,
                                 borderRadius: 12,
                                 borderWidth: 1,
-                                borderColor: DESIGN.colors.border,
+                                borderColor: DISENO.colors.border,
                                 paddingHorizontal: 12,
                                 paddingVertical: 4,
                                 marginTop: 4,
                             }]}>
                                 <Text style={[styles.efectivoInputPrefix, {
-                                    fontSize: isTablet ? 18 : isSmallPhone ? 16 : 17,
-                                    color: DESIGN.colors.textSecondary,
-                                    fontWeight: 'bold',
+                                    fontSize: isTablet ? 17 : isSmallPhone ? 16 : 16,
+                                    color: DISENO.colors.textSecondary,
                                     marginRight: 4,
                                 }]}>
                                     $
@@ -1447,10 +1129,9 @@ export default function PantallaCheckout(props: any) {
                                 <TextInput
                                     style={[styles.efectivoInput, {
                                         flex: 1,
-                                        fontSize: isTablet ? 18 : isSmallPhone ? 16 : 17,
-                                        color: DESIGN.colors.text,
+                                        fontSize: isTablet ? 17 : isSmallPhone ? 16 : 16,
+                                        color: DISENO.colors.text,
                                         paddingVertical: 10,
-                                        fontWeight: '600',
                                     }]}
                                     value={montoConQuePaga}
                                     onChangeText={(text) => {
@@ -1459,83 +1140,71 @@ export default function PantallaCheckout(props: any) {
                                         calcularVuelto(cleaned);
                                     }}
                                     placeholder="0.00"
-                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    placeholderTextColor={DISENO.colors.textTertiary}
                                     keyboardType="decimal-pad"
-                                    selectionColor={DESIGN.colors.accent}
+                                    selectionColor={DISENO.colors.accent}
                                 />
-                                <Text style={[styles.efectivoInputSuffix, {
-                                    fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                    color: DESIGN.colors.textSecondary,
-                                }]}>
-                                    {montoConQuePaga ? `(${montoConQuePaga})` : '(ingresá el monto)'}
-                                </Text>
                             </View>
 
-                            {/* ✅ Mostrar el vuelto calculado */}
                             {mostrarVuelto && vueltoCalculado > 0 && (
                                 <View style={[styles.vueltoContainer, {
                                     marginTop: 10,
                                     padding: isTablet ? 14 : isSmallPhone ? 10 : 12,
                                     borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                    backgroundColor: DESIGN.colors.verde + '15',
+                                    backgroundColor: DISENO.colors.success + '15',
                                     borderWidth: 1,
-                                    borderColor: DESIGN.colors.verde + '30',
+                                    borderColor: DISENO.colors.success + '30',
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
                                 }]}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="cash-outline" size={isTablet ? 24 : 20} color={DESIGN.colors.verde} />
+                                        <Ionicons name="cash-outline" size={isTablet ? 24 : 20} color={DISENO.colors.success} />
                                         <Text style={[styles.vueltoLabel, {
-                                            fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13,
-                                            color: DESIGN.colors.text,
-                                            fontWeight: '500',
+                                            fontSize: isTablet ? 13 : isSmallPhone ? 12 : 12,
+                                            color: DISENO.colors.text,
                                         }]}>
                                             💵 Vuelto:
                                         </Text>
                                     </View>
                                     <Text style={[styles.vueltoMonto, {
-                                        fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20,
-                                        fontWeight: 'bold',
-                                        color: DESIGN.colors.verde,
+                                        fontSize: isTablet ? 20 : isSmallPhone ? 18 : 18,
+                                        color: DISENO.colors.success,
                                     }]}>
                                         {formatearPrecio(vueltoCalculado)}
                                     </Text>
                                 </View>
                             )}
 
-                            {/* ✅ Mensaje de error si el monto es insuficiente */}
                             {montoConQuePaga && !mostrarVuelto && parseFloat(montoConQuePaga) > 0 && (
                                 <View style={[styles.efectivoError, {
                                     marginTop: 8,
                                     padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
                                     borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                                    backgroundColor: DESIGN.colors.accent + '15',
+                                    backgroundColor: DISENO.colors.accent + '15',
                                     borderWidth: 1,
-                                    borderColor: DESIGN.colors.accent + '30',
+                                    borderColor: DISENO.colors.accent + '30',
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     gap: 6,
                                 }]}>
-                                    <Ionicons name="warning" size={isTablet ? 18 : 14} color={DESIGN.colors.accent} />
+                                    <Ionicons name="warning" size={isTablet ? 18 : 14} color={DISENO.colors.accent} />
                                     <Text style={[styles.efectivoErrorText, {
-                                        fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                        color: DESIGN.colors.accent,
-                                        fontWeight: '500',
+                                        fontSize: isTablet ? 12 : isSmallPhone ? 11 : 11,
+                                        color: DISENO.colors.accent,
                                     }]}>
                                         El monto es insuficiente. El total es {formatearPrecio(totalFinal)}
                                     </Text>
                                 </View>
                             )}
 
-                            {/* ✅ Botón de sugerencia para monto exacto */}
                             {(!montoConQuePaga || (montoConQuePaga && !mostrarVuelto)) && (
                                 <TouchableOpacity
                                     style={[styles.efectivoSugerencia, {
                                         marginTop: 8,
                                         padding: isTablet ? 8 : isSmallPhone ? 6 : 8,
                                         borderRadius: isTablet ? 8 : isSmallPhone ? 6 : 8,
-                                        backgroundColor: DESIGN.colors.accentSecondary + '15',
+                                        backgroundColor: DISENO.colors.accentSecondary + '15',
                                         alignSelf: 'flex-start',
                                     }]}
                                     onPress={() => {
@@ -1547,8 +1216,7 @@ export default function PantallaCheckout(props: any) {
                                 >
                                     <Text style={[styles.efectivoSugerenciaText, {
                                         fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
-                                        color: DESIGN.colors.accentSecondary,
-                                        fontWeight: '500',
+                                        color: DISENO.colors.accentSecondary,
                                     }]}>
                                         💡 Pagar con el monto exacto
                                     </Text>
@@ -1559,130 +1227,119 @@ export default function PantallaCheckout(props: any) {
                 </Animated.View>
 
                 {/* ✅ NOTAS */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         📝 Notas (opcional)
                     </Text>
-                    <View style={[styles.inputContainer, { backgroundColor: DESIGN.colors.surface, borderColor: DESIGN.colors.border }]}>
-                        <Ionicons name="create-outline" size={22} color={DESIGN.colors.accent} style={styles.inputIcon} />
+                    <View style={[styles.inputContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
+                        <Ionicons name="create-outline" size={22} color={DISENO.colors.accent} style={styles.inputIcon} />
                         <TextInput
-                            style={[styles.input, styles.textArea, { fontSize: inputSize, color: DESIGN.colors.text }]}
+                            style={[styles.input, styles.textArea, { fontSize: inputSize, color: DISENO.colors.text }]}
                             value={notas}
                             onChangeText={setNotas}
                             placeholder="Sin cebolla, extra queso..."
-                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            placeholderTextColor={DISENO.colors.textTertiary}
                             multiline
                             numberOfLines={2}
-                            selectionColor={DESIGN.colors.accent}
+                            selectionColor={DISENO.colors.accent}
                         />
                     </View>
                 </Animated.View>
 
                 {/* ✅ PRODUCTOS */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         🛒 Productos ({elementos.length})
                     </Text>
                     {elementos.map((e, i) => (
-                        <View key={i} style={[styles.productoItem, { borderBottomColor: DESIGN.colors.border }]}>
-                            <Text style={[styles.productoNombre, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
+                        <View key={i} style={[styles.productoItem, { borderBottomColor: DISENO.colors.border }]}>
+                            <Text style={[styles.productoNombre, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>
                                 {e.cantidad}x {e.producto.nombre}
                             </Text>
-                            <Text style={[styles.productoPrecio, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.accentSecondary }]}>
+                            <Text style={[styles.productoPrecio, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DISENO.colors.accent }]}>
                                 {formatearPrecio(precioUnitario(e.producto.precio) * e.cantidad)}
                             </Text>
                         </View>
                     ))}
                 </Animated.View>
 
-                {/* ✅ RESUMEN CON BENEFICIOS */}
-                <Animated.View style={[
-                    styles.section,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateY: slideUpAnim }],
-                        marginTop: 12,
-                    }
-                ]}>
-                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DESIGN.colors.text }]}>
+                {/* ✅ RESUMEN */}
+                <Animated.View style={[styles.section, {
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
+                }]}>
+                    <Text style={[styles.sectionTitle, { fontSize: seccionTituloSize, color: DISENO.colors.text }]}>
                         📊 Resumen
                     </Text>
                     <View style={styles.resumenFila}>
-                        <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>Subtotal</Text>
-                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>{formatearPrecio(subtotal)}</Text>
+                        <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>Subtotal</Text>
+                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.text }]}>{formatearPrecio(subtotal)}</Text>
                     </View>
 
-                    {/* ✅ Descuento por nivel */}
                     {beneficios && beneficios.descuento > 0 && descuentoNivelAplicado > 0 && (
                         <View style={[styles.resumenFila, styles.resumenBeneficio]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="pricetag-outline" size={14} color={DESIGN.colors.accent} />
-                                <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.accent }]}>
+                                <Ionicons name="pricetag-outline" size={14} color={DISENO.colors.accent} />
+                                <Text style={[styles.resumenText, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.accent }]}>
                                     Descuento {nivel?.nombre} ({beneficios.descuento}%)
                                 </Text>
                             </View>
-                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.verde }]}>
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.success }]}>
                                 -{formatearPrecio(descuentoNivelAplicado)}
                             </Text>
                         </View>
                     )}
 
-                    {/* ✅ Descuento por cupón */}
-                    {descuento > 0 && (
+                    {descuentoPuntos > 0 && (
                         <View style={styles.resumenFila}>
-                            <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
-                                Descuento cupón
+                            <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
+                                Descuento por puntos
                             </Text>
-                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde }]}>
-                                -{formatearPrecio(descuento)}
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
+                                -{formatearPrecio(descuentoPuntos)}
                             </Text>
                         </View>
                     )}
 
-                    {/* ✅ Costo de envío */}
+                    {descuentoCuponUI > 0 && (
+                        <View style={styles.resumenFila}>
+                            <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
+                                Descuento cupón {cuponAplicado?.codigo ? `(${cuponAplicado.codigo})` : ''}
+                            </Text>
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
+                                -{formatearPrecio(descuentoCuponUI)}
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={styles.resumenFila}>
-                        <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>Costo de envío</Text>
-                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
+                        <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>Costo de envío</Text>
+                        <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.text }]}>
                             {tipoEntrega === 'retiro' ? 'GRATIS' :
                                 (envioGratisAplicado ? 'GRATIS (beneficio)' :
-                                    (ubicacionSeleccionada ?
-                                        (envioDisponible ? formatearPrecio(costoEnvioCalculado) : 'No disponible') :
-                                        'Selecciona ubicación'
-                                    )
-                                )
-                            }
+                                    (envioGratisCupon ? 'GRATIS (cupón)' :
+                                        (ubicacionSeleccionada ?
+                                            (envioDisponible ? formatearPrecio(costoEnvioCalculado) : 'No disponible') :
+                                            'Selecciona ubicación')))}
                         </Text>
                     </View>
 
-                    {/* ✅ Total final */}
-                    <View style={[styles.resumenFila, styles.resumenTotal, { borderTopColor: DESIGN.colors.border }]}>
-                        <Text style={[styles.totalText, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.text }]}>Total</Text>
-                        <Text style={[styles.totalPrice, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 24, color: DESIGN.colors.accentSecondary }]}>
+                    <View style={[styles.resumenFila, styles.resumenTotal, { borderTopColor: DISENO.colors.border }]}>
+                        <Text style={[styles.totalText, { fontSize: isTablet ? 18 : isSmallPhone ? 16 : 17, color: DISENO.colors.text }]}>Total</Text>
+                        <Text style={[styles.totalPrice, { fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20, color: DISENO.colors.accent }]}>
                             {formatearPrecio(totalFinal)}
                         </Text>
                     </View>
 
-                    {/* ✅ Vuelto en el resumen */}
                     {metodoPago === 'efectivo' && mostrarVuelto && vueltoCalculado > 0 && (
-                        <View style={[styles.resumenFila, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: DESIGN.colors.border }]}>
-                            <Text style={[styles.resumenText, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde, fontWeight: '600' }]}>
+                        <View style={[styles.resumenFila, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: DISENO.colors.border }]}>
+                            <Text style={[styles.resumenText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success, fontWeight: '600' }]}>
                                 💵 Vuelto
                             </Text>
-                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.verde, fontWeight: 'bold' }]}>
+                            <Text style={[styles.resumenValor, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success, fontWeight: 'bold' }]}>
                                 {formatearPrecio(vueltoCalculado)}
                             </Text>
                         </View>
@@ -1691,9 +1348,7 @@ export default function PantallaCheckout(props: any) {
 
                 {/* ✅ BOTÓN CONFIRMAR */}
                 <Animated.View style={{
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideUpAnim }],
-                    marginTop: 12,
+                    opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }}>
                     <TouchableOpacity
                         style={[styles.botonConfirmar, cargando && { opacity: 0.6 }]}
@@ -1702,17 +1357,17 @@ export default function PantallaCheckout(props: any) {
                         activeOpacity={0.8}
                     >
                         <LinearGradient
-                            colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                            colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
                             style={styles.botonConfirmarGradient}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
                             {cargando ? (
-                                <ActivityIndicator color={DESIGN.colors.text} size="small" />
+                                <ActivityIndicator color={DISENO.colors.text} size="small" />
                             ) : (
                                 <>
-                                    <Ionicons name="checkmark-circle" size={isTablet ? 28 : 24} color={DESIGN.colors.text} />
-                                    <Text style={[styles.botonConfirmarText, { fontSize: buttonTextSize, color: DESIGN.colors.text }]}>
+                                    <Ionicons name="checkmark-circle" size={isTablet ? 26 : 22} color={DISENO.colors.text} />
+                                    <Text style={[styles.botonConfirmarText, { fontSize: buttonTextSize, color: DISENO.colors.text }]}>
                                         {metodoPago === 'transferencia' ? 'Pagar con Transferencia' : 'Confirmar Pedido'}
                                     </Text>
                                 </>
@@ -1724,28 +1379,27 @@ export default function PantallaCheckout(props: any) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ✅ MODAL DE ÉXITO (para efectivo/tarjeta) */}
+            {/* ✅ MODAL DE ÉXITO */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <View style={[
-                        styles.modal,
-                        {
-                            padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
-                            borderRadius: isTablet ? 28 : 24,
-                            borderColor: DESIGN.colors.accentSecondary,
-                            backgroundColor: DESIGN.colors.surface,
-                        }
-                    ]}>
+                    <View style={[styles.modal, {
+                        padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
+                        borderRadius: isTablet ? 28 : 24,
+                        borderColor: DISENO.colors.accentSecondary,
+                        borderWidth: 1,
+                        backgroundColor: DISENO.colors.surface,
+                        ...DISENO.shadow.lg,
+                    }]}>
                         <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>✅</Text>
-                        <Text style={[styles.modalTitle, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: DESIGN.colors.accentSecondary }]}>
+                        <Text style={[styles.modalTitle, { fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20, color: DISENO.colors.accentSecondary }]}>
                             ¡Pedido confirmado!
                         </Text>
-                        <Text style={[styles.modalText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.textSecondary }]}>
+                        <Text style={[styles.modalText, { fontSize: isTablet ? 14 : isSmallPhone ? 13 : 13, color: DISENO.colors.textSecondary }]}>
                             {metodoPago === 'efectivo' && mostrarVuelto
                                 ? `💰 Pagás con ${formatearPrecio(parseFloat(montoConQuePaga.replace(',', '.')))}. Tu vuelto es ${formatearPrecio(vueltoCalculado)}`
                                 : 'Tu pedido está siendo preparado'}
                         </Text>
-                        <Text style={[styles.modalSubtext, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.accent }]}>
+                        <Text style={[styles.modalSubtext, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.accent }]}>
                             Redirigiendo al seguimiento...
                         </Text>
                         <View style={styles.modalLoader}>
@@ -1755,7 +1409,7 @@ export default function PantallaCheckout(props: any) {
                 </View>
             </Modal>
 
-            {/* ✅ MODAL DE TRANSFERENCIA - REDISEÑADO Y CORREGIDO */}
+            {/* ✅ MODAL DE TRANSFERENCIA */}
             <Modal
                 visible={mostrarModalTransferencia}
                 transparent={true}
@@ -1763,28 +1417,25 @@ export default function PantallaCheckout(props: any) {
                 statusBarTranslucent={true}
             >
                 <View style={styles.modalTransferenciaOverlay}>
-                    <View style={[
-                        styles.modalTransferencia,
-                        {
-                            width: isTablet ? 480 : responsive.width * 0.92,
-                            maxWidth: 480,
-                            backgroundColor: DESIGN.colors.surface,
-                            borderColor: DESIGN.colors.border,
-                            borderRadius: 20,
-                            overflow: 'hidden',
-                            borderWidth: 1,
-                        }
-                    ]}>
-                        {/* Header compacto */}
+                    <View style={[styles.modalTransferencia, {
+                        width: isTablet ? 480 : responsive.width * 0.92,
+                        maxWidth: 480,
+                        backgroundColor: DISENO.colors.surface,
+                        borderColor: DISENO.colors.border,
+                        borderRadius: 20,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        ...DISENO.shadow.lg,
+                    }]}>
                         <LinearGradient
-                            colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
+                            colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
                             style={styles.modalTransferenciaHeader}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
                             <View style={styles.modalTransferenciaHeaderContent}>
                                 <View style={styles.modalTransferenciaHeaderIcon}>
-                                    <Ionicons name="swap-horizontal-outline" size={24} color={DESIGN.colors.text} />
+                                    <Ionicons name="swap-horizontal-outline" size={24} color={DISENO.colors.text} />
                                 </View>
                                 <Text style={styles.modalTransferenciaHeaderTitle}>
                                     Transferencia
@@ -1801,10 +1452,9 @@ export default function PantallaCheckout(props: any) {
                                 Para completar tu pedido, realizá la transferencia a los siguientes datos:
                             </Text>
 
-                            {/* Alias */}
                             <View style={styles.modalTransferenciaAliasContainer}>
                                 <View style={styles.modalTransferenciaAliasHeader}>
-                                    <Ionicons name="cash-outline" size={16} color={DESIGN.colors.textSecondary} />
+                                    <Ionicons name="cash-outline" size={16} color={DISENO.colors.textSecondary} />
                                     <Text style={styles.modalTransferenciaAliasLabel}>Alias</Text>
                                 </View>
                                 <View style={styles.modalTransferenciaAliasRow}>
@@ -1816,13 +1466,12 @@ export default function PantallaCheckout(props: any) {
                                         style={styles.modalTransferenciaAliasCopiar}
                                         activeOpacity={0.7}
                                     >
-                                        <Ionicons name="copy-outline" size={18} color={DESIGN.colors.accentSecondary} />
+                                        <Ionicons name="copy-outline" size={18} color={DISENO.colors.accent} />
                                         <Text style={styles.modalTransferenciaAliasCopiarText}>Copiar</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
-                            {/* CBU */}
                             <View style={styles.modalTransferenciaCbuContainer}>
                                 <Text style={styles.modalTransferenciaCbuLabel}>CBU</Text>
                                 <Text style={styles.modalTransferenciaCbuTexto} numberOfLines={1} adjustsFontSizeToFit>
@@ -1830,7 +1479,6 @@ export default function PantallaCheckout(props: any) {
                                 </Text>
                             </View>
 
-                            {/* Monto */}
                             <View style={styles.modalTransferenciaMontoContainer}>
                                 <Text style={styles.modalTransferenciaMontoLabel}>Monto a transferir</Text>
                                 <Text style={styles.modalTransferenciaMontoTexto}>
@@ -1838,19 +1486,17 @@ export default function PantallaCheckout(props: any) {
                                 </Text>
                             </View>
 
-                            {/* Pedido ID */}
                             <Text style={styles.modalTransferenciaPedidoId}>
                                 Pedido #{pedidoIdTransferencia}
                             </Text>
 
-                            {/* ✅ BOTONES CORREGIDOS - CON FLEX WRAP Y ANCHO FIJO */}
                             <View style={styles.modalTransferenciaBotones}>
                                 <TouchableOpacity
                                     style={[styles.modalTransferenciaBoton, styles.modalTransferenciaBotonSecundario]}
                                     onPress={cerrarModalTransferencia}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="checkmark-circle-outline" size={18} color={DESIGN.colors.textSecondary} />
+                                    <Ionicons name="checkmark-circle-outline" size={18} color={DISENO.colors.textSecondary} />
                                     <Text style={styles.modalTransferenciaBotonSecundarioText}>
                                         Ya transferí
                                     </Text>
@@ -1861,7 +1507,7 @@ export default function PantallaCheckout(props: any) {
                                     onPress={abrirBanco}
                                     activeOpacity={0.8}
                                 >
-                                    <Ionicons name="open-outline" size={18} color={DESIGN.colors.text} />
+                                    <Ionicons name="open-outline" size={18} color={DISENO.colors.text} />
                                     <Text style={styles.modalTransferenciaBotonPrincipalText}>
                                         Mercado Pago
                                     </Text>
@@ -1876,7 +1522,6 @@ export default function PantallaCheckout(props: any) {
                 </View>
             </Modal>
 
-            {/* ✅ TOAST */}
             <Toast
                 visible={toast.visible}
                 mensaje={toast.mensaje}
@@ -1888,12 +1533,12 @@ export default function PantallaCheckout(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS - TEMA CLARO CON SIMPSONFONT
 // ============================================================
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: DESIGN.colors.fondo,
+        backgroundColor: DISENO.colors.fondo,
     },
     backgroundGradient: {
         position: 'absolute',
@@ -1906,14 +1551,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: DESIGN.colors.surface + '10',
     },
     backButton: {
-        padding: 4,
+        padding: 10,
+        borderRadius: 14,
+        backgroundColor: DISENO.colors.surface,
+        ...DISENO.shadow.sm,
     },
+    // ✅ TÍTULO CON SIMPSONFONT
     title: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         letterSpacing: 1,
     },
     scroll: {
@@ -1922,8 +1570,10 @@ const styles = StyleSheet.create({
     section: {
         marginBottom: 20,
     },
+    // ✅ SECTION TITLE CON SIMPSONFONT
     sectionTitle: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 10,
         letterSpacing: 0.5,
     },
@@ -1939,7 +1589,9 @@ const styles = StyleSheet.create({
         marginRight: 12,
         marginTop: 12,
     },
+    // ✅ INPUT CON FUENTE REGULAR
     input: {
+        fontFamily: FUENTES.regular,
         flex: 1,
         paddingVertical: 12,
         paddingRight: 8,
@@ -1948,9 +1600,7 @@ const styles = StyleSheet.create({
         minHeight: 70,
         textAlignVertical: 'top',
     },
-    options: {
-        gap: 8,
-    },
+    options: { gap: 8 },
     option: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1965,20 +1615,25 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         gap: 8,
     },
+    // ✅ OPTION TEXT CON FUENTE REGULAR
     optionText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '600',
         flex: 1,
     },
+    // ✅ OPTION PRICE CON SIMPSONFONT
     optionPrice: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     botonMapa: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
         marginBottom: 10,
     },
+    // ✅ BOTON MAPA CON FUENTE REGULAR
     botonMapaText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '600',
         flex: 1,
         marginLeft: 8,
@@ -1986,11 +1641,11 @@ const styles = StyleSheet.create({
     sugerenciaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
         marginTop: 8,
         gap: 8,
     },
     sugerenciaText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
         flex: 1,
     },
@@ -2007,7 +1662,9 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 3,
     },
+    // ✅ INFO ENVIO CON FUENTE REGULAR
     infoEnvioText: {
+        fontFamily: FUENTES.regular,
         fontSize: 13,
         fontWeight: '500',
     },
@@ -2017,43 +1674,51 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderBottomWidth: 1,
     },
+    // ✅ PRODUCTO NOMBRE CON FUENTE REGULAR
     productoNombre: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
+    // ✅ PRODUCTO PRECIO CON SIMPSONFONT
     productoPrecio: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     resumenFila: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         marginBottom: 6,
     },
+    // ✅ RESUMEN TEXT CON FUENTE REGULAR
     resumenText: {
+        fontFamily: FUENTES.regular,
         opacity: 0.8,
     },
+    // ✅ RESUMEN VALOR CON SIMPSONFONT
     resumenValor: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     resumenTotal: {
         borderTopWidth: 1,
         paddingTop: 10,
         marginTop: 4,
     },
+    // ✅ TOTAL TEXT CON SIMPSONFONT
     totalText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
+    // ✅ TOTAL PRICE CON SIMPSONFONT
     totalPrice: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     botonConfirmar: {
         borderRadius: 16,
         overflow: 'hidden',
-        elevation: 8,
-        shadowColor: DESIGN.colors.accentSecondary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 20,
         marginTop: 10,
+        ...DISENO.shadow.md,
     },
     botonConfirmarGradient: {
         flexDirection: 'row',
@@ -2063,13 +1728,15 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         paddingHorizontal: 24,
     },
+    // ✅ BOTÓN CONFIRMAR CON SIMPSONFONT
     botonConfirmarText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         letterSpacing: 0.5,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.85)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
@@ -2078,20 +1745,23 @@ const styles = StyleSheet.create({
         width: '90%',
         maxWidth: 400,
         alignItems: 'center',
-        borderWidth: 2,
     },
-    modalIcon: {
-        marginBottom: 12,
-    },
+    modalIcon: { marginBottom: 12 },
+    // ✅ MODAL TITLE CON SIMPSONFONT
     modalTitle: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 8,
     },
+    // ✅ MODAL TEXT CON FUENTE REGULAR
     modalText: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         opacity: 0.8,
     },
+    // ✅ MODAL SUBTEXT CON FUENTE REGULAR
     modalSubtext: {
+        fontFamily: FUENTES.regular,
         marginTop: 12,
         fontWeight: '500',
     },
@@ -2104,7 +1774,7 @@ const styles = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: DESIGN.colors.accentSecondary,
+        backgroundColor: DISENO.colors.accent,
     },
     loadingUbicacion: {
         flexDirection: 'row',
@@ -2114,11 +1784,13 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: DESIGN.colors.border,
+        borderColor: DISENO.colors.border,
         gap: 10,
-        backgroundColor: DESIGN.colors.surface + '80',
+        backgroundColor: DISENO.colors.surface,
     },
+    // ✅ LOADING CON FUENTE REGULAR
     loadingUbicacionText: {
+        fontFamily: FUENTES.regular,
         fontSize: 13,
         fontWeight: '500',
     },
@@ -2133,15 +1805,20 @@ const styles = StyleSheet.create({
         gap: 6,
         flexWrap: 'wrap',
     },
+    // ✅ DIRECCION LABEL CON FUENTE REGULAR
     direccionPerfilLabel: {
+        fontFamily: FUENTES.regular,
         fontWeight: '600',
         opacity: 0.8,
     },
+    // ✅ DIRECCION TEXTO CON FUENTE REGULAR
     direccionPerfilTexto: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
         lineHeight: 20,
     },
     direccionPerfilSubtexto: {
+        fontFamily: FUENTES.regular,
         marginTop: 6,
         opacity: 0.6,
         fontStyle: 'italic',
@@ -2159,6 +1836,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     guardandoPerfilText: {
+        fontFamily: FUENTES.regular,
         fontSize: 13,
         fontWeight: '500',
     },
@@ -2172,9 +1850,12 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     ubicacionConfirmadaText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
+    // ✅ DATOS GUARDADOS CON FUENTE REGULAR
     datosGuardados: {
+        fontFamily: FUENTES.regular,
         fontSize: 11,
         marginTop: 4,
         opacity: 0.7,
@@ -2185,6 +1866,7 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     buscadorManualLabel: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
         marginBottom: 6,
         opacity: 0.7,
@@ -2193,7 +1875,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
     },
+    // ✅ BUSCADOR INPUT CON FUENTE REGULAR
     buscadorManualInput: {
+        fontFamily: FUENTES.regular,
         flex: 1,
         borderRadius: 12,
         paddingHorizontal: 14,
@@ -2205,51 +1889,54 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minWidth: 50,
     },
-    // ✅ ESTILOS PARA PAGO EN EFECTIVO
-    efectivoContainer: {
-        // Estilos aplicados dinámicamente
-    },
+    // EFECTIVO
+    efectivoContainer: {},
+    // ✅ EFECTIVO TITLE CON SIMPSONFONT
     efectivoTitle: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
+    // ✅ EFECTIVO SUBTITLE CON FUENTE REGULAR
     efectivoSubtitle: {
+        fontFamily: FUENTES.regular,
         opacity: 0.8,
     },
-    efectivoInputContainer: {
-        // Estilos aplicados dinámicamente
-    },
+    efectivoInputContainer: {},
     efectivoInputPrefix: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
+    // ✅ EFECTIVO INPUT CON SIMPSONFONT
     efectivoInput: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     efectivoInputSuffix: {
+        fontFamily: FUENTES.regular,
         opacity: 0.6,
     },
-    vueltoContainer: {
-        // Estilos aplicados dinámicamente
-    },
+    vueltoContainer: {},
+    // ✅ VUELTO LABEL CON FUENTE REGULAR
     vueltoLabel: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
+    // ✅ VUELTO MONTO CON SIMPSONFONT
     vueltoMonto: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
-    efectivoError: {
-        // Estilos aplicados dinámicamente
-    },
+    efectivoError: {},
     efectivoErrorText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-    efectivoSugerencia: {
-        // Estilos aplicados dinámicamente
-    },
+    efectivoSugerencia: {},
     efectivoSugerenciaText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-
-    // ✅ NUEVOS ESTILOS PARA BENEFICIOS
+    // BENEFICIOS
     beneficiosSection: {
         marginBottom: 12,
     },
@@ -2266,20 +1953,20 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: DESIGN.colors.accentSecondary + '15',
+        backgroundColor: DISENO.colors.accentSecondary + '15',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    beneficiosIcon: {
-        fontSize: 18,
-    },
-    beneficiosInfo: {
-        flex: 1,
-    },
+    beneficiosIcon: { fontSize: 18 },
+    beneficiosInfo: { flex: 1 },
+    // ✅ BENEFICIOS TITLE CON SIMPSONFONT
     beneficiosTitle: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
+    // ✅ BENEFICIOS DESC CON FUENTE REGULAR
     beneficiosDesc: {
+        fontFamily: FUENTES.regular,
         opacity: 0.8,
     },
     beneficiosList: {
@@ -2291,32 +1978,34 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: DESIGN.colors.surface,
+        backgroundColor: DISENO.colors.surface,
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: DESIGN.colors.border,
+        borderColor: DISENO.colors.border,
     },
+    // ✅ BENEFICIO TAG CON FUENTE REGULAR
     beneficioTagText: {
-        color: DESIGN.colors.textSecondary,
+        fontFamily: FUENTES.regular,
+        color: DISENO.colors.textSecondary,
         fontWeight: '500',
     },
     beneficioTagSub: {
-        color: DESIGN.colors.textTertiary,
+        fontFamily: FUENTES.regular,
+        color: DISENO.colors.textTertiary,
     },
     resumenBeneficio: {
-        backgroundColor: DESIGN.colors.accent + '08',
+        backgroundColor: DISENO.colors.accent + '08',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
         marginTop: 2,
     },
-
-    // ✅ MODAL TRANSFERENCIA - ESTILOS CORREGIDOS
+    // MODAL TRANSFERENCIA
     modalTransferenciaOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(0,0,0,0.5)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 16,
@@ -2343,19 +2032,17 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: DESIGN.colors.text + '15',
+        backgroundColor: DISENO.colors.text + '15',
         justifyContent: 'center',
         alignItems: 'center',
     },
+    // ✅ TRANSFERENCIA HEADER TITLE CON SIMPSONFONT
     modalTransferenciaHeaderTitle: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: DESIGN.colors.text,
+        fontFamily: FUENTES.display,
+        fontSize: 16,
+        fontWeight: '400',
+        color: DISENO.colors.text,
         letterSpacing: 0.3,
-    },
-    modalTransferenciaClose: {
-        padding: 8,
-        marginLeft: 4,
     },
     modalTransferenciaBodyScroll: {
         maxHeight: '80%',
@@ -2364,19 +2051,21 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 8,
     },
+    // ✅ MENSAJE CON FUENTE REGULAR
     modalTransferenciaMensaje: {
+        fontFamily: FUENTES.regular,
         fontSize: 13,
-        color: DESIGN.colors.textSecondary,
+        color: DISENO.colors.textSecondary,
         textAlign: 'center',
         marginBottom: 16,
         lineHeight: 18,
     },
     modalTransferenciaAliasContainer: {
-        backgroundColor: DESIGN.colors.accentSecondary + '08',
+        backgroundColor: DISENO.colors.accentSecondary + '08',
         borderRadius: 12,
         padding: 14,
         borderWidth: 1,
-        borderColor: DESIGN.colors.accentSecondary + '20',
+        borderColor: DISENO.colors.accentSecondary + '20',
         marginBottom: 12,
     },
     modalTransferenciaAliasHeader: {
@@ -2386,9 +2075,10 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
     modalTransferenciaAliasLabel: {
+        fontFamily: FUENTES.regular,
         fontSize: 11,
         fontWeight: '600',
-        color: DESIGN.colors.textSecondary,
+        color: DISENO.colors.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
@@ -2398,10 +2088,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         gap: 8,
     },
+    // ✅ ALIAS TEXTO CON SIMPSONFONT
     modalTransferenciaAliasTexto: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: DESIGN.colors.text,
+        fontFamily: FUENTES.display,
+        fontSize: 16,
+        fontWeight: '400',
+        color: DISENO.colors.text,
         letterSpacing: 0.5,
         flexShrink: 1,
     },
@@ -2412,34 +2104,37 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 6,
-        backgroundColor: DESIGN.colors.accentSecondary + '15',
+        backgroundColor: DISENO.colors.accent + '15',
         flexShrink: 0,
     },
     modalTransferenciaAliasCopiarText: {
+        fontFamily: FUENTES.regular,
         fontSize: 12,
         fontWeight: '600',
-        color: DESIGN.colors.accentSecondary,
+        color: DISENO.colors.accent,
     },
     modalTransferenciaCbuContainer: {
-        backgroundColor: DESIGN.colors.surfaceHover,
+        backgroundColor: DISENO.colors.surfaceHover,
         borderRadius: 10,
         padding: 12,
         borderWidth: 1,
-        borderColor: DESIGN.colors.border,
+        borderColor: DISENO.colors.border,
         marginBottom: 12,
     },
     modalTransferenciaCbuLabel: {
+        fontFamily: FUENTES.regular,
         fontSize: 10,
         fontWeight: '600',
-        color: DESIGN.colors.textTertiary,
+        color: DISENO.colors.textTertiary,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         marginBottom: 2,
     },
     modalTransferenciaCbuTexto: {
+        fontFamily: 'monospace',
         fontSize: 13,
         fontWeight: '500',
-        color: DESIGN.colors.text,
+        color: DISENO.colors.text,
         letterSpacing: 0.3,
     },
     modalTransferenciaMontoContainer: {
@@ -2447,26 +2142,29 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: DESIGN.colors.border,
+        borderColor: DISENO.colors.border,
         marginBottom: 12,
     },
     modalTransferenciaMontoLabel: {
+        fontFamily: FUENTES.regular,
         fontSize: 12,
-        color: DESIGN.colors.textSecondary,
+        color: DISENO.colors.textSecondary,
         marginBottom: 2,
     },
+    // ✅ MONTO CON SIMPSONFONT
     modalTransferenciaMontoTexto: {
-        fontSize: 28,
-        fontWeight: '700',
-        color: DESIGN.colors.accentSecondary,
+        fontFamily: FUENTES.display,
+        fontSize: 26,
+        fontWeight: '400',
+        color: DISENO.colors.accent,
     },
     modalTransferenciaPedidoId: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         fontSize: 13,
-        color: DESIGN.colors.textTertiary,
+        color: DISENO.colors.textTertiary,
         marginBottom: 16,
     },
-    // ✅ BOTONES CORREGIDOS
     modalTransferenciaBotones: {
         flexDirection: 'row',
         gap: 10,
@@ -2486,26 +2184,30 @@ const styles = StyleSheet.create({
         minWidth: 0,
     },
     modalTransferenciaBotonPrincipal: {
-        backgroundColor: DESIGN.colors.accentSecondary,
-        borderColor: DESIGN.colors.accentSecondary,
+        backgroundColor: DISENO.colors.accentSecondary,
+        borderColor: DISENO.colors.accentSecondary,
     },
     modalTransferenciaBotonSecundario: {
-        backgroundColor: DESIGN.colors.surfaceHover,
-        borderColor: DESIGN.colors.border,
+        backgroundColor: DISENO.colors.surfaceHover,
+        borderColor: DISENO.colors.border,
     },
+    // ✅ BOTÓN CON SIMPSONFONT
     modalTransferenciaBotonPrincipalText: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: DESIGN.colors.text,
+        fontFamily: FUENTES.display,
+        fontSize: 12,
+        fontWeight: '400',
+        color: DISENO.colors.text,
     },
     modalTransferenciaBotonSecundarioText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: DESIGN.colors.textSecondary,
+        fontFamily: FUENTES.display,
+        fontSize: 12,
+        fontWeight: '400',
+        color: DISENO.colors.textSecondary,
     },
     modalTransferenciaFooter: {
+        fontFamily: FUENTES.regular,
         fontSize: 11,
-        color: DESIGN.colors.textTertiary,
+        color: DISENO.colors.textTertiary,
         textAlign: 'center',
         lineHeight: 16,
         paddingBottom: 4,

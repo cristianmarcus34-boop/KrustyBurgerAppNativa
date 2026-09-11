@@ -1,4 +1,4 @@
-// stores/tiendaFavoritos.ts - VERSIÓN CON ELIMINAR
+// stores/tiendaFavoritos.ts - SIN RECARGA BLOQUEANTE
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Producto } from '../lib/tipos';
@@ -27,7 +27,7 @@ interface EstadoFavoritos {
     cargarFavoritos: (usuarioId: string) => Promise<void>;
     agregarFavorito: (usuarioId: string, producto: Producto) => Promise<void>;
     incrementarContador: (usuarioId: string, productoId: number) => Promise<void>;
-    eliminarFavorito: (usuarioId: string, productoId: number) => Promise<void>; // ✅ NUEVA FUNCIÓN
+    eliminarFavorito: (usuarioId: string, productoId: number) => Promise<void>;
     limpiarFavoritos: () => void;
 }
 
@@ -87,6 +87,7 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
         }
     },
 
+    // ✅ OPTIMIZADO: sin recarga bloqueante. Update local optimista.
     agregarFavorito: async (usuarioId, producto) => {
         try {
             const { data: existente, error: checkError } = await supabase
@@ -121,14 +122,20 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                     });
             }
 
-            await get().cargarFavoritos(usuarioId);
+            // ❌ ANTES: await get().cargarFavoritos(usuarioId);  ← 2 queries más, bloqueaba el JS thread
+            // ✅ AHORA: actualización local optimista, sin recargar
+            set((state) => {
+                const yaEsta = state.favoritos.some((f) => f.id === producto.id);
+                if (yaEsta) return state; // ya está, no hacemos nada
+                return { favoritos: [...state.favoritos, producto] };
+            });
         } catch (error) {
             console.error('Error agregando favorito:', error);
         }
     },
 
-    // ✅ NUEVA FUNCIÓN: ELIMINAR FAVORITO
-    eliminarFavorito: async (usuarioId: string, productoId: number) => {
+    // ✅ OPTIMIZADO: sin recarga bloqueante
+    eliminarFavorito: async (usuarioId, productoId) => {
         try {
             const { error } = await supabase
                 .from('favoritos')
@@ -141,8 +148,11 @@ export const tiendaFavoritos = create<EstadoFavoritos>((set, get) => ({
                 return;
             }
 
-            // Recargar favoritos
-            await get().cargarFavoritos(usuarioId);
+            // ❌ ANTES: await get().cargarFavoritos(usuarioId);
+            // ✅ AHORA: filtrado local, sin recargar
+            set((state) => ({
+                favoritos: state.favoritos.filter((f) => f.id !== productoId),
+            }));
         } catch (error) {
             console.error('Error eliminando favorito:', error);
         }

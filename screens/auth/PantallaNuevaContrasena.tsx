@@ -8,14 +8,27 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
+
 import { Colores } from '../../lib/colores';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import * as Linking from 'expo-linking';
+import { RootStackParamList } from '../../lib/tipos';
 
 const { width, height } = Dimensions.get('window');
 
-export default function PantallaNuevaContrasena(props: any) {
+// ✅ TIPADO DE NAVEGACIÓN - USANDO RootStackParamList
+type Navigation = {
+    navigate: <T extends keyof RootStackParamList>(
+        screen: T,
+        params?: RootStackParamList[T]
+    ) => void;
+    goBack: () => void;
+    reset: (options: { index: number; routes: { name: keyof RootStackParamList }[] }) => void;
+};
+
+export default function PantallaNuevaContrasena() {
     const [nuevaContrasena, setNuevaContrasena] = useState('');
     const [confirmarContrasena, setConfirmarContrasena] = useState('');
     const [cargando, setCargando] = useState(false);
@@ -24,26 +37,47 @@ export default function PantallaNuevaContrasena(props: any) {
     const [tokenRecibido, setTokenRecibido] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [debugInfo, setDebugInfo] = useState<string>('Esperando acción...');
-    const { actualizarContrasena } = tiendaAutenticacion();
+    const [autenticado, setAutenticado] = useState(false);
+    const [reenviando, setReenviando] = useState(false);
+    const [emailUsuario, setEmailUsuario] = useState<string | null>(null);
+
+    const { actualizarContrasena, resetearContrasena } = tiendaAutenticacion();
     const insets = useSafeAreaInsets();
+    const navigation = useNavigation<Navigation>();
+    const route = useRoute();
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(50)).current;
     const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
-    // ✅ RECIBIR EL TOKEN DE props.route.params
+    // ✅ RECIBIR EL TOKEN DE route.params
     useEffect(() => {
         console.log('🔍 Pantalla NuevaContrasena montada');
-        console.log('📦 props.route.params:', props.route?.params);
-        console.log('📦 props.route.params?.token:', props.route?.params?.token);
+        console.log('📦 route.params:', route.params);
 
-        const tokenFromParams = props.route?.params?.token;
+        const params = route.params as { token?: string } || {};
+        const tokenFromParams = params.token;
+
         if (tokenFromParams) {
             console.log('🔑 Token recibido desde params:', tokenFromParams.substring(0, 30) + '...');
             setTokenRecibido(tokenFromParams);
             setError(null);
             setDebugInfo('✅ Token recibido desde params');
-            autenticarConToken(tokenFromParams);
+
+            try {
+                const parts = tokenFromParams.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(atob(parts[1]));
+                    if (payload.email) {
+                        setEmailUsuario(payload.email);
+                        console.log('📧 Email extraído del token:', payload.email);
+                    }
+                }
+            } catch (e) {
+                console.log('⚠️ No se pudo extraer email del token');
+            }
+
+            setDebugInfo('✅ Token recibido. Presiona "Actualizar contraseña" para continuar.');
             return;
         }
 
@@ -52,14 +86,27 @@ export default function PantallaNuevaContrasena(props: any) {
                 const url = await Linking.getInitialURL();
                 console.log('🔗 URL inicial (fallback):', url);
                 if (url) {
-                    const tokenMatch = url.match(/token=([^&]+)/);
-                    if (tokenMatch) {
-                        const token = decodeURIComponent(tokenMatch[1]);
-                        console.log('🔑 Token extraído de URL (fallback):', token.substring(0, 30) + '...');
+                    let token = null;
+
+                    const hashMatch = url.match(/#access_token=([^&]+)/);
+                    if (hashMatch) {
+                        token = hashMatch[1];
+                        console.log('🔑 Token extraído del hash:', token.substring(0, 30) + '...');
+                    }
+
+                    if (!token) {
+                        const tokenMatch = url.match(/access_token=([^&]+)/);
+                        if (tokenMatch) {
+                            token = tokenMatch[1];
+                            console.log('🔑 Token extraído de URL:', token.substring(0, 30) + '...');
+                        }
+                    }
+
+                    if (token) {
                         setTokenRecibido(token);
                         setError(null);
                         setDebugInfo('✅ Token extraído de URL');
-                        autenticarConToken(token);
+                        setDebugInfo('✅ Token recibido. Presiona "Actualizar contraseña" para continuar.');
                     } else {
                         setDebugInfo('⚠️ URL sin token');
                     }
@@ -79,14 +126,25 @@ export default function PantallaNuevaContrasena(props: any) {
         const subscription = Linking.addEventListener('url', (event) => {
             console.log('🔗 Evento de deep link recibido:', event.url);
             const url = event.url;
-            const tokenMatch = url.match(/token=([^&]+)/);
-            if (tokenMatch) {
-                const token = decodeURIComponent(tokenMatch[1]);
+
+            let token = null;
+            const hashMatch = url.match(/#access_token=([^&]+)/);
+            if (hashMatch) {
+                token = hashMatch[1];
+            }
+            if (!token) {
+                const tokenMatch = url.match(/access_token=([^&]+)/);
+                if (tokenMatch) {
+                    token = tokenMatch[1];
+                }
+            }
+
+            if (token) {
                 console.log('🔑 Token extraído de evento:', token.substring(0, 30) + '...');
                 setTokenRecibido(token);
                 setError(null);
                 setDebugInfo('✅ Token recibido por evento');
-                autenticarConToken(token);
+                setDebugInfo('✅ Token recibido. Presiona "Actualizar contraseña" para continuar.');
             } else {
                 setDebugInfo('⚠️ Evento sin token');
             }
@@ -95,30 +153,117 @@ export default function PantallaNuevaContrasena(props: any) {
         return () => subscription.remove();
     }, []);
 
-    const autenticarConToken = async (token: string) => {
+    // ✅ FUNCIÓN PARA AUTENTICAR CON SUPABASE USANDO EL TOKEN
+    const autenticarConToken = async (token: string): Promise<boolean> => {
         try {
-            console.log('🔄 Autenticando con Supabase...');
+            console.log('🔄 Autenticando con Supabase usando token...');
             setDebugInfo('🔄 Autenticando...');
+
             const { data, error } = await supabase.auth.setSession({
                 access_token: token,
                 refresh_token: '',
             });
 
             if (error) {
-                console.error('❌ Error autenticando:', error);
-                setError('Token inválido o expirado');
-                setDebugInfo('❌ Error: ' + error.message);
-                Alert.alert('Error', 'El token de recuperación no es válido o ha expirado.');
-            } else {
-                console.log('✅ Autenticación exitosa');
-                setDebugInfo('✅ Autenticado correctamente');
-                Alert.alert('✅ Éxito', 'Token válido. Ingresa tu nueva contraseña.');
+                console.error('❌ Error autenticando con setSession:', error.message);
+
+                console.log('🔄 Intentando método alternativo con verifyOtp...');
+
+                try {
+                    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+                        token_hash: token,
+                        type: 'recovery',
+                    });
+
+                    if (verifyError) {
+                        console.error('❌ Error en verifyOtp:', verifyError.message);
+
+                        if (verifyError.message.toLowerCase().includes('expired') ||
+                            verifyError.message.toLowerCase().includes('invalid')) {
+                            setError('⏰ El enlace de recuperación ha expirado.');
+                            setDebugInfo('❌ Token expirado');
+                            return false;
+                        }
+
+                        setError('Token inválido o expirado. Solicita un nuevo enlace de recuperación.');
+                        setDebugInfo('❌ Token inválido');
+                        return false;
+                    }
+
+                    console.log('✅ Autenticación exitosa con verifyOtp');
+                    setAutenticado(true);
+                    setDebugInfo('✅ Autenticado correctamente');
+                    return true;
+
+                } catch (verifyErr) {
+                    console.error('❌ Error en verifyOtp:', verifyErr);
+                    setError('Error al verificar el token. Solicita un nuevo enlace.');
+                    setDebugInfo('❌ Error en verificación');
+                    return false;
+                }
             }
+
+            console.log('✅ Autenticación exitosa con setSession');
+            setAutenticado(true);
+            setDebugInfo('✅ Autenticado correctamente');
+            return true;
+
         } catch (error) {
             console.error('❌ Error en autenticación:', error);
             setError('Error al autenticar');
             setDebugInfo('❌ Error en autenticación');
-            Alert.alert('Error', 'Ocurrió un error al autenticar el token.');
+            return false;
+        }
+    };
+
+    // ✅ REENVIAR ENLACE DE RECUPERACIÓN
+    const reenviarEnlace = async () => {
+        if (!emailUsuario) {
+            Alert.alert(
+                'Correo no disponible',
+                'No pudimos identificar tu correo. Por favor, solicita un nuevo enlace desde la pantalla de recuperación.',
+                [
+                    {
+                        text: 'Ir a recuperación',
+                        onPress: () => navigation.navigate('ResetPassword'),
+                    },
+                    {
+                        text: 'Cancelar',
+                        style: 'cancel',
+                    },
+                ]
+            );
+            return;
+        }
+
+        setReenviando(true);
+        try {
+            console.log('📧 Reenviando enlace de recuperación a:', emailUsuario);
+            const resultado = await resetearContrasena(emailUsuario);
+
+            if (resultado.success) {
+                Alert.alert(
+                    '✅ Enlace reenviado',
+                    `Hemos enviado un nuevo enlace de recuperación a:\n\n📬 ${emailUsuario}\n\n⏰ El enlace expira en 1 hora.\n\n📌 IMPORTANTE:\n• Abre el enlace desde tu TELÉFONO\n• Revisa tu carpeta de SPAM`,
+                    [
+                        {
+                            text: 'Entendido',
+                            onPress: () => navigation.navigate('Login'),
+                        },
+                    ]
+                );
+            } else {
+                Alert.alert(
+                    'Error al reenviar',
+                    resultado.error || 'No se pudo reenviar el enlace. Intenta nuevamente.',
+                    [{ text: 'Entendido' }]
+                );
+            }
+        } catch (error) {
+            console.error('❌ Error reenviando enlace:', error);
+            Alert.alert('Error', 'No se pudo reenviar el enlace.');
+        } finally {
+            setReenviando(false);
         }
     };
 
@@ -143,19 +288,16 @@ export default function PantallaNuevaContrasena(props: any) {
         ]).start();
     }, []);
 
-    // ✅ FUNCIÓN DE ACTUALIZAR CON DEBUG EXTREMO
+    // ✅ FUNCIÓN DE ACTUALIZAR
     const manejarActualizar = async () => {
         console.log('========================================');
         console.log('📝 BOTÓN PRESIONADO - Actualizar contraseña');
         console.log('📝 Token recibido:', tokenRecibido?.substring(0, 30) + '...');
-        console.log('📝 Token es null?', tokenRecibido === null);
-        console.log('📝 Nueva contraseña:', nuevaContrasena ? '***' : 'VACÍA');
-        console.log('📝 Confirmar contraseña:', confirmarContrasena ? '***' : 'VACÍA');
+        console.log('📝 Autenticado:', autenticado);
         console.log('========================================');
 
         setDebugInfo('🔄 Procesando...');
 
-        // ✅ VALIDACIONES
         if (!nuevaContrasena || !confirmarContrasena) {
             console.log('❌ Error: Campos vacíos');
             setDebugInfo('❌ Campos vacíos');
@@ -187,34 +329,45 @@ export default function PantallaNuevaContrasena(props: any) {
         console.log('✅ Validaciones pasadas');
         setDebugInfo('✅ Validaciones OK');
 
-        // ✅ Verificar sesión
+        setCargando(true);
+
         try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            console.log('📝 Sesión activa:', session ? 'Sí' : 'No');
+            if (!autenticado) {
+                console.log('🔄 Autenticando con token...');
+                const authResult = await autenticarConToken(tokenRecibido);
 
-            if (sessionError) {
-                console.log('❌ Error obteniendo sesión:', sessionError);
-                setDebugInfo('❌ Error de sesión');
-                Alert.alert('Error', 'Error al verificar la sesión: ' + sessionError.message);
-                return;
-            }
+                if (!authResult) {
+                    setCargando(false);
 
-            if (!session) {
-                console.log('⚠️ No hay sesión, intentando autenticar...');
-                setDebugInfo('🔄 Autenticando...');
-                await autenticarConToken(tokenRecibido);
-                const { data: { session: newSession } } = await supabase.auth.getSession();
-                if (!newSession) {
-                    console.log('❌ No se pudo establecer sesión');
-                    setDebugInfo('❌ Sesión fallida');
+                    Alert.alert(
+                        '⏰ Enlace expirado',
+                        'El enlace de recuperación ha expirado o es inválido.\n\n¿Quieres reenviar un nuevo enlace a tu correo?',
+                        [
+                            {
+                                text: 'Reenviar enlace',
+                                onPress: reenviarEnlace,
+                            },
+                            {
+                                text: 'Cancelar',
+                                style: 'cancel',
+                                onPress: () => navigation.navigate('Login'),
+                            },
+                        ]
+                    );
+                    return;
+                }
+
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    setCargando(false);
                     Alert.alert('Error', 'No se pudo establecer sesión. El token puede haber expirado.');
                     return;
                 }
+                setAutenticado(true);
             }
 
-            console.log('✅ Sesión verificada. Actualizando...');
-            setDebugInfo('🔄 Actualizando...');
-            setCargando(true);
+            console.log('✅ Sesión verificada. Actualizando contraseña...');
+            setDebugInfo('🔄 Actualizando contraseña...');
 
             const resultado = await actualizarContrasena(nuevaContrasena);
             console.log('📝 Resultado:', resultado);
@@ -226,11 +379,17 @@ export default function PantallaNuevaContrasena(props: any) {
                 setDebugInfo('✅ ¡Éxito!');
                 Alert.alert(
                     '✅ ¡Éxito!',
-                    'Tu contraseña ha sido actualizada correctamente',
+                    'Tu contraseña ha sido actualizada correctamente.\n\nAhora puedes iniciar sesión con tu nueva contraseña.',
                     [
                         {
                             text: 'Iniciar sesión',
-                            onPress: () => props.navigation.navigate('Login'),
+                            onPress: () => {
+                                supabase.auth.signOut();
+                                navigation.reset({
+                                    index: 0,
+                                    routes: [{ name: 'Login' }],
+                                });
+                            },
                         },
                     ]
                 );
@@ -257,6 +416,10 @@ export default function PantallaNuevaContrasena(props: any) {
     const labelSize = isTablet ? 16 : isSmallPhone ? 13 : 14;
     const inputSize = isTablet ? 18 : isSmallPhone ? 15 : 16;
     const buttonTextSize = isTablet ? 18 : isSmallPhone ? 15 : 16;
+
+    // ✅ Determinar si el token es válido o expiró
+    const tokenValido = tokenRecibido !== null && !error?.includes('expirado') && !error?.includes('expired');
+    const camposHabilitados = tokenValido && !cargando;
 
     return (
         <LinearGradient
@@ -292,7 +455,7 @@ export default function PantallaNuevaContrasena(props: any) {
                     >
                         <TouchableOpacity
                             style={estilos.botonVolver}
-                            onPress={() => props.navigation.goBack()}
+                            onPress={() => navigation.goBack()}
                             activeOpacity={0.7}
                         >
                             <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={Colores.frinkAzul} />
@@ -303,12 +466,18 @@ export default function PantallaNuevaContrasena(props: any) {
                             <Text style={[estilos.titulo, { fontSize: tituloSize, color: Colores.frinkAzul }]}>
                                 Nueva Contraseña
                             </Text>
-                            <Text style={[estilos.subtitulo, { fontSize: subtituloSize, color: tokenRecibido ? Colores.verdeClaro : Colores.frinkGris }]}>
-                                {tokenRecibido ? '✅ Token válido. Ingresa tu nueva contraseña.' : '"Glaaaven! Actualizá tu clave!" 🧪'}
+                            <Text style={[estilos.subtitulo, { fontSize: subtituloSize, color: tokenValido ? Colores.verdeClaro : Colores.secundario }]}>
+                                {tokenValido
+                                    ? '✅ Token válido. Ingresa tu nueva contraseña.'
+                                    : error?.includes('expirado') || error?.includes('expired')
+                                        ? '⏰ El enlace ha expirado'
+                                        : tokenRecibido
+                                            ? '⚠️ Token inválido. Solicita un nuevo enlace.'
+                                            : '"Glaaaven! Actualizá tu clave!" 🧪'}
                             </Text>
-                            {tokenRecibido && (
+                            {tokenValido && (
                                 <Text style={[estilos.tokenInfo, { fontSize: isTablet ? 12 : 10, color: Colores.verdeClaro }]}>
-                                    🔑 Token recibido correctamente
+                                    ✅ Token válido
                                 </Text>
                             )}
                             {error && (
@@ -316,7 +485,11 @@ export default function PantallaNuevaContrasena(props: any) {
                                     ⚠️ {error}
                                 </Text>
                             )}
-                            {/* ✅ DEBUG INFO */}
+                            {emailUsuario && (
+                                <Text style={[estilos.emailInfo, { fontSize: isTablet ? 12 : 10, color: Colores.frinkGris }]}>
+                                    📧 {emailUsuario}
+                                </Text>
+                            )}
                             <Text style={[estilos.debugInfo, { fontSize: isTablet ? 10 : 8, color: Colores.frinkGris }]}>
                                 🐛 {debugInfo}
                             </Text>
@@ -345,6 +518,7 @@ export default function PantallaNuevaContrasena(props: any) {
                                 placeholderTextColor={Colores.frinkGris + '60'}
                                 secureTextEntry={!mostrarContrasena1}
                                 selectionColor={Colores.frinkAzul}
+                                editable={camposHabilitados}
                             />
                             <TouchableOpacity
                                 onPress={() => setMostrarContrasena1(!mostrarContrasena1)}
@@ -371,6 +545,7 @@ export default function PantallaNuevaContrasena(props: any) {
                                 placeholderTextColor={Colores.frinkGris + '60'}
                                 secureTextEntry={!mostrarContrasena2}
                                 selectionColor={Colores.frinkAzul}
+                                editable={camposHabilitados}
                             />
                             <TouchableOpacity
                                 onPress={() => setMostrarContrasena2(!mostrarContrasena2)}
@@ -384,17 +559,13 @@ export default function PantallaNuevaContrasena(props: any) {
                             </TouchableOpacity>
                         </View>
 
-                        {/* ✅ BOTÓN DE ACTUALIZAR CON DEBUG VISIBLE */}
                         <TouchableOpacity
                             style={[
                                 estilos.boton,
-                                (!tokenRecibido) && { opacity: 0.5 }
+                                (!tokenValido || cargando) && { opacity: 0.5 }
                             ]}
-                            onPress={() => {
-                                console.log('👆👆👆 BOTÓN DE ACTUALIZAR PRESIONADO 👆👆👆');
-                                manejarActualizar();
-                            }}
-                            disabled={cargando || !tokenRecibido}
+                            onPress={manejarActualizar}
+                            disabled={!tokenValido || cargando}
                             activeOpacity={0.8}
                         >
                             <LinearGradient
@@ -409,44 +580,37 @@ export default function PantallaNuevaContrasena(props: any) {
                                     <>
                                         <Ionicons name="save" size={buttonTextSize + 4} color={Colores.frinkBlanco} />
                                         <Text style={[estilos.textoBoton, { fontSize: buttonTextSize, color: Colores.frinkBlanco }]}>
-                                            {tokenRecibido ? 'Actualizar contraseña' : '⏳ Esperando token...'}
+                                            {tokenValido ? 'Actualizar contraseña' : '⏳ Token inválido'}
                                         </Text>
                                     </>
                                 )}
                             </LinearGradient>
                         </TouchableOpacity>
 
-                        {/* ✅ BOTÓN DE PRUEBA - SIEMPRE FUNCIONAL */}
-                        <TouchableOpacity
-                            style={{
-                                marginTop: 16,
-                                padding: 16,
-                                backgroundColor: '#FF6B6B',
-                                borderRadius: 12,
-                                alignItems: 'center',
-                                borderWidth: 2,
-                                borderColor: '#FFFFFF',
-                            }}
-                            onPress={() => {
-                                console.log('🧪🧪🧪 BOTÓN DE PRUEBA PRESIONADO 🧪🧪🧪');
-                                setDebugInfo('🧪 Botón de prueba presionado');
-                                Alert.alert(
-                                    '¡Prueba!',
-                                    'El botón de prueba funciona correctamente.\n\n' +
-                                    'Token: ' + (tokenRecibido ? '✅ Recibido' : '❌ No recibido') + '\n' +
-                                    'Debug: ' + debugInfo
-                                );
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
-                                🧪 BOTÓN DE PRUEBA
-                            </Text>
-                        </TouchableOpacity>
+                        {/* ✅ Botón para reenviar enlace si el token expiró */}
+                        {!tokenValido && tokenRecibido && (
+                            <TouchableOpacity
+                                style={estilos.botonReenviar}
+                                onPress={reenviarEnlace}
+                                disabled={reenviando}
+                                activeOpacity={0.7}
+                            >
+                                {reenviando ? (
+                                    <ActivityIndicator size="small" color={Colores.frinkAzul} />
+                                ) : (
+                                    <>
+                                        <Ionicons name="refresh-outline" size={20} color={Colores.frinkAzul} />
+                                        <Text style={estilos.botonReenviarTexto}>
+                                            Reenviar enlace de recuperación
+                                        </Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity
                             style={estilos.enlaceLogin}
-                            onPress={() => props.navigation.navigate('Login')}
+                            onPress={() => navigation.navigate('Login')}
                             activeOpacity={0.6}
                         >
                             <Text style={[estilos.enlaceLoginTexto, { fontSize: isTablet ? 15 : 13, color: Colores.frinkGris }]}>
@@ -505,6 +669,10 @@ const estilos = StyleSheet.create({
         marginTop: 4,
         opacity: 0.8,
     },
+    emailInfo: {
+        marginTop: 4,
+        opacity: 0.6,
+    },
     debugInfo: {
         marginTop: 8,
         opacity: 0.6,
@@ -560,6 +728,23 @@ const estilos = StyleSheet.create({
     textoBoton: {
         fontWeight: '800',
         letterSpacing: 1,
+    },
+    botonReenviar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: Colores.frinkAzul + '10',
+        borderWidth: 1,
+        borderColor: Colores.frinkAzul + '20',
+    },
+    botonReenviarTexto: {
+        fontSize: 14,
+        color: Colores.frinkAzul,
+        fontWeight: '600',
     },
     enlaceLogin: {
         marginTop: 16,
