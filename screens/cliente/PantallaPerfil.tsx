@@ -743,6 +743,23 @@ export default function PantallaPerfil(props: any) {
               <Text style={[styles.guestSubText, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12 }]}>
                 Inicia sesión para acceder a tus pedidos, puntos y recompensas
               </Text>
+
+              <TouchableOpacity
+                style={styles.loginButtonGuest}
+                onPress={() => props.navigation.navigate('Login')} // Ajusta 'Login' según el nombre de tu ruta de autenticación
+              >
+                <LinearGradient
+                  colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
+                  style={styles.loginButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="log-in-outline" size={18} color={DISENO.colors.surface} />
+                  <Text style={[styles.loginButtonText, { fontSize: isTablet ? 15 : 13 }]}>
+                    Iniciar sesión / Registrarse
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           )}
         </Animated.View>
@@ -1770,5 +1787,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     marginBottom: 8,
+  },
+  loginButtonGuest: {
+    borderRadius: DISENO.radius.md,
+    overflow: 'hidden',
+    marginTop: 16,
+    width: '100%',
+    maxWidth: 250,
+  },
+  loginButtonGradient: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loginButtonText: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.surface,
   },
 });

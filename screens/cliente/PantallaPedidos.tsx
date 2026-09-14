@@ -35,7 +35,7 @@ const ESTADOS_CONFIG: Record<string, { label: string; icono: keyof typeof Ionico
 };
 
 export default function PantallaPedidos(props: any) {
-  const { pedidos, cargando, cargarPedidosUsuario } = tiendaPedidos();
+  const { pedidos, cargando, cargarPedidosUsuario, limpiarPedidos } = tiendaPedidos();
   const { perfil } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const [refrescando, setRefrescando] = useState(false);
@@ -48,9 +48,12 @@ export default function PantallaPedidos(props: any) {
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    if (perfil) {
+    if (perfil?.id) {
       cargarPedidosUsuario(perfil.id);
+    } else {
+      limpiarPedidos();
     }
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
@@ -59,7 +62,7 @@ export default function PantallaPedidos(props: any) {
 
   const manejarRefresh = async () => {
     setRefrescando(true);
-    if (perfil) {
+    if (perfil?.id) {
       await cargarPedidosUsuario(perfil.id);
     }
     setRefrescando(false);
@@ -69,7 +72,6 @@ export default function PantallaPedidos(props: any) {
     return ESTADOS_CONFIG[estado] || ESTADOS_CONFIG.pendiente;
   };
 
-  // ✅ Tamaños (Simpsonfont reducido)
   const paddingHorizontal = isTablet ? 40 : isSmall ? 12 : 16;
   const tituloSize = isTablet ? 24 : isSmall ? 17 : 20;
   const tarjetaPadding = isTablet ? 20 : isSmall ? 12 : 16;
@@ -101,7 +103,6 @@ export default function PantallaPedidos(props: any) {
         onPress={() => props.navigation.navigate('Seguimiento', { pedidoId: item.id })}
         activeOpacity={0.8}
       >
-        {/* ENCABEZADO */}
         <View style={styles.cardHeader}>
           <View style={styles.pedidoInfo}>
             <View style={[
@@ -115,7 +116,6 @@ export default function PantallaPedidos(props: any) {
               <Ionicons name={estadoInfo.icono} size={iconSize} color={estadoInfo.color} />
             </View>
             <View style={styles.pedidoTexto}>
-              {/* ✅ PEDIDO ID CON SIMPSONFONT */}
               <Text style={[styles.pedidoId, { fontSize: pedidoIdSize, color: DISENO.colors.text }]}>
                 Pedido #{item.id}
               </Text>
@@ -153,10 +153,8 @@ export default function PantallaPedidos(props: any) {
           </View>
         </View>
 
-        {/* DETALLES Y PRECIO */}
         <View style={[styles.detalles, { borderTopColor: DISENO.colors.border }]}>
           <View>
-            {/* ✅ TOTAL CON SIMPSONFONT */}
             <Text style={[styles.total, { fontSize: totalSize, color: DISENO.colors.accent }]}>
               {formatearPrecio(item.total || 0)}
             </Text>
@@ -174,7 +172,6 @@ export default function PantallaPedidos(props: any) {
           </View>
         </View>
 
-        {/* INFORMACIÓN DE ENVÍO */}
         {mostrarInfoEnvio && (
           <View style={[
             styles.infoEnvioContainer,
@@ -238,7 +235,6 @@ export default function PantallaPedidos(props: any) {
 
   return (
     <View style={styles.container}>
-      {/* ✅ FONDO TEMA CLARO */}
       <LinearGradient
         colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
@@ -246,7 +242,6 @@ export default function PantallaPedidos(props: any) {
         end={{ x: 1, y: 1 }}
       />
 
-      {/* HEADER */}
       <View style={[
         styles.header,
         {
@@ -255,7 +250,6 @@ export default function PantallaPedidos(props: any) {
           paddingBottom: isTablet ? 16 : isSmall ? 8 : 12,
         }
       ]}>
-        {/* ✅ TÍTULO CON SIMPSONFONT */}
         <Text style={[styles.title, { fontSize: tituloSize, color: DISENO.colors.text }]}>
           📋 Mis Pedidos
         </Text>
@@ -266,7 +260,6 @@ export default function PantallaPedidos(props: any) {
         </View>
       </View>
 
-      {/* LISTA */}
       <View style={{ flex: 1 }}>
         {cargando ? (
           <View style={styles.loadingContainer}>
@@ -307,7 +300,6 @@ export default function PantallaPedidos(props: any) {
                   size={isTablet ? 80 : isSmall ? 50 : 60}
                   color={DISENO.colors.textTertiary + '40'}
                 />
-                {/* ✅ EMPTY CON SIMPSONFONT */}
                 <Text style={[styles.emptyText, {
                   fontSize: isTablet ? 18 : isSmall ? 15 : 16,
                   color: DISENO.colors.text,
@@ -329,9 +321,6 @@ export default function PantallaPedidos(props: any) {
   );
 }
 
-// ============================================================
-// 🎨 ESTILOS - TEMA CLARO CON SIMPSONFONT
-// ============================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -349,7 +338,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   title: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -360,7 +348,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  // ✅ CONTADOR CON FUENTE REGULAR
   counter: {
     fontFamily: FUENTES.regular,
     fontWeight: '500',
@@ -372,7 +359,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  // ✅ LOADING CON FUENTE REGULAR
   loadingText: {
     fontFamily: FUENTES.regular,
     fontWeight: '400',
@@ -405,12 +391,10 @@ const styles = StyleSheet.create({
   pedidoTexto: {
     flex: 1,
   },
-  // ✅ PEDIDO ID CON SIMPSONFONT
   pedidoId: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
-  // ✅ FECHA CON FUENTE REGULAR
   fecha: {
     fontFamily: FUENTES.regular,
     marginTop: 2,
@@ -420,7 +404,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginLeft: 8,
   },
-  // ✅ ESTADO CON FUENTE REGULAR (texto pequeño)
   estadoTexto: {
     fontFamily: FUENTES.regular,
     fontWeight: '600',
@@ -433,12 +416,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: 10,
   },
-  // ✅ TOTAL CON SIMPSONFONT
   total: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
-  // ✅ CANTIDAD CON FUENTE REGULAR
   cantidadItems: {
     fontFamily: FUENTES.regular,
     marginTop: 2,
@@ -449,7 +430,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  // ✅ VER DETALLE CON FUENTE REGULAR
   verDetalle: {
     fontFamily: FUENTES.regular,
     fontWeight: '500',
@@ -464,7 +444,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  // ✅ INFO ENVÍO CON FUENTE REGULAR
   infoEnvioTexto: {
     fontFamily: FUENTES.regular,
     fontWeight: '400',
@@ -475,14 +454,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 80,
   },
-  // ✅ EMPTY CON SIMPSONFONT
   emptyText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     marginTop: 16,
     textAlign: 'center',
   },
-  // ✅ SUBTEXT CON FUENTE REGULAR
   emptySubText: {
     fontFamily: FUENTES.regular,
     textAlign: 'center',

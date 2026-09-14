@@ -351,7 +351,7 @@ export default function PantallaInicio(props: any) {
                   }
                 ]}
               >
-                Hola, bienvenido a Krusty Burger!
+                Hola
               </Text>
               {/* ✅ NOMBRE CON SIMPSONFONT */}
               <Text
@@ -441,6 +441,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginTop: 0,
     marginBottom: 16,
   },
   headerLeft: {
@@ -460,17 +461,18 @@ const styles = StyleSheet.create({
   bienvenidaImagen: {
     borderRadius: 999,
     backgroundColor: 'transparent',
-    marginTop: 20,
+    marginTop: -100,
     marginBottom: -300,
     marginLeft: 0,
   },
   logoBienvenida: {
     backgroundColor: 'transparent',
-    marginBottom: 12,
+    marginBottom: -100,
     marginLeft: 0,
+    marginTop: 0,
   },
   saludoContainer: {
-    marginTop: 4,
+    marginTop: 2,
   },
   // ✅ GREETING CON FUENTE REGULAR
   headerGreeting: {
@@ -478,6 +480,7 @@ const styles = StyleSheet.create({
     color: DISENO.colors.textSecondary,
     letterSpacing: 0.3,
     fontWeight: '400',
+    marginBottom: 2,
   },
   // ✅ NOMBRE CON SIMPSONFONT
   headerName: {
@@ -485,7 +488,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: DISENO.colors.text,
     letterSpacing: -0.5,
-    marginTop: 2,
+    marginTop: 0,
   },
   headerButtonAdmin: {
     borderRadius: DISENO.radius.full,

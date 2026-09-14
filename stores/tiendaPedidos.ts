@@ -1,3 +1,4 @@
+// stores/tiendaPedidos.ts
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Pedido } from '../lib/tipos';
@@ -12,6 +13,7 @@ interface EstadoPedidos {
   actualizarEstado: (idPedido: number, estado: string) => Promise<void>;
   actualizarUbicacionRepartidor: (idPedido: number, latitud: number, longitud: number) => Promise<void>;
   crearPedido: (datos: Partial<Pedido>) => Promise<{ error: string | null; id: number | null }>;
+  limpiarPedidos: () => void;
 }
 
 export const tiendaPedidos = create<EstadoPedidos>((set, get) => ({
@@ -101,4 +103,6 @@ export const tiendaPedidos = create<EstadoPedidos>((set, get) => ({
       return { error: error.message || 'Error desconocido', id: null };
     }
   },
+
+  limpiarPedidos: () => set({ pedidos: [], pedidoActual: null, cargando: false }),
 }));
