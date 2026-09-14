@@ -132,6 +132,8 @@ export default function PantallaInicio(props: any) {
     padding: responsive.getEspaciado('LG'),
     categoriaWidth: responsive.isDesktop ? SCREEN_WIDTH * 0.18 :
       responsive.isTablet ? SCREEN_WIDTH * 0.25 : SCREEN_WIDTH * 0.35,
+    favoritoWidth: responsive.isDesktop ? SCREEN_WIDTH * 0.22 :
+      responsive.isTablet ? SCREEN_WIDTH * 0.30 : SCREEN_WIDTH * 0.42,
     logoSize: responsive.getValor({ tablet: 600, normal: 600, small: 115 }),
     bienvenidaSize: responsive.getValor({ tablet: 200, normal: 350, small: 120 }),
   }), [responsive]);
@@ -269,6 +271,57 @@ export default function PantallaInicio(props: any) {
   }, [tamanos, cantidadProductos, ofertas, responsive]);
 
   // ============================================================
+  // ⭐ RENDER DE FAVORITO RÁPIDO
+  // ============================================================
+  const renderFavorito = useCallback(({ item }: { item: any }) => {
+    const producto = item.productos || item;
+    if (!producto) return null;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.favoritoItem,
+          {
+            width: tamanos.favoritoWidth,
+            backgroundColor: DISENO.colors.surface,
+            ...DISENO.shadow.sm,
+          }
+        ]}
+        onPress={() => props.navigation.navigate('DetalleProducto', { producto })}
+        activeOpacity={0.8}
+      >
+        <View style={styles.favoritoImageContainer}>
+          <Image
+            source={{ uri: producto.imagen || 'https://via.placeholder.com/150' }}
+            style={styles.favoritoImagen}
+            resizeMode="cover"
+          />
+          <View style={styles.favoritoBadge}>
+            <Ionicons name="heart" size={14} color={DISENO.colors.danger} />
+          </View>
+        </View>
+
+        <View style={styles.favoritoInfo}>
+          <Text style={styles.favoritoNombre} numberOfLines={1}>
+            {producto.nombre}
+          </Text>
+          <View style={styles.favoritoFooter}>
+            <Text style={styles.favoritoPrecio}>
+              {formatearPrecio(producto.precio)}
+            </Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => agregarProducto(producto)}
+            >
+              <Ionicons name="add" size={18} color={DISENO.colors.text} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [tamanos.favoritoWidth, props.navigation, agregarProducto]);
+
+  // ============================================================
   // 🏗️ RENDER PRINCIPAL
   // ============================================================
   const padding = tamanos.padding;
@@ -386,8 +439,33 @@ export default function PantallaInicio(props: any) {
           </View>
         </View>
 
+        {/* ⭐ SECCIÓN DE FAVORITOS RÁPIDOS */}
+        {favoritos && favoritos.length > 0 && (
+          <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 17 }) }
+              ]}
+            >
+              ⭐ Tus Favoritos
+            </Text>
+
+            <FlatList
+              horizontal
+              data={favoritos}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+              renderItem={renderFavorito}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              snapToInterval={tamanos.favoritoWidth + 12}
+              decelerationRate="fast"
+            />
+          </View>
+        )}
+
         {/* CATEGORÍAS */}
-        <View style={[styles.categoriasContainer, { paddingHorizontal: padding }]}>
+        <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
           {/* ✅ TÍTULO "CATEGORÍAS" CON SIMPSONFONT */}
           <Text
             style={[
@@ -406,7 +484,7 @@ export default function PantallaInicio(props: any) {
             keyExtractor={(item) => item.id}
             renderItem={renderCategoria}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriasList}
+            contentContainerStyle={styles.horizontalList}
             snapToInterval={tamanos.categoriaWidth + 12}
             decelerationRate="fast"
             snapToAlignment="start"
@@ -503,7 +581,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: DISENO.radius.full,
   },
-  categoriasContainer: {
+  seccionContainer: {
     marginVertical: 8,
   },
   // ✅ TÍTULO DE SECCIÓN CON SIMPSONFONT
@@ -514,7 +592,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 14,
   },
-  categoriasList: {
+  horizontalList: {
     paddingVertical: 4,
     gap: 12,
   },
@@ -552,6 +630,58 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.6,
     marginTop: 1,
+  },
+  // Estilos para la tarjeta de Favoritos
+  favoritoItem: {
+    borderRadius: DISENO.radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: DISENO.colors.surfaceHover,
+    marginRight: 12,
+  },
+  favoritoImageContainer: {
+    width: '100%',
+    height: 110,
+    position: 'relative',
+    backgroundColor: DISENO.colors.surfaceHover,
+  },
+  favoritoImagen: {
+    width: '100%',
+    height: '100%',
+  },
+  favoritoBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: DISENO.colors.surface,
+    padding: 6,
+    borderRadius: DISENO.radius.full,
+    ...DISENO.shadow.sm,
+  },
+  favoritoInfo: {
+    padding: 10,
+  },
+  favoritoNombre: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: DISENO.colors.text,
+    marginBottom: 6,
+  },
+  favoritoFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  favoritoPrecio: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    color: DISENO.colors.accent,
+    fontWeight: '600',
+  },
+  addButton: {
+    backgroundColor: DISENO.colors.accent,
+    padding: 6,
+    borderRadius: DISENO.radius.full,
   },
   footerSpacing: {
     height: 20,

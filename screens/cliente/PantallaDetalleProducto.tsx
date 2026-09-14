@@ -94,10 +94,18 @@ export default function PantallaDetalleProducto(props: any) {
     }
     , [producto]);
 
-  // ✅ ¿Es favorito?
+  // ✅ ¿Es favorito? (Con conversión de seguridad a string)
   const esFavorito = useMemo(() => {
     if (!producto?.id) return false;
-    return favoritos.some((f: any) => f.id === producto.id);
+    const prodIdStr = String(producto.id);
+
+    return favoritos.some((f: any) => {
+      const fProdId = f.producto_id ? String(f.producto_id) : null;
+      const fId = f.id ? String(f.id) : null;
+      const fNestedProdId = f.productos?.id ? String(f.productos.id) : null;
+
+      return fProdId === prodIdStr || fId === prodIdStr || fNestedProdId === prodIdStr;
+    });
   }, [favoritos, producto]);
 
   // ✅ ¿Está disponible?
