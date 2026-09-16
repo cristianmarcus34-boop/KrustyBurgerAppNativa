@@ -33,12 +33,12 @@ export default function SplashScreen({ onFinish, duration = 2500, onLayoutReady 
         Animated.parallel([
             Animated.timing(scaleAnim, {
                 toValue: 1,
-                duration: 800,
+                duration: 400,
                 useNativeDriver: true,
             }),
             Animated.timing(opacityAnim, {
                 toValue: 1,
-                duration: 600,
+                duration: 300,
                 useNativeDriver: true,
             }),
         ]).start();
