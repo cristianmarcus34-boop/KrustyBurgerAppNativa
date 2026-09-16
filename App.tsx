@@ -136,9 +136,9 @@ import PantallaTransmision from './screens/repartidor/PantallaTransmision';
 // ============================================================
 // ⏱️ CONSTANTES DE TIMING DEL SPLASH
 // ============================================================
-const SPLASH_MIN_DURATION = 2000;   // Mínimo 1.2s para que se vea la animación
-const SPLASH_MAX_DURATION = 3500;   // Máximo 2.5s antes de forzar la salida
-const SPLASH_LOGO_FADE_DURATION = 900;   // 👈 NUEVO: tiempo que tarda el logo custom en aparecer
+const SPLASH_MIN_DURATION = 1600;   // Mínimo 1.2s para que se vea la animación
+const SPLASH_MAX_DURATION = 2300;   // Máximo 2.5s antes de forzar la salida
+const SPLASH_LOGO_FADE_DURATION = 800;   // 👈 NUEVO: tiempo que tarda el logo custom en aparecer
 
 // ============================================================
 // 🎨 THEME DE NAVEGACIÓN CON FONDO BLANCO
