@@ -28,7 +28,7 @@ const temaApp = {
         activo: '#f7f7f1',
         inactivo: 'rgb(247, 222, 222)',
         sombra: 'rgba(241, 5, 5, 0.91)',
-        gradiente: ['rgba(197, 46, 46, 0.91)', 'rgba(148, 13, 13, 0.85)'] as const,
+        gradiente: ['rgba(134, 13, 13, 0.91)', 'rgba(148, 13, 13, 0.85)'] as const,
     },
 };
 

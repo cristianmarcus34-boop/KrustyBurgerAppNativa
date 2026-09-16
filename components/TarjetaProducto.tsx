@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Producto } from '../lib/tipos';
 import { Colores, getTematica } from '../lib/colores';
+import { tiendaFavoritos } from '../stores/tiendaFavoritos';
+import { tiendaAutenticacion } from '../stores/tiendaAutenticacion';
 
 // ✅ IMPORTAR FORMATEADOR DE PRECIOS
 import { formatearPrecio } from '../lib/formateador';
@@ -28,6 +30,13 @@ interface Props {
 
 export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGrid = true }: Props) {
   const temaKrusty = getTematica('krusty');
+  const { perfil } = tiendaAutenticacion();
+  const { favoritos, toggleFavorito } = tiendaFavoritos() as any;
+
+  // ✅ Verificar si este producto es favorito
+  const esFavorito = favoritos.some(
+    (fav: any) => (fav.producto_id === producto.id || fav.id === producto.id)
+  );
 
   // ✅ Animaciones
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -100,6 +109,12 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
     }, 1500);
   };
 
+  const handleToggleFavorito = () => {
+    if (perfil?.id) {
+      toggleFavorito(perfil.id, producto.id);
+    }
+  };
+
   // ✅ Obtener color de categoría
   const getColorCategoria = (categoria: string) => {
     const colores: Record<string, string> = {
@@ -115,7 +130,7 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
   const colorCategoria = getColorCategoria(producto.categoria || '');
   const isDisponible = producto.disponible !== false;
   const esPopular = producto.popular || producto.precio < 5;
-  const esPremium = producto.precio > 15; // ✅ Definimos qué es premium
+  const esPremium = producto.precio > 15;
 
   // ✅ TAMAÑOS RESPONSIVOS
   const isTablet = width >= 768;
@@ -133,7 +148,6 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
     cardWidth = width - 32;
   }
 
-  // ✅ Tamaños para modo grid
   const imagenHeight = modoGrid
     ? (isTablet ? 140 : isSmallPhone ? 100 : 120)
     : (isTablet ? 180 : 150);
@@ -228,6 +242,28 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
             </View>
           )}
 
+          {/* ⭐ BOTÓN DE FAVORITO FLOTANTE */}
+          <TouchableOpacity
+            style={[
+              estilos.favoritoBadge,
+              {
+                top: isTablet ? 8 : 6,
+                right: isTablet ? 8 : 6,
+              }
+            ]}
+            onPress={(e) => {
+              e.stopPropagation(); // Evita que se abra el detalle al tocar el corazón
+              handleToggleFavorito();
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={esFavorito ? "heart" : "heart-outline"}
+              size={isTablet ? 18 : 16}
+              color={esFavorito ? Colores.acento || '#ff3b30' : Colores.textoClaro}
+            />
+          </TouchableOpacity>
+
           {/* ✅ Badge de popular */}
           {esPopular && isDisponible && (
             <View style={[
@@ -238,7 +274,7 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
                 paddingVertical: isTablet ? 3 : 2,
                 borderRadius: isTablet ? 10 : 8,
                 top: isTablet ? 8 : 6,
-                right: isTablet ? 8 : 6,
+                left: isTablet ? 8 : 6,
                 gap: 3,
               }
             ]}>
@@ -336,7 +372,6 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
               marginTop: isTablet ? 8 : 6,
             }
           ]}>
-            {/* ✅ Contenedor de precio con badge premium AL LADO */}
             <View style={estilos.precioContainer}>
               <Text style={[
                 estilos.precio,
@@ -345,11 +380,9 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
                   color: temaKrusty.secundario,
                 }
               ]}>
-                {/* ✅ PRECIO FORMATEADO SIN DECIMALES Y CON SEPARADOR DE MILES */}
                 {formatearPrecio(typeof producto.precio === 'number' ? producto.precio : Number(producto.precio))}
               </Text>
 
-              {/* ✅ Badge Premium - AHORA AL LADO DEL PRECIO, no debajo */}
               {esPremium && isDisponible && (
                 <View style={[
                   estilos.badgePremium,
@@ -376,7 +409,6 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
               )}
             </View>
 
-            {/* ✅ Botón agregar */}
             <TouchableOpacity
               style={[
                 estilos.botonAgregar,
@@ -476,6 +508,16 @@ const estilos = StyleSheet.create({
   },
   emoji: {},
 
+  // Botón Favorito Flotante
+  favoritoBadge: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 7,
+    borderRadius: 20,
+    zIndex: 15,
+
+  },
+
   // Badges
   badgePopular: {
     position: 'absolute',
@@ -514,7 +556,6 @@ const estilos = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ✅ Badge Premium - MEJORADO
   badgePremium: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -525,7 +566,6 @@ const estilos = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Información
   infoContainer: {
     flex: 1,
     position: 'relative',
@@ -540,7 +580,6 @@ const estilos = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Precio y botón
   filaInferior: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -551,7 +590,7 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    flexWrap: 'wrap', // ✅ Para que el badge no se corte
+    flexWrap: 'wrap',
   },
   precio: {
     fontWeight: 'bold',
@@ -572,7 +611,6 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Feedback
   feedbackContainer: {
     flexDirection: 'row',
     alignItems: 'center',

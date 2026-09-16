@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaCarrito.tsx - CON DESCUENTO POR NIVEL Y AHORRO TOTAL
+﻿// screens/cliente/PantallaCarrito.tsx - CON TOPE 25% Y MÍNIMO $15.000
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -30,6 +30,14 @@ import { formatearPrecio } from '../../lib/formateador';
 import { cuponService } from '../../lib/cupones/cuponService';
 import { useBeneficios } from '../../hooks/useBeneficios';
 import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
+
+// ============================================================
+// 📌 CONSTANTES DE NEGOCIO
+// ============================================================
+const MAX_PORCENTAJE_PUNTOS = 0.25;   // Máximo 25% del subtotal
+const MINIMO_PARA_PUNTOS = 15000;     // Mínimo $15.000 para usar puntos
+const MINIMO_PUNTOS_CANJE = 100;      // Mínimo 100 pts a canjear
+const VALOR_POR_PUNTO = 100;          // 100 pts = $100
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -98,6 +106,30 @@ export default function PantallaCarrito(props: any) {
   const total = calcularTotal();
   const totalProductos = elementos.reduce((sum, item) => sum + item.cantidad, 0);
   const tieneProductos = elementos.length > 0;
+
+  // ============================================================
+  // 🆕 NUEVAS REGLAS: tope 25% y mínimo $15.000
+  // ============================================================
+
+  // ✅ ¿El cliente puede usar puntos? (mínimo de compra)
+  const puedeUsarPuntos = useMemo(() => {
+    return total >= MINIMO_PARA_PUNTOS;
+  }, [total]);
+
+  // ✅ ¿Cuánto le falta para poder usar puntos?
+  const faltaParaUsarPuntos = useMemo(() => {
+    if (total >= MINIMO_PARA_PUNTOS) return 0;
+    return MINIMO_PARA_PUNTOS - total;
+  }, [total]);
+
+  // ✅ Tope máximo de puntos permitidos (25% del total, redondeado a múltiplos de 100)
+  const puntosMaximosPermitidos = useMemo(() => {
+    if (!puedeUsarPuntos) return 0;
+    const maxEnPesos = total * MAX_PORCENTAJE_PUNTOS;
+    // Convertir a puntos (100 pts = $100) y redondear hacia abajo a múltiplos de 100
+    const maxEnPuntos = Math.floor(maxEnPesos / VALOR_POR_PUNTO) * VALOR_POR_PUNTO;
+    return maxEnPuntos;
+  }, [total, puedeUsarPuntos]);
 
   // ✅ Porcentaje de descuento del nivel actual
   const porcentajeDescuentoNivel = useMemo(() => {
@@ -318,21 +350,45 @@ export default function PantallaCarrito(props: any) {
   const handleInputPuntos = (text: string) => {
     const num = parseInt(text) || 0;
     if (num < 0) return;
-    setInputPuntos(text);
-    setPuntosSeleccionados(num);
+    // ✅ Limitar al tope permitido (25% y mínimo de compra)
+    const limitado = Math.min(num, puntosMaximosPermitidos, puntosMaximos);
+    setInputPuntos(limitado.toString());
+    setPuntosSeleccionados(limitado);
   };
 
   const canjearPuntos = async () => {
-    if (puntosSeleccionados < 100) {
-      Alert.alert('Mínimo 100 puntos', 'Necesitas al menos 100 puntos para canjear ($100 de descuento)');
+    // ✅ Validaciones nuevas
+    if (!puedeUsarPuntos) {
+      Alert.alert(
+        'Mínimo de compra',
+        `Necesitás un mínimo de ${formatearPrecio(MINIMO_PARA_PUNTOS)} para usar tus puntos. Agregá ${formatearPrecio(faltaParaUsarPuntos)} más.`
+      );
       return;
     }
+
+    if (puntosSeleccionados < MINIMO_PUNTOS_CANJE) {
+      Alert.alert(
+        `Mínimo ${MINIMO_PUNTOS_CANJE} puntos`,
+        `Necesitás al menos ${MINIMO_PUNTOS_CANJE} puntos para canjear (${formatearPrecio(MINIMO_PUNTOS_CANJE)} de descuento)`
+      );
+      return;
+    }
+
     if (puntosSeleccionados > puntosMaximos) {
       Alert.alert('Puntos insuficientes', `Tenés ${puntosMaximos} puntos disponibles`);
       return;
     }
 
-    const descuentoEnPesos = Math.floor(puntosSeleccionados / 100) * 100;
+    // ✅ Validar tope del 25%
+    if (puntosSeleccionados > puntosMaximosPermitidos) {
+      Alert.alert(
+        'Tope máximo alcanzado',
+        `El máximo que podés canjear es ${puntosMaximosPermitidos} pts (25% del total)`
+      );
+      return;
+    }
+
+    const descuentoEnPesos = Math.floor(puntosSeleccionados / VALOR_POR_PUNTO) * VALOR_POR_PUNTO;
     const puntosAntesCanje = puntosMaximos;
 
     setCanjeandoPuntos(true);
@@ -673,55 +729,96 @@ export default function PantallaCarrito(props: any) {
               ...DISENO.shadow.md,
             }
           ]}>
-            {/* ✅ BOTÓN DE PUNTOS */}
-            <TouchableOpacity
-              style={[
-                styles.puntosButton,
+
+            {/* ✅ BOTÓN DE PUNTOS - CON VALIDACIÓN DE MÍNIMO Y TOPE */}
+            {puedeUsarPuntos ? (
+              <TouchableOpacity
+                style={[
+                  styles.puntosButton,
+                  {
+                    backgroundColor: DISENO.colors.accentSecondary + '10',
+                    borderColor: DISENO.colors.accentSecondary + '40',
+                    borderWidth: 1.5,
+                    paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                    paddingHorizontal: responsive.getValor({ tablet: 20, normal: 16, small: 16 }),
+                    borderRadius: 14,
+                    marginBottom: 10,
+                    ...DISENO.shadow.sm,
+                  }
+                ]}
+                onPress={() => {
+                  if (cuponPuntosAplicado) {
+                    setPuntosMaximos(puntosOriginalesAntesCanje || puntosOriginales);
+                  }
+                  setPuntosSeleccionados(0);
+                  setInputPuntos('');
+                  setMostrarModalPuntos(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.puntosButtonContent}>
+                  <View style={styles.puntosButtonLeft}>
+                    <Text style={[styles.actionButtonText, {
+                      color: DISENO.colors.text,
+                      fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
+                    }]}>
+                      ⭐ {puntosMaximos} pts
+                    </Text>
+                  </View>
+                  <View style={styles.puntosButtonRight}>
+                    <Text style={[styles.puntosButtonLabel, {
+                      color: DISENO.colors.accent,
+                      fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }),
+                      backgroundColor: DISENO.colors.accent + '10',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                    }]}>
+                      Canjear X descuento
+                    </Text>
+                    <Ionicons name="chevron-forward" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.accent} />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              // ✅ Aviso cuando no llega al mínimo
+              <View style={[
+                styles.avisoMinimo,
                 {
-                  backgroundColor: DISENO.colors.accentSecondary + '10',
-                  borderColor: DISENO.colors.accentSecondary + '40',
+                  backgroundColor: '#FFF3E0',
+                  borderColor: '#FFB74D',
                   borderWidth: 1.5,
                   paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-                  paddingHorizontal: responsive.getValor({ tablet: 20, normal: 16, small: 16 }),
+                  paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
                   borderRadius: 14,
                   marginBottom: 10,
-                  ...DISENO.shadow.sm,
                 }
-              ]}
-              onPress={() => {
-                if (cuponPuntosAplicado) {
-                  setPuntosMaximos(puntosOriginalesAntesCanje || puntosOriginales);
-                }
-                setPuntosSeleccionados(0);
-                setInputPuntos('');
-                setMostrarModalPuntos(true);
-              }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.puntosButtonContent}>
-                <View style={styles.puntosButtonLeft}>
-                  <Text style={[styles.actionButtonText, {
-                    color: DISENO.colors.text,
-                    fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
-                  }]}>
-                    ⭐ {puntosMaximos} pts
-                  </Text>
-                </View>
-                <View style={styles.puntosButtonRight}>
-                  <Text style={[styles.puntosButtonLabel, {
-                    color: DISENO.colors.accent,
-                    fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }),
-                    backgroundColor: DISENO.colors.accent + '10',
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 6,
-                  }]}>
-                    Canjear X descuento
-                  </Text>
-                  <Ionicons name="chevron-forward" size={responsive.getValor({ tablet: 18, normal: 16, small: 14 })} color={DISENO.colors.accent} />
-                </View>
+              ]}>
+                <Text style={[
+                  styles.avisoMinimoTexto,
+                  {
+                    color: '#E65100',
+                    fontSize: responsive.getValor({ tablet: 13, normal: 11, small: 10 }),
+                    fontWeight: '700',
+                    textAlign: 'center',
+                  }
+                ]}>
+                  🛒 Agregá {formatearPrecio(faltaParaUsarPuntos)} más para usar tus {puntosMaximos} pts
+                </Text>
+                <Text style={[
+                  styles.avisoMinimoSub,
+                  {
+                    color: '#BF360C',
+                    fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
+                    fontWeight: '500',
+                    textAlign: 'center',
+                    marginTop: 3,
+                  }
+                ]}>
+                  Mínimo de compra: {formatearPrecio(MINIMO_PARA_PUNTOS)}
+                </Text>
               </View>
-            </TouchableOpacity>
+            )}
 
             {/* ✅ BADGE DE NIVEL DEL USUARIO */}
             {nivel && (
@@ -994,7 +1091,7 @@ export default function PantallaCarrito(props: any) {
         </View>
       </Modal>
 
-      {/* ✅ MODAL DE PUNTOS */}
+      {/* ✅ MODAL DE PUNTOS - CON TOPE 25% Y MÍNIMO $15.000 */}
       <Modal visible={mostrarModalPuntos} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[
@@ -1050,6 +1147,23 @@ export default function PantallaCarrito(props: any) {
                   color: DISENO.colors.accentSecondary,
                 }]}>
                   {puntosMaximos} pts
+                </Text>
+              </View>
+
+              {/* ✅ Info del tope */}
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.modalPuntosInfoLabel, {
+                  fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }),
+                  color: DISENO.colors.textSecondary,
+                  fontWeight: '500',
+                }]}>
+                  Máximo canjeable
+                </Text>
+                <Text style={[styles.modalPuntosInfoValue, {
+                  fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }),
+                  color: DISENO.colors.accent,
+                }]}>
+                  {Math.min(puntosMaximos, puntosMaximosPermitidos)} pts
                 </Text>
               </View>
             </View>
@@ -1113,7 +1227,11 @@ export default function PantallaCarrito(props: any) {
                     borderLeftColor: DISENO.colors.border,
                   }]}
                   onPress={() => {
-                    const nuevo = Math.min(puntosMaximos, puntosSeleccionados + 100);
+                    // ✅ Limitar al tope permitido
+                    const nuevo = Math.min(
+                      Math.min(puntosMaximos, puntosMaximosPermitidos),
+                      puntosSeleccionados + 100
+                    );
                     setPuntosSeleccionados(nuevo);
                     setInputPuntos(nuevo.toString());
                   }}
@@ -1122,6 +1240,16 @@ export default function PantallaCarrito(props: any) {
                   <Ionicons name="add" size={responsive.getValor({ tablet: 22, normal: 20, small: 18 })} color={DISENO.colors.text} />
                 </TouchableOpacity>
               </View>
+
+              {/* ✅ Aviso de tope máximo */}
+              <Text style={{
+                fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
+                color: DISENO.colors.textSecondary,
+                textAlign: 'center',
+                marginTop: 6,
+              }}>
+                💡 Máximo 25% del total ({puntosMaximosPermitidos} pts = {formatearPrecio(Math.floor(puntosMaximosPermitidos / 100) * 100)})
+              </Text>
             </View>
 
             {puntosSeleccionados > 0 && (
@@ -1178,36 +1306,36 @@ export default function PantallaCarrito(props: any) {
                   paddingVertical: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
                   borderRadius: 12,
                   alignItems: 'center',
-                  backgroundColor: puntosSeleccionados >= 100 ? DISENO.colors.accentSecondary : DISENO.colors.surfaceHover,
+                  backgroundColor: puntosSeleccionados >= MINIMO_PUNTOS_CANJE ? DISENO.colors.accentSecondary : DISENO.colors.surfaceHover,
                   borderWidth: 1,
-                  borderColor: puntosSeleccionados >= 100 ? DISENO.colors.accentSecondary : DISENO.colors.border,
+                  borderColor: puntosSeleccionados >= MINIMO_PUNTOS_CANJE ? DISENO.colors.accentSecondary : DISENO.colors.border,
                 }]}
                 onPress={canjearPuntos}
-                disabled={canjeandoPuntos || puntosSeleccionados < 100}
+                disabled={canjeandoPuntos || puntosSeleccionados < MINIMO_PUNTOS_CANJE}
                 activeOpacity={0.7}
               >
                 {canjeandoPuntos ? (
                   <ActivityIndicator size="small" color={DISENO.colors.text} />
                 ) : (
                   <Text style={[styles.puntosConfirmText, {
-                    color: puntosSeleccionados >= 100 ? DISENO.colors.text : DISENO.colors.textTertiary,
+                    color: puntosSeleccionados >= MINIMO_PUNTOS_CANJE ? DISENO.colors.text : DISENO.colors.textTertiary,
                     fontWeight: 'bold',
                     fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }),
                   }]}>
-                    {puntosSeleccionados < 100 ? 'Mínimo 100 pts' : '✅ Canjear'}
+                    {puntosSeleccionados < MINIMO_PUNTOS_CANJE ? `Mínimo ${MINIMO_PUNTOS_CANJE} pts` : '✅ Canjear'}
                   </Text>
                 )}
               </TouchableOpacity>
             </View>
 
-            {puntosSeleccionados < 100 && puntosSeleccionados > 0 && (
+            {puntosSeleccionados < MINIMO_PUNTOS_CANJE && puntosSeleccionados > 0 && (
               <Text style={[styles.modalPuntosMinimo, {
                 fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
                 color: DISENO.colors.accent,
                 textAlign: 'center',
                 marginTop: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
               }]}>
-                ⚠️ Mínimo 100 puntos (${formatearPrecio(100)} de descuento)
+                ⚠️ Mínimo {MINIMO_PUNTOS_CANJE} puntos ({formatearPrecio(MINIMO_PUNTOS_CANJE)} de descuento)
               </Text>
             )}
           </View>
@@ -1382,6 +1510,18 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
+  // ✅ NUEVO: Estilos para el aviso de mínimo
+  avisoMinimo: {
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avisoMinimoTexto: {
+    fontFamily: FUENTES.regular,
+  },
+  avisoMinimoSub: {
+    fontFamily: FUENTES.regular,
+  },
   summary: {
     borderRadius: 10,
     padding: 10,
@@ -1439,7 +1579,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 2,
   },
-  // ✅ NUEVO: Ahorro total
   ahorroContainer: {
     flexDirection: 'row',
     alignItems: 'center',

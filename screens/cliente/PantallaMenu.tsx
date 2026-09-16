@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaMenu.tsx - CON PRODUCT CARD MEMOIZADO
+﻿// screens/cliente/PantallaMenu.tsx - CON PRODUCT CARD MEMOIZADO Y FAVORITOS
 import React, { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react';
 import {
   View,
@@ -20,6 +20,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
+import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { Producto } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
 import { FUENTES } from '../../lib/fuentes';
@@ -100,15 +101,16 @@ const CATEGORIAS = [
 
 // ============================================================
 // 🎴 PRODUCT CARD - MEMOIZADO
-// Solo se re-renderiza si sus props cambian (item, estaAgregado, etc.)
 // ============================================================
 interface ProductCardProps {
   item: Producto;
   cardWidth: number;
   modoGrid: boolean;
   estaAgregado: boolean;
+  esFavorito: boolean;
   onPress: (item: Producto) => void;
   onAdd: (item: Producto) => void;
+  onToggleFavorito: (item: Producto) => void;
   responsive: ResponsiveType;
 }
 
@@ -117,13 +119,12 @@ const ProductCard = memo(function ProductCard({
   cardWidth,
   modoGrid,
   estaAgregado,
+  esFavorito,
   onPress,
   onAdd,
+  onToggleFavorito,
   responsive,
 }: ProductCardProps) {
-  // ✅ Debug: cuántas veces se re-renderiza cada card
-  console.log('🎨 [ProductCard] render:', item.nombre, '| agregado:', estaAgregado);
-
   if (item.id < 0) {
     return <View style={{ width: cardWidth }} />;
   }
@@ -131,6 +132,7 @@ const ProductCard = memo(function ProductCard({
   const priceSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
   const buttonSize = responsive.getValor({ tablet: 34, normal: 30, small: 28 });
   const iconSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
+  const heartSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
 
   return (
     <View style={[
@@ -178,6 +180,22 @@ const ProductCard = memo(function ProductCard({
             start={{ x: 0, y: 0.6 }}
             end={{ x: 0, y: 1 }}
           />
+
+          {/* ❤️ BOTÓN DE FAVORITO FLOTANTE */}
+          <TouchableOpacity
+            style={styles.favoritoBadge}
+            onPress={(e) => {
+              e.stopPropagation();
+              onToggleFavorito(item);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={esFavorito ? 'heart' : 'heart-outline'}
+              size={heartSize}
+              color={esFavorito ? DESIGN.colors.accent : DESIGN.colors.text}
+            />
+          </TouchableOpacity>
         </View>
 
         <View style={[
@@ -238,21 +256,16 @@ const ProductCard = memo(function ProductCard({
     </View>
   );
 }, (prev, next) => {
-  // ✅ Comparación custom: solo re-renderizamos si cambia algo importante
-  const iguales = (
+  return (
     prev.item.id === next.item.id &&
     prev.item.nombre === next.item.nombre &&
     prev.item.precio === next.item.precio &&
     prev.item.imagen === next.item.imagen &&
     prev.estaAgregado === next.estaAgregado &&
+    prev.esFavorito === next.esFavorito &&
     prev.cardWidth === next.cardWidth &&
     prev.modoGrid === next.modoGrid
   );
-  if (!iguales) {
-    console.log('🔄 [ProductCard] CAMBIA:', prev.item.nombre,
-      '| antes:', prev.estaAgregado, '→ ahora:', next.estaAgregado);
-  }
-  return iguales;
 });
 
 // ============================================================
@@ -264,6 +277,7 @@ export default function PantallaMenu(props: any) {
 
   const { agregarProducto } = tiendaCarrito();
   const { perfil } = tiendaAutenticacion();
+  const { idsFavoritos, agregarFavorito, eliminarFavorito } = tiendaFavoritos() as any;
 
   const categoriaInicial: string | undefined = props.route?.params?.categoria;
 
@@ -277,7 +291,6 @@ export default function PantallaMenu(props: any) {
   const [busqueda, setBusqueda] = useState('');
   const [modoGrid, setModoGrid] = useState(true);
 
-  // ✅ Estado para el feedback visual del botón "+"
   const [agregados, setAgregados] = useState<Record<number, boolean>>({});
 
   const categoriasListRef = useRef<FlatList>(null);
@@ -286,16 +299,13 @@ export default function PantallaMenu(props: any) {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-  // ✅ USEFOCUSEFFECT (badge del carrito)
   useFocusEffect(
     useCallback(() => {
       const cantidad = tiendaCarrito.getState().cantidadTotal();
-      console.log('🛒 [PantallaMenu] Focus, cantidad badge:', cantidad);
       return () => { };
     }, [])
   );
 
-  // ✅ Limpiar el param al desenfocar
   useFocusEffect(
     useCallback(() => {
       return () => {
@@ -306,9 +316,6 @@ export default function PantallaMenu(props: any) {
     }, [props.navigation, props.route?.params?.categoria])
   );
 
-  // ============================================================
-  // 📦 CÁLCULOS DE TAMAÑOS
-  // ============================================================
   const tamanos = useMemo(() => ({
     padding: responsive.getValor({ tablet: 40, normal: 20, small: 16 }),
     gridColumns: responsive.isDesktop ? 3 : responsive.isTablet ? 2 : 2,
@@ -327,9 +334,6 @@ export default function PantallaMenu(props: any) {
     return responsive.width - 32;
   }, [modoGrid, padding, numColumns, responsive]);
 
-  // ============================================================
-  // 📏 TAMAÑOS DE CATEGORÍA
-  // ============================================================
   const categoriaItemHeight = useMemo(() => {
     return responsive.getValor({ tablet: 42, normal: 36, small: 32 });
   }, [responsive]);
@@ -344,9 +348,6 @@ export default function PantallaMenu(props: any) {
 
   const categoriaItemFullWidth = categoriaItemWidth + categoriaItemMarginRight;
 
-  // ============================================================
-  // 🔄 FUNCIONES DE CARGA
-  // ============================================================
   const cargarProductos = useCallback(async () => {
     setCargando(true);
     try {
@@ -398,17 +399,11 @@ export default function PantallaMenu(props: any) {
     setRefreshing(false);
   }, [cargarProductos]);
 
-  // ============================================================
-  // 🔄 SINCRONIZAR CATEGORÍA POR PARAMS
-  // ============================================================
   useEffect(() => {
     if (!categoriaInicial) return;
     setCategoriaSeleccionada(categoriaInicial);
   }, [categoriaInicial]);
 
-  // ============================================================
-  // 📜 SCROLL AUTOMÁTICO A LA CATEGORÍA
-  // ============================================================
   const scrollCategoriaA = useCallback((categoriaId: string, animated: boolean = true) => {
     const index = CATEGORIAS.findIndex(c => c.id === categoriaId);
     if (index === -1) return;
@@ -437,22 +432,14 @@ export default function PantallaMenu(props: any) {
     return () => clearTimeout(timer);
   }, [categoriaSeleccionada, scrollCategoriaA]);
 
-  // ============================================================
-  // 🎯 MANEJADORES
-  // ============================================================
   const handleAgregarProducto = useCallback((item: Producto) => {
     const id = item.id;
-    console.log('🖱️ [PantallaMenu] TAP en + de:', item.nombre);
-
-    // 1. Feedback visual instantáneo
     setAgregados(prev => ({ ...prev, [id]: true }));
 
-    // 2. Trabajo del store en el siguiente frame
     requestAnimationFrame(() => {
       agregarProducto(item);
     });
 
-    // 3. Restaurar el ícono después de 800ms
     setTimeout(() => {
       setAgregados(prev => {
         const next = { ...prev };
@@ -462,13 +449,33 @@ export default function PantallaMenu(props: any) {
     }, 800);
   }, [agregarProducto]);
 
+  const handleToggleFavorito = useCallback((item: Producto) => {
+    const usuarioId = perfil?.id ? String(perfil.id) : null;
+    const productoId = item?.id ? Number(item.id) : null;
+
+    if (!usuarioId || usuarioId === 'undefined' || usuarioId === 'NaN') {
+      console.warn('⚠️ No se puede gestionar favoritos: ID de usuario inválido o ausente.', perfil?.id);
+      return;
+    }
+
+    if (!productoId || isNaN(productoId) || productoId < 0) {
+      console.warn('⚠️ No se puede gestionar favoritos: ID de producto inválido.', item?.id);
+      return;
+    }
+
+    const yaEsFavorito = idsFavoritos?.includes(productoId);
+
+    if (yaEsFavorito) {
+      eliminarFavorito(usuarioId, productoId);
+    } else {
+      agregarFavorito(usuarioId, item);   // 👈 AHORA pasa `item` completo, no `item.id`
+    }
+  }, [perfil?.id, idsFavoritos, agregarFavorito, eliminarFavorito]);
+
   const handleDetalleProducto = useCallback((item: Producto) => {
     props.navigation.navigate('DetalleProducto', { producto: item });
   }, [props.navigation]);
 
-  // ============================================================
-  // 📦 FUNCIÓN PARA DISTRIBUIR EN COLUMNAS
-  // ============================================================
   const formatData = useCallback((data: Producto[], numColumns: number) => {
     if (!modoGrid) return data;
     const result = [...data];
@@ -491,22 +498,23 @@ export default function PantallaMenu(props: any) {
     return result;
   }, [modoGrid]);
 
-  // ============================================================
-  // 🖼️ RENDER DE PRODUCTOS
-  // ============================================================
   const renderProducto = useCallback(({ item }: { item: Producto }) => {
+    const esFavorito = idsFavoritos?.includes(Number(item.id));
+
     return (
       <ProductCard
         item={item}
         cardWidth={cardWidth}
         modoGrid={modoGrid}
         estaAgregado={!!agregados[item.id]}
+        esFavorito={!!esFavorito}
         onPress={handleDetalleProducto}
         onAdd={handleAgregarProducto}
+        onToggleFavorito={handleToggleFavorito}
         responsive={responsive}
       />
     );
-  }, [cardWidth, modoGrid, agregados, handleDetalleProducto, handleAgregarProducto, responsive]);
+  }, [cardWidth, modoGrid, agregados, idsFavoritos, handleDetalleProducto, handleAgregarProducto, handleToggleFavorito, responsive]);
 
   const datosFormateados = useMemo(() => {
     if (!modoGrid) return productosFiltrados;
@@ -824,6 +832,20 @@ const styles = StyleSheet.create({
   productImageOverlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%',
   },
+  favoritoBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 6,
+    borderRadius: 20,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
   productInfo: { flex: 1 },
   productName: {
     fontFamily: FUENTES.display, fontWeight: '400', marginBottom: 2,
@@ -849,7 +871,6 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.regular, fontWeight: '400', opacity: 0.7,
   },
   emptyContainer: { alignItems: 'center' },
-  emptyEmoji: { marginBottom: 16 },
   emptyText: {
     fontFamily: FUENTES.display, fontWeight: '400', textAlign: 'center',
   },

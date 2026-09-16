@@ -2,7 +2,7 @@
   "expo": {
     "name": "KrustyBurger",
     "slug": "KrustyBurger",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -32,7 +32,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "versionCode": 3,
+      "versionCode": 8,
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
       "package": "com.agenciapowa.KrustyBurger",
@@ -86,7 +86,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 400,
+          "imageWidth": 250,
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
@@ -146,18 +146,19 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/709ab55b-7649-4a00-8a9c-a9dfd6aa2277"
+      "url": "https://u.expo.dev/3bb3f5cf-a572-4703-8a2a-e727bc44a0e6"
     },
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "709ab55b-7649-4a00-8a9c-a9dfd6aa2277"
+        "projectId": "3bb3f5cf-a572-4703-8a2a-e727bc44a0e6"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "agenciadigitalpowas-team"
   }
 }

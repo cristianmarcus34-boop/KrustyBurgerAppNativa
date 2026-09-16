@@ -1,4 +1,4 @@
-// components/SplashScreen.tsx - COMPLETO Y ACTUALIZADO
+// components/SplashScreen.tsx
 import React, { useEffect, useRef } from 'react';
 import {
     View,
@@ -15,18 +15,21 @@ const { width } = Dimensions.get('window');
 interface Props {
     onFinish: () => void;
     duration?: number;
+    onLayoutReady?: () => void;   // 👈 nuevo callback
 }
 
-export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
+export default function SplashScreen({ onFinish, duration = 2500, onLayoutReady }: Props) {
+    console.log('🟥 [SplashScreen] Componente montó');
+
     const scaleAnim = useRef(new Animated.Value(0.5)).current;
     const opacityAnim = useRef(new Animated.Value(0)).current;
     const spinAnim = useRef(new Animated.Value(0)).current;
 
-    // ✅ TAMAÑO DEL LOGO (responsive)
     const logoSize = Math.min(width * 0.5, 250);
 
     useEffect(() => {
-        // ✅ Animación de entrada del logo
+        console.log('🟥 [SplashScreen] useEffect ejecutado');
+
         Animated.parallel([
             Animated.timing(scaleAnim, {
                 toValue: 1,
@@ -40,7 +43,6 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
             }),
         ]).start();
 
-        // ✅ Animación del spinner (infinita)
         Animated.loop(
             Animated.timing(spinAnim, {
                 toValue: 1,
@@ -49,8 +51,8 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
             })
         ).start();
 
-        // ✅ Temporizador para finalizar el splash
         const timer = setTimeout(() => {
+            console.log('🟥 [SplashScreen] Timer interno, llamando onFinish');
             onFinish();
         }, duration);
 
@@ -63,10 +65,15 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
     });
 
     return (
-        <View style={styles.container}>
+        <View
+            style={styles.container}
+            onLayout={() => {
+                console.log('🟥 [SplashScreen] onLayout - ya está pintado');
+                onLayoutReady?.();
+            }}
+        >
             <StatusBar hidden />
 
-            {/* ✅ Fondo con gradiente sutil */}
             <LinearGradient
                 colors={['#FFFFFF', '#F5F2ED', '#FFFFFF']}
                 style={styles.gradient}
@@ -74,7 +81,6 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
                 end={{ x: 1, y: 1 }}
             />
 
-            {/* ✅ LOGO CON ANIMACIÓN */}
             <Animated.View
                 style={[
                     styles.logoContainer,
@@ -97,7 +103,6 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
                 />
             </Animated.View>
 
-            {/* ✅ SPINNER GIRATORIO */}
             <Animated.View
                 style={[
                     styles.spinnerContainer,
@@ -109,7 +114,6 @@ export default function SplashScreen({ onFinish, duration = 3000 }: Props) {
                 <View style={styles.spinner} />
             </Animated.View>
 
-            {/* ✅ TEXTO "Cargando..." */}
             <Animated.Text style={[styles.loadingText, { opacity: opacityAnim }]}>
                 Cargando...
             </Animated.Text>

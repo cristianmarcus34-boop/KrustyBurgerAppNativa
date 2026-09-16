@@ -101,6 +101,7 @@ export default function PantallaInicio(props: any) {
   const { perfil, esAdministrador } = tiendaAutenticacion();
   const { agregarProducto } = tiendaCarrito();
   const { favoritos, cargando: cargandoFavoritos, cargarFavoritos, limpiarFavoritos } = tiendaFavoritos();
+
   // ✅ USAMOS EL HOOK CENTRALIZADO
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
@@ -116,13 +117,28 @@ export default function PantallaInicio(props: any) {
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
 
-  // ✅ USEFOCUSEFFECT
   useFocusEffect(
     useCallback(() => {
-      const cantidad = tiendaCarrito.getState().cantidadTotal();
-      console.log('🛒 [PantallaInicio] Forzando actualización badge:', cantidad);
+      console.log('🔍 [Inicio] Ejecutando useFocusEffect, perfil.id =', perfil?.id);
+
+      if (perfil?.id) {
+        console.log('🔍 [Inicio] Llamando cargarFavoritos con:', perfil.id);
+
+        cargarFavoritos(perfil.id).then(() => {
+          const state = tiendaFavoritos.getState();
+          console.log('🔍 [Inicio] DESPUÉS de cargar:');
+          console.log('   - favoritos.length:', state.favoritos.length);
+          console.log('   - idsFavoritos.length:', state.idsFavoritos.length);
+          console.log('   - favoritos:', JSON.stringify(state.favoritos.map(f => f.id)));
+          console.log('   - cargando:', state.cargando);
+        }).catch((err) => {
+          console.error('🔍 [Inicio] ERROR en cargarFavoritos:', err);
+        });
+      } else {
+        console.log('🔍 [Inicio] perfil.id es null/undefined, no se cargan favoritos');
+      }
       return () => { };
-    }, [])
+    }, [perfil?.id, cargarFavoritos])
   );
 
   // ============================================================
@@ -199,7 +215,7 @@ export default function PantallaInicio(props: any) {
       Animated.spring(logoScale, { toValue: 1, friction: 8, tension: 50, useNativeDriver: true }),
       Animated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [cargarOfertas, cargarFavoritosUsuario, cargarCantidadProductos, fadeAnim, slideAnim, logoScale, logoOpacity]);
 
   const onRefresh = useCallback(async () => {
     setRefrescando(true);
@@ -231,7 +247,6 @@ export default function PantallaInicio(props: any) {
           if (item.esOferta) {
             props.navigation.navigate('Ofertas');
           } else {
-            // ✅ Pasamos la categoría a PantallaMenu para que haga scroll a esa categoría
             props.navigation.navigate('Menu', { categoria: item.id });
           }
         }}
@@ -241,7 +256,6 @@ export default function PantallaInicio(props: any) {
           <Image source={item.imagen} style={styles.categoriaImagen} resizeMode="cover" />
         </View>
         <View style={styles.categoriaInfo}>
-          {/* ✅ NOMBRE DE CATEGORÍA CON SIMPSONFONT */}
           <Text
             style={[
               styles.categoriaNombre,
@@ -253,7 +267,6 @@ export default function PantallaInicio(props: any) {
           >
             {item.nombre}
           </Text>
-          {/* ✅ DESCRIPCIÓN CON FUENTE REGULAR */}
           <Text
             style={[
               styles.categoriaDesc,
@@ -268,7 +281,7 @@ export default function PantallaInicio(props: any) {
         </View>
       </TouchableOpacity>
     );
-  }, [tamanos, cantidadProductos, ofertas, responsive]);
+  }, [tamanos.categoriaWidth, cantidadProductos, ofertas.length, responsive, props.navigation]);
 
   // ============================================================
   // ⭐ RENDER DE FAVORITO RÁPIDO
@@ -395,7 +408,6 @@ export default function PantallaInicio(props: any) {
             </Animated.View>
 
             <View style={styles.saludoContainer}>
-              {/* ✅ GREETING CON FUENTE REGULAR */}
               <Text
                 style={[
                   styles.headerGreeting,
@@ -406,7 +418,6 @@ export default function PantallaInicio(props: any) {
               >
                 Hola
               </Text>
-              {/* ✅ NOMBRE CON SIMPSONFONT */}
               <Text
                 style={[
                   styles.headerName,
@@ -466,7 +477,6 @@ export default function PantallaInicio(props: any) {
 
         {/* CATEGORÍAS */}
         <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
-          {/* ✅ TÍTULO "CATEGORÍAS" CON SIMPSONFONT */}
           <Text
             style={[
               styles.sectionTitle,
@@ -552,7 +562,6 @@ const styles = StyleSheet.create({
   saludoContainer: {
     marginTop: 2,
   },
-  // ✅ GREETING CON FUENTE REGULAR
   headerGreeting: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -560,7 +569,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginBottom: 2,
   },
-  // ✅ NOMBRE CON SIMPSONFONT
   headerName: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -584,7 +592,6 @@ const styles = StyleSheet.create({
   seccionContainer: {
     marginVertical: 8,
   },
-  // ✅ TÍTULO DE SECCIÓN CON SIMPSONFONT
   sectionTitle: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -616,14 +623,12 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
   },
-  // ✅ NOMBRE DE CATEGORÍA CON SIMPSONFONT
   categoriaNombre: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
     textAlign: 'center',
   },
-  // ✅ DESCRIPCIÓN CON FUENTE REGULAR
   categoriaDesc: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -631,7 +636,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginTop: 1,
   },
-  // Estilos para la tarjeta de Favoritos
   favoritoItem: {
     borderRadius: DISENO.radius.md,
     overflow: 'hidden',

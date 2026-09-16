@@ -1,23 +1,12 @@
 // ============================================================
 // 📱 App.tsx - PUNTO DE ENTRADA DE KRUSTY BURGER
 // ============================================================
-// Este archivo es el corazón de la app. Aquí se configura:
-// 1. La carga de fuentes personalizadas
-// 2. La navegación (Stack + Tabs)
-// 3. El Deep Linking (cupones y recuperación de contraseña)
-// 4. Las notificaciones push
-// 5. La sesión del usuario
-// ============================================================
 
 import './setup.js';
 
 // ============================================================
 // 🚫 FILTRO DE ERRORES DE CONSOLA (NO CRÍTICOS)
 // ============================================================
-// Algunos errores de terceros (Supabase, Paper, etc.) no son
-// relevantes para el desarrollo. Los filtramos para tener una
-// consola más limpia.
-
 const originalConsoleError = console.error;
 
 console.error = (...args: any[]) => {
@@ -25,11 +14,11 @@ console.error = (...args: any[]) => {
 
   if (typeof message === 'string') {
     const ignorar = [
-      'rate limit',           // Supabase: límite de correos
+      'rate limit',
       'email rate limit',
       'too many requests',
       'try again later',
-      'Text strings',         // React Native Paper
+      'Text strings',
       'Text string',
       'react-native-paper',
       'Paper',
@@ -37,7 +26,7 @@ console.error = (...args: any[]) => {
     ];
 
     if (ignorar.some(texto => message.toLowerCase().includes(texto.toLowerCase()))) {
-      return; // Ignorar este error
+      return;
     }
   }
 
@@ -47,19 +36,23 @@ console.error = (...args: any[]) => {
 // ============================================================
 // 📦 IMPORTACIONES DE REACT Y NAVEGACIÓN
 // ============================================================
-import React, { useEffect, useRef, useState } from 'react';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  NavigationContainer,
+  NavigationContainerRef,
+  DefaultTheme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, Platform, Text } from 'react-native';
+import { View, Platform, StyleSheet } from 'react-native';
 
 // ============================================================
 // 📦 IMPORTACIONES DE EXPO Y LIBRERÍAS NATIVAS
 // ============================================================
 import * as NavigationBar from 'expo-navigation-bar';
 import * as Linking from 'expo-linking';
-import { useFonts } from 'expo-font';  // ✅ NUEVO: Para cargar fuentes
-
+import * as ExpoSplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
 
 // ============================================================
 // 📦 COMPONENTES PROPIOS
@@ -141,52 +134,64 @@ import PantallaCrearCupon from './screens/admin/PantallaCrearCupon';
 import PantallaTransmision from './screens/repartidor/PantallaTransmision';
 
 // ============================================================
+// ⏱️ CONSTANTES DE TIMING DEL SPLASH
+// ============================================================
+const SPLASH_MIN_DURATION = 1200;   // Mínimo 1.2s para que se vea la animación
+const SPLASH_MAX_DURATION = 2500;   // Máximo 2.5s antes de forzar la salida
+const SPLASH_LOGO_FADE_DURATION = 800;   // 👈 NUEVO: tiempo que tarda el logo custom en aparecer
+
+// ============================================================
+// 🎨 THEME DE NAVEGACIÓN CON FONDO BLANCO
+// ============================================================
+const themeAppKrusty = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#FFFFFF',
+  },
+};
+
+// ============================================================
 // 🏗️ CREACIÓN DE NAVEGADORES
 // ============================================================
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // ============================================================
+// 🎬 BLOQUEAR EL SPLASH NATIVO HASTA QUE EL CUSTOM ESTÉ LISTO
+// ============================================================
+console.log('🟦 [Module] App.tsx cargado');
+
+ExpoSplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignorar si ya estaba oculto (hot reload, etc)
+});
+
+console.log('🟦 [Module] preventAutoHideAsync llamado');
+
+// ============================================================
 // 🔗 CONFIGURACIÓN DE DEEP LINKING
 // ============================================================
-// Esto permite que la app se abra con enlaces como:
-// - krustyburger://cupon/KB381L7MUA
-// - krustyburger://nueva-contrasena?token=XXX
-// - https://krustyburger.com.ar/canjear
-
 const linking = {
-  // ✅ Prefijos de URL que la app reconoce
   prefixes: [
     'krustyburger://',
     'https://www.krustyburger.com.ar',
     'https://krustyburger.com'
   ],
-
-  // ✅ Configuración de rutas
   config: {
     screens: {
-      // ------------------------------------------------
-      // 🔐 AUTENTICACIÓN
-      // ------------------------------------------------
       ResetPassword: 'reset-password',
       NuevaContrasena: {
         path: 'nueva-contrasena',
-        parse: {
-          token: (token: string) => token,
-        },
+        parse: { token: (token: string) => token },
       },
       Login: 'login',
       Registro: 'registro',
       Bienvenida: 'bienvenida',
 
-      // ------------------------------------------------
-      // 👤 CLIENTE
-      // ------------------------------------------------
       Ofertas: 'ofertas',
       Terminos: 'terminos',
       Privacidad: 'privacidad',
 
-      // ✅ Navegación por tabs
       Principal: {
         screens: {
           Inicio: 'inicio',
@@ -201,20 +206,12 @@ const linking = {
       Recompensas: 'recompensas',
       Seguimiento: 'seguimiento',
 
-      // ------------------------------------------------
-      // 🎫 CUPONES - CLIENTE
-      // ------------------------------------------------
       MisCupones: 'mis-cupones',
       CanjearCupon: {
-        path: 'cupon/:codigo',  // ✅ krustyburger://cupon/KB381L7MUA
-        parse: {
-          codigo: (codigo: string) => codigo,
-        },
+        path: 'cupon/:codigo',
+        parse: { codigo: (codigo: string) => codigo },
       },
 
-      // ------------------------------------------------
-      // 🎫 CUPONES - ADMIN
-      // ------------------------------------------------
       ListaCupones: 'lista-cupones',
       CrearCupon: 'crear-cupon',
       EditarCupon: 'editar-cupon',
@@ -232,16 +229,11 @@ const renderTabBar = (props: any) => {
 // ============================================================
 // 📱 PESTAÑAS DEL CLIENTE
 // ============================================================
-// Estas son las 5 pestañas principales del cliente:
-// Inicio, Menú, Carrito, Pedidos, Perfil
-
 function PestanasCliente() {
   return (
     <Tab.Navigator
       tabBar={renderTabBar}
-      screenOptions={{
-        headerShown: false,  // ✅ Sin header en las tabs
-      }}
+      screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Inicio" component={PantallaInicio} />
       <Tab.Screen name="Menu" component={PantallaMenu} />
@@ -255,40 +247,36 @@ function PestanasCliente() {
 // ============================================================
 // 🚀 COMPONENTE PRINCIPAL DE LA APP
 // ============================================================
-
 export default function App() {
+  console.log('🟩 [App] Componente App renderizó');
 
   // ============================================================
   // 🎨 CARGA DE FUENTES PERSONALIZADAS
   // ============================================================
-  // Cargamos la fuente Simpsonfont desde assets/fonts/.
-  // Mientras carga, mostramos un indicador.
-  // Si falla, la app sigue funcionando con la fuente por defecto.
-
   const [fontsLoaded, fontError] = useFonts({
     'Simpsonfont': require('./assets/fonts/Simpsonfont.ttf'),
   });
 
-  // ⚠️ Loguear error de fuente (si ocurre)
   if (fontError) {
     console.warn('⚠️ Error cargando Simpsonfont:', fontError);
   }
 
   // ============================================================
-  // 🎬 ESTADOS LOCALES
+  // 🎬 ESTADOS DE ARRANQUE
   // ============================================================
-  const [mostrarSplash, setMostrarSplash] = useState(true);
+  const [splashTerminado, setSplashTerminado] = useState(false);
+  const [tiempoMinimoCumplido, setTiempoMinimoCumplido] = useState(false);
 
   // ============================================================
   // 📦 STORES GLOBALES
   // ============================================================
   const {
-    sesion,              // Sesión activa de Supabase
-    cargando,            // ¿Está cargando la sesión?
-    esAdministrador,     // ¿El usuario es admin?
-    esRepartidor,        // ¿El usuario es repartidor?
-    inicializarSesion,   // Función para restaurar sesión
-    perfil               // Perfil del usuario logueado
+    sesion,
+    cargando,
+    esAdministrador,
+    esRepartidor,
+    inicializarSesion,
+    perfil
   } = tiendaAutenticacion();
 
   const { cargarCarrito } = tiendaCarrito();
@@ -296,16 +284,135 @@ export default function App() {
   // ============================================================
   // 🔗 REFERENCIA DE NAVEGACIÓN
   // ============================================================
-  // Permite navegar desde fuera de los componentes (servicios)
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
   // ============================================================
-  // 🔔 CONFIGURAR NAVIGATION REF EN EL SERVICIO DE NOTIFICACIONES
+  // ⏱️ REFS DE TIMERS
+  // ============================================================
+  const minTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 👈 NUEVO: Ref para asegurar que hideAsync se llame UNA sola vez
+  const yaOcultoSplashNativo = useRef(false);
+
+  // ============================================================
+  // ⏱️ TIMER MÍNIMO DEL SPLASH
+  // ============================================================
+  useEffect(() => {
+    minTimerRef.current = setTimeout(() => {
+      console.log('⏱️ [App] Timer mínimo cumplido');
+      setTiempoMinimoCumplido(true);
+    }, SPLASH_MIN_DURATION);
+
+    return () => {
+      if (minTimerRef.current) clearTimeout(minTimerRef.current);
+    };
+  }, []);
+
+  // ============================================================
+  // ⏱️ TIMER MÁXIMO DEL SPLASH
+  // ============================================================
+  useEffect(() => {
+    maxTimerRef.current = setTimeout(() => {
+      setSplashTerminado((prev) => {
+        if (!prev) {
+          console.warn('⚠️ [App] Splash excedió el tiempo máximo, forzando salida');
+          return true;
+        }
+        return prev;
+      });
+    }, SPLASH_MAX_DURATION);
+
+    return () => {
+      if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
+    };
+  }, []);
+
+  // ============================================================
+  // ✅ SALIR DEL SPLASH CUANDO TODO ESTÉ LISTO
+  // ============================================================
+  useEffect(() => {
+    const appLista = (fontsLoaded || fontError) && !cargando;
+    const puedeCerrar = tiempoMinimoCumplido && appLista && !splashTerminado;
+
+    console.log('🔍 [App] Check salir splash:', {
+      tiempoMinimoCumplido,
+      fontsLoaded,
+      fontError: !!fontError,
+      cargando,
+      appLista,
+      splashTerminado,
+      puedeCerrar,
+    });
+
+    if (puedeCerrar) {
+      console.log('✅ [App] Sale del splash (todo listo)');
+
+      if (maxTimerRef.current) {
+        clearTimeout(maxTimerRef.current);
+        maxTimerRef.current = null;
+      }
+
+      setSplashTerminado(true);
+    }
+  }, [tiempoMinimoCumplido, fontsLoaded, fontError, cargando, splashTerminado]);
+
+  // ============================================================
+  // ✅ OCULTAR EL SPLASH NATIVO DESPUÉS DE LA ANIMACIÓN DEL CUSTOM
+  // ============================================================
+  // 👈 NUEVO: Esperamos a que el logo del custom termine de aparecer
+  // (SPLASH_LOGO_FADE_DURATION) antes de ocultar el splash nativo.
+  // Esto evita el hueco blanco entre ambos splashes.
+  //
+  // El ref `yaOcultoSplashNativo` garantiza que hideAsync se llame
+  // UNA sola vez, sin importar cuántas veces re-renderice App.
+  // ============================================================
+  useEffect(() => {
+    if (yaOcultoSplashNativo.current) return;
+    if (splashTerminado) return;
+
+    yaOcultoSplashNativo.current = true;
+
+    const timer = setTimeout(() => {
+      console.log('🟨 [App] Llamando hideAsync (después de animación del logo)');
+      ExpoSplashScreen.hideAsync().catch(() => { });
+    }, SPLASH_LOGO_FADE_DURATION);
+
+    return () => clearTimeout(timer);
+  }, [splashTerminado]);
+
+  // ============================================================
+  // 🚀 INICIALIZACIÓN (sesión + carrito + navigation bar)
+  // ============================================================
+  useEffect(() => {
+    const setupNavigationBar = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          const navBar = NavigationBar as any;
+
+          if (typeof navBar.setBackgroundColorAsync === 'function') {
+            await navBar.setBackgroundColorAsync(temaApp.fondo);
+            await navBar.setButtonStyleAsync('light');
+          } else if (typeof navBar.setStyle === 'function') {
+            await navBar.setStyle('dark');
+          }
+        } catch (error) {
+          console.warn('⚠️ Error configurando barra de navegación:', error);
+        }
+      }
+    };
+
+    setupNavigationBar();
+    inicializarSesion();
+    cargarCarrito();
+  }, []);
+
+  // ============================================================
+  // 🔔 CONFIGURAR NAVIGATION REF
   // ============================================================
   useEffect(() => {
     if (navigationRef.current) {
       setNavigationRef(navigationRef.current);
-      console.log('✅ NavigationRef conectado a notificacionService');
       notificacionService.procesarNotificacionInicial();
     }
   }, [navigationRef.current]);
@@ -314,17 +421,11 @@ export default function App() {
   // 🔔 ESCUCHA DE NOTIFICACIONES PUSH
   // ============================================================
   useEffect(() => {
-    const {
-      subscription,
-      responseSubscription
-    } = notificacionService.escucharNotificaciones();
-
-    console.log('✅ Escucha de notificaciones activada');
+    const { subscription, responseSubscription } = notificacionService.escucharNotificaciones();
 
     return () => {
       subscription.remove();
       responseSubscription.remove();
-      console.log('✅ Escucha de notificaciones desactivada');
     };
   }, []);
 
@@ -338,14 +439,9 @@ export default function App() {
 
         if (sesion && perfil?.id) {
           await notificacionService.registrarToken(perfil.id);
-          console.log('✅ Token FCM registrado para usuario:', perfil.nombre_cliente);
-        } else {
-          console.log('ℹ️ Usuario no logueado, no se registra token');
         }
-
-        console.log('✅ Notificaciones configuradas correctamente');
       } catch (error) {
-        console.warn('⚠️ Error configurando notificaciones:', error);
+        // Silencioso
       }
     };
 
@@ -353,623 +449,219 @@ export default function App() {
   }, [sesion, perfil]);
 
   // ============================================================
-  // 🎨 CONFIGURACIÓN DE LA BARRA DE NAVEGACIÓN (Android)
+  // 🔄 REDIRECCIÓN AUTOMÁTICA AL CERRAR SESIÓN
   // ============================================================
   useEffect(() => {
-    const setupNavigationBar = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          const navBar = NavigationBar as any;
-
-          if (typeof navBar.setBackgroundColorAsync === 'function') {
-            await navBar.setBackgroundColorAsync(temaApp.fondo);
-            await navBar.setButtonStyleAsync('light');
-            console.log('✅ NavigationBar configurada (Async)');
-          } else if (typeof navBar.setBackgroundColor === 'function') {
-            await navBar.setBackgroundColor(temaApp.fondo);
-            if (typeof navBar.setButtonStyle === 'function') {
-              await navBar.setButtonStyle('light');
-            }
-            console.log('✅ NavigationBar configurada (estándar)');
-          } else if (typeof navBar.setStyle === 'function') {
-            await navBar.setStyle('dark');
-            console.log('✅ NavigationBar configurada (setStyle)');
-          } else {
-            console.warn('⚠️ No se encontró método compatible para NavigationBar');
-          }
-        } catch (error) {
-          console.warn('⚠️ Error configurando barra de navegación:', error);
-        }
-      }
-    };
-
-    setupNavigationBar();
-
-    // ✅ Inicializar sesión y carrito
-    inicializarSesion();
-    cargarCarrito();
-  }, []);
-
-  // ============================================================
-  // 🔄 REDIRECCIÓN AUTOMÁTICA POR SESIÓN
-  // ============================================================
-  // Si el usuario cierra sesión, lo mandamos a Bienvenida
-  useEffect(() => {
-    if (!sesion && !cargando && navigationRef.current) {
-      console.log('🔄 Redirigiendo a login (sesión cerrada)');
+    if (!sesion && !cargando && navigationRef.current && splashTerminado) {
       navigationRef.current.reset({
         index: 0,
         routes: [{ name: 'Bienvenida' }],
       });
     }
-  }, [sesion, cargando]);
+  }, [sesion, cargando, splashTerminado]);
 
   // ============================================================
   // 🔗 MANEJAR DEEP LINKING (CUPONES Y RECUPERACIÓN)
   // ============================================================
-  // Detecta cuando la app se abre con un enlace como:
-  // - krustyburger://cupon/KB381L7MUA
-  // - krustyburger://nueva-contrasena?token=XXX
   useEffect(() => {
     const handleDeepLink = async (event: any) => {
       const url = event.url;
-      console.log('📱 Deep link recibido:', url);
-
       if (!url) return;
 
       try {
-        // ------------------------------------------------
-        // 🎫 1. ENLACE DE CUPÓN
-        // ------------------------------------------------
-        // Formato: krustyburger://cupon/KB381L7MUA
         const cuponMatch = url.match(/krustyburger:\/\/cupon\/(.+)/);
         if (cuponMatch) {
           const codigo = cuponMatch[1];
-          console.log('🎫 Código de cupón extraído:', codigo);
-
           setTimeout(() => {
             if (navigationRef.current) {
               navigationRef.current.navigate('CanjearCupon', { codigo });
-              console.log('✅ Navegando a CanjearCupon con código:', codigo);
             }
           }, 500);
           return;
         }
 
-        // ------------------------------------------------
-        // 🔑 2. ENLACE DE RECUPERACIÓN DE CONTRASEÑA
-        // ------------------------------------------------
-        // Formato: krustyburger://nueva-contrasena#access_token=XXX&type=recovery
         if (url.includes('nueva-contrasena')) {
-          console.log('🔑 Detectado enlace de recuperación de contraseña');
-
-          // ✅ Extraer el access_token de la URL (después del #)
           const hashMatch = url.match(/#access_token=([^&]+)/);
-          if (hashMatch) {
-            const token = hashMatch[1];
-            console.log('🔑 Token de acceso extraído:', token.substring(0, 30) + '...');
-            console.log('🔑 Tipo:', url.match(/type=([^&]+)/)?.[1] || 'no especificado');
-
-            setTimeout(() => {
-              if (navigationRef.current) {
-                navigationRef.current.navigate('NuevaContrasena', { token });
-                console.log('✅ Navegando a NuevaContrasena con token');
-              }
-            }, 500);
-            return;
-          }
-
-          // ✅ Fallback: buscar en la URL completa
           const tokenMatch = url.match(/access_token=([^&]+)/);
-          if (tokenMatch) {
-            const token = tokenMatch[1];
-            console.log('🔑 Token extraído (fallback):', token.substring(0, 30) + '...');
+          const token = hashMatch?.[1] || tokenMatch?.[1] || null;
 
-            setTimeout(() => {
-              if (navigationRef.current) {
-                navigationRef.current.navigate('NuevaContrasena', { token });
-                console.log('✅ Navegando a NuevaContrasena con token (fallback)');
-              }
-            }, 500);
-            return;
-          }
-
-          // ✅ Si no hay token, navegar de todas formas
-          console.log('⚠️ No se encontró token, navegando a NuevaContrasena sin token');
           setTimeout(() => {
             if (navigationRef.current) {
-              navigationRef.current.navigate('NuevaContrasena');
-              console.log('✅ Navegando a NuevaContrasena sin token');
+              navigationRef.current.navigate('NuevaContrasena', token ? { token } : undefined);
             }
           }, 500);
         }
-
       } catch (error) {
-        console.error('❌ Error manejando deep link:', error);
+        // Silencioso
       }
     };
 
-    // ✅ Escuchar deep links
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
-    // ✅ Verificar si la app fue abierta con un deep link
     Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('📱 Deep link inicial:', url);
-        handleDeepLink({ url });
-      }
+      if (url) handleDeepLink({ url });
     });
 
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, []);
 
   // ============================================================
-  // ⏳ PANTALLA DE CARGA DE FUENTES
+  // 🎬 LÓGICA DEL SPLASH
   // ============================================================
-  // Mientras carga la fuente, mostramos un indicador
-  if (!fontsLoaded && !fontError) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: temaApp.fondo
-        }}
-      >
-        <ActivityIndicator
-          size="large"
-          color={temaApp.secundario}
-        />
-      </View>
-    );
-  }
+  const appLista = (fontsLoaded || fontError) && !cargando;
+  const debeMostrarSplash = !splashTerminado;
+
+  console.log('🎬 [App] Render:', {
+    debeMostrarSplash,
+    splashTerminado,
+    tiempoMinimoCumplido,
+    appLista,
+  });
 
   // ============================================================
-  // 🎬 SPLASH SCREEN
+  // 🚀 RENDER: app + splash superpuesto
   // ============================================================
-  if (mostrarSplash) {
-    return (
-      <SplashScreen
-        onFinish={() => setMostrarSplash(false)}
-        duration={4000}
-      />
-    );
-  }
-
-  // ============================================================
-  // ⏳ PANTALLA DE CARGA DE SESIÓN
-  // ============================================================
-  if (cargando) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: temaApp.fondo
-        }}
-      >
-        <ActivityIndicator
-          size="large"
-          color={temaApp.secundario}
-        />
-      </View>
-    );
-  }
-
-  // ============================================================
-  // 🚀 APP PRINCIPAL
+  // 👈 CLAVE: La app se monta SIEMPRE debajo. El splash se superpone
+  // con position: absolute. Cuando el splash termina, se desmonta SOLO
+  // el splash, y la app ya está ahí (sin huecos).
   // ============================================================
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      linking={linking}
-      fallback={<ActivityIndicator size="large" color={temaApp.secundario} />}
-    >
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false
-        }}
+    <View style={styles.root}>
+      {/* ================================================== */}
+      {/* 1️⃣ LA APP DE FONDO (siempre montada) */}
+      {/* ================================================== */}
+      <NavigationContainer
+        ref={navigationRef}
+        linking={linking}
+        theme={themeAppKrusty}
+        fallback={<View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />}
       >
-
-        {/* ================================================== */}
-        {/* 👤 USUARIO NO AUTENTICADO */}
-        {/* ================================================== */}
-        {/* Este grupo se muestra cuando NO hay sesión activa */}
-        {!sesion ? (
-
-          <Stack.Group>
-
-            {/* ✅ AUTENTICACIÓN */}
-            <Stack.Screen
-              name="Bienvenida"
-              component={PantallaBienvenida}
-            />
-
-            <Stack.Screen
-              name="Login"
-              component={PantallaLogin}
-            />
-
-            <Stack.Screen
-              name="Registro"
-              component={PantallaRegistro}
-            />
-
-            <Stack.Screen
-              name="ResetPassword"
-              component={PantallaResetPassword}
-            />
-
-            <Stack.Screen
-              name="NuevaContrasena"
-              component={PantallaNuevaContrasena}
-              initialParams={{
-                token: null
-              }}
-            />
-
-            {/* ✅ CLIENTE */}
-            <Stack.Screen
-              name="Principal"
-              component={PestanasCliente}
-            />
-
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Ofertas"
-              component={PantallaOfertas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Recompensas"
-              component={PantallaRecompensas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Checkout"
-              component={PantallaCheckout}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS DE CUPONES - CLIENTE */}
-            <Stack.Screen
-              name="MisCupones"
-              component={PantallaMisCupones}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="CanjearCupon"
-              component={PantallaCanjearCupon}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS LEGALES */}
-            <Stack.Screen
-              name="Terminos"
-              component={PantallaTerminos}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Privacidad"
-              component={PantallaPrivacidad}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-          </Stack.Group>
-
-        ) : esAdministrador ? (
-
-          // ==================================================
-          // 👑 ADMINISTRADOR
-          // ==================================================
-          // Este grupo se muestra cuando el usuario es admin
-          <Stack.Group>
-
-            <Stack.Screen
-              name="PanelAdmin"
-              component={PantallaPanelAdmin}
-            />
-
-            <Stack.Screen
-              name="GestionPedidos"
-              component={PantallaGestionPedidos}
-            />
-
-            <Stack.Screen
-              name="GestionMenu"
-              component={PantallaGestionMenu}
-            />
-
-            <Stack.Screen
-              name="GestionClientes"
-              component={PantallaGestionClientes}
-            />
-
-            <Stack.Screen
-              name="Estadisticas"
-              component={PantallaEstadisticas}
-            />
-
-            <Stack.Screen
-              name="GestionOfertas"
-              component={PantallaGestionOfertas}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="ConfiguracionEnvios"
-              component={PantallaConfiguracionEnvios}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="GestionRecompensas"
-              component={PantallaGestionRecompensas}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="NotificacionesAdmin"
-              component={PantallaNotificacionesAdmin}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS DE CUPONES - ADMIN */}
-            <Stack.Screen
-              name="ListaCupones"
-              component={PantallaListaCupones}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="CrearCupon"
-              component={PantallaCrearCupon}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="EditarCupon"
-              component={PantallaCrearCupon}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ CLIENTE (admin también puede ver) */}
-            <Stack.Screen
-              name="Principal"
-              component={PestanasCliente}
-            />
-
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Ofertas"
-              component={PantallaOfertas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Recompensas"
-              component={PantallaRecompensas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Checkout"
-              component={PantallaCheckout}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="MisCupones"
-              component={PantallaMisCupones}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="CanjearCupon"
-              component={PantallaCanjearCupon}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS LEGALES */}
-            <Stack.Screen
-              name="Terminos"
-              component={PantallaTerminos}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Privacidad"
-              component={PantallaPrivacidad}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-          </Stack.Group>
-
-        ) : esRepartidor ? (
-
-          // ==================================================
-          // 🛵 REPARTIDOR
-          // ==================================================
-          // Este grupo se muestra cuando el usuario es repartidor
-          <Stack.Group>
-
-            <Stack.Screen
-              name="Transmision"
-              component={PantallaTransmision}
-            />
-
-            {/* ✅ PANTALLAS LEGALES */}
-            <Stack.Screen
-              name="Terminos"
-              component={PantallaTerminos}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Privacidad"
-              component={PantallaPrivacidad}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-          </Stack.Group>
-
-        ) : (
-
-          // ==================================================
-          // 👤 CLIENTE AUTENTICADO
-          // ==================================================
-          // Este grupo se muestra cuando el usuario es cliente
-          <Stack.Group>
-
-            <Stack.Screen
-              name="Principal"
-              component={PestanasCliente}
-            />
-
-            <Stack.Screen
-              name="Carrito"
-              component={PantallaCarrito}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Ofertas"
-              component={PantallaOfertas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Seguimiento"
-              component={PantallaSeguimiento}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleProducto"
-              component={PantallaDetalleProducto}
-              options={HEADER_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="DetalleOferta"
-              component={PantallaDetalleOferta}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Recompensas"
-              component={PantallaRecompensas}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="Checkout"
-              component={PantallaCheckout}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="NotificacionesUsuario"
-              component={PantallaNotificacionesUsuario}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS DE CUPONES - CLIENTE */}
-            <Stack.Screen
-              name="MisCupones"
-              component={PantallaMisCupones}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="CanjearCupon"
-              component={PantallaCanjearCupon}
-              options={{ headerShown: false }}
-            />
-
-            {/* ✅ PANTALLAS LEGALES */}
-            <Stack.Screen
-              name="Terminos"
-              component={PantallaTerminos}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-            <Stack.Screen
-              name="Privacidad"
-              component={PantallaPrivacidad}
-              options={HEADER_LEGAL_OPTIONS}
-            />
-
-          </Stack.Group>
-        )}
-
-      </Stack.Navigator>
-    </NavigationContainer>
+        <Stack.Navigator
+          screenOptions={{ headerShown: false }}
+          initialRouteName={
+            !sesion ? 'Bienvenida'
+              : esAdministrador ? 'PanelAdmin'
+                : esRepartidor ? 'Transmision'
+                  : 'Principal'
+          }
+        >
+
+          {/* 👤 USUARIO NO AUTENTICADO */}
+          {!sesion ? (
+            <Stack.Group>
+              <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
+              <Stack.Screen name="Login" component={PantallaLogin} />
+              <Stack.Screen name="Registro" component={PantallaRegistro} />
+              <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
+              <Stack.Screen
+                name="NuevaContrasena"
+                component={PantallaNuevaContrasena}
+                initialParams={{ token: null }}
+              />
+              <Stack.Screen name="Principal" component={PestanasCliente} />
+              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+            </Stack.Group>
+
+          ) : esAdministrador ? (
+
+            // 👑 ADMINISTRADOR
+            <Stack.Group>
+              <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
+              <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
+              <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
+              <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
+              <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
+              <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
+              <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
+              <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
+              <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
+              <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
+              <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+              <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+
+              <Stack.Screen name="Principal" component={PestanasCliente} />
+              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+            </Stack.Group>
+
+          ) : esRepartidor ? (
+
+            // 🛵 REPARTIDOR
+            <Stack.Group>
+              <Stack.Screen name="Transmision" component={PantallaTransmision} />
+              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+            </Stack.Group>
+
+          ) : (
+
+            // 👤 CLIENTE AUTENTICADO
+            <Stack.Group>
+              <Stack.Screen name="Principal" component={PestanasCliente} />
+              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+            </Stack.Group>
+          )}
+
+        </Stack.Navigator>
+      </NavigationContainer>
+
+      {/* ================================================== */}
+      {/* 2️⃣ SPLASH SUPERPUESTO (encima de la app) */}
+      {/* ================================================== */}
+      {debeMostrarSplash && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+          <SplashScreen
+            onFinish={() => {
+              if (tiempoMinimoCumplido && appLista) {
+                setSplashTerminado(true);
+              }
+            }}
+            duration={SPLASH_MAX_DURATION}
+          />
+        </View>
+      )}
+    </View>
   );
 }
+
+// ============================================================
+// 🎨 ESTILOS
+// ============================================================
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+});

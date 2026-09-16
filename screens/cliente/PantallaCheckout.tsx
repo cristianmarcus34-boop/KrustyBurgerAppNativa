@@ -33,6 +33,7 @@ import { formatearPrecio } from '../../lib/formateador';
 import { useBeneficios } from '../../hooks/useBeneficios';
 import { cuponService } from '../../lib/cupones/cuponService';
 import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
+import { supabase } from '../../lib/supabase';  // ✅ FIX #3: import de supabase
 
 import MapaSelector from '../../components/Mapa';
 
@@ -574,6 +575,7 @@ export default function PantallaCheckout(props: any) {
             tiempo_estimado: tiempoEstimado,
             descuento_nivel: resumen.descuentoNivel,
             descuento_cupon: resumen.descuentoCupon,
+            descuento_puntos: resumen.descuentoPuntos,   // ✅ FIX #1: guardar descuento de puntos
             envio_gratis: resumen.envioGratis,
             nivel_cliente: nivel?.nombre || 'Bronce',
         };
@@ -601,6 +603,45 @@ export default function PantallaCheckout(props: any) {
             const resultadoCupon = await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
             if (!resultadoCupon.success) {
                 toast.advertencia(`El pedido #${pedidoId} fue creado, pero el cupón no pudo aplicarse: ${resultadoCupon.mensaje}`);
+            }
+        }
+
+        // ✅ FIX #2: Marcar el canje de puntos como usado y asociarlo al pedido
+        if (cuponPuntosAplicado?.puntos_usados > 0 && perfil?.id && pedidoId) {
+            try {
+                // Buscar el canje más reciente del usuario que coincida con los puntos usados
+                const { data: canjesRecientes, error: errorBuscar } = await supabase
+                    .from('canjes')
+                    .select('id')
+                    .eq('usuario_id', perfil.id)
+                    .eq('puntos_usados', cuponPuntosAplicado.puntos_usados)
+                    .eq('usado_en_pedido', false)
+                    .order('fecha', { ascending: false })
+                    .limit(1);
+
+                if (errorBuscar) {
+                    console.error('❌ Error buscando canje:', errorBuscar);
+                } else if (canjesRecientes && canjesRecientes.length > 0) {
+                    const canjeId = canjesRecientes[0].id;
+                    const { error: errorUpdate } = await supabase
+                        .from('canjes')
+                        .update({
+                            usado_en_pedido: true,
+                            pedido_id: pedidoId,
+                        })
+                        .eq('id', canjeId);
+
+                    if (errorUpdate) {
+                        console.error('❌ Error actualizando canje:', errorUpdate);
+                    } else {
+                        console.log(`✅ Canje #${canjeId} asociado al pedido #${pedidoId}`);
+                    }
+                } else {
+                    console.warn('⚠️ No se encontró canje pendiente para asociar');
+                }
+            } catch (error) {
+                console.error('❌ Error marcando canje como usado:', error);
+                // No frenamos el flujo del pedido por esto
             }
         }
 

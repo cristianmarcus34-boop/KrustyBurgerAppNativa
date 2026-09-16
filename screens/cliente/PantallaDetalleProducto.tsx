@@ -62,7 +62,7 @@ export default function PantallaDetalleProducto(props: any) {
 
   // ✅ Stores
   const { agregarProducto, cantidadTotal } = tiendaCarrito();
-  const { favoritos, agregarFavorito, eliminarFavorito } = tiendaFavoritos();
+  const { idsFavoritos, agregarFavorito, eliminarFavorito } = tiendaFavoritos() as any;
   const { perfil } = tiendaAutenticacion();
 
   // ✅ Obtener producto
@@ -94,19 +94,11 @@ export default function PantallaDetalleProducto(props: any) {
     }
     , [producto]);
 
-  // ✅ ¿Es favorito? (Con conversión de seguridad a string)
+  // ✅ ¿Es favorito? (Verificación directa contra idsFavoritos)
   const esFavorito = useMemo(() => {
     if (!producto?.id) return false;
-    const prodIdStr = String(producto.id);
-
-    return favoritos.some((f: any) => {
-      const fProdId = f.producto_id ? String(f.producto_id) : null;
-      const fId = f.id ? String(f.id) : null;
-      const fNestedProdId = f.productos?.id ? String(f.productos.id) : null;
-
-      return fProdId === prodIdStr || fId === prodIdStr || fNestedProdId === prodIdStr;
-    });
-  }, [favoritos, producto]);
+    return idsFavoritos?.includes(Number(producto.id));
+  }, [idsFavoritos, producto?.id]);
 
   // ✅ ¿Está disponible?
   const disponible = producto?.disponible !== false;
@@ -180,17 +172,20 @@ export default function PantallaDetalleProducto(props: any) {
       return;
     }
 
+    const usuarioId = String(perfil.id);
+    const productoId = Number(producto.id);
+
     try {
       if (esFavorito) {
-        await eliminarFavorito(perfil.id, producto.id);
+        await eliminarFavorito(usuarioId, productoId);
       } else {
-        await agregarFavorito(perfil.id, producto);
+        await agregarFavorito(usuarioId, productoId);
       }
     } catch (error) {
       console.error('Error toggle favorito:', error);
       Alert.alert('Error', 'No pudimos actualizar tus favoritos');
     }
-  }, [producto, perfil?.id, esFavorito, agregarFavorito, eliminarFavorito]);
+  }, [producto?.id, perfil?.id, esFavorito, agregarFavorito, eliminarFavorito]);
 
   // ============================================================
   // 🚫 VALIDACIÓN
@@ -429,7 +424,7 @@ export default function PantallaDetalleProducto(props: any) {
             }
           ]}
         >
-          {/* ✅ NOMBRE + RATING */}
+          {/* ✅ NOMBRE */}
           <Text style={[
             styles.nombre,
             { fontSize: nombreSize, color: DISENO.colors.text }
@@ -655,8 +650,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-
-  // ✅ BADGE CARRITO
   badgeCarrito: {
     position: 'absolute',
     top: -2,
@@ -677,7 +670,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: FUENTES.display,
   },
-
   errorText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -698,12 +690,9 @@ const styles = StyleSheet.create({
     color: DISENO.colors.text,
     fontSize: 16,
   },
-
   scroll: {
     flex: 1,
   },
-
-  // ✅ IMAGEN
   imagenContenedor: {
     width: 'auto',
     overflow: 'hidden',
@@ -758,7 +747,6 @@ const styles = StyleSheet.create({
     color: DISENO.colors.surface,
     fontWeight: 'bold',
   },
-
   info: {
     flex: 1,
   },
@@ -804,7 +792,6 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
-
   seccion: {
     marginTop: 20,
   },
@@ -817,8 +804,6 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.regular,
     opacity: 0.9,
   },
-
-  // ✅ FOOTER STICKY
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -836,7 +821,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  // ✅ SELECTOR DE CANTIDAD
   cantidadSelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -857,7 +841,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: DISENO.colors.text,
   },
-  // ✅ BOTÓN AGREGAR
   addButton: {
     flex: 1,
     overflow: 'hidden',
