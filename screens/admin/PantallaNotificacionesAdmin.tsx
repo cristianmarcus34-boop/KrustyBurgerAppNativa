@@ -22,7 +22,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { notificacionService } from '../../services/notificacionService';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-// ✅ IMPORTAMOS DESDE EL ARCHIVO CENTRALIZADO
 import {
     DISENO,
     useResponsive,
@@ -39,6 +38,8 @@ interface Usuario {
     email: string;
     fcm_token: string | null;
     rol: string;
+    tokens?: string[];        // ✅ NUEVO: array de tokens (multi-dispositivo)
+    tiene_token?: boolean;    // ✅ NUEVO: flag para el badge
 }
 
 interface DetalleNotificacion {
@@ -105,7 +106,6 @@ const SONIDOS = [
 export default function PantallaNotificacionesAdmin(props: any) {
     const insets = useSafeAreaInsets();
     const { perfil } = tiendaAutenticacion();
-    // ✅ USAMOS EL HOOK CENTRALIZADO
     const responsive = useResponsive();
 
     // ✅ Estados
@@ -145,7 +145,6 @@ export default function PantallaNotificacionesAdmin(props: any) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(25)).current;
 
-    // ✅ Tamaños responsivos usando el hook centralizado
     const padding = responsive.getEspaciado('LG');
 
     // ============================================================
@@ -160,7 +159,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
     }, []);
 
     // ============================================================
-    // 🔄 FUNCIONES DE CARGA (se mantienen igual)
+    // 🔄 FUNCIONES DE CARGA
     // ============================================================
     const cargarTodo = async () => {
         setCargando(true);
@@ -238,14 +237,54 @@ export default function PantallaNotificacionesAdmin(props: any) {
     const cargarUsuarios = async () => {
         setCargandoUsuarios(true);
         try {
-            const { data, error } = await supabase
+            // 1. Traer perfiles
+            const { data: perfiles, error } = await supabase
                 .from('perfiles')
-                .select('id, nombre_cliente, email, fcm_token, rol')
+                .select('id, nombre_cliente, email, rol, fcm_token')
                 .in('rol', ['admin', 'cliente', 'repartidor'])
                 .order('nombre_cliente');
 
             if (error) throw error;
-            setUsuarios(data || []);
+            if (!perfiles) {
+                setUsuarios([]);
+                return;
+            }
+
+            // 2. Traer tokens desde dispositivos_push
+            const idsUsuarios = perfiles.map((p: any) => p.id);
+            const { data: dispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('usuario_actual_id, expo_push_token')
+                .in('usuario_actual_id', idsUsuarios)
+                .eq('activo', true);
+
+            // 3. Combinar
+            const usuariosConTokens = perfiles.map((perfil: any) => {
+                const tokensSet = new Set<string>();
+
+                // Token desde dispositivos_push
+                dispositivos
+                    ?.filter((d: any) => d.usuario_actual_id === perfil.id)
+                    .forEach((d: any) => {
+                        if (d.expo_push_token) tokensSet.add(d.expo_push_token);
+                    });
+
+                // Token desde perfiles.fcm_token (retrocompatibilidad)
+                if (perfil.fcm_token && perfil.fcm_token.length > 10) {
+                    tokensSet.add(perfil.fcm_token);
+                }
+
+                const tokens = Array.from(tokensSet);
+
+                return {
+                    ...perfil,
+                    tokens,
+                    fcm_token: tokens[0] || null,
+                    tiene_token: tokens.length > 0,
+                };
+            });
+
+            setUsuarios(usuariosConTokens);
         } catch (error) {
             console.error('Error cargando usuarios:', error);
             Alert.alert('Error', 'No se pudieron cargar los usuarios');
@@ -280,7 +319,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
     }, [notificaciones, filtroTipo, filtroOrigen, busquedaGlobal]);
 
     // ============================================================
-    // 📊 FUNCIONES AUXILIARES (usando DISENO.colors)
+    // 📊 FUNCIONES AUXILIARES
     // ============================================================
     const getRolIcon = (rol: string) => {
         if (rol === 'admin') return '👑';
@@ -318,7 +357,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
     };
 
     // ============================================================
-    // 📷 IMAGEN (se mantiene igual)
+    // 📷 IMAGEN
     // ============================================================
     const seleccionarImagen = async () => {
         try {
@@ -420,14 +459,22 @@ export default function PantallaNotificacionesAdmin(props: any) {
     // ============================================================
     // 📨 ENVÍO DE NOTIFICACIONES
     // ============================================================
+
+    /**
+     * ✅ NUEVO: Consulta AMBAS fuentes de tokens
+     * - dispositivos_push (multi-dispositivo, moderno)
+     * - perfiles.fcm_token (retrocompatibilidad)
+     */
     const obtenerDestinatarios = async () => {
+        // Si hay seleccionados manualmente, usarlos
         if (seleccionados.length > 0) {
             return { count: seleccionados.length, data: seleccionados };
         }
 
+        // 1. Traer usuarios del segmento
         let query = supabase
             .from('perfiles')
-            .select('id, nombre_cliente, email, fcm_token, rol', { count: 'exact' })
+            .select('id, nombre_cliente, email, rol, fcm_token')
             .in('rol', ['admin', 'cliente', 'repartidor']);
 
         if (segmento === 'clientes_frecuentes') {
@@ -463,8 +510,47 @@ export default function PantallaNotificacionesAdmin(props: any) {
             query = query.eq('rol', 'cliente').gt('puntos_disponibles', 0);
         }
 
-        const { data, count } = await query;
-        return { count: count || 0, data: data || [] };
+        const { data: perfiles } = await query;
+
+        if (!perfiles || perfiles.length === 0) {
+            return { count: 0, data: [] };
+        }
+
+        // 2. Traer tokens de dispositivos_push
+        const idsUsuarios = perfiles.map((p: any) => p.id);
+
+        const { data: dispositivos } = await supabase
+            .from('dispositivos_push')
+            .select('usuario_actual_id, expo_push_token')
+            .in('usuario_actual_id', idsUsuarios)
+            .eq('activo', true);
+
+        // 3. Combinar: cada perfil con TODOS sus tokens (únicos)
+        const dataFinal = perfiles.map((perfil: any) => {
+            const tokensSet = new Set<string>();
+
+            // Token desde dispositivos_push
+            dispositivos
+                ?.filter((d: any) => d.usuario_actual_id === perfil.id)
+                .forEach((d: any) => {
+                    if (d.expo_push_token) tokensSet.add(d.expo_push_token);
+                });
+
+            // Token desde perfiles.fcm_token (retrocompatibilidad)
+            if (perfil.fcm_token && perfil.fcm_token.length > 10) {
+                tokensSet.add(perfil.fcm_token);
+            }
+
+            const tokens = Array.from(tokensSet);
+
+            return {
+                ...perfil,
+                tokens,
+                fcm_token: tokens[0] || null,
+            };
+        }).filter((u: any) => u.tokens.length > 0);
+
+        return { count: dataFinal.length, data: dataFinal };
     };
 
     const enviarNotificacion = async () => {
@@ -478,13 +564,21 @@ export default function PantallaNotificacionesAdmin(props: any) {
 
         try {
             const { data: destinatarios } = await obtenerDestinatarios();
-            const conToken = destinatarios.filter((u: any) => u.fcm_token && u.fcm_token.length > 10);
+
+            // ✅ Ahora cada destinatario tiene `tokens` (array)
+            const conToken = destinatarios.filter((u: any) => u.tokens && u.tokens.length > 0);
 
             if (!conToken.length) {
                 Alert.alert('Sin tokens', 'Ningún usuario tiene token FCM válido.');
                 setEnviando(false);
                 return;
             }
+
+            // ✅ Aplanar TODOS los tokens de TODOS los dispositivos
+            const todosLosTokens = conToken.flatMap((u: any) => u.tokens);
+            const tokensUnicos = Array.from(new Set(todosLosTokens));
+
+            console.log('📨 Enviando a', conToken.length, 'usuarios,', tokensUnicos.length, 'tokens únicos');
 
             await notificacionService.guardarNotificacionEnviada(
                 titulo, mensaje, tipo,
@@ -512,8 +606,9 @@ export default function PantallaNotificacionesAdmin(props: any) {
                 datosNotificacion.sonido = sonidoFile;
             }
 
+            // ✅ Enviar a TODOS los tokens únicos
             await notificacionService.enviarNotificacionesMasivas(
-                conToken.map((u: any) => u.fcm_token),
+                tokensUnicos,
                 titulo,
                 mensaje,
                 datosNotificacion
@@ -527,7 +622,10 @@ export default function PantallaNotificacionesAdmin(props: any) {
             setSeleccionados([]);
             await cargarHistorial();
 
-            Alert.alert('✅ Enviado', `Notificación enviada a ${conToken.length} usuarios`);
+            Alert.alert(
+                '✅ Enviado',
+                `Notificación enviada a ${conToken.length} usuarios (${tokensUnicos.length} dispositivos)`
+            );
         } catch (error: any) {
             Alert.alert('Error', error?.message || 'Error inesperado');
         } finally {
@@ -636,7 +734,8 @@ export default function PantallaNotificacionesAdmin(props: any) {
     };
 
     const seleccionarTodosConToken = () => {
-        setSeleccionados(usuarios.filter(u => u.fcm_token && u.fcm_token.length > 10));
+        // ✅ Usamos tiene_token (que ya considera ambos fuentes)
+        setSeleccionados(usuarios.filter(u => u.tiene_token));
     };
 
     const limpiarSeleccion = () => {
@@ -1189,7 +1288,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
             </Animated.ScrollView>
 
             {/* ============================================================ */}
-            {/* MODALES - Todos usan DISENO.colors en lugar de DESIGN.colors */}
+            {/* MODALES */}
             {/* ============================================================ */}
 
             {/* Modal de Detalle */}
@@ -1375,7 +1474,8 @@ export default function PantallaNotificacionesAdmin(props: any) {
                                 keyExtractor={item => item.id}
                                 renderItem={({ item }) => {
                                     const isSelected = seleccionados.some(u => u.id === item.id);
-                                    const hasToken = item.fcm_token && item.fcm_token.length > 10;
+                                    // ✅ Usar `tiene_token` que ya considera ambas fuentes
+                                    const hasToken = (item as any).tiene_token || (item.fcm_token && item.fcm_token.length > 10);
                                     return (
                                         <TouchableOpacity
                                             style={[
@@ -1501,7 +1601,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - USANDO DISENO CENTRALIZADO
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
     container: {
