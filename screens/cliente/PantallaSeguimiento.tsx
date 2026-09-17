@@ -12,7 +12,6 @@ import {
   RefreshControl,
   useWindowDimensions,
   Alert,
-  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -95,7 +94,8 @@ const ESTADO_COLORES_TEXTO: Record<string, string> = {
 // 🏠 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaSeguimiento(props: any) {
-  const { perfil, esAdministrador } = tiendaAutenticacion();
+  // ✅ NUEVO: sesion + cargandoAuth
+  const { perfil, sesion, esAdministrador, cargando: cargandoAuth } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
   const { width } = useWindowDimensions();
@@ -119,6 +119,7 @@ export default function PantallaSeguimiento(props: any) {
   const [direccionCliente, setDireccionCliente] = useState<string>('');
   const [rutaCargada, setRutaCargada] = useState(false);
   const [generandoTicket, setGenerandoTicket] = useState(false);
+  const [noAutorizado, setNoAutorizado] = useState(false);   // ✅ NUEVO
 
   // ✅ DETALLES DE PRECIOS
   const [subtotal, setSubtotal] = useState(0);
@@ -145,9 +146,38 @@ export default function PantallaSeguimiento(props: any) {
   const estadoTextSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
 
   // ============================================================
+  // 🔒 GUARD DE SESIÓN
+  // ============================================================
+  useEffect(() => {
+    if (!cargandoAuth && !sesion) {
+      console.log('🔒 [Seguimiento] Sin sesión → redirigiendo a Login');
+
+      Alert.alert(
+        'Iniciá sesión',
+        'Necesitás una cuenta para ver el seguimiento del pedido.',
+        [
+          {
+            text: 'Volver',
+            style: 'cancel',
+            onPress: () => props.navigation.goBack(),
+          },
+          {
+            text: 'Iniciar sesión',
+            onPress: () => props.navigation.replace('Login'),
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [sesion, cargandoAuth]);
+
+  // ============================================================
   // 🎬 EFECTOS
   // ============================================================
   useEffect(() => {
+    // ✅ No cargar si no hay sesión
+    if (!sesion) return;
+
     const pedidoId = props.route?.params?.pedidoId;
 
     if (!pedidoId) {
@@ -170,7 +200,7 @@ export default function PantallaSeguimiento(props: any) {
     return () => {
       limpiarSuscripcion();
     };
-  }, []);
+  }, [sesion]);
 
   // ✅ CARGAR RUTA DESDE LA DB
   useEffect(() => {
@@ -224,6 +254,15 @@ export default function PantallaSeguimiento(props: any) {
       if (error) { setError('No se pudo cargar el pedido'); return; }
 
       if (data) {
+        // ✅ VALIDACIÓN DE OWNERSHIP
+        const esMio = data.id_de_usuario === perfil?.id;
+        if (!esMio && !esAdministrador) {
+          console.warn('⛔ [Seguimiento] Pedido no pertenece al usuario');
+          setNoAutorizado(true);
+          setError('No tenés permiso para ver este pedido');
+          return;
+        }
+
         setPedido(data as Pedido);
         extraerDireccion(data as Pedido);
         actualizarUbicacion(data as Pedido);
@@ -575,6 +614,40 @@ export default function PantallaSeguimiento(props: any) {
   const puntosValidos = validarCoordenadas(coordenadasRuta);
 
   // ============================================================
+  // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+  // ============================================================
+  if (cargandoAuth || !sesion) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={DISENO.colors.accent} />
+        <Text style={styles.loadingText}>
+          {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+        </Text>
+      </View>
+    );
+  }
+
+  // ============================================================
+  // ⛔ NO AUTORIZADO
+  // ============================================================
+  if (noAutorizado) {
+    return (
+      <View style={styles.centered}>
+        <Ionicons name="lock-closed-outline" size={60} color={DISENO.colors.accent} />
+        <Text style={[styles.errorText, { color: DISENO.colors.accent, marginTop: 12 }]}>
+          No tenés permiso para ver este pedido
+        </Text>
+        <TouchableOpacity style={styles.botonVolver} onPress={() => props.navigation.goBack()} activeOpacity={0.7}>
+          <LinearGradient colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]} style={styles.botonVolverGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <Ionicons name="arrow-back" size={20} color={DISENO.colors.text} />
+            <Text style={styles.botonVolverTexto}>Volver</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ============================================================
   // ⚠️ PANTALLAS DE ESTADO
   // ============================================================
   if (error) {
@@ -641,7 +714,6 @@ export default function PantallaSeguimiento(props: any) {
           <TouchableOpacity style={styles.backButton} onPress={() => props.navigation.goBack()} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={isTablet ? 26 : 22} color={DISENO.colors.text} />
           </TouchableOpacity>
-          {/* ✅ TÍTULO CON SIMPSONFONT */}
           <Text style={[styles.title, { fontSize: tituloSize }]}>📍 Seguimiento</Text>
           <View style={{ width: isTablet ? 26 : 22 }} />
         </Animated.View>
@@ -727,7 +799,6 @@ export default function PantallaSeguimiento(props: any) {
           }]}>
             <Ionicons name="person-circle" size={isTablet ? 36 : 30} color={DISENO.colors.accent} />
             <View style={{ flex: 1 }}>
-              {/* ✅ NOMBRE CON SIMPSONFONT */}
               <Text style={[styles.repartidorNombre, { fontSize: isTablet ? 15 : 13 }]}>
                 {pedido.encabezado_repartidor}
               </Text>
@@ -754,7 +825,6 @@ export default function PantallaSeguimiento(props: any) {
             size={isTablet ? 56 : 42}
             color={estadoColor(estadoActual)}
           />
-          {/* ✅ ESTADO ACTUAL CON SIMPSONFONT */}
           <Text style={[styles.estadoActualText, {
             fontSize: estadoTextSize,
             color: estadoColor(estadoActual),
@@ -797,7 +867,6 @@ export default function PantallaSeguimiento(props: any) {
                   )}
                 </View>
                 <View style={styles.timelineInfo}>
-                  {/* ✅ LABEL CON SIMPSONFONT */}
                   <Text style={[styles.timelineLabel, {
                     fontSize: isTablet ? 15 : 13,
                     color: completado ? DISENO.colors.text : DISENO.colors.textTertiary,
@@ -825,7 +894,6 @@ export default function PantallaSeguimiento(props: any) {
           transform: [{ translateY: slideUpAnim }],
           ...DISENO.shadow.sm,
         }]}>
-          {/* ✅ TÍTULO CON SIMPSONFONT */}
           <Text style={[styles.infoTitulo, { fontSize: isTablet ? 16 : 14 }]}>
             📋 Detalles del Pedido
           </Text>
@@ -853,7 +921,6 @@ export default function PantallaSeguimiento(props: any) {
 
           {/* ✅ RESUMEN DE PRECIOS */}
           <View style={styles.resumenContainer}>
-            {/* ✅ TÍTULO CON SIMPSONFONT */}
             <Text style={[styles.resumenTitulo, { fontSize: isTablet ? 14 : 13 }]}>
               💰 Resumen de precios
             </Text>
@@ -951,7 +1018,6 @@ export default function PantallaSeguimiento(props: any) {
                 ) : (
                   <>
                     <Ionicons name="receipt-outline" size={20} color={DISENO.colors.text} />
-                    {/* ✅ TEXTO CON SIMPSONFONT */}
                     <Text style={styles.botonTicketTexto}>📄 Descargar Ticket</Text>
                   </>
                 )}
@@ -962,7 +1028,6 @@ export default function PantallaSeguimiento(props: any) {
           {/* ✅ PRODUCTOS */}
           {pedido.items_json && (
             <View style={styles.productos}>
-              {/* ✅ TÍTULO CON SIMPSONFONT */}
               <Text style={[styles.productosTitulo, { fontSize: isTablet ? 14 : 13 }]}>🍔 Productos</Text>
               {(() => {
                 let items = pedido.items_json;
@@ -1033,7 +1098,6 @@ const styles = StyleSheet.create({
     backgroundColor: DISENO.colors.surface,
     ...DISENO.shadow.sm,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   title: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1042,7 +1106,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  // ✅ LOADING CON FUENTE REGULAR
   loadingText: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -1076,7 +1139,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  // ✅ MAP INFO CON SIMPSONFONT
   mapInfoText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1088,7 +1150,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     gap: 12,
   },
-  // ✅ REPARTIDOR CON SIMPSONFONT
   repartidorNombre: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1104,7 +1165,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
-  // ✅ ESTADO CON SIMPSONFONT
   estadoActualText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1148,7 +1208,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 2,
   },
-  // ✅ TIMELINE LABEL CON SIMPSONFONT
   timelineLabel: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1165,7 +1224,6 @@ const styles = StyleSheet.create({
   infoPedido: {
     marginTop: 12,
   },
-  // ✅ INFO TÍTULO CON SIMPSONFONT
   infoTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1177,12 +1235,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  // ✅ INFO LABEL CON FUENTE REGULAR
   infoLabel: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
   },
-  // ✅ INFO VALOR CON FUENTE REGULAR
   infoValor: {
     fontFamily: FUENTES.regular,
     fontWeight: '600',
@@ -1194,7 +1250,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: DISENO.colors.border,
   },
-  // ✅ RESUMEN TÍTULO CON SIMPSONFONT
   resumenTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1212,12 +1267,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginVertical: 1,
   },
-  // ✅ RESUMEN LABEL CON FUENTE REGULAR
   resumenLabel: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
   },
-  // ✅ RESUMEN VALOR CON FUENTE REGULAR
   resumenValor: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
@@ -1229,13 +1282,11 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     marginTop: 4,
   },
-  // ✅ TOTAL LABEL CON SIMPSONFONT
   resumenTotalLabel: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
   },
-  // ✅ TOTAL VALOR CON SIMPSONFONT
   resumenTotalValor: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1261,7 +1312,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
   },
-  // ✅ BOTÓN TICKET CON SIMPSONFONT
   botonTicketTexto: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1274,7 +1324,6 @@ const styles = StyleSheet.create({
     borderTopColor: DISENO.colors.border,
     paddingTop: 12,
   },
-  // ✅ PRODUCTOS TÍTULO CON SIMPSONFONT
   productosTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1288,7 +1337,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: DISENO.colors.border,
   },
-  // ✅ PRODUCTOS CON FUENTE REGULAR
   productoNombre: {
     fontFamily: FUENTES.regular,
     flex: 1,
@@ -1324,7 +1372,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  // ✅ BOTÓN VOLVER CON SIMPSONFONT
   botonVolverTexto: {
     fontFamily: FUENTES.display,
     fontWeight: '400',

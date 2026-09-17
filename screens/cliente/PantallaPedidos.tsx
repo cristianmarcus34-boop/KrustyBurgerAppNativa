@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   RefreshControl,
+  Alert,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,7 +37,8 @@ const ESTADOS_CONFIG: Record<string, { label: string; icono: keyof typeof Ionico
 
 export default function PantallaPedidos(props: any) {
   const { pedidos, cargando, cargarPedidosUsuario, limpiarPedidos } = tiendaPedidos();
-  const { perfil } = tiendaAutenticacion();
+  // ✅ NUEVO: traemos sesion y cargandoAuth
+  const { perfil, sesion, cargando: cargandoAuth } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const [refrescando, setRefrescando] = useState(false);
   const { width } = useWindowDimensions();
@@ -46,6 +48,41 @@ export default function PantallaPedidos(props: any) {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
+
+  // ============================================================
+  // 🔒 GUARD DE SESIÓN
+  // ============================================================
+  useEffect(() => {
+    if (!cargandoAuth && !sesion) {
+      Alert.alert(
+        'Iniciá sesión',
+        'Necesitás una cuenta para ver tus pedidos.',
+        [
+          {
+            text: 'Volver',
+            style: 'cancel',
+            onPress: () => {
+              // Volver al inicio del tab
+              try {
+                props.navigation.navigate('Principal', { screen: 'Inicio' });
+              } catch (e) {
+                props.navigation.goBack();
+              }
+            },
+          },
+          {
+            text: 'Iniciar sesión',
+            onPress: () => props.navigation.replace('Login'),
+          },
+          {
+            text: 'Registrarme',
+            onPress: () => props.navigation.replace('Registro'),
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [sesion, cargandoAuth]);
 
   useEffect(() => {
     if (perfil?.id) {
@@ -61,6 +98,7 @@ export default function PantallaPedidos(props: any) {
   }, [perfil]);
 
   const manejarRefresh = async () => {
+    if (!sesion) return;
     setRefrescando(true);
     if (perfil?.id) {
       await cargarPedidosUsuario(perfil.id);
@@ -86,6 +124,15 @@ export default function PantallaPedidos(props: any) {
     const estadoInfo = getEstadoInfo(estado);
     const mostrarInfoEnvio = item.distancia_km !== undefined && item.distancia_km !== null;
 
+    // ✅ GUARD: si no hay sesión, no permitimos navegar
+    const handlePress = () => {
+      if (!sesion) {
+        Alert.alert('Iniciá sesión', 'Necesitás una cuenta para ver el detalle del pedido.');
+        return;
+      }
+      props.navigation.navigate('Seguimiento', { pedidoId: item.id });
+    };
+
     return (
       <TouchableOpacity
         key={item.id?.toString() || index.toString()}
@@ -100,7 +147,7 @@ export default function PantallaPedidos(props: any) {
             ...DISENO.shadow.sm,
           }
         ]}
-        onPress={() => props.navigation.navigate('Seguimiento', { pedidoId: item.id })}
+        onPress={handlePress}
         activeOpacity={0.8}
       >
         <View style={styles.cardHeader}>
@@ -231,7 +278,32 @@ export default function PantallaPedidos(props: any) {
         )}
       </TouchableOpacity>
     );
-  }, [isTablet, isSmall, tarjetaPadding, pedidoIdSize, totalSize, estadoTextSize, infoEnvioSize, iconSize]);
+  }, [isTablet, isSmall, tarjetaPadding, pedidoIdSize, totalSize, estadoTextSize, infoEnvioSize, iconSize, sesion]);
+
+  // ============================================================
+  // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+  // ============================================================
+  if (cargandoAuth || !sesion) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
+          style={styles.backgroundGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={DISENO.colors.accent} />
+          <Text style={[styles.loadingText, {
+            fontSize: isTablet ? 14 : isSmall ? 12 : 13,
+            color: DISENO.colors.textSecondary,
+          }]}>
+            {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

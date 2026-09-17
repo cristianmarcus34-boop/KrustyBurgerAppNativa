@@ -139,6 +139,7 @@ export default function PantallaGestionMenu(props: any) {
   const [precio, setPrecio] = useState('');
   const [categoria, setCategoria] = useState('burgers');
   const [imagen, setImagen] = useState('');
+  const [incluyePapas, setIncluyePapas] = useState(false);   // ✅ NUEVO
 
   // ✅ ANIMACIONES
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -283,6 +284,7 @@ export default function PantallaGestionMenu(props: any) {
         setPrecio(String(producto.precio));
         setCategoria(producto.categoria);
         setImagen(producto.imagen || '');
+        setIncluyePapas(producto.incluye_papas === true);   // ✅ NUEVO
         setModalKey(prev => prev + 1);
         setModalVisible(true);
         setTimeout(() => {
@@ -291,6 +293,7 @@ export default function PantallaGestionMenu(props: any) {
       }, 100);
     } else {
       setProductoEditando(null);
+      setIncluyePapas(false);   // ✅ NUEVO: reset al crear
       setModalKey(prev => prev + 1);
       setModalVisible(true);
     }
@@ -305,6 +308,7 @@ export default function PantallaGestionMenu(props: any) {
       setPrecio('');
       setCategoria('burgers');
       setImagen('');
+      setIncluyePapas(false);   // ✅ NUEVO: reset al cerrar
       setProductoEditando(null);
     }, 300);
   };
@@ -338,6 +342,7 @@ export default function PantallaGestionMenu(props: any) {
       precio: precioNum,
       categoria,
       imagen: imagen || null,
+      incluye_papas: incluyePapas,   // ✅ NUEVO
     };
 
     try {
@@ -824,7 +829,53 @@ export default function PantallaGestionMenu(props: any) {
                   </TouchableOpacity>
                 ))}
               </View>
+              {/* ✅ NUEVO: Incluye papas */}
+              <Text style={[estilos.label, {
+                fontSize: responsive.labelSize,
+                marginTop: 14,
+                color: DESIGN.colors.text,
+              }]}>
+                <Ionicons name="fast-food-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> ¿Incluye papas?
+              </Text>
 
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingVertical: responsive.isTablet ? 14 : responsive.isSmallPhone ? 10 : 12,
+                  paddingHorizontal: responsive.isTablet ? 16 : responsive.isSmallPhone ? 12 : 14,
+                  borderRadius: responsive.isTablet ? 12 : responsive.isSmallPhone ? 8 : 10,
+                  backgroundColor: incluyePapas ? DESIGN.colors.verde + '15' : DESIGN.colors.surfaceHover,
+                  borderWidth: 1.5,
+                  borderColor: incluyePapas ? DESIGN.colors.verde + '40' : DESIGN.colors.border,
+                }}
+                onPress={() => setIncluyePapas(!incluyePapas)}
+                activeOpacity={0.7}
+              >
+                <View style={{
+                  width: responsive.isTablet ? 26 : responsive.isSmallPhone ? 20 : 24,
+                  height: responsive.isTablet ? 26 : responsive.isSmallPhone ? 20 : 24,
+                  borderRadius: responsive.isTablet ? 13 : responsive.isSmallPhone ? 10 : 12,
+                  backgroundColor: incluyePapas ? DESIGN.colors.verde : 'transparent',
+                  borderWidth: 2,
+                  borderColor: incluyePapas ? DESIGN.colors.verde : DESIGN.colors.textTertiary,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  {incluyePapas && (
+                    <Ionicons name="checkmark" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 12 : 16} color={DESIGN.colors.surface} />
+                  )}
+                </View>
+                <Text style={{
+                  fontSize: responsive.isTablet ? 15 : responsive.isSmallPhone ? 12 : 13,
+                  color: incluyePapas ? DESIGN.colors.verde : DESIGN.colors.textSecondary,
+                  fontWeight: '600',
+                  flex: 1,
+                }}>
+                  🍟 Este producto incluye papas fritas
+                </Text>
+              </TouchableOpacity>
               {/* Imagen */}
               <Text style={[estilos.label, {
                 fontSize: responsive.labelSize,

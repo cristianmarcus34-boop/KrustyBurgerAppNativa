@@ -44,7 +44,7 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Platform, StyleSheet } from 'react-native';
+import { View, Platform, StyleSheet, Alert } from 'react-native';
 
 // ============================================================
 // 📦 IMPORTACIONES DE EXPO Y LIBRERÍAS NATIVAS
@@ -136,9 +136,9 @@ import PantallaTransmision from './screens/repartidor/PantallaTransmision';
 // ============================================================
 // ⏱️ CONSTANTES DE TIMING DEL SPLASH
 // ============================================================
-const SPLASH_MIN_DURATION = 2000;        // 👈 subir de 1600 a 2000
-const SPLASH_MAX_DURATION = 3000;        // 👈 subir de 2300 a 3000
-const SPLASH_LOGO_FADE_DURATION = 400;   // 👈 bajar de 800 a 400
+const SPLASH_MIN_DURATION = 2000;
+const SPLASH_MAX_DURATION = 3000;
+const SPLASH_LOGO_FADE_DURATION = 400;
 
 // ============================================================
 // 🎨 THEME DE NAVEGACIÓN CON FONDO BLANCO
@@ -292,7 +292,6 @@ export default function App() {
   const minTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 👈 NUEVO: Ref para asegurar que hideAsync se llame UNA sola vez
   const yaOcultoSplashNativo = useRef(false);
 
   // ============================================================
@@ -360,13 +359,6 @@ export default function App() {
   // ============================================================
   // ✅ OCULTAR EL SPLASH NATIVO DESPUÉS DE LA ANIMACIÓN DEL CUSTOM
   // ============================================================
-  // 👈 NUEVO: Esperamos a que el logo del custom termine de aparecer
-  // (SPLASH_LOGO_FADE_DURATION) antes de ocultar el splash nativo.
-  // Esto evita el hueco blanco entre ambos splashes.
-  //
-  // El ref `yaOcultoSplashNativo` garantiza que hideAsync se llame
-  // UNA sola vez, sin importar cuántas veces re-renderice App.
-  // ============================================================
   useEffect(() => {
     if (yaOcultoSplashNativo.current) return;
     if (splashTerminado) return;
@@ -430,23 +422,53 @@ export default function App() {
   }, []);
 
   // ============================================================
-  // 🔔 REGISTRO DE TOKEN FCM
+  // 🔔 REGISTRO DE TOKEN (SOLO CON SESIÓN)
   // ============================================================
   useEffect(() => {
     const configurarNotificaciones = async () => {
       try {
-        await notificacionService.solicitarPermisos();
-
-        if (sesion && perfil?.id) {
-          await notificacionService.registrarToken(perfil.id);
+        // ✅ Solo si hay sesión activa
+        if (!sesion || !perfil?.id) {
+          console.log('🔕 [Notif] Sin sesión, no se piden permisos');
+          return;
         }
+
+        console.log('🔔 [Notif] Configurando para:', perfil.id);
+
+        // 1. Pedir permisos
+        const permisosConcedidos = await notificacionService.solicitarPermisos();
+        if (!permisosConcedidos) {
+          console.log('🔕 [Notif] Permisos rechazados');
+          return;
+        }
+
+        // 2. Registrar token (upsert en dispositivos_push)
+        await notificacionService.registrarToken(perfil.id);
+        console.log('✅ [Notif] Token registrado');
       } catch (error) {
-        // Silencioso
+        console.warn('⚠️ [Notif] Error:', error);
       }
     };
 
     configurarNotificaciones();
-  }, [sesion, perfil]);
+  }, [sesion, perfil?.id]);
+
+  // ============================================================
+  // 🔄 HEARTBEAT DE ACTIVIDAD
+  // ============================================================
+  useEffect(() => {
+    const heartbeat = async () => {
+      if (!sesion || !perfil?.id) return;
+
+      try {
+        await notificacionService.actualizarActividad(perfil.id);
+      } catch (e) {
+        // Silencioso
+      }
+    };
+
+    heartbeat();
+  }, [sesion, perfil?.id]);
 
   // ============================================================
   // 🔄 REDIRECCIÓN AUTOMÁTICA AL CERRAR SESIÓN
@@ -463,20 +485,38 @@ export default function App() {
   // ============================================================
   // 🔗 MANEJAR DEEP LINKING (CUPONES Y RECUPERACIÓN)
   // ============================================================
+  // ✅ NUEVO: Si el deep link requiere sesión y no la hay,
+  // redirigimos a Login en vez de dejar la navegación rota.
+  // ============================================================
   useEffect(() => {
     const handleDeepLink = async (event: any) => {
       const url = event.url;
       if (!url) return;
 
+      // Esperamos un poco por si la app recién arranca
+      const navegarSeguro = (nombre: string, params?: any) => {
+        setTimeout(() => {
+          if (!navigationRef.current) return;
+
+          // ✅ Si la ruta requiere sesión y no hay, mandamos a Login
+          const requiereSesion = ['CanjearCupon', 'MisCupones', 'Recompensas',
+            'Checkout', 'NotificacionesUsuario', 'Seguimiento'];
+
+          if (requiereSesion.includes(nombre) && !sesion) {
+            console.log(`🔒 Deep link a ${nombre} sin sesión → redirigiendo a Login`);
+            navigationRef.current.navigate('Login');
+            return;
+          }
+
+          navigationRef.current.navigate(nombre as any, params);
+        }, 500);
+      };
+
       try {
         const cuponMatch = url.match(/krustyburger:\/\/cupon\/(.+)/);
         if (cuponMatch) {
           const codigo = cuponMatch[1];
-          setTimeout(() => {
-            if (navigationRef.current) {
-              navigationRef.current.navigate('CanjearCupon', { codigo });
-            }
-          }, 500);
+          navegarSeguro('CanjearCupon', { codigo });
           return;
         }
 
@@ -485,11 +525,7 @@ export default function App() {
           const tokenMatch = url.match(/access_token=([^&]+)/);
           const token = hashMatch?.[1] || tokenMatch?.[1] || null;
 
-          setTimeout(() => {
-            if (navigationRef.current) {
-              navigationRef.current.navigate('NuevaContrasena', token ? { token } : undefined);
-            }
-          }, 500);
+          navegarSeguro('NuevaContrasena', token ? { token } : undefined);
         }
       } catch (error) {
         // Silencioso
@@ -503,7 +539,7 @@ export default function App() {
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [sesion]);
 
   // ============================================================
   // 🎬 LÓGICA DEL SPLASH
@@ -520,10 +556,6 @@ export default function App() {
 
   // ============================================================
   // 🚀 RENDER: app + splash superpuesto
-  // ============================================================
-  // 👈 CLAVE: La app se monta SIEMPRE debajo. El splash se superpone
-  // con position: absolute. Cuando el splash termina, se desmonta SOLO
-  // el splash, y la app ya está ahí (sin huecos).
   // ============================================================
   return (
     <View style={styles.root}>
@@ -546,9 +578,10 @@ export default function App() {
           }
         >
 
-          {/* 👤 USUARIO NO AUTENTICADO */}
+          {/* 👤 USUARIO NO AUTENTICADO (INVITADO) */}
           {!sesion ? (
             <Stack.Group>
+              {/* --- Auth --- */}
               <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
               <Stack.Screen name="Login" component={PantallaLogin} />
               <Stack.Screen name="Registro" component={PantallaRegistro} />
@@ -558,19 +591,24 @@ export default function App() {
                 component={PantallaNuevaContrasena}
                 initialParams={{ token: null }}
               />
+
+              {/* --- Exploración permitida sin sesión --- */}
               <Stack.Screen name="Principal" component={PestanasCliente} />
               <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
               <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
               <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
               <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
-              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
-              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
-              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
               <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
               <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+
+              {/* ❌ NO incluidas a propósito (requieren sesión):
+                  - Seguimiento
+                  - Recompensas
+                  - Checkout
+                  - NotificacionesUsuario
+                  - MisCupones
+                  - CanjearCupon
+              */}
             </Stack.Group>
 
           ) : esAdministrador ? (

@@ -1,5 +1,5 @@
-﻿// screens/auth/PantallaRegistro.tsx - COMPLETO CON CHECKBOX Y PRIVACIDAD
-import React, { useState, useRef, useEffect } from 'react';
+﻿// screens/auth/PantallaRegistro.tsx - COMPLETO CON TIPOGRAFÍA SIMPSON
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,9 +18,90 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
 import { useToast, Toast } from '../../components/Toast';
+import { supabase } from '../../lib/supabase';
 
 const logoImage = require('../../assets/logo-krusty.png');
+
+// ============================================================
+// 🛡️ HELPERS GLOBALES (a prueba de balas)
+// ============================================================
+
+const stringSeguro = (valor: unknown): string => {
+  if (valor === null || valor === undefined) return '';
+  if (typeof valor === 'string') return valor;
+  if (valor instanceof Error) return valor.message || '';
+  if (typeof valor === 'object') {
+    try {
+      const obj = valor as Record<string, unknown>;
+      if (typeof obj.message === 'string') return obj.message;
+      if (typeof obj.error === 'string') return obj.error;
+      if (typeof obj.detalle === 'string') return obj.detalle;
+      if (typeof obj.detail === 'string') return obj.detail;
+      return JSON.stringify(valor);
+    } catch {
+      return 'Error desconocido';
+    }
+  }
+  return String(valor);
+};
+
+const MENSAJES_ERROR: Array<{ match: string; mensaje: string }> = [
+  { match: 'already registered', mensaje: '📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.' },
+  { match: 'already exists', mensaje: '📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.' },
+  { match: 'already in use', mensaje: '📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.' },
+  { match: 'duplicate key', mensaje: '📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.' },
+  { match: 'user already', mensaje: '📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.' },
+  { match: 'email not confirmed', mensaje: '✉️ Tenés que confirmar tu correo antes de continuar. Revisá tu bandeja de entrada.' },
+  { match: 'password should be at least 6', mensaje: '🔒 La contraseña debe tener al menos 6 caracteres.' },
+  { match: 'password is too short', mensaje: '🔒 La contraseña es muy corta. Usá al menos 6 caracteres.' },
+  { match: 'invalid email', mensaje: '📧 El correo no es válido. Revisá que esté bien escrito.' },
+  { match: 'unable to validate email', mensaje: '📧 El correo no es válido. Revisá que esté bien escrito.' },
+  { match: 'signup is disabled', mensaje: '⚠️ El registro está deshabilitado temporalmente. Probá más tarde.' },
+  { match: 'signups not allowed', mensaje: '⚠️ El registro está deshabilitado temporalmente. Probá más tarde.' },
+  { match: 'database error saving new user', mensaje: '⚠️ Hubo un problema al crear tu cuenta. Intentá de nuevo en unos minutos.' },
+  { match: 'database error', mensaje: '⚠️ Hubo un problema al crear tu cuenta. Intentá de nuevo en unos minutos.' },
+  { match: 'rate limit', mensaje: '⏳ Demasiados intentos. Esperá unos minutos antes de volver a intentar.' },
+  { match: 'too many requests', mensaje: '⏳ Demasiados intentos. Esperá unos minutos antes de volver a intentar.' },
+  { match: 'network', mensaje: '📶 Parece que no tenés conexión. Verificá tu internet e intentá de nuevo.' },
+  { match: 'fetch', mensaje: '📶 Parece que no tenés conexión. Verificá tu internet e intentá de nuevo.' },
+  { match: 'timeout', mensaje: '⏱️ La conexión tardó demasiado. Intentá de nuevo.' },
+];
+
+const obtenerMensajeError = (error: unknown): string => {
+  const mensaje = stringSeguro(error).toLowerCase().trim();
+
+  if (!mensaje) {
+    return '❌ No pudimos crear tu cuenta. Intentá de nuevo en unos segundos.';
+  }
+
+  for (const item of MENSAJES_ERROR) {
+    if (mensaje.includes(item.match)) {
+      return item.mensaje;
+    }
+  }
+
+  return '❌ No pudimos crear tu cuenta. Intentá de nuevo en unos segundos.';
+};
+
+const esErrorEmailDuplicado = (error: unknown): boolean => {
+  const mensaje = stringSeguro(error).toLowerCase();
+  return (
+    mensaje.includes('already') ||
+    mensaje.includes('duplicate') ||
+    mensaje.includes('exists') ||
+    mensaje.includes('unique constraint')
+  );
+};
+
+const esEmailValido = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+// ============================================================
+// 🧩 COMPONENTE
+// ============================================================
 
 export default function PantallaRegistro(props: any) {
   const [nombre, setNombre] = useState('');
@@ -30,8 +111,9 @@ export default function PantallaRegistro(props: any) {
   const [cargando, setCargando] = useState(false);
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [terminosAceptados, setTerminosAceptados] = useState(false);
-  const { registrarCliente } = tiendaAutenticacion();
+  const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
 
+  const { registrarCliente } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
   const toast = useToast();
@@ -39,6 +121,7 @@ export default function PantallaRegistro(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const enviandoRef = useRef(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -48,53 +131,144 @@ export default function PantallaRegistro(props: any) {
     ]).start();
   }, []);
 
-  const manejarRegistro = async () => {
-    if (!nombre || !correo || !telefono || !contrasena) {
-      toast.advertencia('Completa todos los campos');
-      return;
+  useEffect(() => {
+    if (errorCorreo && correo) {
+      setErrorCorreo(null);
     }
+  }, [correo]);
 
-    if (!terminosAceptados) {
-      toast.advertencia('Debes aceptar los Términos y Condiciones');
-      return;
+  const verificarEmailExistente = useCallback(async (email: string): Promise<boolean | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('id')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (error) {
+        console.warn('⚠️ No se pudo verificar email:', error.message);
+        return null;
+      }
+
+      return !!data;
+    } catch (error) {
+      console.warn('⚠️ Excepción verificando email:', error);
+      return null;
     }
+  }, []);
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(correo)) {
-      toast.error('Correo electrónico inválido');
-      return;
-    }
+  const manejarRegistro = useCallback(async () => {
+    if (enviandoRef.current || cargando) return;
+    enviandoRef.current = true;
 
-    if (contrasena.length < 6) {
-      toast.advertencia('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
+    setErrorCorreo(null);
 
-    if (telefono.length < 8) {
-      toast.advertencia('Ingresa un número de teléfono válido');
-      return;
-    }
+    try {
+      const nombreTrim = nombre.trim();
+      const correoTrim = correo.trim().toLowerCase();
+      const telefonoTrim = telefono.trim();
 
-    setCargando(true);
-    const resultado = await registrarCliente({
-      correo,
-      contrasena,
-      nombre,
-      telefono,
-    });
-    setCargando(false);
+      if (!nombreTrim || !correoTrim || !telefonoTrim || !contrasena) {
+        toast.advertencia('Completá todos los campos');
+        return;
+      }
 
-    if (typeof resultado === 'string' && resultado) {
-      toast.error(resultado);
-    } else if (resultado && typeof resultado === 'object' && 'error' in resultado) {
-      toast.error(resultado.error || 'Error al registrarse');
-    } else {
+      if (!terminosAceptados) {
+        toast.advertencia('Tenés que aceptar los Términos y Condiciones');
+        return;
+      }
+
+      if (!esEmailValido(correoTrim)) {
+        toast.error('📧 El correo no es válido. Revisá que esté bien escrito.');
+        return;
+      }
+
+      if (contrasena.length < 6) {
+        toast.advertencia('🔒 La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+
+      if (telefonoTrim.length < 8) {
+        toast.advertencia('📞 Ingresá un número de teléfono válido');
+        return;
+      }
+
+      setCargando(true);
+
+      const emailExiste = await verificarEmailExistente(correoTrim);
+
+      if (emailExiste === true) {
+        setErrorCorreo('Este correo ya está registrado. Probá iniciar sesión.');
+        toast.error('📧 Este correo ya está registrado. Probá iniciar sesión o usá otro correo.');
+        return;
+      }
+
+      let resultado: unknown;
+      try {
+        resultado = await registrarCliente({
+          correo: correoTrim,
+          contrasena,
+          nombre: nombreTrim,
+          telefono: telefonoTrim,
+        });
+      } catch (excepcion) {
+        console.error('❌ [Registro] Excepción:', excepcion);
+        const mensaje = obtenerMensajeError(excepcion);
+
+        if (esErrorEmailDuplicado(excepcion)) {
+          setErrorCorreo('Este correo ya está registrado. Probá iniciar sesión.');
+        }
+
+        toast.error(mensaje);
+        return;
+      }
+
+      let mensajeError = '';
+      if (typeof resultado === 'string') {
+        mensajeError = resultado;
+      } else if (resultado && typeof resultado === 'object' && 'error' in resultado) {
+        mensajeError = stringSeguro((resultado as { error: unknown }).error);
+      }
+
+      if (mensajeError) {
+        const mensajeAmigable = obtenerMensajeError(mensajeError);
+
+        if (esErrorEmailDuplicado(mensajeError)) {
+          setErrorCorreo('Este correo ya está registrado. Probá iniciar sesión.');
+        }
+
+        toast.error(mensajeAmigable);
+        return;
+      }
+
       toast.exito('¡Cuenta creada con éxito! 🎉');
       setTimeout(() => {
-        props.navigation.goBack();
+        try {
+          props.navigation.goBack();
+        } catch {
+          // Silencioso
+        }
       }, 1500);
+
+    } catch (error) {
+      console.error('❌ [Registro] Error inesperado:', error);
+      toast.error('❌ Algo salió mal. Intentá de nuevo en unos segundos.');
+    } finally {
+      setCargando(false);
+      enviandoRef.current = false;
     }
-  };
+  }, [
+    cargando,
+    nombre,
+    correo,
+    telefono,
+    contrasena,
+    terminosAceptados,
+    toast,
+    registrarCliente,
+    verificarEmailExistente,
+    props.navigation,
+  ]);
 
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
@@ -136,7 +310,6 @@ export default function PantallaRegistro(props: any) {
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {/* ✅ CONTENEDOR CENTRAL */}
             <View style={estilos.contenidoCentral}>
 
               {/* LOGO */}
@@ -154,10 +327,7 @@ export default function PantallaRegistro(props: any) {
                     source={logoImage}
                     style={[
                       estilos.logoImage,
-                      {
-                        width: logoSize,
-                        height: logoSize,
-                      },
+                      { width: logoSize, height: logoSize },
                     ]}
                     resizeMode="contain"
                   />
@@ -178,20 +348,10 @@ export default function PantallaRegistro(props: any) {
                 >
                   <Text style={estilos.bannerPuntosEmoji}>🎁</Text>
                   <View style={estilos.bannerPuntosTextos}>
-                    <Text
-                      style={[
-                        estilos.bannerPuntosTitulo,
-                        { fontSize: isTablet ? 17 : 14 },
-                      ]}
-                    >
+                    <Text style={[estilos.bannerPuntosTitulo, { fontSize: isTablet ? 17 : 14 }]}>
                       ¡Regístrate y obtén 500 puntos!
                     </Text>
-                    <Text
-                      style={[
-                        estilos.bannerPuntosDesc,
-                        { fontSize: isTablet ? 13 : 11 },
-                      ]}
-                    >
+                    <Text style={[estilos.bannerPuntosDesc, { fontSize: isTablet ? 13 : 11 }]}>
                       Canjealos por descuentos, envíos gratis y más
                     </Text>
                   </View>
@@ -211,16 +371,9 @@ export default function PantallaRegistro(props: any) {
                   },
                 ]}
               >
-                <Text style={[estilos.label, { fontSize: labelSize }]}>
-                  Nombre
-                </Text>
+                <Text style={[estilos.label, { fontSize: labelSize }]}>Nombre</Text>
                 <View style={estilos.inputContainer}>
-                  <Ionicons
-                    name="person-outline"
-                    size={22}
-                    color={DISENO.colors.textTertiary}
-                    style={estilos.inputIcon}
-                  />
+                  <Ionicons name="person-outline" size={22} color={DISENO.colors.textTertiary} style={estilos.inputIcon} />
                   <TextInput
                     style={[estilos.input, { fontSize: inputSize }]}
                     value={nombre}
@@ -228,22 +381,23 @@ export default function PantallaRegistro(props: any) {
                     placeholder="Tu nombre completo"
                     placeholderTextColor={DISENO.colors.textTertiary}
                     selectionColor={DISENO.colors.accent}
+                    editable={!cargando}
                   />
                 </View>
 
-                <Text
-                  style={[
-                    estilos.label,
-                    { fontSize: labelSize, marginTop: 16 },
-                  ]}
-                >
+                <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>
                   Correo electrónico
                 </Text>
-                <View style={estilos.inputContainer}>
+                <View
+                  style={[
+                    estilos.inputContainer,
+                    errorCorreo && { borderColor: DISENO.colors.accent, borderWidth: 2 },
+                  ]}
+                >
                   <Ionicons
                     name="mail-outline"
                     size={22}
-                    color={DISENO.colors.textTertiary}
+                    color={errorCorreo ? DISENO.colors.accent : DISENO.colors.textTertiary}
                     style={estilos.inputIcon}
                   />
                   <TextInput
@@ -254,25 +408,27 @@ export default function PantallaRegistro(props: any) {
                     placeholderTextColor={DISENO.colors.textTertiary}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     selectionColor={DISENO.colors.accent}
+                    editable={!cargando}
                   />
+                  {errorCorreo && (
+                    <Ionicons name="alert-circle" size={20} color={DISENO.colors.accent} />
+                  )}
                 </View>
 
-                <Text
-                  style={[
-                    estilos.label,
-                    { fontSize: labelSize, marginTop: 16 },
-                  ]}
-                >
-                  Teléfono
-                </Text>
+                {errorCorreo && (
+                  <View style={estilos.errorCorreoContainer}>
+                    <Ionicons name="alert-circle-outline" size={14} color={DISENO.colors.accent} />
+                    <Text style={[estilos.errorCorreoTexto, { fontSize: isTablet ? 13 : 11 }]}>
+                      {errorCorreo}
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>Teléfono</Text>
                 <View style={estilos.inputContainer}>
-                  <Ionicons
-                    name="call-outline"
-                    size={22}
-                    color={DISENO.colors.textTertiary}
-                    style={estilos.inputIcon}
-                  />
+                  <Ionicons name="call-outline" size={22} color={DISENO.colors.textTertiary} style={estilos.inputIcon} />
                   <TextInput
                     style={[estilos.input, { fontSize: inputSize }]}
                     value={telefono}
@@ -281,24 +437,13 @@ export default function PantallaRegistro(props: any) {
                     placeholderTextColor={DISENO.colors.textTertiary}
                     keyboardType="phone-pad"
                     selectionColor={DISENO.colors.accent}
+                    editable={!cargando}
                   />
                 </View>
 
-                <Text
-                  style={[
-                    estilos.label,
-                    { fontSize: labelSize, marginTop: 16 },
-                  ]}
-                >
-                  Contraseña
-                </Text>
+                <Text style={[estilos.label, { fontSize: labelSize, marginTop: 16 }]}>Contraseña</Text>
                 <View style={estilos.inputContainer}>
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={22}
-                    color={DISENO.colors.textTertiary}
-                    style={estilos.inputIcon}
-                  />
+                  <Ionicons name="lock-closed-outline" size={22} color={DISENO.colors.textTertiary} style={estilos.inputIcon} />
                   <TextInput
                     style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
                     value={contrasena}
@@ -307,11 +452,9 @@ export default function PantallaRegistro(props: any) {
                     placeholderTextColor={DISENO.colors.textTertiary}
                     secureTextEntry={!mostrarContrasena}
                     selectionColor={DISENO.colors.accent}
+                    editable={!cargando}
                   />
-                  <TouchableOpacity
-                    onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                    style={estilos.eyeButton}
-                  >
+                  <TouchableOpacity onPress={() => setMostrarContrasena(!mostrarContrasena)} style={estilos.eyeButton}>
                     <Ionicons
                       name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                       size={22}
@@ -320,34 +463,25 @@ export default function PantallaRegistro(props: any) {
                   </TouchableOpacity>
                 </View>
 
-                {/* ✅ TÉRMINOS Y PRIVACIDAD - DISEÑO ORGANIZADO */}
+                {/* TÉRMINOS Y PRIVACIDAD */}
                 <View style={estilos.legalContainer}>
-
-                  {/* Checkbox de términos */}
                   <TouchableOpacity
                     style={estilos.terminosCheckboxContainer}
                     onPress={() => setTerminosAceptados(!terminosAceptados)}
                     activeOpacity={0.7}
+                    disabled={cargando}
                   >
                     <View
                       style={[
                         estilos.checkbox,
                         {
-                          borderColor: terminosAceptados
-                            ? DISENO.colors.accent
-                            : DISENO.colors.azul,
-                          backgroundColor: terminosAceptados
-                            ? DISENO.colors.accent
-                            : 'transparent',
+                          borderColor: terminosAceptados ? DISENO.colors.accent : DISENO.colors.azul,
+                          backgroundColor: terminosAceptados ? DISENO.colors.accent : 'transparent',
                         },
                       ]}
                     >
                       {terminosAceptados && (
-                        <Ionicons
-                          name="checkmark"
-                          size={14}
-                          color={DISENO.colors.surface}
-                        />
+                        <Ionicons name="checkmark" size={14} color={DISENO.colors.surface} />
                       )}
                     </View>
 
@@ -362,10 +496,8 @@ export default function PantallaRegistro(props: any) {
                     </Text>
                   </TouchableOpacity>
 
-                  {/* Divisor sutil */}
                   <View style={estilos.legalDivisor} />
 
-                  {/* Enlaces legales */}
                   <View style={estilos.legalLinksContainer}>
                     <TouchableOpacity
                       style={estilos.legalLinkItem}
@@ -373,9 +505,7 @@ export default function PantallaRegistro(props: any) {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="document-text-outline" size={14} color={DISENO.colors.accent} />
-                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>
-                        Términos
-                      </Text>
+                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>Términos</Text>
                     </TouchableOpacity>
 
                     <View style={estilos.legalLinkSeparador} />
@@ -386,16 +516,13 @@ export default function PantallaRegistro(props: any) {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="shield-checkmark-outline" size={14} color={DISENO.colors.accent} />
-                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>
-                        Privacidad
-                      </Text>
+                      <Text style={[estilos.legalLinkTexto, { fontSize: isTablet ? 12 : 11 }]}>Privacidad</Text>
                     </TouchableOpacity>
                   </View>
-
                 </View>
 
                 <TouchableOpacity
-                  style={estilos.boton}
+                  style={[estilos.boton, cargando && { opacity: 0.7 }]}
                   onPress={manejarRegistro}
                   disabled={cargando}
                   activeOpacity={0.8}
@@ -407,45 +534,21 @@ export default function PantallaRegistro(props: any) {
                     end={{ x: 1, y: 0 }}
                   >
                     {cargando ? (
-                      <ActivityIndicator
-                        color={DISENO.colors.surface}
-                        size="small"
-                      />
+                      <ActivityIndicator color={DISENO.colors.surface} size="small" />
                     ) : (
                       <>
-                        <Ionicons
-                          name="person-add"
-                          size={buttonTextSize + 4}
-                          color={DISENO.colors.surface}
-                        />
-                        <Text
-                          style={[
-                            estilos.textoBoton,
-                            { fontSize: buttonTextSize },
-                          ]}
-                        >
-                          Crear Cuenta
-                        </Text>
+                        <Ionicons name="person-add" size={buttonTextSize + 4} color={DISENO.colors.surface} />
+                        <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>Crear Cuenta</Text>
                       </>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
 
                 <View style={estilos.enlacesContainer}>
-                  <TouchableOpacity
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.6}
-                  >
-                    <Text
-                      style={[
-                        estilos.enlace,
-                        { fontSize: isTablet ? 16 : 14 },
-                      ]}
-                    >
+                  <TouchableOpacity onPress={() => props.navigation.goBack()} activeOpacity={0.6}>
+                    <Text style={[estilos.enlace, { fontSize: isTablet ? 16 : 14 }]}>
                       ¿Ya tienes cuenta?{' '}
-                      <Text style={estilos.enlaceDestacado}>
-                        Inicia sesión
-                      </Text>
+                      <Text style={estilos.enlaceDestacado}>Inicia sesión</Text>
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -461,17 +564,8 @@ export default function PantallaRegistro(props: any) {
                   onPress={() => props.navigation.navigate('Principal')}
                   activeOpacity={0.6}
                 >
-                  <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color={DISENO.colors.textTertiary}
-                  />
-                  <Text
-                    style={[
-                      estilos.botonInvitadoTexto,
-                      { fontSize: isTablet ? 16 : 14 },
-                    ]}
-                  >
+                  <Ionicons name="person-outline" size={20} color={DISENO.colors.textTertiary} />
+                  <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
                     Continuar como invitado
                   </Text>
                 </TouchableOpacity>
@@ -492,21 +586,18 @@ export default function PantallaRegistro(props: any) {
   );
 }
 
+// ============================================================
+// 🎨 ESTILOS - CON TIPOGRAFÍA SIMPSON
+// ============================================================
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: DISENO.colors.fondo,
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  contenedor: { flex: 1, backgroundColor: DISENO.colors.fondo },
+  keyboardView: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     minHeight: '100%',
   },
-  // ✅ CONTENEDOR CENTRAL
   contenidoCentral: {
     width: '100%',
     maxWidth: 500,
@@ -526,23 +617,15 @@ const estilos = StyleSheet.create({
     shadowColor: DISENO.colors.accent,
     shadowOpacity: 0.25,
   },
-  logoImage: {
-    backgroundColor: 'transparent',
-    borderRadius: 100,
-  },
+  logoImage: { backgroundColor: 'transparent', borderRadius: 100 },
+  // ✅ TÍTULO CON SIMPSONFONT
   titulo: {
-    fontWeight: '900',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accent,
     letterSpacing: 2,
-    textAlign: 'center',      // ✅ Centra el texto horizontalmente
-    width: '70%',            // ✅ Ocupa todo el ancho disponible
-  },
-  subtitulo: {
-    color: DISENO.colors.textSecondary,
-    marginTop: 4,
-    fontWeight: '300',
-    letterSpacing: 0.5,
-    fontStyle: 'italic',
+    textAlign: 'center',
+    width: '70%',
   },
   bannerPuntosContainer: {
     width: '100%',
@@ -561,17 +644,17 @@ const estilos = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  bannerPuntosEmoji: {
-    fontSize: 32,
-  },
-  bannerPuntosTextos: {
-    flex: 1,
-  },
+  bannerPuntosEmoji: { fontSize: 32 },
+  bannerPuntosTextos: { flex: 1 },
+  // ✅ BANNER TÍTULO CON SIMPSONFONT
   bannerPuntosTitulo: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
-    fontWeight: 'bold',
   },
+  // ✅ BANNER DESCRIPCIÓN CON FUENTE REGULAR
   bannerPuntosDesc: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     marginTop: 2,
   },
@@ -586,8 +669,10 @@ const estilos = StyleSheet.create({
     borderWidth: 1,
     borderColor: DISENO.colors.border,
   },
+  // ✅ LABEL CON SIMPSONFONT
   label: {
-    fontWeight: '500',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.text,
     marginBottom: 6,
     letterSpacing: 0.5,
@@ -602,21 +687,30 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 14,
     height: 54,
   },
-  inputIcon: {
-    marginRight: 12,
-  },
+  inputIcon: { marginRight: 12 },
+  // ✅ INPUT CON FUENTE REGULAR
   input: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
     paddingVertical: 12,
     paddingRight: 8,
     flex: 1,
   },
-  eyeButton: {
-    padding: 4,
+  eyeButton: { padding: 4 },
+  // ✅ ERROR CON FUENTE REGULAR
+  errorCorreoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
-  // ============================================================
-  // ✅ TÉRMINOS Y PRIVACIDAD - DISEÑO ORGANIZADO
-  // ============================================================
+  errorCorreoTexto: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.accent,
+    fontWeight: '600',
+    flex: 1,
+  },
   legalContainer: {
     marginTop: 20,
     width: '100%',
@@ -641,15 +735,19 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
+  // ✅ CHECKBOX TEXTO CON FUENTE REGULAR
   terminosCheckboxTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '400',
     flex: 1,
     lineHeight: 18,
   },
+  // ✅ LINK DE TÉRMINOS CON SIMPSONFONT
   terminosLink: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accent,
-    fontWeight: '600',
     textDecorationLine: 'underline',
   },
   legalDivisor: {
@@ -672,9 +770,11 @@ const estilos = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
+  // ✅ LEGAL LINK CON SIMPSONFONT
   legalLinkTexto: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accent,
-    fontWeight: '500',
   },
   legalLinkSeparador: {
     width: 1,
@@ -697,22 +797,25 @@ const estilos = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 24,
   },
+  // ✅ BOTÓN TEXTO CON SIMPSONFONT
   textoBoton: {
-    fontWeight: '800',
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.surface,
     letterSpacing: 1.5,
   },
-  enlacesContainer: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
+  enlacesContainer: { marginTop: 18, alignItems: 'center' },
+  // ✅ ENLACE CON FUENTE REGULAR
   enlace: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '500',
   },
+  // ✅ ENLACE DESTACADO CON SIMPSONFONT
   enlaceDestacado: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.accent,
-    fontWeight: '700',
   },
   separadorContainer: {
     flexDirection: 'row',
@@ -720,16 +823,14 @@ const estilos = StyleSheet.create({
     marginTop: 22,
     marginBottom: 14,
   },
-  separador: {
-    flex: 1,
-    height: 1,
-    backgroundColor: DISENO.colors.border,
-  },
+  separador: { flex: 1, height: 1, backgroundColor: DISENO.colors.border },
+  // ✅ SEPARADOR TEXTO CON SIMPSONFONT
   separadorTexto: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
     color: DISENO.colors.textTertiary,
     paddingHorizontal: 16,
     fontSize: 12,
-    fontWeight: '600',
   },
   botonInvitado: {
     flexDirection: 'row',
@@ -742,7 +843,9 @@ const estilos = StyleSheet.create({
     borderColor: DISENO.colors.border,
     backgroundColor: DISENO.colors.surfaceHover,
   },
+  // ✅ BOTÓN INVITADO CON FUENTE REGULAR
   botonInvitadoTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.5,

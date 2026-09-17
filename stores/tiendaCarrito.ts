@@ -1,18 +1,34 @@
-﻿// stores/tiendaCarrito.ts - CON FAVORITOS DIFERIDOS AL MÁXIMO
+﻿// stores/tiendaCarrito.ts - CON AGREGAR POR CANTIDAD Y RANKING DIFERIDO
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Producto, ElementoCarrito } from '../lib/tipos';
 import { tiendaFavoritos } from './tiendaFavoritos';
 import { tiendaAutenticacion } from './tiendaAutenticacion';
 
+// ============================================================
+// ⏱️ TIMERS DE RANKING POR PRODUCTO
+// ============================================================
+// Guardamos los timers acá para poder cancelarlos si el producto
+// se quita del carrito antes de los 2s.
+const timersRanking: Record<string, ReturnType<typeof setTimeout>> = {};
+
+const getProductoId = (producto: Producto): string | null => {
+  const id = producto?.id || (producto as any)?.identificacion;
+  return id != null ? String(id) : null;
+};
+
+// ============================================================
+// 📦 STORE
+// ============================================================
 interface EstadoCarrito {
   elementos: ElementoCarrito[];
   cargando: boolean;
+
   cargarCarrito: () => Promise<void>;
-  agregarProducto: (producto: Producto) => Promise<void>;
-  quitarProducto: (idProducto: number) => Promise<void>;
-  aumentarCantidad: (idProducto: number) => Promise<void>;
-  disminuirCantidad: (idProducto: number) => Promise<void>;
+  agregarProducto: (producto: Producto, cantidad?: number) => Promise<void>;
+  quitarProducto: (idProducto: number | string) => Promise<void>;
+  aumentarCantidad: (idProducto: number | string) => Promise<void>;
+  disminuirCantidad: (idProducto: number | string) => Promise<void>;
   vaciarCarrito: () => Promise<void>;
   calcularTotal: () => number;
   cantidadTotal: () => number;
@@ -22,6 +38,9 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
   elementos: [],
   cargando: true,
 
+  // ============================================================
+  // 🔄 CARGAR
+  // ============================================================
   cargarCarrito: async () => {
     try {
       const guardado = await AsyncStorage.getItem('carrito_krusty');
@@ -31,151 +50,197 @@ export const tiendaCarrito = create<EstadoCarrito>((set, get) => ({
         set({ cargando: false });
       }
     } catch (error) {
-      console.error('Error cargando carrito:', error);
+      console.error('❌ Error cargando carrito:', error);
       set({ cargando: false });
     }
   },
 
-  // ✅ OPTIMIZADO: set() primero, todo lo demás diferido
-  agregarProducto: async (producto) => {
-    // 1. OBTENER ID DEL PRODUCTO
-    const idProducto = producto.id || (producto as any).identificacion;
+  // ============================================================
+  // ➕ AGREGAR PRODUCTO (con cantidad)
+  // ============================================================
+  agregarProducto: async (producto, cantidad = 1) => {
+    const idProducto = getProductoId(producto);
+    if (!idProducto || cantidad <= 0) return;
 
-    // 2. ACTUALIZAR ESTADO INMEDIATAMENTE
+    // 1. Actualizar estado INMEDIATAMENTE
     const nuevosElementos = [...get().elementos];
-    const indice = nuevosElementos.findIndex(e => {
-      const id = e.producto.id || (e.producto as any).identificacion;
-      return id === idProducto;
-    });
+    const indice = nuevosElementos.findIndex((e) => getProductoId(e.producto) === idProducto);
 
     if (indice !== -1) {
       nuevosElementos[indice] = {
         ...nuevosElementos[indice],
-        cantidad: nuevosElementos[indice].cantidad + 1,
+        cantidad: nuevosElementos[indice].cantidad + cantidad,
       };
     } else {
-      nuevosElementos.push({ producto, cantidad: 1 });
+      nuevosElementos.push({ producto, cantidad });
     }
 
-    // 3. SETEAR ESTADO → EL BADGE SE ACTUALIZA ACÁ
     set({ elementos: nuevosElementos });
-    console.log('🛒 [Store] Producto agregado, cantidad total:', get().cantidadTotal());
+    console.log('🛒 [Carrito] Producto agregado x', cantidad, '→ total:', get().cantidadTotal());
 
-    // 4. PERSISTIR EN BACKGROUND (diferido para no competir con el render)
+    // 2. Persistir en background
     setTimeout(() => {
       AsyncStorage.setItem('carrito_krusty', JSON.stringify(nuevosElementos))
-        .catch(error => console.error('Error guardando carrito:', error));
+        .catch((error) => console.error('❌ Error guardando carrito:', error));
     }, 0);
 
-    // 5. REGISTRAR FAVORITO MUY DIFERIDO (2 segundos después)
-    //    Cuando ya nadie está mirando el badge, ahí hacemos las 2-3 requests
-    //    a Supabase. NO bloquea la UI porque ya pasó el momento crítico.
-    setTimeout(() => {
+    // 3. Ranking diferido (2s) — SOLO UNA VEZ por producto, y cancelable
+    //    Si el timer ya existe, lo cancelamos y lo recreamos para acumular.
+    if (timersRanking[idProducto]) {
+      clearTimeout(timersRanking[idProducto]);
+      delete timersRanking[idProducto];
+    }
+
+    timersRanking[idProducto] = setTimeout(() => {
       try {
+        // ✅ Solo registrar si el producto SIGUE en el carrito
+        const sigueEnCarrito = get().elementos.some(
+          (e) => getProductoId(e.producto) === idProducto
+        );
+
+        if (!sigueEnCarrito) {
+          console.log('⏭️ [Ranking] Producto ya no está en carrito, skip:', idProducto);
+          delete timersRanking[idProducto];
+          return;
+        }
+
         const { perfil } = tiendaAutenticacion.getState();
         if (perfil?.id) {
-          tiendaFavoritos.getState().agregarFavorito(perfil.id, producto)
-            .catch(favError => console.log('⚠️ Error registrando favorito:', favError));
+          tiendaFavoritos
+            .getState()
+            .agregarAlRanking(String(perfil.id), producto)
+            .catch((favError) =>
+              console.log('⚠️ [Ranking] Error registrando:', favError)
+            );
         }
       } catch (favError) {
-        console.log('⚠️ Error registrando favorito:', favError);
+        console.log('⚠️ [Ranking] Error inesperado:', favError);
+      } finally {
+        delete timersRanking[idProducto];
       }
     }, 2000);
   },
 
+  // ============================================================
+  // ➖ QUITAR PRODUCTO
+  // ============================================================
   quitarProducto: async (idProducto) => {
     try {
-      const elementos = get().elementos.filter(e => {
-        const id = e.producto.id || (e.producto as any).identificacion;
-        return id !== idProducto;
-      });
+      const id = String(idProducto);
 
-      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
+      // ✅ Cancelar timer de ranking si existe
+      if (timersRanking[id]) {
+        clearTimeout(timersRanking[id]);
+        delete timersRanking[id];
+      }
+
+      const elementos = get().elementos.filter(
+        (e) => getProductoId(e.producto) !== id
+      );
+
       set({ elementos });
-      console.log('🛒 [Store] Producto quitado, cantidad total:', get().cantidadTotal());
+      console.log('🛒 [Carrito] Producto quitado → total:', get().cantidadTotal());
 
-      // ✅ PERSISTIR EN BACKGROUND (diferido)
       setTimeout(() => {
         AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
-          .catch(error => console.error('Error guardando carrito:', error));
+          .catch((error) => console.error('❌ Error guardando carrito:', error));
       }, 0);
     } catch (error) {
-      console.error('Error quitando producto:', error);
+      console.error('❌ Error quitando producto:', error);
     }
   },
 
+  // ============================================================
+  // ⬆️ AUMENTAR
+  // ============================================================
   aumentarCantidad: async (idProducto) => {
     try {
-      const elementos = get().elementos.map(e => {
-        const id = e.producto.id || (e.producto as any).identificacion;
-        if (id === idProducto) {
+      const id = String(idProducto);
+      const elementos = get().elementos.map((e) => {
+        if (getProductoId(e.producto) === id) {
           return { ...e, cantidad: e.cantidad + 1 };
         }
         return e;
       });
 
-      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
       set({ elementos });
-      console.log('🛒 [Store] Cantidad aumentada, total:', get().cantidadTotal());
 
-      // ✅ PERSISTIR EN BACKGROUND (diferido)
       setTimeout(() => {
         AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
-          .catch(error => console.error('Error guardando carrito:', error));
+          .catch((error) => console.error('❌ Error guardando carrito:', error));
       }, 0);
     } catch (error) {
-      console.error('Error aumentando cantidad:', error);
+      console.error('❌ Error aumentando cantidad:', error);
     }
   },
 
+  // ============================================================
+  // ⬇️ DISMINUIR
+  // ============================================================
   disminuirCantidad: async (idProducto) => {
     try {
+      const id = String(idProducto);
       const elementos = get().elementos
-        .map(e => {
-          const id = e.producto.id || (e.producto as any).identificacion;
-          if (id === idProducto) {
+        .map((e) => {
+          if (getProductoId(e.producto) === id) {
             return { ...e, cantidad: Math.max(0, e.cantidad - 1) };
           }
           return e;
         })
-        .filter(e => e.cantidad > 0);
+        .filter((e) => e.cantidad > 0);
 
-      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
+      // ✅ Si el producto llegó a 0 y fue eliminado, cancelar timer
+      const sigueExistiendo = elementos.some(
+        (e) => getProductoId(e.producto) === id
+      );
+      if (!sigueExistiendo && timersRanking[id]) {
+        clearTimeout(timersRanking[id]);
+        delete timersRanking[id];
+      }
+
       set({ elementos });
-      console.log('🛒 [Store] Cantidad disminuida, total:', get().cantidadTotal());
 
-      // ✅ PERSISTIR EN BACKGROUND (diferido)
       setTimeout(() => {
         AsyncStorage.setItem('carrito_krusty', JSON.stringify(elementos))
-          .catch(error => console.error('Error guardando carrito:', error));
+          .catch((error) => console.error('❌ Error guardando carrito:', error));
       }, 0);
     } catch (error) {
-      console.error('Error disminuyendo cantidad:', error);
+      console.error('❌ Error disminuyendo cantidad:', error);
     }
   },
 
+  // ============================================================
+  // 🗑️ VACIAR
+  // ============================================================
   vaciarCarrito: async () => {
     try {
-      // ✅ ACTUALIZAR ESTADO INMEDIATAMENTE
-      set({ elementos: [] });
-      console.log('🛒 [Store] Carrito vaciado');
+      // ✅ Cancelar TODOS los timers
+      Object.keys(timersRanking).forEach((id) => {
+        clearTimeout(timersRanking[id]);
+        delete timersRanking[id];
+      });
 
-      // ✅ PERSISTIR EN BACKGROUND (diferido)
+      set({ elementos: [] });
+
       setTimeout(() => {
         AsyncStorage.removeItem('carrito_krusty')
-          .catch(error => console.error('Error eliminando carrito:', error));
+          .catch((error) => console.error('❌ Error eliminando carrito:', error));
       }, 0);
     } catch (error) {
-      console.error('Error vaciando carrito:', error);
+      console.error('❌ Error vaciando carrito:', error);
     }
   },
 
+  // ============================================================
+  // 💰 CÁLCULOS
+  // ============================================================
   calcularTotal: () => {
     return get().elementos.reduce((suma, e) => {
-      const precio = typeof e.producto.precio === 'number'
-        ? e.producto.precio
-        : Number(e.producto.precio);
-      return suma + (precio * e.cantidad);
+      const precio =
+        typeof e.producto.precio === 'number'
+          ? e.producto.precio
+          : Number(e.producto.precio);
+      return suma + precio * e.cantidad;
     }, 0);
   },
 

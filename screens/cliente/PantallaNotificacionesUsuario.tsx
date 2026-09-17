@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { notificacionService } from '../../services/notificacionService';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Colores } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';   // ✅ NUEVO
 
 // ============================================================
 // 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
@@ -125,7 +126,8 @@ const getColorForTipo = (tipo: string) => {
 };
 
 export default function PantallaNotificacionesUsuario(props: any) {
-    const { perfil } = tiendaAutenticacion();
+    // ✅ NUEVO: traemos sesion y cargando del store
+    const { perfil, sesion, cargando: cargandoAuth } = tiendaAutenticacion();
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
     const [notificaciones, setNotificaciones] = useState<any[]>([]);
@@ -138,11 +140,55 @@ export default function PantallaNotificacionesUsuario(props: any) {
     const [notificacionAOcultar, setNotificacionAOcultar] = useState<number | null>(null);
     const [ocultandoTodas, setOcultandoTodas] = useState(false);
 
+    // ============================================================
+    // 🔒 GUARD DE SESIÓN
+    // ============================================================
+    useEffect(() => {
+        if (!cargandoAuth && !sesion) {
+            console.log('🔒 [Notificaciones] Sin sesión → redirigiendo a Login');
+
+            Alert.alert(
+                'Iniciá sesión',
+                'Necesitás una cuenta para ver tus notificaciones.',
+                [
+                    {
+                        text: 'Volver',
+                        style: 'cancel',
+                        onPress: () => props.navigation.goBack(),
+                    },
+                    {
+                        text: 'Iniciar sesión',
+                        onPress: () => props.navigation.replace('Login'),
+                    },
+                    {
+                        text: 'Registrarme',
+                        onPress: () => props.navigation.replace('Registro'),
+                    },
+                ],
+                { cancelable: false }
+            );
+        }
+    }, [sesion, cargandoAuth]);
+
+    // ✅ FIX: Ahora depende de perfil?.id
     useFocusEffect(
         useCallback(() => {
-            cargarNotificaciones();
-        }, [])
+            if (perfil?.id) {
+                cargarNotificaciones();
+            }
+        }, [perfil?.id])
     );
+
+    // ✅ FIX: Si cambia perfil, resetea y recarga
+    useEffect(() => {
+        if (!perfil?.id) {
+            setNotificaciones([]);
+            setNotificacionesOcultas([]);
+            setCargando(false);
+            return;
+        }
+        cargarNotificaciones();
+    }, [perfil?.id]);
 
     const cargarNotificaciones = async () => {
         if (!perfil?.id) {
@@ -236,6 +282,20 @@ export default function PantallaNotificacionesUsuario(props: any) {
     const isSmallPhone = responsive.isSmallPhone;
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const tituloSize = isTablet ? 28 : isSmallPhone ? 20 : 24;
+
+    // ============================================================
+    // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+    // ============================================================
+    if (cargandoAuth || !sesion) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={DESIGN.colors.accent} />
+                <Text style={[styles.loadingText, { color: DESIGN.colors.textSecondary }]}>
+                    {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+                </Text>
+            </View>
+        );
+    }
 
     if (cargando) {
         return (
@@ -570,6 +630,7 @@ const styles = StyleSheet.create({
         backgroundColor: DESIGN.colors.fondo,
     },
     loadingText: {
+        fontFamily: FUENTES.display,
         marginTop: 12,
         opacity: 0.6,
     },
@@ -592,12 +653,14 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     title: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         flex: 1,
         textAlign: 'center',
         letterSpacing: 0.5,
     },
     markAllText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
         opacity: 0.8,
     },
@@ -611,11 +674,13 @@ const styles = StyleSheet.create({
         paddingVertical: 60,
     },
     emptyText: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginTop: 12,
         textAlign: 'center',
     },
     emptySubtext: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         marginTop: 4,
         opacity: 0.6,
@@ -651,6 +716,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     notificacionTipoText: {
+        fontFamily: FUENTES.regular,
         fontWeight: 'bold',
         opacity: 0.8,
     },
@@ -663,14 +729,17 @@ const styles = StyleSheet.create({
         padding: 4,
     },
     notificacionTitulo: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 4,
     },
     notificacionMensaje: {
+        fontFamily: FUENTES.regular,
         marginBottom: 6,
         opacity: 0.7,
     },
     notificacionFecha: {
+        fontFamily: FUENTES.regular,
         opacity: 0.4,
     },
     bannerContainer: {
@@ -692,6 +761,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
     },
     counterText: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
         opacity: 0.8,
     },
@@ -703,6 +773,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     restaurarTexto: {
+        fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
     modalOverlay: {
@@ -723,10 +794,12 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     modalTitle: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
         marginBottom: 8,
     },
     modalMessage: {
+        fontFamily: FUENTES.regular,
         textAlign: 'center',
         marginBottom: 20,
         lineHeight: 20,
@@ -749,7 +822,8 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     modalButtonCancelText: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     modalButtonOcultar: {
         flexDirection: 'row',
@@ -758,7 +832,8 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     modalButtonOcultarText: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
     },
     loadingOverlay: {
         position: 'absolute',
@@ -772,6 +847,7 @@ const styles = StyleSheet.create({
         zIndex: 999,
     },
     loadingOverlayText: {
+        fontFamily: FUENTES.regular,
         marginTop: 12,
         opacity: 0.7,
     },

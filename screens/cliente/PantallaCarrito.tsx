@@ -63,6 +63,7 @@ export default function PantallaCarrito(props: any) {
   const { elementos, aumentarCantidad, disminuirCantidad, quitarProducto, vaciarCarrito, calcularTotal } = tiendaCarrito();
   const {
     perfil,
+    sesion,               // ✅ NUEVO
     ubicacionSeleccionada: ubicacionStore,
     cargarUbicacionTemporal,
     guardarUbicacionTemporal,
@@ -108,13 +109,14 @@ export default function PantallaCarrito(props: any) {
   const tieneProductos = elementos.length > 0;
 
   // ============================================================
-  // 🆕 NUEVAS REGLAS: tope 25% y mínimo $15.000
+  // 🆕 REGLAS: tope 25% y mínimo $15.000
   // ============================================================
 
-  // ✅ ¿El cliente puede usar puntos? (mínimo de compra)
+  // ✅ ¿El cliente puede usar puntos? (requiere sesión + mínimo de compra)
   const puedeUsarPuntos = useMemo(() => {
+    if (!perfil?.id) return false;              // 👈 NUEVO: invitado nunca puede
     return total >= MINIMO_PARA_PUNTOS;
-  }, [total]);
+  }, [total, perfil?.id]);
 
   // ✅ ¿Cuánto le falta para poder usar puntos?
   const faltaParaUsarPuntos = useMemo(() => {
@@ -126,7 +128,6 @@ export default function PantallaCarrito(props: any) {
   const puntosMaximosPermitidos = useMemo(() => {
     if (!puedeUsarPuntos) return 0;
     const maxEnPesos = total * MAX_PORCENTAJE_PUNTOS;
-    // Convertir a puntos (100 pts = $100) y redondear hacia abajo a múltiplos de 100
     const maxEnPuntos = Math.floor(maxEnPesos / VALOR_POR_PUNTO) * VALOR_POR_PUNTO;
     return maxEnPuntos;
   }, [total, puedeUsarPuntos]);
@@ -145,8 +146,19 @@ export default function PantallaCarrito(props: any) {
     ]).start();
   }, []);
 
+  // ✅ FIX: Cargar puntos si hay sesión, resetear si no
   useEffect(() => {
-    if (perfil) cargarPuntosUsuario();
+    if (perfil) {
+      cargarPuntosUsuario();
+    } else {
+      // ✅ Reset cuando no hay sesión (invitado o cerró sesión)
+      setPuntosMaximos(0);
+      setPuntosOriginales(0);
+      setPuntosOriginalesAntesCanje(0);
+      setInputPuntos('');
+      setPuntosSeleccionados(0);
+      setCuponPuntosAplicado(null);
+    }
   }, [perfil]);
 
   useEffect(() => {
@@ -350,14 +362,12 @@ export default function PantallaCarrito(props: any) {
   const handleInputPuntos = (text: string) => {
     const num = parseInt(text) || 0;
     if (num < 0) return;
-    // ✅ Limitar al tope permitido (25% y mínimo de compra)
     const limitado = Math.min(num, puntosMaximosPermitidos, puntosMaximos);
     setInputPuntos(limitado.toString());
     setPuntosSeleccionados(limitado);
   };
 
   const canjearPuntos = async () => {
-    // ✅ Validaciones nuevas
     if (!puedeUsarPuntos) {
       Alert.alert(
         'Mínimo de compra',
@@ -379,7 +389,6 @@ export default function PantallaCarrito(props: any) {
       return;
     }
 
-    // ✅ Validar tope del 25%
     if (puntosSeleccionados > puntosMaximosPermitidos) {
       Alert.alert(
         'Tope máximo alcanzado',
@@ -488,7 +497,6 @@ export default function PantallaCarrito(props: any) {
   const costoEnvioFinal = resumenPedido.costoEnvioFinal;
   const totalFinal = resumenPedido.totalFinal;
 
-  // ✅ Cálculo del ahorro total (descuentos + envío gratis)
   const ahorroPorEnvio = (envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel)
     ? costoEnvioEstimado
     : 0;
@@ -730,7 +738,7 @@ export default function PantallaCarrito(props: any) {
             }
           ]}>
 
-            {/* ✅ BOTÓN DE PUNTOS - CON VALIDACIÓN DE MÍNIMO Y TOPE */}
+            {/* ✅ BOTÓN DE PUNTOS - SOLO SI HAY SESIÓN Y CUMPLE MÍNIMO */}
             {puedeUsarPuntos ? (
               <TouchableOpacity
                 style={[
@@ -780,8 +788,8 @@ export default function PantallaCarrito(props: any) {
                   </View>
                 </View>
               </TouchableOpacity>
-            ) : (
-              // ✅ Aviso cuando no llega al mínimo
+            ) : sesion && !puedeUsarPuntos ? (
+              // ✅ Aviso cuando hay sesión pero no llega al mínimo
               <View style={[
                 styles.avisoMinimo,
                 {
@@ -818,10 +826,11 @@ export default function PantallaCarrito(props: any) {
                   Mínimo de compra: {formatearPrecio(MINIMO_PARA_PUNTOS)}
                 </Text>
               </View>
-            )}
+            ) : null}
+            {/* Si es invitado, no mostramos ni botón de puntos ni aviso de mínimo (no aplica) */}
 
-            {/* ✅ BADGE DE NIVEL DEL USUARIO */}
-            {nivel && (
+            {/* ✅ BADGE DE NIVEL DEL USUARIO - SOLO SI HAY SESIÓN */}
+            {sesion && nivel && (
               <View style={[
                 styles.nivelBadge,
                 {
@@ -897,7 +906,6 @@ export default function PantallaCarrito(props: any) {
                 </View>
               )}
 
-              {/* ✅ DESCUENTO POR NIVEL */}
               {descuentoNivel > 0 && (
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: DISENO.colors.success }]}>
@@ -966,7 +974,6 @@ export default function PantallaCarrito(props: any) {
                 </View>
               )}
 
-              {/* ✅ AHORRO TOTAL */}
               {mostrarAhorro && (
                 <View style={[
                   styles.ahorroContainer,
@@ -1061,15 +1068,18 @@ export default function PantallaCarrito(props: any) {
       {/* 🔹 MODALES */}
       {/* ============================================================ */}
 
-      {/* Modal de Login */}
+      {/* ✅ MODAL DE LOGIN MEJORADO: con opción de Registro */}
       <Modal visible={mostrarModalLogin} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modal, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border, borderWidth: 1, ...DISENO.shadow.lg }]}>
             <Text style={[styles.modalIcon, { fontSize: 60 }]}>🔐</Text>
-            <Text style={[styles.modalTitle, { fontSize: 18, color: DISENO.colors.text }]}>Inicia sesión</Text>
-            <Text style={[styles.modalText, { color: DISENO.colors.textSecondary }]}>
-              Debes iniciar sesión para realizar pedidos
+            <Text style={[styles.modalTitle, { fontSize: 18, color: DISENO.colors.text }]}>
+              Necesitás una cuenta
             </Text>
+            <Text style={[styles.modalText, { color: DISENO.colors.textSecondary }]}>
+              Para hacer tu pedido tenés que iniciar sesión o registrarte.
+            </Text>
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalCancel, { backgroundColor: DISENO.colors.surfaceHover, borderColor: DISENO.colors.border }]}
@@ -1084,9 +1094,26 @@ export default function PantallaCarrito(props: any) {
                 activeOpacity={0.7}
               >
                 <Ionicons name="log-in" size={18} color={DISENO.colors.text} />
-                <Text style={[styles.modalConfirmText, { color: DISENO.colors.text }]}>Iniciar sesión</Text>
+                <Text style={[styles.modalConfirmText, { color: DISENO.colors.text }]}>Ingresar</Text>
               </TouchableOpacity>
             </View>
+
+            {/* ✅ Nuevo: botón de registro */}
+            <TouchableOpacity
+              style={{ marginTop: 14, paddingVertical: 8 }}
+              onPress={() => { setMostrarModalLogin(false); props.navigation.navigate('Registro'); }}
+              activeOpacity={0.7}
+            >
+              <Text style={{
+                fontFamily: FUENTES.regular,
+                fontSize: 13,
+                color: DISENO.colors.accent,
+                textAlign: 'center',
+                textDecorationLine: 'underline',
+              }}>
+                ¿No tenés cuenta? Registrate gratis
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1150,7 +1177,6 @@ export default function PantallaCarrito(props: any) {
                 </Text>
               </View>
 
-              {/* ✅ Info del tope */}
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[styles.modalPuntosInfoLabel, {
                   fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }),
@@ -1227,7 +1253,6 @@ export default function PantallaCarrito(props: any) {
                     borderLeftColor: DISENO.colors.border,
                   }]}
                   onPress={() => {
-                    // ✅ Limitar al tope permitido
                     const nuevo = Math.min(
                       Math.min(puntosMaximos, puntosMaximosPermitidos),
                       puntosSeleccionados + 100
@@ -1241,7 +1266,6 @@ export default function PantallaCarrito(props: any) {
                 </TouchableOpacity>
               </View>
 
-              {/* ✅ Aviso de tope máximo */}
               <Text style={{
                 fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
                 color: DISENO.colors.textSecondary,
@@ -1510,7 +1534,6 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
-  // ✅ NUEVO: Estilos para el aviso de mínimo
   avisoMinimo: {
     borderWidth: 1.5,
     alignItems: 'center',
@@ -1805,8 +1828,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 13,
   },
-
-  // ✅ BADGE DE NIVEL
   nivelBadge: {
     flexDirection: 'row',
     alignItems: 'center',

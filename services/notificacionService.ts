@@ -1,11 +1,11 @@
-// services/notificacionService.ts
+// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ✅ NAVIGATION REF - Para navegar desde notificaciones
+// ✅ NAVIGATION REF
 let navigationRef: any = null;
 let isAppReady = false;
 let notificacionesPendientes: any[] = [];
@@ -13,77 +13,63 @@ let notificacionesPendientes: any[] = [];
 export const setNavigationRef = (ref: any) => {
     navigationRef = ref;
     isAppReady = true;
-    console.log('✅ NavigationRef configurado para notificaciones');
+    console.log('✅ NavigationRef configurado');
 
-    // ✅ Procesar notificaciones pendientes
     if (notificacionesPendientes.length > 0) {
         console.log(`📱 Procesando ${notificacionesPendientes.length} notificaciones pendientes...`);
-        notificacionesPendientes.forEach(notif => {
-            procesarNotificacion(notif);
-        });
+        notificacionesPendientes.forEach(notif => procesarNotificacion(notif));
         notificacionesPendientes = [];
     }
 };
 
-// ✅ FUNCIÓN PARA PROCESAR NOTIFICACIÓN
+// ✅ PROCESAR NOTIFICACIÓN
 const procesarNotificacion = (data: any) => {
     if (!navigationRef) {
-        // ✅ Guardar para después
         notificacionesPendientes.push(data);
-        console.log('📱 Notificación guardada para procesar después');
+        console.log('📱 Notificación guardada para después');
         return;
     }
 
     const tipo = data?.tipo || 'sistema';
 
-    // ✅ Verificar si el usuario está logueado (usando el store)
     try {
         const { tiendaAutenticacion } = require('../stores/tiendaAutenticacion');
         const state = tiendaAutenticacion.getState();
         const { sesion } = state;
 
         if (!sesion) {
-            // ✅ Si no está logueado, guardar la notificación y redirigir al Login
-            console.log('🔒 Usuario no logueado, guardando notificación para después');
+            console.log('🔒 Usuario no logueado, guardando notificación');
             notificacionesPendientes.push(data);
-
-            // ✅ Navegar al Login
             navigationRef.navigate('Login');
             return;
         }
     } catch (error) {
         console.error('Error verificando sesión:', error);
-        // Si hay error, redirigir al Login por seguridad
         navigationRef.navigate('Login');
         return;
     }
 
-    // ✅ Usuario logueado - navegar según tipo
     switch (tipo) {
         case 'pedido':
             if (data?.pedidoId) {
-                console.log('🔗 Navegando a Seguimiento con pedido:', data.pedidoId);
                 navigationRef.navigate('Seguimiento', { pedidoId: data.pedidoId });
             } else {
-                console.log('🔗 Navegando a NotificacionesUsuario');
                 navigationRef.navigate('NotificacionesUsuario');
             }
             break;
         case 'recompensa':
-            console.log('🔗 Navegando a Recompensas');
             navigationRef.navigate('Recompensas');
             break;
         case 'promocion':
         case 'oferta':
         case 'sistema':
         default:
-            console.log('🔗 Navegando a NotificacionesUsuario');
             navigationRef.navigate('NotificacionesUsuario');
             break;
     }
 };
 
-// ✅ CONFIGURACIÓN DE NOTIFICACIONES
+// ✅ CONFIG
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowBanner: true,
@@ -96,28 +82,61 @@ Notifications.setNotificationHandler({
 const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send';
 const NOTIFICACIONES_OCULTAS_KEY = '@notificaciones_ocultas';
 
+// ✅ Project ID (usa tu valor existente)
+const getProjectId = (): string => {
+    const config = Constants.expoConfig as any;
+    return config?.extra?.eas?.projectId ||
+        config?.projectId ||
+        '709ab55b-7649-4a00-8a9c-a9dfd6aa2277';
+};
+
 export const notificacionService = {
 
     // ============================================================
     // 📱 REGISTRO Y PERMISOS
     // ============================================================
 
+    /**
+     * Registra el token en `dispositivos_push` Y en `perfiles.fcm_token` (compatibilidad)
+     */
     async registrarToken(usuarioId: string) {
         try {
-            const config = Constants.expoConfig as any;
-            const projectId = config?.extra?.eas?.projectId ||
-                config?.projectId ||
-                '709ab55b-7649-4a00-8a9c-a9dfd6aa2277';
-
+            const projectId = getProjectId();
             const token = await Notifications.getExpoPushTokenAsync({ projectId });
+            const plataforma = Platform.OS;
 
-            const { error } = await supabase
+            // ✅ 1. Upsert en dispositivos_push
+            const { error: errorDispositivo } = await supabase
+                .from('dispositivos_push')
+                .upsert(
+                    {
+                        expo_push_token: token.data,
+                        usuario_actual_id: usuarioId,
+                        plataforma,
+                        activo: true,
+                        ultima_actividad: new Date().toISOString(),
+                    },
+                    { onConflict: 'expo_push_token' }
+                );
+
+            if (errorDispositivo) {
+                console.error('❌ Error en dispositivos_push:', errorDispositivo);
+            }
+
+            // ✅ 2. Compatibilidad: mantener perfiles.fcm_token actualizado
+            const { error: errorPerfil } = await supabase
                 .from('perfiles')
-                .update({ fcm_token: token.data, ultimo_acceso: new Date().toISOString() })
+                .update({
+                    fcm_token: token.data,
+                    ultimo_acceso: new Date().toISOString(),
+                })
                 .eq('id', usuarioId);
 
-            if (error) throw error;
-            console.log('✅ Token FCM registrado:', token.data);
+            if (errorPerfil) {
+                console.warn('⚠️ Error actualizando perfiles.fcm_token:', errorPerfil);
+            }
+
+            console.log('✅ Token registrado:', token.data);
             return true;
         } catch (error) {
             console.error('❌ Error registrando token:', error);
@@ -125,7 +144,82 @@ export const notificacionService = {
         }
     },
 
-    // ✅ SOLICITAR PERMISOS CON CANALES CONFIGURADOS CON SONIDOS
+    /**
+     * Obtiene el token actual sin guardarlo
+     */
+    async obtenerTokenActual(): Promise<string | null> {
+        try {
+            const projectId = getProjectId();
+            const token = await Notifications.getExpoPushTokenAsync({ projectId });
+            return token.data;
+        } catch (error) {
+            console.warn('⚠️ Error obteniendo token actual:', error);
+            return null;
+        }
+    },
+
+    /**
+     * Desasocia el usuario del dispositivo actual (NO borra el token)
+     */
+    async desasociarUsuario(usuarioId: string): Promise<boolean> {
+        if (!usuarioId) return false;
+
+        try {
+            const { error } = await supabase
+                .from('dispositivos_push')
+                .update({ usuario_actual_id: null })
+                .eq('usuario_actual_id', usuarioId);
+
+            if (error) {
+                console.error('❌ Error desasociando:', error);
+                return false;
+            }
+
+            console.log('✅ Usuario desasociado de dispositivos');
+            return true;
+        } catch (error) {
+            console.error('❌ Error:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Actualiza ultima_actividad (heartbeat)
+     */
+    async actualizarActividad(usuarioId?: string): Promise<boolean> {
+        try {
+            const token = await this.obtenerTokenActual();
+            if (!token) return false;
+
+            const update: any = {
+                ultima_actividad: new Date().toISOString(),
+                activo: true,
+            };
+
+            if (usuarioId) {
+                update.usuario_actual_id = usuarioId;
+            }
+
+            const { error } = await supabase
+                .from('dispositivos_push')
+                .update(update)
+                .eq('expo_push_token', token);
+
+            if (error) {
+                console.warn('⚠️ Error actualizando actividad:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('⚠️ Error:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Permisos + canales de Android con sonidos personalizados
+     */
     async solicitarPermisos() {
         try {
             const { status } = await Notifications.requestPermissionsAsync();
@@ -203,7 +297,7 @@ export const notificacionService = {
                     sound: 'saxolisa.wav',
                 });
             }
-            console.log('✅ Permisos concedidos y canales configurados con sonidos');
+            console.log('✅ Permisos concedidos y canales configurados');
             return true;
         } catch (error) {
             console.error('❌ Error solicitando permisos:', error);
@@ -211,7 +305,9 @@ export const notificacionService = {
         }
     },
 
-    // ✅ ESCUCHAR NOTIFICACIONES CON NAVEGACIÓN
+    /**
+     * Escucha notificaciones
+     */
     escucharNotificaciones() {
         const subscription = Notifications.addNotificationReceivedListener(n => {
             console.log('📱 Notificación recibida:', n.request.content.title);
@@ -219,26 +315,24 @@ export const notificacionService = {
 
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(n => {
             console.log('👆 Click en notificación:', n.notification.request.content.data);
-            const data = n.notification.request.content.data;
-            procesarNotificacion(data);
+            procesarNotificacion(n.notification.request.content.data);
         });
 
         return { subscription, responseSubscription };
     },
 
-    // ✅ PROCESAR NOTIFICACIÓN INICIAL (app cerrada)
+    /**
+     * Procesa notificación inicial
+     */
     async procesarNotificacionInicial() {
         try {
             const response = await Notifications.getLastNotificationResponseAsync();
             if (response) {
-                console.log('📱 Notificación inicial (app cerrada):', response.notification.request.content.data);
                 const data = response.notification.request.content.data;
-                // ✅ Esperar a que la app esté lista
                 if (navigationRef) {
                     procesarNotificacion(data);
                 } else {
                     notificacionesPendientes.push(data);
-                    console.log('📱 Notificación guardada para procesar después (app iniciando)');
                 }
             }
         } catch (error) {
@@ -247,9 +341,12 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // 📤 ENVÍO DE NOTIFICACIONES CON IMAGEN Y SONIDO
+    // 📤 ENVÍO
     // ============================================================
 
+    /**
+     * Envía a múltiples tokens (con imagen y sonido)
+     */
     async enviarNotificacionesMasivas(tokens: string[], titulo: string, mensaje: string, data?: any) {
         try {
             const tokensValidos = tokens.filter(t => t && t.length > 10);
@@ -257,11 +354,8 @@ export const notificacionService = {
                 return { success: false, errores: ['No hay tokens válidos'] };
             }
 
-            console.log('📷 ========== ENVIANDO NOTIFICACIONES ==========');
-            console.log('📷 Tokens válidos:', tokensValidos.length);
-            console.log('📷 Título:', titulo);
-            console.log('📷 Mensaje:', mensaje);
-            console.log('📷 Datos recibidos:', JSON.stringify(data, null, 2));
+            console.log('📷 ========== ENVIANDO ==========');
+            console.log('📷 Tokens:', tokensValidos.length, '| Título:', titulo);
 
             const messages = tokensValidos.map(token => {
                 const sonidoSeleccionado = data?.sonido;
@@ -289,7 +383,6 @@ export const notificacionService = {
                         ? sonidoSeleccionado
                         : `${sonidoSeleccionado}.wav`;
                     message.sound = soundFile;
-                    console.log('🔊 Sonido personalizado agregado al payload:', soundFile);
                 }
 
                 const imagenUrl = data?.imagen;
@@ -297,7 +390,6 @@ export const notificacionService = {
                     if (imagenUrl.startsWith('http://') || imagenUrl.startsWith('https://')) {
                         message.image = imagenUrl;
                         message.sticky = true;
-                        console.log('✅ IMAGEN AGREGADA AL PAYLOAD:', imagenUrl);
                     }
                 }
 
@@ -313,7 +405,7 @@ export const notificacionService = {
             const result = await response.json();
 
             if (result.errors) {
-                console.error('❌ Errores en la respuesta:', result.errors);
+                console.error('❌ Errores:', result.errors);
                 return { success: false, errores: result.errors };
             }
 
@@ -326,17 +418,26 @@ export const notificacionService = {
                 success: fallidos === 0,
                 resultados: { total: tokensValidos.length, exitos, fallidos },
                 data: result.data,
-                errores: fallidos > 0 ? 'Algunos mensajes fallaron' : undefined,
             };
-
         } catch (error: any) {
-            console.error('❌ Error enviando notificaciones:', error);
+            console.error('❌ Error enviando:', error);
             return { success: false, errores: [error?.message || 'Error desconocido'] };
         }
     },
 
-    async enviarNotificacionAUsuario(usuarioId: string, titulo: string, mensaje: string, tipo: string = 'sistema', imagen?: string, sonido?: string) {
+    /**
+     * Envía a un usuario (a TODOS sus dispositivos)
+     */
+    async enviarNotificacionAUsuario(
+        usuarioId: string,
+        titulo: string,
+        mensaje: string,
+        tipo: string = 'sistema',
+        imagen?: string,
+        sonido?: string
+    ) {
         try {
+            // 1. Guardar en notificaciones_usuarios
             const { error: insertError } = await supabase
                 .from('notificaciones_usuarios')
                 .insert({
@@ -350,51 +451,90 @@ export const notificacionService = {
 
             if (insertError) throw insertError;
 
-            const { data: usuario } = await supabase
-                .from('perfiles')
-                .select('fcm_token')
-                .eq('id', usuarioId)
-                .single();
+            // 2. Traer TODOS los tokens del usuario
+            const { data: dispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .eq('usuario_actual_id', usuarioId)
+                .eq('activo', true);
 
-            if (usuario?.fcm_token) {
-                const message: any = {
-                    to: usuario.fcm_token,
-                    title: titulo,
-                    body: mensaje,
-                    data: {
-                        tipo,
-                        screen: 'NotificacionesUsuario',
-                        timestamp: Date.now(),
-                    },
-                    priority: 'high',
-                };
-
-                if (sonido && sonido !== 'default') {
-                    const soundFile = sonido.endsWith('.wav') ? sonido : `${sonido}.wav`;
-                    message.sound = soundFile;
-                }
-
-                if (imagen && imagen.startsWith('http')) {
-                    message.image = imagen;
-                    message.sticky = true;
-                }
-
-                await fetch(EXPO_PUSH_API, {
-                    method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify(message),
-                });
+            if (!dispositivos || dispositivos.length === 0) {
+                console.log('ℹ️ Usuario sin dispositivos activos');
+                return { success: true, enviados: 0 };
             }
 
-            return { success: true };
+            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+
+            return await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
+                tipo, imagen, sonido
+            });
         } catch (error) {
             console.error('❌ Error:', error);
             return { success: false, error };
         }
     },
 
+    /**
+     * Envía a TODOS los dispositivos activos (marketing masivo)
+     */
+    async enviarNotificacionMasiva(
+        titulo: string,
+        mensaje: string,
+        tipo: string = 'sistema',
+        imagen?: string,
+        sonido?: string
+    ) {
+        try {
+            const hace60dias = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+
+            const { data: dispositivos, error } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .eq('activo', true)
+                .gte('ultima_actividad', hace60dias);
+
+            if (error) throw error;
+            if (!dispositivos || dispositivos.length === 0) {
+                return { success: true, enviados: 0 };
+            }
+
+            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+
+            // Batches de 100 (límite de Expo)
+            const BATCH_SIZE = 100;
+            let exitosTotales = 0;
+            let fallidosTotales = 0;
+
+            for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+                const batch = tokens.slice(i, i + BATCH_SIZE);
+                const resultado = await this.enviarNotificacionesMasivas(
+                    batch, titulo, mensaje, { tipo, imagen, sonido }
+                );
+
+                if (resultado.resultados) {
+                    exitosTotales += resultado.resultados.exitos;
+                    fallidosTotales += resultado.resultados.fallidos;
+                }
+            }
+
+            console.log(`✅ Masiva: ${exitosTotales} OK, ${fallidosTotales} fallidos`);
+
+            return {
+                success: true,
+                resultados: {
+                    total: tokens.length,
+                    exitos: exitosTotales,
+                    fallidos: fallidosTotales,
+                },
+            };
+        } catch (error) {
+            console.error('❌ Error masiva:', error);
+            return { success: false, error };
+        }
+    },
+
     // ============================================================
-    // 📥 OBTENER NOTIFICACIONES (CON FILTRO DE OCULTAS)
+    // 📥 NOTIFICACIONES (con filtro de ocultas)
     // ============================================================
 
     async obtenerNotificacionesOcultas(usuarioId: string): Promise<number[]> {
@@ -403,7 +543,7 @@ export const notificacionService = {
             const data = await AsyncStorage.getItem(key);
             return data ? JSON.parse(data) : [];
         } catch (error) {
-            console.error('Error obteniendo notificaciones ocultas:', error);
+            console.error('Error obteniendo ocultas:', error);
             return [];
         }
     },
@@ -413,7 +553,7 @@ export const notificacionService = {
             const key = `${NOTIFICACIONES_OCULTAS_KEY}_${usuarioId}`;
             await AsyncStorage.setItem(key, JSON.stringify(ids));
         } catch (error) {
-            console.error('Error guardando notificaciones ocultas:', error);
+            console.error('Error guardando ocultas:', error);
         }
     },
 
@@ -426,7 +566,7 @@ export const notificacionService = {
             }
             return true;
         } catch (error) {
-            console.error('Error ocultando notificación:', error);
+            console.error('Error ocultando:', error);
             return false;
         }
     },
@@ -444,7 +584,7 @@ export const notificacionService = {
             await this.guardarNotificacionesOcultas(usuarioId, ids);
             return true;
         } catch (error) {
-            console.error('Error ocultando todas las notificaciones:', error);
+            console.error('Error ocultando todas:', error);
             return false;
         }
     },
@@ -454,7 +594,7 @@ export const notificacionService = {
             const key = `${NOTIFICACIONES_OCULTAS_KEY}_${usuarioId}`;
             await AsyncStorage.removeItem(key);
         } catch (error) {
-            console.error('Error mostrando todas las notificaciones:', error);
+            console.error('Error mostrando todas:', error);
         }
     },
 
@@ -471,7 +611,7 @@ export const notificacionService = {
 
         const { data, error } = await query;
         if (error) {
-            console.error('Error obteniendo notificaciones:', error);
+            console.error('Error obteniendo:', error);
             return [];
         }
 
@@ -566,17 +706,47 @@ export const notificacionService = {
         if (soloNoLeidas) query = query.eq('leida', false);
 
         const { data, error } = await query;
-        if (error) console.error('Error obteniendo notificaciones de admin:', error);
+        if (error) console.error('Error:', error);
         return data || [];
     },
 
-    // ⚠️ DEPRECADO: Usar ocultarNotificacion en su lugar
     async eliminarNotificacion(notificacionId: number) {
-        console.warn('⚠️ eliminarNotificacion está deprecado. Usar ocultarNotificacion en su lugar.');
+        console.warn('⚠️ eliminarNotificacion deprecado. Usar ocultarNotificacion.');
         const { error } = await supabase
             .from('notificaciones_usuarios')
             .delete()
             .eq('id', notificacionId);
         return !error;
+    },
+
+    // ============================================================
+    // 📊 CONTADORES (para el admin)
+    // ============================================================
+
+    async contarDispositivosActivos(): Promise<number> {
+        try {
+            const { count } = await supabase
+                .from('dispositivos_push')
+                .select('*', { count: 'exact', head: true })
+                .eq('activo', true);
+            return count || 0;
+        } catch {
+            return 0;
+        }
+    },
+
+    async contarUsuariosAlcanzables(): Promise<number> {
+        try {
+            const { data } = await supabase
+                .from('dispositivos_push')
+                .select('usuario_actual_id')
+                .eq('activo', true)
+                .not('usuario_actual_id', 'is', null);
+
+            const usuariosUnicos = new Set(data?.map((d: any) => d.usuario_actual_id));
+            return usuariosUnicos.size;
+        } catch {
+            return 0;
+        }
     },
 };

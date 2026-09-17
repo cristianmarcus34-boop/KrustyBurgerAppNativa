@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    Modal, ActivityIndicator, useWindowDimensions
+    Modal, ActivityIndicator, Alert, useWindowDimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,7 +42,8 @@ interface Recompensa {
 }
 
 export default function PantallaRecompensas(props: any) {
-    const { perfil } = tiendaAutenticacion();
+    // ✅ NUEVO: sesion, cargandoAuth y actualizarPerfil
+    const { perfil, sesion, cargando: cargandoAuth, actualizarPerfil } = tiendaAutenticacion();
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
     const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
@@ -77,16 +78,56 @@ export default function PantallaRecompensas(props: any) {
     const modalTituloSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
     const modalTextSize = isTablet ? 14 : isSmallPhone ? 12 : 13;
 
-    useEffect(() => { cargarRecompensas(); }, []);
+    // ============================================================
+    // 🔒 GUARD DE SESIÓN
+    // ============================================================
+    useEffect(() => {
+        if (!cargandoAuth && !sesion) {
+            console.log('🔒 [Recompensas] Sin sesión → redirigiendo a Login');
+
+            Alert.alert(
+                'Iniciá sesión',
+                'Necesitás una cuenta para canjear recompensas.',
+                [
+                    {
+                        text: 'Volver',
+                        style: 'cancel',
+                        onPress: () => props.navigation.goBack(),
+                    },
+                    {
+                        text: 'Iniciar sesión',
+                        onPress: () => props.navigation.replace('Login'),
+                    },
+                    {
+                        text: 'Registrarme',
+                        onPress: () => props.navigation.replace('Registro'),
+                    },
+                ],
+                { cancelable: false }
+            );
+        }
+    }, [sesion, cargandoAuth]);
+
+    // ✅ Solo carga si hay sesión
+    useEffect(() => {
+        if (sesion) {
+            cargarRecompensas();
+        } else {
+            setCargando(false);
+        }
+    }, [sesion]);
 
     const cargarRecompensas = async () => {
-        const { data } = await supabase
-            .from('recompensas')
-            .select('*')
-            .eq('activa', true)
-            .order('puntos_necesarios', { ascending: true });
-        setRecompensas(data as Recompensa[] || []);
-        setCargando(false);
+        try {
+            const { data } = await supabase
+                .from('recompensas')
+                .select('*')
+                .eq('activa', true)
+                .order('puntos_necesarios', { ascending: true });
+            setRecompensas(data as Recompensa[] || []);
+        } finally {
+            setCargando(false);
+        }
     };
 
     const mostrarExito = (mensaje: string) => {
@@ -96,7 +137,8 @@ export default function PantallaRecompensas(props: any) {
     };
 
     const confirmarCanje = (recompensa: Recompensa) => {
-        const puntos = perfil?.puntos_disponibles || 0;
+        // ✅ FIX: usamos puntos_acumulados (no puntos_disponibles)
+        const puntos = perfil?.puntos_acumulados || 0;
         if (puntos < recompensa.puntos_necesarios) {
             mostrarExito('❌ Puntos insuficientes');
             return;
@@ -106,7 +148,7 @@ export default function PantallaRecompensas(props: any) {
     };
 
     const canjear = async () => {
-        if (!recompensaSeleccionada || !perfil) return;
+        if (!recompensaSeleccionada || !perfil || !sesion) return;
         setMostrarModalConfirmar(false);
         setCanjeando(true);
 
@@ -138,6 +180,7 @@ export default function PantallaRecompensas(props: any) {
                 return;
             }
 
+            // ✅ FIX: usamos actualizarPerfil en vez de setState directo
             const { data: perfilActualizado, error: errorPerfil } = await supabase
                 .from('perfiles')
                 .select('*')
@@ -145,7 +188,7 @@ export default function PantallaRecompensas(props: any) {
                 .single();
 
             if (perfilActualizado && !errorPerfil) {
-                tiendaAutenticacion.setState({ perfil: perfilActualizado });
+                await actualizarPerfil(perfilActualizado);
             }
 
             mostrarExito(`🎉 ¡Cupón canjeado! ${recompensaSeleccionada.nombre}`);
@@ -187,7 +230,8 @@ export default function PantallaRecompensas(props: any) {
     };
 
     const renderRecompensa = ({ item }: { item: Recompensa }) => {
-        const puntosDisponibles = perfil?.puntos_disponibles || 0;
+        // ✅ FIX: puntos_acumulados
+        const puntosDisponibles = perfil?.puntos_acumulados || 0;
         const disponible = puntosDisponibles >= item.puntos_necesarios;
         const tipoColor = getColorPorTipo(item.tipo);
 
@@ -293,7 +337,30 @@ export default function PantallaRecompensas(props: any) {
         );
     };
 
-    const tieneRecompensasDisponibles = recompensas.some(r => (perfil?.puntos_disponibles || 0) >= r.puntos_necesarios);
+    // ✅ FIX: puntos_acumulados
+    const tieneRecompensasDisponibles = recompensas.some(r => (perfil?.puntos_acumulados || 0) >= r.puntos_necesarios);
+
+    // ============================================================
+    // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+    // ============================================================
+    if (cargandoAuth || !sesion) {
+        return (
+            <View style={styles.container}>
+                <LinearGradient
+                    colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
+                    style={styles.backgroundGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                    <Text style={[styles.loadingText, { fontSize: 13, color: DISENO.colors.textSecondary }]}>
+                        {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+                    </Text>
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -340,7 +407,7 @@ export default function PantallaRecompensas(props: any) {
                 ]}>
                     <Text style={[styles.pointsIcon, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>⭐</Text>
                     <Text style={[styles.pointsText, { fontSize: puntosSize, color: DISENO.colors.accentSecondary }]}>
-                        {perfil?.puntos_disponibles || 0}
+                        {perfil?.puntos_acumulados || 0}
                     </Text>
                 </View>
             </View>
@@ -431,7 +498,7 @@ export default function PantallaRecompensas(props: any) {
                         </View>
                     }
                     ListFooterComponent={
-                        (perfil?.puntos_disponibles || 0) > 0 && !tieneRecompensasDisponibles && recompensas.length > 0 ? (
+                        (perfil?.puntos_acumulados || 0) > 0 && !tieneRecompensasDisponibles && recompensas.length > 0 ? (
                             <View style={[
                                 styles.helpMessage,
                                 {
@@ -451,7 +518,7 @@ export default function PantallaRecompensas(props: any) {
                                         💡 ¿Sabías que podés usar tus puntos?
                                     </Text>
                                     <Text style={[styles.helpMessageText, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DISENO.colors.textSecondary }]}>
-                                        Aunque no haya recompensas disponibles ahora, podés usar tus {perfil?.puntos_disponibles || 0} puntos como descuento en tu próximo pedido.
+                                        Aunque no haya recompensas disponibles ahora, podés usar tus {perfil?.puntos_acumulados || 0} puntos como descuento en tu próximo pedido.
                                         Simplemente agregá productos al carrito y aplicá tus puntos en el checkout.
                                     </Text>
                                 </View>
@@ -586,7 +653,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surface,
         ...DISENO.shadow.sm,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     title: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -600,12 +666,10 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     pointsIcon: {},
-    // ✅ PUNTOS CON SIMPSONFONT
     pointsText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ BANNER INFORMATIVO
     infoBanner: {
         borderWidth: 1,
     },
@@ -621,19 +685,16 @@ const styles = StyleSheet.create({
     infoBannerTextContainer: {
         flex: 1,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     infoBannerTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         marginBottom: 2,
     },
-    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     infoBannerText: {
         fontFamily: FUENTES.regular,
         lineHeight: 16,
         opacity: 0.85,
     },
-    // ✅ MENSAJE DE AYUDA
     helpMessage: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -642,13 +703,11 @@ const styles = StyleSheet.create({
     helpMessageTextContainer: {
         flex: 1,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     helpMessageTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         marginBottom: 2,
     },
-    // ✅ TEXTO CON FUENTE REGULAR
     helpMessageText: {
         fontFamily: FUENTES.regular,
         lineHeight: 16,
@@ -660,7 +719,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 16,
     },
-    // ✅ LOADING CON FUENTE REGULAR
     loadingText: {
         fontFamily: FUENTES.regular,
         fontWeight: '400',
@@ -692,7 +750,6 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         gap: 4,
     },
-    // ✅ NOMBRE CON SIMPSONFONT
     cardName: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -701,13 +758,11 @@ const styles = StyleSheet.create({
     typeBadge: {
         borderWidth: 1,
     },
-    // ✅ TIPO BADGE CON FUENTE REGULAR
     typeBadgeText: {
         fontFamily: FUENTES.regular,
         fontWeight: '600',
         textTransform: 'capitalize',
     },
-    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     cardDesc: {
         fontFamily: FUENTES.regular,
         marginTop: 2,
@@ -728,7 +783,6 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     pointsIconSmall: {},
-    // ✅ PUNTOS CON SIMPSONFONT
     cardPoints: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -737,7 +791,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         ...DISENO.shadow.xs,
     },
-    // ✅ BOTÓN CON SIMPSONFONT
     redeemButtonText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -749,14 +802,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 80,
     },
-    // ✅ EMPTY CON SIMPSONFONT
     emptyText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         marginTop: 16,
         textAlign: 'center',
     },
-    // ✅ SUBTEXT CON FUENTE REGULAR
     emptySubtext: {
         fontFamily: FUENTES.regular,
         textAlign: 'center',
@@ -777,26 +828,22 @@ const styles = StyleSheet.create({
     modalIcon: {
         marginBottom: 12,
     },
-    // ✅ MODAL TITLE CON SIMPSONFONT
     modalTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         marginBottom: 8,
         textAlign: 'center',
     },
-    // ✅ MODAL TEXT CON FUENTE REGULAR
     modalText: {
         fontFamily: FUENTES.regular,
         textAlign: 'center',
         marginBottom: 24,
         lineHeight: 22,
     },
-    // ✅ HIGHLIGHT CON SIMPSONFONT
     modalTextHighlight: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ REWARD NAME CON SIMPSONFONT
     modalTextReward: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -810,12 +857,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    // ✅ CANCEL CON SIMPSONFONT
     modalCancelText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ CONFIRM CON SIMPSONFONT
     modalConfirmText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',

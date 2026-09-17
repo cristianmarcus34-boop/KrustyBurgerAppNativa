@@ -9,7 +9,6 @@ import {
     ActivityIndicator,
     RefreshControl,
     Alert,
-    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,11 +20,10 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { DISENO, useResponsive } from '../../lib/colores';
 import { CuponUsuario } from '../../lib/cupones/cuponTypes';
 import { useToast, Toast } from '../../components/Toast';
-// ✅ IMPORTAMOS FUENTES
 import { FUENTES } from '../../lib/fuentes';
 
 // ============================================================
-// 🎨 COMPONENTE DE TARJETA DE CUPÓN - CON SIMPSONFONT
+// 🎨 COMPONENTE DE TARJETA DE CUPÓN
 // ============================================================
 const CuponCard = ({
     cuponUsuario,
@@ -46,7 +44,6 @@ const CuponCard = ({
 
     const diasRestantes = Math.ceil((expiracion.getTime() - ahora.getTime()) / (1000 * 60 * 60 * 24));
 
-    // ✅ Determinar estado y colores
     let estado = 'Activo';
     let estadoColor = DISENO.colors.success;
     let estadoIcono = 'checkmark-circle';
@@ -87,25 +84,20 @@ const CuponCard = ({
             (expirado || usado) && styles.cuponCardInactivo,
             !usado && !expirado && diasRestantes <= 3 && styles.cuponCardPorVencer
         ]}>
-            {/* ENCABEZADO */}
             <View style={styles.cuponHeader}>
                 <View style={[styles.cuponTipo, { borderColor: tipoColor + '40' }]}>
-                    {/* ✅ TIPO CON SIMPSONFONT - REDUCIDO */}
                     <Text style={[styles.cuponTipoTexto, { color: tipoColor }]}>
                         {tipoTexto}
                     </Text>
                 </View>
                 <View style={[styles.cuponEstado, { backgroundColor: estadoBg }]}>
                     <Ionicons name={estadoIcono as any} size={14} color={estadoColor} />
-                    {/* ✅ ESTADO CON FUENTE REGULAR */}
                     <Text style={[styles.cuponEstadoTexto, { color: estadoColor }]}>
                         {estado}
                     </Text>
                 </View>
             </View>
 
-            {/* TÍTULO */}
-            {/* ✅ TÍTULO CON SIMPSONFONT - REDUCIDO */}
             <Text style={[
                 styles.cuponTitulo,
                 (expirado || usado) && styles.cuponTituloInactivo
@@ -113,7 +105,6 @@ const CuponCard = ({
                 {cupon.titulo}
             </Text>
 
-            {/* DESCRIPCIÓN */}
             {cupon.descripcion && (
                 <Text style={[
                     styles.cuponDescripcion,
@@ -123,9 +114,7 @@ const CuponCard = ({
                 </Text>
             )}
 
-            {/* VALOR DEL DESCUENTO */}
             <View style={styles.cuponValorGrande}>
-                {/* ✅ VALOR CON SIMPSONFONT - REDUCIDO */}
                 <Text style={[
                     styles.cuponValorGrandeTexto,
                     { color: (expirado || usado) ? DISENO.colors.textTertiary : DISENO.colors.accent }
@@ -139,12 +128,10 @@ const CuponCard = ({
                 )}
             </View>
 
-            {/* CÓDIGO */}
             <View style={styles.cuponFooter}>
                 <View style={styles.cuponCodigoContainer}>
                     <Text style={styles.cuponCodigoLabel}>🔑 Código</Text>
                     <View style={styles.cuponCodigoRow}>
-                        {/* ✅ CÓDIGO CON MONO */}
                         <Text style={styles.cuponCodigo}>{cupon.codigo}</Text>
                         <TouchableOpacity
                             style={styles.cuponCopiarBoton}
@@ -152,14 +139,12 @@ const CuponCard = ({
                             activeOpacity={0.7}
                         >
                             <Ionicons name="copy-outline" size={16} color={DISENO.colors.accent} />
-                            {/* ✅ TEXTO COPIAR CON SIMPSONFONT */}
                             <Text style={styles.cuponCopiarTexto}>Copiar</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </View>
 
-            {/* VENCIMIENTO */}
             {!usado && !expirado && (
                 <View style={styles.cuponVencimiento}>
                     <Ionicons name="calendar-outline" size={14} color={DISENO.colors.textSecondary} />
@@ -174,7 +159,6 @@ const CuponCard = ({
                 </View>
             )}
 
-            {/* FECHA DE CANJE */}
             {usado && cuponUsuario.fecha_canje && (
                 <Text style={styles.cuponFecha}>
                     ✅ Usado el {new Date(cuponUsuario.fecha_canje).toLocaleDateString('es-AR', {
@@ -185,7 +169,6 @@ const CuponCard = ({
                 </Text>
             )}
 
-            {/* FECHA DE EXPIRACIÓN */}
             {expirado && (
                 <Text style={[styles.cuponFecha, { color: DISENO.colors.danger }]}>
                     ⏰ Expirado el {expiracion.toLocaleDateString('es-AR', {
@@ -196,7 +179,6 @@ const CuponCard = ({
                 </Text>
             )}
 
-            {/* PEDIDO */}
             {cuponUsuario.pedido_id && (
                 <View style={styles.cuponPedido}>
                     <Ionicons name="receipt-outline" size={14} color={DISENO.colors.textSecondary} />
@@ -206,7 +188,6 @@ const CuponCard = ({
                 </View>
             )}
 
-            {/* BOTÓN USAR CUPÓN */}
             {!usado && !expirado && (
                 <TouchableOpacity
                     style={styles.cuponUsarBoton}
@@ -224,7 +205,6 @@ const CuponCard = ({
                         end={{ x: 1, y: 0 }}
                     >
                         <Ionicons name="cart-outline" size={18} color={DISENO.colors.text} />
-                        {/* ✅ BOTÓN USAR CON SIMPSONFONT - REDUCIDO */}
                         <Text style={styles.cuponUsarTexto}>Usar en mi pedido</Text>
                     </LinearGradient>
                 </TouchableOpacity>
@@ -237,7 +217,8 @@ const CuponCard = ({
 // 🖥️ PANTALLA PRINCIPAL
 // ============================================================
 export default function PantallaMisCupones({ navigation }: any) {
-    const { perfil } = tiendaAutenticacion();
+    // ✅ Traemos también `sesion` y `cargando` del store
+    const { perfil, sesion, cargando: cargandoAuth } = tiendaAutenticacion();
     const insets = useSafeAreaInsets();
     const responsive = useResponsive();
     const toast = useToast();
@@ -246,6 +227,29 @@ export default function PantallaMisCupones({ navigation }: any) {
     const [cargando, setCargando] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
     const [filtro, setFiltro] = useState<'todos' | 'activos' | 'usados' | 'expirados'>('todos');
+
+    // ============================================================
+    // 🔒 GUARD: si es invitado, lo mandamos a Login
+    // ============================================================
+    useEffect(() => {
+        if (!cargandoAuth && !sesion) {
+            Alert.alert(
+                'Iniciá sesión',
+                'Necesitás una cuenta para ver tus cupones.',
+                [
+                    {
+                        text: 'Volver',
+                        style: 'cancel',
+                        onPress: () => navigation.goBack(),
+                    },
+                    {
+                        text: 'Iniciar sesión',
+                        onPress: () => navigation.replace('Login'),
+                    },
+                ]
+            );
+        }
+    }, [sesion, cargandoAuth, navigation]);
 
     const copiarCodigo = async (codigo: string) => {
         try {
@@ -258,7 +262,14 @@ export default function PantallaMisCupones({ navigation }: any) {
     };
 
     const cargarCupones = useCallback(async () => {
-        if (!perfil?.id) return;
+        // ✅ Si no hay perfil, apagamos spinners y no cargamos nada
+        if (!perfil?.id) {
+            setCupones([]);
+            setCargando(false);
+            setRefrescando(false);
+            return;
+        }
+
         try {
             const data = await cuponService.obtenerCuponesUsuario(perfil.id);
             setCupones(data);
@@ -302,6 +313,20 @@ export default function PantallaMisCupones({ navigation }: any) {
         !c.usado_en_pedido &&
         new Date(c.cupon!.fecha_expiracion) < new Date()
     ).length;
+
+    // ============================================================
+    // 🔒 RENDER: invitado o cargando auth → spinner discreto
+    // ============================================================
+    if (cargandoAuth || !sesion) {
+        return (
+            <View style={[styles.centrado, { backgroundColor: DISENO.colors.fondo }]}>
+                <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                <Text style={styles.cargandoTexto}>
+                    {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+                </Text>
+            </View>
+        );
+    }
 
     if (cargando) {
         return (
@@ -351,7 +376,6 @@ export default function PantallaMisCupones({ navigation }: any) {
                     >
                         <Ionicons name="arrow-back" size={28} color={DISENO.colors.text} />
                     </TouchableOpacity>
-                    {/* ✅ TÍTULO CON SIMPSONFONT - REDUCIDO */}
                     <Text style={[
                         styles.title,
                         { fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }) }
@@ -371,7 +395,6 @@ export default function PantallaMisCupones({ navigation }: any) {
                 <View style={styles.resumenContainer}>
                     <View style={styles.resumenCard}>
                         <View style={styles.resumenItem}>
-                            {/* ✅ NÚMEROS CON SIMPSONFONT - REDUCIDOS */}
                             <Text style={styles.resumenNumero}>{activos}</Text>
                             <Text style={styles.resumenLabel}>Activos</Text>
                             <View style={[styles.resumenDot, { backgroundColor: DISENO.colors.success }]} />
@@ -418,7 +441,6 @@ export default function PantallaMisCupones({ navigation }: any) {
                                 onPress={() => setFiltro(f as any)}
                                 activeOpacity={0.7}
                             >
-                                {/* ✅ FILTROS CON SIMPSONFONT - REDUCIDOS */}
                                 <Text style={[
                                     styles.filtroTexto,
                                     esActivo && styles.filtroTextoActivo
@@ -439,7 +461,6 @@ export default function PantallaMisCupones({ navigation }: any) {
                         <View style={styles.emptyIconContainer}>
                             <Ionicons name="gift-outline" size={64} color={DISENO.colors.textTertiary} />
                         </View>
-                        {/* ✅ EMPTY TITLE CON SIMPSONFONT */}
                         <Text style={styles.emptyTitle}>
                             {filtro === 'todos' && '🎯 No tienes cupones aún'}
                             {filtro === 'activos' && '✅ No tienes cupones activos'}
@@ -459,7 +480,6 @@ export default function PantallaMisCupones({ navigation }: any) {
                                 activeOpacity={0.7}
                             >
                                 <Ionicons name="scan-outline" size={20} color={DISENO.colors.text} />
-                                {/* ✅ BOTÓN EMPTY CON SIMPSONFONT */}
                                 <Text style={styles.emptyButtonText}>Canjear cupón</Text>
                             </TouchableOpacity>
                         )}
@@ -489,7 +509,7 @@ export default function PantallaMisCupones({ navigation }: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CON SIMPSONFONT
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
     container: {
@@ -511,7 +531,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    // ✅ CARGANDO CON SIMPSONFONT
     cargandoTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -531,7 +550,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surface,
         ...DISENO.shadow.sm,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     title: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -544,7 +562,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surface,
         ...DISENO.shadow.sm,
     },
-    // Resumen
     resumenContainer: {
         marginBottom: 16,
     },
@@ -562,14 +579,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 4,
     },
-    // ✅ NÚMEROS CON SIMPSONFONT - REDUCIDOS
     resumenNumero: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         fontSize: 24,
         color: DISENO.colors.text,
     },
-    // ✅ LABEL CON FUENTE REGULAR
     resumenLabel: {
         fontFamily: FUENTES.regular,
         fontSize: 12,
@@ -586,7 +601,6 @@ const styles = StyleSheet.create({
         width: 1,
         backgroundColor: DISENO.colors.border,
     },
-    // Ayuda
     ayudaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -598,7 +612,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(245, 197, 24, 0.15)',
     },
-    // ✅ AYUDA CON FUENTE REGULAR
     ayudaTexto: {
         fontFamily: FUENTES.regular,
         flex: 1,
@@ -606,7 +619,6 @@ const styles = StyleSheet.create({
         color: DISENO.colors.textSecondary,
         lineHeight: 18,
     },
-    // Filtros
     filtrosContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -625,7 +637,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.accent + '15',
         borderColor: DISENO.colors.accent,
     },
-    // ✅ FILTROS CON SIMPSONFONT - REDUCIDOS
     filtroTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -635,12 +646,10 @@ const styles = StyleSheet.create({
     filtroTextoActivo: {
         color: DISENO.colors.accent,
     },
-    // Lista
     cuponesList: {
         gap: 12,
         paddingBottom: 20,
     },
-    // Tarjeta de cupón
     cuponCard: {
         borderRadius: 16,
         overflow: 'hidden',
@@ -670,7 +679,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         backgroundColor: DISENO.colors.surfaceHover,
     },
-    // ✅ TIPO CON SIMPSONFONT
     cuponTipoTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -684,13 +692,11 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 12,
     },
-    // ✅ ESTADO CON FUENTE REGULAR
     cuponEstadoTexto: {
         fontFamily: FUENTES.regular,
         fontSize: 11,
         fontWeight: '600',
     },
-    // ✅ TÍTULO CON SIMPSONFONT - REDUCIDO
     cuponTitulo: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -701,7 +707,6 @@ const styles = StyleSheet.create({
     cuponTituloInactivo: {
         color: DISENO.colors.textSecondary,
     },
-    // ✅ DESCRIPCIÓN CON FUENTE REGULAR
     cuponDescripcion: {
         fontFamily: FUENTES.regular,
         fontSize: 14,
@@ -717,7 +722,6 @@ const styles = StyleSheet.create({
         gap: 10,
         marginTop: 4,
     },
-    // ✅ VALOR CON SIMPSONFONT - REDUCIDO
     cuponValorGrandeTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -731,7 +735,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.accent + '30',
     },
-    // ✅ BADGE CON SIMPSONFONT
     cuponValorBadgeText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -747,7 +750,6 @@ const styles = StyleSheet.create({
     cuponCodigoContainer: {
         gap: 4,
     },
-    // ✅ LABEL CÓDIGO CON FUENTE REGULAR
     cuponCodigoLabel: {
         fontFamily: FUENTES.regular,
         fontSize: 10,
@@ -759,7 +761,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
-    // ✅ CÓDIGO CON MONO
     cuponCodigo: {
         fontFamily: 'monospace',
         fontSize: 16,
@@ -778,7 +779,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.accent + '20',
     },
-    // ✅ COPIAR CON SIMPSONFONT
     cuponCopiarTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -791,7 +791,6 @@ const styles = StyleSheet.create({
         gap: 6,
         marginTop: 4,
     },
-    // ✅ VENCIMIENTO CON FUENTE REGULAR
     cuponVencimientoTexto: {
         fontFamily: FUENTES.regular,
         fontSize: 12,
@@ -826,14 +825,12 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 10,
     },
-    // ✅ BOTÓN USAR CON SIMPSONFONT - REDUCIDO
     cuponUsarTexto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         fontSize: 14,
         color: DISENO.colors.text,
     },
-    // Empty state
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -843,7 +840,6 @@ const styles = StyleSheet.create({
     emptyIconContainer: {
         marginBottom: 16,
     },
-    // ✅ EMPTY TITLE CON SIMPSONFONT - REDUCIDO
     emptyTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -852,7 +848,6 @@ const styles = StyleSheet.create({
         marginBottom: 8,
         textAlign: 'center',
     },
-    // ✅ EMPTY TEXT CON FUENTE REGULAR
     emptyText: {
         fontFamily: FUENTES.regular,
         fontSize: 14,
@@ -871,7 +866,6 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         ...DISENO.shadow.md,
     },
-    // ✅ BOTÓN EMPTY CON SIMPSONFONT
     emptyButtonText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',

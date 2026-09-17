@@ -9,6 +9,7 @@ import {
     ActivityIndicator,
     Keyboard,
     Platform,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -27,6 +28,71 @@ interface Props {
     titulo?: string;
 }
 
+// ============================================================
+// ✅ HELPERS FUERA DEL COMPONENTE
+// ============================================================
+
+/**
+ * Pide permisos de ubicación si no están concedidos.
+ * Devuelve `true` si tiene permisos, `false` si no.
+ */
+const asegurarPermisosUbicacion = async (): Promise<boolean> => {
+    try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') return true;
+
+        console.log('📍 [Mapa] Solicitando permisos de ubicación...');
+        const { status: nuevoStatus } = await Location.requestForegroundPermissionsAsync();
+        if (nuevoStatus === 'granted') return true;
+
+        console.warn('❌ [Mapa] Permisos de ubicación rechazados');
+        return false;
+    } catch (error) {
+        console.error('❌ [Mapa] Error pidiendo permisos:', error);
+        return false;
+    }
+};
+
+/**
+ * Convierte coordenadas en una dirección legible.
+ * Pide permisos automáticamente si no los tiene.
+ * Devuelve `null` si no se pudo obtener.
+ */
+const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+        const tienePermiso = await asegurarPermisosUbicacion();
+        if (!tienePermiso) {
+            console.warn('⚠️ [Mapa] Sin permisos, no se puede geocodificar');
+            return null;
+        }
+
+        const resultados = await Location.reverseGeocodeAsync({
+            latitude: lat,
+            longitude: lng,
+        });
+
+        if (resultados && resultados.length > 0) {
+            const lugar = resultados[0];
+            const partes = [
+                lugar.street || lugar.name,
+                lugar.streetNumber,
+                lugar.district,
+                lugar.city,
+                lugar.region,
+            ].filter(Boolean);
+
+            const direccion = partes.join(', ') || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            console.log('📍 [Mapa] Dirección obtenida:', direccion);
+            return direccion;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('❌ [Mapa] Error geocodificando:', error);
+        return null;
+    }
+};
+
 export default function MapaSelector({
     visible,
     onClose,
@@ -42,6 +108,7 @@ export default function MapaSelector({
     const [buscando, setBuscando] = useState(false);
     const [busquedaManual, setBusquedaManual] = useState('');
     const [cargandoUbicacion, setCargandoUbicacion] = useState(false);
+    const [cargandoDireccion, setCargandoDireccion] = useState(false);
     const mapRef = useRef<MapView>(null);
 
     // ✅ Sincronizar cuando cambia la ubicación inicial
@@ -60,56 +127,46 @@ export default function MapaSelector({
         }
     }, [ubicacionInicial, direccionInicial, visible]);
 
-    // ✅ Obtener dirección desde coordenadas
-    const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
-        try {
-            const resultados = await Location.reverseGeocodeAsync({
-                latitude: lat,
-                longitude: lng,
-            });
-            if (resultados && resultados.length > 0) {
-                const lugar = resultados[0];
-                const partes = [
-                    lugar.street || lugar.name,
-                    lugar.streetNumber,
-                    lugar.district,
-                    lugar.city,
-                    lugar.region,
-                ].filter(Boolean);
-                return partes.join(', ') || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-            }
-            return null;
-        } catch (error) {
-            console.log('Error en geocodificación:', error);
-            return null;
+    // ✅ Pedir permisos al abrir el modal
+    useEffect(() => {
+        if (visible) {
+            asegurarPermisosUbicacion();
         }
-    };
+    }, [visible]);
 
     // ✅ Obtener ubicación actual
     const obtenerUbicacionActual = async () => {
         setCargandoUbicacion(true);
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                const ubicacion = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.High,
-                });
-                const { latitude, longitude } = ubicacion.coords;
-                setUbicacionSeleccionada({ latitude, longitude });
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                Alert.alert(
+                    'Permisos necesarios',
+                    'Necesitamos permiso de ubicación para centrar el mapa en tu posición actual. Habilitalo desde los ajustes del teléfono.'
+                );
+                return;
+            }
 
-                const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
-                if (direccionObtenida) {
-                    setDireccion(direccionObtenida);
-                }
+            const ubicacion = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
+            const { latitude, longitude } = ubicacion.coords;
+            setUbicacionSeleccionada({ latitude, longitude });
 
-                if (mapRef.current) {
-                    mapRef.current.animateToRegion({
-                        latitude,
-                        longitude,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                    }, 500);
-                }
+            setCargandoDireccion(true);
+            const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
+            if (direccionObtenida) {
+                setDireccion(direccionObtenida);
+            }
+            setCargandoDireccion(false);
+
+            if (mapRef.current) {
+                mapRef.current.animateToRegion({
+                    latitude,
+                    longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                }, 500);
             }
         } catch (error) {
             console.log('Error obteniendo ubicación:', error);
@@ -118,7 +175,7 @@ export default function MapaSelector({
         }
     };
 
-    // ✅ Buscar dirección manual - CORREGIDO (sin cerrar el modal)
+    // ✅ Buscar dirección manual
     const buscarDireccionManual = async () => {
         if (busquedaManual.length < 3) {
             return;
@@ -126,7 +183,6 @@ export default function MapaSelector({
 
         setBuscando(true);
 
-        // ✅ Ocultar teclado sin cerrar el modal
         if (Platform.OS === 'ios') {
             Keyboard.dismiss();
         } else {
@@ -135,16 +191,25 @@ export default function MapaSelector({
 
         try {
             console.log('🔍 Buscando dirección:', busquedaManual);
+
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                Alert.alert(
+                    'Permisos necesarios',
+                    'Necesitamos permiso de ubicación para buscar direcciones.'
+                );
+                return;
+            }
+
             const resultados = await Location.geocodeAsync(busquedaManual);
 
             if (resultados && resultados.length > 0) {
                 const { latitude, longitude } = resultados[0];
                 console.log('📍 Ubicación encontrada:', latitude, longitude);
 
-                // ✅ Actualizar ubicación
                 setUbicacionSeleccionada({ latitude, longitude });
 
-                // ✅ Obtener dirección formateada
+                setCargandoDireccion(true);
                 const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
                 console.log('📌 Dirección obtenida:', direccionObtenida);
 
@@ -153,8 +218,8 @@ export default function MapaSelector({
                 } else {
                     setDireccion(busquedaManual);
                 }
+                setCargandoDireccion(false);
 
-                // ✅ Mover el mapa a la ubicación encontrada
                 if (mapRef.current) {
                     mapRef.current.animateToRegion({
                         latitude,
@@ -164,44 +229,73 @@ export default function MapaSelector({
                     }, 1000);
                 }
 
-                // ✅ Limpiar el campo de búsqueda
                 setBusquedaManual('');
             } else {
                 console.log('⚠️ No se encontraron resultados para:', busquedaManual);
-                // ✅ Mostrar un mensaje visual o toast
+                Alert.alert(
+                    'Sin resultados',
+                    'No pudimos encontrar esa dirección. Probá con otra búsqueda.'
+                );
             }
         } catch (error) {
             console.log('❌ Error buscando dirección:', error);
+            Alert.alert(
+                'Error',
+                'Hubo un problema al buscar la dirección. Intentá de nuevo.'
+            );
         } finally {
             setBuscando(false);
         }
     };
 
-    // ✅ Seleccionar ubicación en el mapa
+    // ✅ Seleccionar ubicación en el mapa (al tocar o arrastrar)
     const seleccionarUbicacion = async (event: any) => {
         const { latitude, longitude } = event.nativeEvent.coordinate;
+
         setUbicacionSeleccionada({ latitude, longitude });
 
+        // ✅ Mostrar indicador mientras se geocodifica
+        setCargandoDireccion(true);
         const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
+        setCargandoDireccion(false);
+
         if (direccionObtenida) {
             setDireccion(direccionObtenida);
+        } else {
+            // ✅ Si falla el geocoding, mostrar mensaje claro
+            // NO usar coordenadas crudas como fallback
+            console.warn('⚠️ [Mapa] No se pudo obtener la dirección, manteniendo la anterior');
+            // Dejar la dirección anterior o limpiarla
+            // setDireccion('');  // 👈 Descomentar si querés limpiar
         }
     };
 
     // ✅ Confirmar ubicación
     const handleConfirmar = () => {
-        if (ubicacionSeleccionada) {
-            onConfirmar({
-                latitude: ubicacionSeleccionada.latitude,
-                longitude: ubicacionSeleccionada.longitude,
-                direccion: direccion || `${ubicacionSeleccionada.latitude}, ${ubicacionSeleccionada.longitude}`,
-            });
+        if (!ubicacionSeleccionada) return;
+
+        // ✅ Si no hay dirección válida, NO confirmar
+        if (!direccion || direccion.includes(', -') || direccion.match(/^-?\d+\.\d+, -?\d+\.\d+$/)) {
+            Alert.alert(
+                'Dirección no disponible',
+                'No pudimos obtener la dirección de esta ubicación. Por favor:\n\n' +
+                '1. Verificá que la app tenga permisos de ubicación\n' +
+                '2. Tocá de nuevo el mapa o arrastrá el marcador\n' +
+                '3. Esperá unos segundos a que aparezca la dirección',
+                [{ text: 'Entendido' }]
+            );
+            return;
         }
+
+        onConfirmar({
+            latitude: ubicacionSeleccionada.latitude,
+            longitude: ubicacionSeleccionada.longitude,
+            direccion: direccion,
+        });
     };
 
     // ✅ Prevenir que el modal se cierre al tocar fuera
     const handleClose = () => {
-        // ✅ Solo cerrar si no hay una búsqueda en curso
         if (!buscando) {
             onClose();
         }
@@ -259,7 +353,7 @@ export default function MapaSelector({
                         style={estilos.botonConfirmar}
                         onPress={handleConfirmar}
                         activeOpacity={0.7}
-                        disabled={buscando}
+                        disabled={buscando || cargandoDireccion}
                     >
                         <LinearGradient
                             colors={[Colores.bartNaranja, Colores.bartAzul]}
@@ -305,9 +399,18 @@ export default function MapaSelector({
                 <View style={estilos.footer}>
                     <View style={estilos.footerInfo}>
                         <Ionicons name="location" size={20} color={Colores.bartNaranja} />
-                        <Text style={estilos.footerDireccion} numberOfLines={2}>
-                            {direccion || 'Selecciona una ubicación en el mapa'}
-                        </Text>
+                        {cargandoDireccion ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <ActivityIndicator size="small" color={Colores.bartNaranja} />
+                                <Text style={estilos.footerDireccion} numberOfLines={2}>
+                                    Obteniendo dirección...
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text style={estilos.footerDireccion} numberOfLines={2}>
+                                {direccion || 'Selecciona una ubicación en el mapa'}
+                            </Text>
+                        )}
                     </View>
 
                     <TouchableOpacity

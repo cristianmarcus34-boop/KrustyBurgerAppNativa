@@ -97,6 +97,7 @@ export interface Producto {
     sin_gluten?: boolean;
     popular?: boolean;
     destacado?: boolean;
+    incluye_papas?: boolean;
     created_at?: string;
     updated_at?: string;
 }

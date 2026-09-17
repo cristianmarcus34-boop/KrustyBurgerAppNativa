@@ -1,4 +1,4 @@
-// screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO
+// screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO + NOTIFICACIONES
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -23,18 +23,17 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { DISENO, useResponsive } from '../../lib/colores';
 import { formatearPrecio } from '../../lib/formateador';
 import BarraProgreso from '../../components/BarraProgreso';
 import { servicioEliminacionCuenta } from '../../services/servicioEliminacionCuenta';
 import { useBeneficios } from '../../hooks/useBeneficios';
+import { notificacionService } from '../../services/notificacionService';
 import {
   ActividadReciente,
   obtenerNivel,
   Perfil,
 } from '../../lib/tipos';
-// ✅ IMPORTAMOS FUENTES
 import { FUENTES } from '../../lib/fuentes';
 
 // ============================================================
@@ -48,6 +47,7 @@ interface MenuItem {
   navigate: string;
   show: boolean;
   subtitle?: string;
+  requiereSesion?: boolean;
 }
 
 // ============================================================
@@ -55,12 +55,10 @@ interface MenuItem {
 // ============================================================
 export default function PantallaPerfil(props: any) {
   const { perfil, sesion, cerrarSesion, actualizarPerfil, cargarPerfil } = tiendaAutenticacion();
-  const { favoritos } = tiendaFavoritos();
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
 
-  // ✅ HOOK DE BENEFICIOS
   const { nivel, beneficios } = useBeneficios(
     perfil?.puntos_acumulados || 0,
     perfil?.id
@@ -81,6 +79,9 @@ export default function PantallaPerfil(props: any) {
   const [ultimosCanjes, setUltimosCanjes] = useState<any[]>([]);
   const [cargandoEstadisticas, setCargandoEstadisticas] = useState(true);
 
+  // ✅ NUEVO: contador de notificaciones no leídas
+  const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
+
   const [telefono, setTelefono] = useState('');
   const [direccionCalle, setDireccionCalle] = useState('');
   const [direccionNumero, setDireccionNumero] = useState('');
@@ -93,7 +94,6 @@ export default function PantallaPerfil(props: any) {
   const [metodoPago, setMetodoPago] = useState('');
   const [geocodificando, setGeocodificando] = useState(false);
 
-
   // ✅ ANIMACIONES
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
@@ -103,7 +103,6 @@ export default function PantallaPerfil(props: any) {
   const isSmallPhone = responsive.isSmallPhone;
   const padding = responsive.getEspaciado('LG');
 
-  // ✅ TAMAÑOS REDUCIDOS PARA SIMPSONFONT
   const avatarSize = responsive.getValor({ tablet: 120, normal: 90, small: 80 });
   const nombreSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
   const correoSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
@@ -121,6 +120,7 @@ export default function PantallaPerfil(props: any) {
       cargarTotalPedidos();
       cargarDatosPerfil();
       cargarEstadisticas();
+      cargarNotificacionesNoLeidas();
 
       if (perfil.avatar_url) {
         setImagenPerfil(perfil.avatar_url);
@@ -137,9 +137,24 @@ export default function PantallaPerfil(props: any) {
     useCallback(() => {
       if (perfil?.id) {
         cargarPerfil(perfil.id);
+        cargarNotificacionesNoLeidas();
       }
     }, [perfil?.id])
   );
+
+  // ============================================================
+  // 🔔 CARGAR CONTADOR DE NOTIFICACIONES
+  // ============================================================
+  const cargarNotificacionesNoLeidas = async () => {
+    if (!perfil?.id) return;
+    try {
+      const noLeidas = await notificacionService.obtenerNotificaciones(perfil.id, true);
+      setNotificacionesNoLeidas(noLeidas.length);
+    } catch (error) {
+      console.warn('⚠️ Error cargando notificaciones no leídas:', error);
+      setNotificacionesNoLeidas(0);
+    }
+  };
 
   // ============================================================
   // 🔄 FUNCIONES DE CARGA
@@ -295,14 +310,13 @@ export default function PantallaPerfil(props: any) {
       cargarTotalPedidos(),
       cargarDatosPerfil(),
       cargarEstadisticas(),
+      cargarNotificacionesNoLeidas(),
     ]);
     setRefrescando(false);
   };
 
-
-
   // ============================================================
-  // 📍 FUNCIÓN PARA OBTENER COORDENADAS
+  // 📍 COORDENADAS
   // ============================================================
   const obtenerCoordenadasDesdeDireccion = async (
     calle: string,
@@ -385,8 +399,6 @@ export default function PantallaPerfil(props: any) {
       setGeocodificando(false);
     }
   };
-
-
 
   // ============================================================
   // 📷 IMÁGENES
@@ -523,14 +535,90 @@ export default function PantallaPerfil(props: any) {
   // 📋 MENU ITEMS
   // ============================================================
   const menuItems: MenuItem[] = [
-    { id: 'pedidos', label: 'Mis Pedidos', icono: 'receipt-outline', color: DISENO.colors.success, navigate: 'Pedidos', show: true },
-    { id: 'cupones', label: 'Mis Cupones', icono: 'ticket-outline', color: DISENO.colors.accent, subtitle: 'Ver mis cupones disponibles', navigate: 'MisCupones', show: true },
-    { id: 'recompensas', label: 'Recompensas', icono: 'star-outline', color: DISENO.colors.rosa, subtitle: 'Canjear puntos', navigate: 'Recompensas', show: true },
-    { id: 'privacidad', label: '🔒 Privacidad', icono: 'lock-closed-outline', color: DISENO.colors.info, navigate: 'Privacidad', show: true },
-    { id: 'terminos', label: '📋 Términos', icono: 'document-text-outline', color: DISENO.colors.textSecondary, navigate: 'Terminos', show: true },
+    {
+      id: 'notificaciones',
+      label: 'Notificaciones',
+      icono: 'notifications-outline',
+      color: DISENO.colors.azul,
+      subtitle: notificacionesNoLeidas > 0
+        ? `${notificacionesNoLeidas} sin leer`
+        : 'Ver notificaciones',
+      navigate: 'NotificacionesUsuario',
+      show: true,
+      requiereSesion: true,
+    },
+    {
+      id: 'pedidos',
+      label: 'Mis Pedidos',
+      icono: 'receipt-outline',
+      color: DISENO.colors.success,
+      navigate: 'Pedidos',
+      show: true,
+      requiereSesion: true,
+    },
+    {
+      id: 'cupones',
+      label: 'Mis Cupones',
+      icono: 'ticket-outline',
+      color: DISENO.colors.accent,
+      subtitle: 'Ver mis cupones disponibles',
+      navigate: 'MisCupones',
+      show: true,
+      requiereSesion: true,
+    },
+    {
+      id: 'recompensas',
+      label: 'Recompensas',
+      icono: 'star-outline',
+      color: DISENO.colors.rosa,
+      subtitle: 'Canjear puntos',
+      navigate: 'Recompensas',
+      show: true,
+      requiereSesion: true,
+    },
+    {
+      id: 'privacidad',
+      label: '🔒 Privacidad',
+      icono: 'lock-closed-outline',
+      color: DISENO.colors.info,
+      navigate: 'Privacidad',
+      show: true,
+      requiereSesion: false,
+    },
+    {
+      id: 'terminos',
+      label: '📋 Términos',
+      icono: 'document-text-outline',
+      color: DISENO.colors.textSecondary,
+      navigate: 'Terminos',
+      show: true,
+      requiereSesion: false,
+    },
   ];
 
+  // ============================================================
+  // 🧭 HANDLE NAVIGATE
+  // ============================================================
   const handleNavigate = (item: MenuItem) => {
+    if (item.requiereSesion && !sesion) {
+      Alert.alert(
+        'Iniciá sesión',
+        'Necesitás una cuenta para acceder a esta sección.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Iniciar sesión',
+            onPress: () => props.navigation.navigate('Login'),
+          },
+          {
+            text: 'Registrarme',
+            onPress: () => props.navigation.navigate('Registro'),
+          },
+        ]
+      );
+      return;
+    }
+
     if (item.id === 'pedidos') {
       props.navigation.navigate('Principal', { screen: 'Pedidos' });
     } else {
@@ -539,7 +627,7 @@ export default function PantallaPerfil(props: any) {
   };
 
   // ============================================================
-  // 🏗️ RENDER PRINCIPAL
+  // 🏗️ RENDER
   // ============================================================
   return (
     <View style={styles.container}>
@@ -569,7 +657,6 @@ export default function PantallaPerfil(props: any) {
             },
           ]}
         >
-          {/* Avatar */}
           <TouchableOpacity
             onPress={perfil?.id ? mostrarOpcionesFoto : undefined}
             activeOpacity={0.8}
@@ -605,12 +692,10 @@ export default function PantallaPerfil(props: any) {
             </View>
           )}
 
-          {/* ✅ NOMBRE CON SIMPSONFONT */}
           <Text style={[styles.name, { fontSize: nombreSize }]}>
             {perfil?.nombre_cliente || 'Invitado'}
           </Text>
 
-          {/* ✅ EMAIL CON FUENTE REGULAR */}
           <Text style={[styles.email, { fontSize: correoSize }]}>
             {perfil?.email || 'Inicia sesión para ver tus datos'}
           </Text>
@@ -620,7 +705,6 @@ export default function PantallaPerfil(props: any) {
               <View style={styles.pointsContainer}>
                 <View style={styles.pointsWrapper}>
                   <Text style={styles.pointsIcon}>⭐</Text>
-                  {/* ✅ PUNTOS CON SIMPSONFONT */}
                   <Text style={[styles.pointsText, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                     {perfil?.puntos_acumulados || 0} Krusty Points
                   </Text>
@@ -634,7 +718,6 @@ export default function PantallaPerfil(props: any) {
                 borderColor: nivelActual.color + '30',
                 width: '100%',
               }]}>
-                {/* ✅ NIVEL CON SIMPSONFONT */}
                 <Text style={[styles.levelText, {
                   color: nivelActual.color,
                   fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
@@ -652,15 +735,12 @@ export default function PantallaPerfil(props: any) {
                 />
               </View>
 
-              {/* ✅ SECCIÓN DE BENEFICIOS */}
               {beneficios && (
                 <View style={styles.beneficiosContainer}>
-                  {/* ✅ TÍTULO CON SIMPSONFONT */}
                   <Text style={[styles.beneficiosTitle, { fontSize: isTablet ? 14 : 12 }]}>
                     🎁 Beneficios de tu nivel
                   </Text>
 
-                  {/* Descuento */}
                   <View style={styles.beneficioItem}>
                     <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.accent + '15' }]}>
                       <Ionicons name="pricetag-outline" size={isTablet ? 18 : 16} color={DISENO.colors.accent} />
@@ -672,7 +752,6 @@ export default function PantallaPerfil(props: any) {
                     </Text>
                   </View>
 
-                  {/* Envío gratis */}
                   <View style={styles.beneficioItem}>
                     <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.success + '15' }]}>
                       <Ionicons name="bicycle-outline" size={isTablet ? 18 : 16} color={DISENO.colors.success} />
@@ -686,7 +765,6 @@ export default function PantallaPerfil(props: any) {
                     </Text>
                   </View>
 
-                  {/* Acceso anticipado */}
                   {beneficios.accesoAnticipadoOfertas && (
                     <View style={styles.beneficioItem}>
                       <View style={[styles.beneficioIcon, { backgroundColor: DISENO.colors.info + '15' }]}>
@@ -702,7 +780,6 @@ export default function PantallaPerfil(props: any) {
 
               <View style={styles.stats}>
                 <View style={styles.statItem}>
-                  {/* ✅ STAT VALOR CON SIMPSONFONT */}
                   <Text style={[styles.statValue, { fontSize: statValorSize }]}>
                     {totalPedidos}
                   </Text>
@@ -746,7 +823,7 @@ export default function PantallaPerfil(props: any) {
 
               <TouchableOpacity
                 style={styles.loginButtonGuest}
-                onPress={() => props.navigation.navigate('Login')} // Ajusta 'Login' según el nombre de tu ruta de autenticación
+                onPress={() => props.navigation.navigate('Login')}
               >
                 <LinearGradient
                   colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
@@ -775,7 +852,6 @@ export default function PantallaPerfil(props: any) {
               transform: [{ translateY: slideUpAnim }],
             },
           ]}>
-            {/* ✅ TÍTULO CON SIMPSONFONT */}
             <Text style={[styles.actividadTitulo, { fontSize: isTablet ? 15 : 13 }]}>
               📈 Actividad reciente
             </Text>
@@ -817,7 +893,6 @@ export default function PantallaPerfil(props: any) {
             },
           ]}>
             <View style={styles.infoHeader}>
-              {/* ✅ TÍTULO CON SIMPSONFONT */}
               <Text style={[styles.infoTitulo, { fontSize: isTablet ? 15 : 13 }]}>
                 📋 Info contacto
               </Text>
@@ -979,7 +1054,6 @@ export default function PantallaPerfil(props: any) {
               transform: [{ translateY: slideUpAnim }],
             },
           ]}>
-            {/* ✅ TÍTULO CON SIMPSONFONT */}
             <Text style={[styles.canjesTitulo, { fontSize: isTablet ? 15 : 13 }]}>
               🎁 Últimas recompensas canjeadas
             </Text>
@@ -1023,35 +1097,59 @@ export default function PantallaPerfil(props: any) {
             transform: [{ translateY: slideUpAnim }],
           },
         ]}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.menuItem, {
-                paddingVertical: isTablet ? 16 : isSmallPhone ? 12 : 14,
-                paddingHorizontal: isTablet ? 20 : 16,
-              }]}
-              onPress={() => handleNavigate(item)}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
-                  <Ionicons name={item.icono as any} size={isTablet ? 22 : 20} color={item.color} />
-                </View>
-                <View style={styles.menuLabelContainer}>
-                  {/* ✅ MENU LABEL CON SIMPSONFONT */}
-                  <Text style={[styles.menuLabel, { fontSize: menuTextSize }]} numberOfLines={1}>
-                    {item.label}
-                  </Text>
-                  {item.subtitle && (
-                    <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 12 : 10 }]} numberOfLines={1}>
-                      {item.subtitle}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={isTablet ? 22 : 18} color={DISENO.colors.textTertiary} />
-            </TouchableOpacity>
-          ))}
+          {menuItems.map((item) => {
+            const bloqueado = item.requiereSesion && !sesion;
+            const tieneBadge = item.id === 'notificaciones' && notificacionesNoLeidas > 0;
 
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.menuItem, {
+                  paddingVertical: isTablet ? 16 : isSmallPhone ? 12 : 14,
+                  paddingHorizontal: isTablet ? 20 : 16,
+                }]}
+                onPress={() => handleNavigate(item)}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={[styles.menuIcon, { backgroundColor: item.color + '15' }]}>
+                    <Ionicons name={item.icono as any} size={isTablet ? 22 : 20} color={item.color} />
+                    {tieneBadge && (
+                      <View style={[
+                        styles.badgeNotificaciones,
+                        {
+                          backgroundColor: DISENO.colors.accent,
+                          borderColor: DISENO.colors.surface,
+                        }
+                      ]}>
+                        <Text style={styles.badgeNotificacionesTexto}>
+                          {notificacionesNoLeidas > 99 ? '99+' : notificacionesNoLeidas}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.menuLabelContainer}>
+                    <Text style={[styles.menuLabel, { fontSize: menuTextSize }]} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                    {bloqueado ? (
+                      <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 12 : 10 }]} numberOfLines={1}>
+                        🔒 Iniciá sesión para acceder
+                      </Text>
+                    ) : item.subtitle ? (
+                      <Text style={[styles.menuSubtitle, { fontSize: isTablet ? 12 : 10 }]} numberOfLines={1}>
+                        {item.subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+                <Ionicons
+                  name={bloqueado ? 'lock-closed-outline' : 'chevron-forward'}
+                  size={isTablet ? 22 : 18}
+                  color={bloqueado ? DISENO.colors.warning : DISENO.colors.textTertiary}
+                />
+              </TouchableOpacity>
+            );
+          })}
         </Animated.View>
 
         {/* Cerrar Sesión */}
@@ -1068,7 +1166,6 @@ export default function PantallaPerfil(props: any) {
           ]}>
             <TouchableOpacity style={styles.logoutButton} onPress={() => setMostrarModal(true)}>
               <Ionicons name="log-out-outline" size={22} color={DISENO.colors.danger} />
-              {/* ✅ LOGOUT CON SIMPSONFONT */}
               <Text style={[styles.logoutText, { fontSize: isTablet ? 14 : 13 }]}>
                 Cerrar sesión
               </Text>
@@ -1076,8 +1173,6 @@ export default function PantallaPerfil(props: any) {
           </Animated.View>
         )}
       </ScrollView>
-
-
 
       {/* MODAL DE CONFIRMACIÓN DE CIERRE DE SESIÓN */}
       <Modal
@@ -1095,7 +1190,6 @@ export default function PantallaPerfil(props: any) {
             <View style={styles.modalIcon}>
               <Ionicons name="log-out-outline" size={48} color={DISENO.colors.danger} />
             </View>
-            {/* ✅ MODAL TITLE CON SIMPSONFONT */}
             <Text style={[styles.modalTitle, { fontSize: isTablet ? 20 : 18 }]}>
               ¿Cerrar sesión?
             </Text>
@@ -1128,7 +1222,7 @@ export default function PantallaPerfil(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CON SIMPSONFONT
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
   container: {
@@ -1188,14 +1282,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: DISENO.colors.textSecondary,
   },
-  // ✅ NOMBRE CON SIMPSONFONT
   name: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
     marginTop: 12,
   },
-  // ✅ EMAIL CON FUENTE REGULAR
   email: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -1215,7 +1307,6 @@ const styles = StyleSheet.create({
   pointsIcon: {
     fontSize: 18,
   },
-  // ✅ PUNTOS CON SIMPSONFONT
   pointsText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1227,7 +1318,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     ...DISENO.shadow.sm,
   },
-  // ✅ NIVEL CON SIMPSONFONT
   levelText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1241,7 +1331,6 @@ const styles = StyleSheet.create({
     width: '100%',
     ...DISENO.shadow.sm,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   beneficiosTitle: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1262,7 +1351,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 0,
   },
-  // ✅ BENEFICIO CON FUENTE REGULAR
   beneficioText: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -1282,13 +1370,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  // ✅ STAT VALOR CON SIMPSONFONT
   statValue: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
   },
-  // ✅ STAT LABEL CON FUENTE REGULAR
   statLabel: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -1304,7 +1390,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     padding: 20,
   },
-  // ✅ GUEST TEXT CON SIMPSONFONT
   guestText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1324,7 +1409,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     ...DISENO.shadow.sm,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   actividadTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1372,7 +1456,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   infoTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1384,7 +1467,6 @@ const styles = StyleSheet.create({
     backgroundColor: DISENO.colors.fondo,
     borderRadius: DISENO.radius.sm,
   },
-  // ✅ EDIT BUTTON CON SIMPSONFONT
   editButtonText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1400,7 +1482,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 4,
   },
-  // ✅ INFO CON FUENTE REGULAR
   infoText: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
@@ -1413,14 +1494,12 @@ const styles = StyleSheet.create({
   formGroup: {
     marginBottom: 14,
   },
-  // ✅ FORM LABEL CON FUENTE REGULAR
   formLabel: {
     fontFamily: FUENTES.regular,
     fontWeight: '500',
     color: DISENO.colors.textSecondary,
     marginBottom: 4,
   },
-  // ✅ FORM INPUT CON FUENTE REGULAR
   formInput: {
     fontFamily: FUENTES.regular,
     backgroundColor: DISENO.colors.fondo,
@@ -1456,7 +1535,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // ✅ SAVE BUTTON CON SIMPSONFONT
   saveButtonText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1468,7 +1546,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     ...DISENO.shadow.sm,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   canjesTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1492,7 +1569,6 @@ const styles = StyleSheet.create({
   },
   canjeEmoji: { fontSize: 18 },
   canjeInfo: { flex: 1 },
-  // ✅ CANJE NOMBRE CON FUENTE REGULAR
   canjeNombre: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
@@ -1535,14 +1611,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
+    position: 'relative',
   },
-  // ✅ MENU LABEL CON SIMPSONFONT
+  // ✅ NUEVO: badge de notificaciones en el ícono
+  badgeNotificaciones: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  badgeNotificacionesTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 9,
+    fontWeight: '400',
+    color: DISENO.colors.surface,
+  },
   menuLabel: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
   },
-  // ✅ MENU SUBTITLE CON FUENTE REGULAR
   menuSubtitle: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
@@ -1562,7 +1656,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DISENO.colors.danger + '30',
   },
-  // ✅ LOGOUT CON SIMPSONFONT
   logoutText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1583,7 +1676,6 @@ const styles = StyleSheet.create({
   modalIcon: {
     marginBottom: 12,
   },
-  // ✅ MODAL TITLE CON SIMPSONFONT
   modalTitle: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1591,7 +1683,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  // ✅ MODAL TEXT CON FUENTE REGULAR
   modalText: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
@@ -1616,7 +1707,6 @@ const styles = StyleSheet.create({
   modalButtonConfirm: {
     backgroundColor: DISENO.colors.danger,
   },
-  // ✅ MODAL BUTTON CON SIMPSONFONT
   modalButtonText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -1625,7 +1715,7 @@ const styles = StyleSheet.create({
   modalButtonConfirmText: {
     color: DISENO.colors.surface,
   },
-  // ESTILOS MODAL ELIMINAR
+  // ESTILOS MODAL ELIMINAR (sin usar)
   modalEliminarOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',

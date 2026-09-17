@@ -4,7 +4,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
@@ -58,6 +58,18 @@ interface Oferta {
   fecha_fin?: string;
 }
 
+// ✅ Paleta de marca (sin naranja)
+const PALETA_OFERTAS = [
+  DISENO.colors.accent,
+  DISENO.colors.accentSecondary,
+  DISENO.colors.verde,
+  DISENO.colors.rosa,
+  DISENO.colors.azul,
+  DISENO.colors.verdeClaro,
+  DISENO.colors.azulClaro,
+  DISENO.colors.accentLight,
+];
+
 export default function PantallaOfertas(props: any) {
   const [ofertas, setOfertas] = useState<Oferta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -70,7 +82,6 @@ export default function PantallaOfertas(props: any) {
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    console.log('🔄 [PantallaOfertas] Componente montado');
     cargarOfertas();
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -87,7 +98,6 @@ export default function PantallaOfertas(props: any) {
   }, []);
 
   const cargarOfertas = async () => {
-    console.log('📦 [PantallaOfertas] Cargando ofertas...');
     try {
       const { data, error } = await supabase
         .from('ofertas')
@@ -98,7 +108,6 @@ export default function PantallaOfertas(props: any) {
         console.error('❌ Error cargando ofertas:', error);
         setOfertas([]);
       } else {
-        console.log(`📦 [PantallaOfertas] Ofertas cargadas: ${data?.length || 0}`);
         setOfertas(data as Oferta[] || []);
       }
     } catch (error) {
@@ -107,12 +116,10 @@ export default function PantallaOfertas(props: any) {
     } finally {
       setCargando(false);
       setRefrescando(false);
-      console.log('🏁 [PantallaOfertas] Carga de ofertas finalizada');
     }
   };
 
   const manejarRefresh = async () => {
-    console.log('🔄 [PantallaOfertas] Refrescando ofertas...');
     setRefrescando(true);
     await cargarOfertas();
   };
@@ -127,26 +134,14 @@ export default function PantallaOfertas(props: any) {
   const descSize = responsive.getValor({ tablet: 13, normal: 12, small: 11 });
   const precioOriginalSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
 
-  // ✅ Paleta de marca (sin naranja)
-  const PALETA_OFERTAS = [
-    DISENO.colors.accent,          // 🔴 Rojo Krusty
-    DISENO.colors.accentSecondary, // 🟡 Amarillo Krusty
-    DISENO.colors.verde,           // 🟢 Verde
-    DISENO.colors.rosa,            // 🌸 Rosa
-    DISENO.colors.azul,            // 🔵 Azul
-    DISENO.colors.verdeClaro,      // 🟢 Verde claro
-    DISENO.colors.azulClaro,       // 🔵 Azul claro
-    DISENO.colors.accentLight,     // 🔴 Rojo claro
-  ];
-
   const getColorPorId = (id: number) => PALETA_OFERTAS[id % PALETA_OFERTAS.length];
 
   const navegarADetalle = (oferta: Oferta) => {
-    console.log(`👉 [PantallaOfertas] Navegando a detalle de oferta: ${oferta.titulo}`);
     props.navigation.navigate('DetalleOferta', { oferta });
   };
 
-  const renderOferta = ({ item, index }: { item: Oferta; index: number }) => {
+  // ✅ FIX: renderItem para FlatList
+  const renderOferta = useCallback(({ item, index }: { item: Oferta; index: number }) => {
     const itemFade = fadeAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [0.2, 1],
@@ -162,7 +157,6 @@ export default function PantallaOfertas(props: any) {
 
     return (
       <Animated.View
-        key={item.id}
         style={{
           opacity: itemFade,
           transform: [{ translateY: itemSlide }],
@@ -224,9 +218,6 @@ export default function PantallaOfertas(props: any) {
                   }
                 ]}
                 resizeMode="cover"
-                onError={(e) => {
-                  console.log('❌ Error cargando imagen:', e.nativeEvent.error);
-                }}
               />
             ) : (
               <View style={[
@@ -288,7 +279,7 @@ export default function PantallaOfertas(props: any) {
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [fadeAnim, slideUpAnim, responsive, props.navigation]);
 
   return (
     <View style={styles.container}>
@@ -362,7 +353,10 @@ export default function PantallaOfertas(props: any) {
           </Text>
         </View>
       ) : (
-        <ScrollView
+        <FlatList
+          data={ofertas}
+          renderItem={renderOferta}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={[
             styles.scroll,
             {
@@ -380,15 +374,13 @@ export default function PantallaOfertas(props: any) {
               colors={[DISENO.colors.accent]}
             />
           }
-        >
-          {ofertas.length === 0 ? (
+          ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons
                 name="pricetag-outline"
                 size={responsive.getValor({ tablet: 80, normal: 70, small: 60 })}
                 color={DISENO.colors.textTertiary + '40'}
               />
-              {/* ✅ EMPTY CON SIMPSONFONT */}
               <Text style={[
                 styles.emptyText,
                 {
@@ -398,7 +390,6 @@ export default function PantallaOfertas(props: any) {
               ]}>
                 No hay ofertas disponibles
               </Text>
-              {/* ✅ SUBTEXT CON FUENTE REGULAR */}
               <Text style={[
                 styles.emptySubText,
                 {
@@ -409,10 +400,8 @@ export default function PantallaOfertas(props: any) {
                 Vuelve pronto para ver nuevas promociones 🚀
               </Text>
             </View>
-          ) : (
-            ofertas.map((item, index) => renderOferta({ item, index }))
-          )}
-        </ScrollView>
+          }
+        />
       )}
     </View>
   );
@@ -433,7 +422,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  // ✅ GRADIENTE SOLO DEL HEADER (mismo tamaño que en Menú)
   headerGradiente: {
     position: 'absolute',
     top: 0,
@@ -457,7 +445,6 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 8,
   },
-  // ✅ TÍTULO CON SIMPSONFONT
   title: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -468,7 +455,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  // ✅ CONTADOR CON FUENTE REGULAR
   counter: {
     fontFamily: FUENTES.regular,
     fontWeight: '500',
@@ -479,7 +465,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-  // ✅ LOADING CON FUENTE REGULAR
   loadingText: {
     fontFamily: FUENTES.regular,
     fontWeight: '400',
@@ -499,7 +484,6 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1,
   },
-  // ✅ DESCUENTO CON SIMPSONFONT
   descuentoTexto: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -522,12 +506,10 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
-  // ✅ TÍTULO OFERTA CON SIMPSONFONT
   ofertaTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
   },
-  // ✅ DESCRIPCIÓN CON FUENTE REGULAR
   ofertaDesc: {
     fontFamily: FUENTES.regular,
     marginTop: 2,
@@ -540,13 +522,11 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 6,
   },
-  // ✅ PRECIO ORIGINAL CON FUENTE REGULAR
   precioOriginal: {
     fontFamily: FUENTES.regular,
     textDecorationLine: 'line-through',
     opacity: 0.5,
   },
-  // ✅ PRECIO OFERTA CON SIMPSONFONT
   precioOferta: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
@@ -557,14 +537,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 80,
   },
-  // ✅ EMPTY CON SIMPSONFONT
   emptyText: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
     marginTop: 16,
     textAlign: 'center',
   },
-  // ✅ SUBTEXT CON FUENTE REGULAR
   emptySubText: {
     fontFamily: FUENTES.regular,
     textAlign: 'center',

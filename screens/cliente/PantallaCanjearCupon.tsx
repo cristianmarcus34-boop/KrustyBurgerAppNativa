@@ -25,12 +25,12 @@ import { DISENO, useResponsive } from '../../lib/colores';
 import { Toast, useToast } from '../../components/Toast';
 import CuponQR from '../../components/cupones/CuponQR';
 import { CuponUsuario } from '../../lib/cupones/cuponTypes';
-// ✅ IMPORTAMOS FUENTES
 import { FUENTES } from '../../lib/fuentes';
 
 // ✅ TIPADO DE NAVEGACIÓN
 type RootStackParamList = {
     Login: undefined;
+    Registro: undefined;
     MisCupones: undefined;
     Carrito: { cuponAplicado?: any };
     CanjearCupon: { codigo?: string };
@@ -42,10 +42,12 @@ type Navigation = {
         params?: RootStackParamList[T]
     ) => void;
     goBack: () => void;
+    replace: (screen: keyof RootStackParamList, params?: any) => void;
 };
 
 export default function PantallaCanjearCupon() {
-    const { perfil } = tiendaAutenticacion();
+    // ✅ NUEVO: sesion + cargandoAuth
+    const { perfil, sesion, cargando: cargandoAuth } = tiendaAutenticacion();
     const insets = useSafeAreaInsets();
     const responsive = useResponsive();
     const navigation = useNavigation<Navigation>();
@@ -85,9 +87,37 @@ export default function PantallaCanjearCupon() {
     const codigoInicial = params.codigo || '';
 
     // ============================================================
+    // 🔒 GUARD DE SESIÓN
+    // ============================================================
+    useEffect(() => {
+        if (!cargandoAuth && !sesion) {
+            Alert.alert(
+                'Iniciá sesión',
+                'Necesitás una cuenta para canjear cupones.',
+                [
+                    {
+                        text: 'Volver',
+                        style: 'cancel',
+                        onPress: () => navigation.goBack(),
+                    },
+                    {
+                        text: 'Iniciar sesión',
+                        onPress: () => navigation.replace('Login'),
+                    },
+                    {
+                        text: 'Registrarme',
+                        onPress: () => navigation.replace('Registro'),
+                    },
+                ],
+                { cancelable: false }
+            );
+        }
+    }, [sesion, cargandoAuth]);
+
+    // ============================================================
     // 📋 Cargar cupones disponibles del usuario
     // ============================================================
-    const cargarCuponesDisponibles = async () => {
+    const cargarCuponesDisponibles = useCallback(async () => {
         if (!perfil?.id) {
             setCuponesDisponibles([]);
             return;
@@ -102,20 +132,23 @@ export default function PantallaCanjearCupon() {
         } finally {
             setCargandoCupones(false);
         }
-    };
+    }, [perfil?.id]);
 
+    // ✅ FIX: useFocusEffect ahora depende de perfil?.id para re-cargar si cambia
     useFocusEffect(
         useCallback(() => {
-            cargarCuponesDisponibles();
-        }, [perfil?.id])
+            if (perfil?.id) {
+                cargarCuponesDisponibles();
+            }
+        }, [perfil?.id, cargarCuponesDisponibles])
     );
 
     // ============================================================
     // ✅ PROCESAR DEEP LINK AUTOMÁTICAMENTE
     // ============================================================
     useEffect(() => {
-        if (codigoInicial) {
-            console.log('🎫 Código recibido por deep link:', codigoInicial);
+        // ✅ Solo si hay sesión
+        if (codigoInicial && sesion) {
             setCodigo(codigoInicial);
 
             const timer = setTimeout(() => {
@@ -124,7 +157,7 @@ export default function PantallaCanjearCupon() {
 
             return () => clearTimeout(timer);
         }
-    }, [codigoInicial]);
+    }, [codigoInicial, sesion]);
 
     // ============================================================
     // 📋 Copiar código al portapapeles
@@ -172,17 +205,10 @@ export default function PantallaCanjearCupon() {
         setCargando(true);
 
         try {
-            console.log('🎟️ Intentando canjear cupón:', {
-                codigo: codigoParaCanjear,
-                usuarioId: perfil.id,
-            });
-
             const resultado = await cuponService.canjearCupon({
                 codigo: codigoParaCanjear,
                 usuarioId: perfil.id,
             });
-
-            console.log('🎟️ Resultado del canje:', resultado);
 
             setResultadoCanje(resultado);
             setModalVisible(true);
@@ -224,8 +250,6 @@ export default function PantallaCanjearCupon() {
         const codigoLimpio = codigoDetectado.trim().toUpperCase();
         if (!codigoLimpio) return;
 
-        console.log('📷 Código recibido desde CuponQR:', codigoLimpio);
-
         setCodigo(codigoLimpio);
         setScaneando(false);
 
@@ -254,19 +278,31 @@ export default function PantallaCanjearCupon() {
 
         const cupon = resultadoCanje.cupon;
 
-        console.log('🛒 Enviando cupón al carrito:', {
-            id: cupon.id,
-            codigo: cupon.codigo,
-            titulo: cupon.titulo,
-            tipo: cupon.tipo,
-        });
-
         setModalVisible(false);
         setResultadoCanje(null);
         setCodigo('');
 
         navigation.navigate('Carrito', { cuponAplicado: cupon });
     };
+
+    // ============================================================
+    // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+    // ============================================================
+    if (cargandoAuth || !sesion) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                <Text style={{
+                    fontFamily: FUENTES.display,
+                    marginTop: 16,
+                    color: DISENO.colors.textSecondary,
+                    fontSize: 14,
+                }}>
+                    {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+                </Text>
+            </View>
+        );
+    }
 
     // ============================================================
     // 📷 Pantalla del escáner
@@ -729,14 +765,12 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surface,
         ...DISENO.shadow.sm,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     title: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         color: DISENO.colors.amarillo,
         letterSpacing: 0.5,
     },
-    // ✅ DEEP LINK INDICATOR
     deepLinkIndicator: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -756,7 +790,6 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         flex: 1,
     },
-    // ✅ CARD DE CANJE
     card: {
         backgroundColor: DISENO.colors.surface,
         borderRadius: 20,
@@ -780,7 +813,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         ...DISENO.shadow.sm,
     },
-    // ✅ CARD TITLE CON SIMPSONFONT
     cardTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -805,7 +837,6 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         gap: 10,
     },
-    // ✅ INPUT CON MONO
     input: {
         fontFamily: 'monospace',
         flex: 1,
@@ -847,7 +878,6 @@ const styles = StyleSheet.create({
     buttonDisabled: {
         opacity: 0.55,
     },
-    // ✅ BOTÓN CON SIMPSONFONT
     buttonText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -859,7 +889,6 @@ const styles = StyleSheet.create({
     buttonTextCanjear: {
         color: DISENO.colors.surface,
     },
-    // ✅ CUPONES DISPONIBLES
     cuponesDisponiblesContainer: {
         backgroundColor: DISENO.colors.surface,
         borderRadius: 16,
@@ -880,7 +909,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 10,
     },
-    // ✅ TEXTO CON SIMPSONFONT
     cuponesDisponiblesHeaderText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -906,7 +934,6 @@ const styles = StyleSheet.create({
     cuponesListContent: {
         gap: 10,
     },
-    // ✅ TARJETA DE CUPÓN DISPONIBLE
     cuponDisponibleCard: {
         backgroundColor: DISENO.colors.surfaceHover,
         borderRadius: 12,
@@ -930,7 +957,6 @@ const styles = StyleSheet.create({
     cuponDisponibleIcon: {
         fontSize: 18,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     cuponDisponibleTitulo: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -956,7 +982,6 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         marginBottom: 2,
     },
-    // ✅ CÓDIGO CON MONO
     cuponDisponibleCodigo: {
         fontFamily: 'monospace',
         fontSize: 12,
@@ -974,7 +999,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.accent + '30',
     },
-    // ✅ COPIAR CON SIMPSONFONT
     cuponDisponibleCopiarText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1011,7 +1035,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingHorizontal: 20,
     },
-    // ✅ TIPS
     tipsContainer: {
         backgroundColor: DISENO.colors.surface,
         borderRadius: 16,
@@ -1021,7 +1044,6 @@ const styles = StyleSheet.create({
         borderColor: DISENO.colors.border,
         ...DISENO.shadow.sm,
     },
-    // ✅ TIPS TITLE CON SIMPSONFONT
     tipsTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1049,7 +1071,6 @@ const styles = StyleSheet.create({
         flex: 1,
         lineHeight: 18,
     },
-    // ✅ HISTORIAL
     historialButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1062,7 +1083,6 @@ const styles = StyleSheet.create({
         borderColor: DISENO.colors.border,
         ...DISENO.shadow.sm,
     },
-    // ✅ HISTORIAL TEXT CON SIMPSONFONT
     historialText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1070,7 +1090,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: DISENO.colors.text,
     },
-    // ✅ MODAL
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -1106,7 +1125,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 16,
     },
-    // ✅ MODAL TITLE CON SIMPSONFONT
     modalTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1133,7 +1151,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.border,
     },
-    // ✅ MODAL TITULO CON SIMPSONFONT
     modalCuponTitulo: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1148,7 +1165,6 @@ const styles = StyleSheet.create({
         gap: 12,
         marginBottom: 8,
     },
-    // ✅ CÓDIGO CON MONO
     modalCuponCodigo: {
         fontFamily: 'monospace',
         fontSize: 16,
@@ -1167,14 +1183,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.accent + '30',
     },
-    // ✅ MODAL COPIAR CON SIMPSONFONT
     modalCuponCopiarText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         fontSize: 10,
         color: DISENO.colors.accent,
     },
-    // ✅ DETALLE CON SIMPSONFONT
     modalCuponDetalle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1205,7 +1219,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.border,
     },
-    // ✅ MODAL BOTÓN CON SIMPSONFONT
     modalButtonText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',

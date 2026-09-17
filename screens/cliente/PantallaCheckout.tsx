@@ -10,9 +10,9 @@ import {
     Modal,
     Animated,
     ActivityIndicator,
+    Alert,                    // ✅ NUEVO: para el guard
     KeyboardAvoidingView,
     Platform,
-    Clipboard,
     Linking,
     useWindowDimensions,
 } from 'react-native';
@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import * as Clipboard from 'expo-clipboard';   // ✅ NUEVO: en vez de react-native
 
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
@@ -33,7 +34,7 @@ import { formatearPrecio } from '../../lib/formateador';
 import { useBeneficios } from '../../hooks/useBeneficios';
 import { cuponService } from '../../lib/cupones/cuponService';
 import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
-import { supabase } from '../../lib/supabase';  // ✅ FIX #3: import de supabase
+import { supabase } from '../../lib/supabase';
 
 import MapaSelector from '../../components/Mapa';
 
@@ -58,6 +59,58 @@ const useResponsive = () => {
 const ALIAS_TRANSFERENCIA = 'krustyburger2025';
 const CUENTA_TRANSFERENCIA = 'CBU: 0000003100088376133432';
 
+// ============================================================
+// ✅ HELPERS FUERA DEL COMPONENTE
+// ============================================================
+const asegurarPermisosUbicacion = async (): Promise<boolean> => {
+    try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') return true;
+
+        console.log('📍 [Checkout] Solicitando permisos de ubicación...');
+        const { status: nuevoStatus } = await Location.requestForegroundPermissionsAsync();
+        if (nuevoStatus === 'granted') return true;
+
+        console.warn('❌ [Checkout] Permisos de ubicación rechazados');
+        return false;
+    } catch (error) {
+        console.error('❌ [Checkout] Error pidiendo permisos:', error);
+        return false;
+    }
+};
+
+const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+        const tienePermiso = await asegurarPermisosUbicacion();
+        if (!tienePermiso) {
+            console.warn('⚠️ [Checkout] Sin permisos, no se puede geocodificar');
+            return null;
+        }
+
+        const resultados = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+
+        if (resultados && resultados.length > 0) {
+            const lugar = resultados[0];
+            const partes = [
+                lugar.street || lugar.name,
+                lugar.streetNumber,
+                lugar.district,
+                lugar.city,
+                lugar.region,
+            ].filter(Boolean);
+
+            const direccion = partes.join(', ') || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            console.log('📍 [Checkout] Dirección obtenida:', direccion);
+            return direccion;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('❌ [Checkout] Error geocodificando:', error);
+        return null;
+    }
+};
+
 export default function PantallaCheckout(props: any) {
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
@@ -65,6 +118,8 @@ export default function PantallaCheckout(props: any) {
     const { crearPedido } = tiendaPedidos();
     const {
         perfil,
+        sesion,                       // ✅ NUEVO
+        cargando: cargandoAuth,       // ✅ NUEVO
         actualizarPerfil,
         ubicacionSeleccionada: ubicacionStore,
         guardarUbicacionTemporal,
@@ -138,8 +193,43 @@ export default function PantallaCheckout(props: any) {
     const dot2Anim = useRef(new Animated.Value(0)).current;
     const dot3Anim = useRef(new Animated.Value(0)).current;
 
+    const ultimaUbicacionCalculada = useRef<string>('');
+
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
+
+    // ============================================================
+    // 🔒 GUARD DE SESIÓN
+    // ============================================================
+    // ✅ Si un invitado llega acá (deep link, navegación programática,
+    //    o algún bug del Carrito), lo mandamos a Login.
+    // ============================================================
+    useEffect(() => {
+        if (!cargandoAuth && !sesion) {
+            console.log('🔒 [Checkout] Sin sesión → redirigiendo a Login');
+
+            Alert.alert(
+                'Iniciá sesión',
+                'Necesitás una cuenta para confirmar tu pedido.',
+                [
+                    {
+                        text: 'Volver al carrito',
+                        style: 'cancel',
+                        onPress: () => props.navigation.goBack(),
+                    },
+                    {
+                        text: 'Iniciar sesión',
+                        onPress: () => props.navigation.replace('Login'),
+                    },
+                    {
+                        text: 'Registrarme',
+                        onPress: () => props.navigation.replace('Registro'),
+                    },
+                ],
+                { cancelable: false }
+            );
+        }
+    }, [sesion, cargandoAuth]);
 
     const precioUnitario = (precio: any) => typeof precio === 'number' ? precio : Number(precio);
 
@@ -168,6 +258,9 @@ export default function PantallaCheckout(props: any) {
     }, [pedidoIdTransferencia]);
 
     useEffect(() => {
+        // ✅ Solo cargamos datos si hay sesión
+        if (!sesion) return;
+
         cargarDatosPerfil();
         servicioEnvios.inicializar();
 
@@ -184,13 +277,12 @@ export default function PantallaCheckout(props: any) {
             setDireccion(ubicacionRecibida.direccion || '');
             setDireccionCompleta(ubicacionRecibida.direccion || '');
             setDireccionDelPerfil(false);
-            calcularCostoEnvio(ubicacionRecibida.latitude, ubicacionRecibida.longitude);
             setCargandoUbicacion(false);
             if (ubicacionRecibida.direccion) guardarUbicacionTemporal(ubicacionRecibida);
         } else {
             cargarUbicacionDesdeStore();
         }
-    }, []);
+    }, [sesion]);
 
     useEffect(() => {
         if (perfil) {
@@ -263,7 +355,6 @@ export default function PantallaCheckout(props: any) {
                 setDireccion(ubicacionCargada.direccion || '');
                 setDireccionCompleta(ubicacionCargada.direccion || '');
                 setDireccionDelPerfil(false);
-                calcularCostoEnvio(ubicacionCargada.latitude, ubicacionCargada.longitude);
                 setCargandoUbicacion(false);
                 return;
             }
@@ -272,7 +363,6 @@ export default function PantallaCheckout(props: any) {
                 setDireccion(ubicacionStore.direccion || '');
                 setDireccionCompleta(ubicacionStore.direccion || '');
                 setDireccionDelPerfil(false);
-                calcularCostoEnvio(ubicacionStore.latitude, ubicacionStore.longitude);
                 setCargandoUbicacion(false);
                 return;
             }
@@ -322,9 +412,19 @@ export default function PantallaCheckout(props: any) {
     };
 
     const calcularCostoEnvio = async (lat: number, lng: number) => {
+        console.log('🚚 [Checkout] Calculando envío para:', lat, lng);
+
         setCalculandoEnvio(true);
         try {
             const resultado = await servicioEnvios.calcularCostoEnvio(lat, lng);
+
+            console.log('🚚 [Checkout] Resultado:', {
+                esValido: resultado.esValido,
+                dentroCobertura: resultado.dentroCobertura,
+                costo: resultado.costo,
+                distancia: resultado.distancia,
+            });
+
             if (resultado.esValido && resultado.dentroCobertura) {
                 setCostoEnvioCalculado(resultado.costo);
                 setDistanciaCliente(resultado.distancia);
@@ -336,9 +436,11 @@ export default function PantallaCheckout(props: any) {
                 setEnvioDisponible(false);
                 setMensajeEnvio(resultado.mensaje || 'No disponible');
                 setCostoEnvioCalculado(0);
+                setDistanciaFormateada('');
+                setTiempoEstimado(0);
             }
         } catch (error) {
-            console.error('Error calculando envío:', error);
+            console.error('❌ [Checkout] Error calculando envío:', error);
             setEnvioDisponible(false);
             setMensajeEnvio('Error al calcular el envío');
         } finally {
@@ -347,14 +449,26 @@ export default function PantallaCheckout(props: any) {
     };
 
     useEffect(() => {
-        if (ubicacionSeleccionada && tipoEntrega === 'domicilio') {
-            calcularCostoEnvio(ubicacionSeleccionada.latitude, ubicacionSeleccionada.longitude);
-        } else if (tipoEntrega === 'retiro') {
-            setCostoEnvioCalculado(0);
-            setEnvioDisponible(true);
-            setDistanciaFormateada('');
-            setTiempoEstimado(0);
+        if (!ubicacionSeleccionada || tipoEntrega !== 'domicilio') {
+            if (tipoEntrega === 'retiro') {
+                setCostoEnvioCalculado(0);
+                setEnvioDisponible(true);
+                setDistanciaFormateada('');
+                setTiempoEstimado(0);
+                ultimaUbicacionCalculada.current = '';
+            }
+            return;
         }
+
+        const key = `${ubicacionSeleccionada.latitude.toFixed(6)},${ubicacionSeleccionada.longitude.toFixed(6)}`;
+
+        if (ultimaUbicacionCalculada.current === key) {
+            console.log('🚚 [Checkout] Ya calculado para esta ubicación, skip');
+            return;
+        }
+
+        ultimaUbicacionCalculada.current = key;
+        calcularCostoEnvio(ubicacionSeleccionada.latitude, ubicacionSeleccionada.longitude);
     }, [ubicacionSeleccionada, tipoEntrega]);
 
     useEffect(() => {
@@ -383,35 +497,25 @@ export default function PantallaCheckout(props: any) {
 
     const obtenerUbicacionActual = async () => {
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') {
-                const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-                const { latitude, longitude } = ubicacion.coords;
-                setUbicacionSeleccionada({ latitude, longitude });
-                const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
-                if (direccionObtenida) {
-                    setDireccionCompleta(direccionObtenida);
-                    setDireccion(direccionObtenida);
-                    setDireccionDelPerfil(false);
-                    await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionObtenida });
-                }
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                console.log('⚠️ [Checkout] Sin permisos para obtener ubicación actual');
+                return;
+            }
+
+            const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            const { latitude, longitude } = ubicacion.coords;
+            setUbicacionSeleccionada({ latitude, longitude });
+
+            const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
+            if (direccionObtenida) {
+                setDireccionCompleta(direccionObtenida);
+                setDireccion(direccionObtenida);
+                setDireccionDelPerfil(false);
+                await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionObtenida });
             }
         } catch (error) {
             console.log('Error obteniendo ubicación:', error);
-        }
-    };
-
-    const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promise<string | null> => {
-        try {
-            const resultados = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-            if (resultados && resultados.length > 0) {
-                const lugar = resultados[0];
-                const partes = [lugar.street || lugar.name, lugar.streetNumber, lugar.district, lugar.city, lugar.region].filter(Boolean);
-                return partes.join(', ') || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-            }
-            return null;
-        } catch (error) {
-            return null;
         }
     };
 
@@ -423,6 +527,12 @@ export default function PantallaCheckout(props: any) {
         setBuscandoDireccion(true);
         setDireccionSugerida('');
         try {
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                toast.advertencia('Necesitamos permiso de ubicación');
+                return;
+            }
+
             const resultados = await Location.geocodeAsync(busquedaManual);
             if (resultados && resultados.length > 0) {
                 const { latitude, longitude } = resultados[0];
@@ -446,41 +556,36 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
-    const seleccionarUbicacionEnMapa = async (event: any) => {
-        const { latitude, longitude } = event.nativeEvent.coordinate;
-        setUbicacionSeleccionada({ latitude, longitude });
-        const direccionObtenida = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
-        if (direccionObtenida) {
-            setDireccionCompleta(direccionObtenida);
-            setDireccion(direccionObtenida);
-            setDireccionDelPerfil(false);
-            await guardarUbicacionTemporal({ latitude, longitude, direccion: direccionObtenida });
-        }
-    };
-
     const handleVolverAlCarrito = async () => {
         if (ubicacionSeleccionada) await guardarDireccionEnStore(ubicacionSeleccionada);
         props.navigation.goBack();
     };
 
     const handleConfirmarUbicacion = async (ubicacion: { latitude: number; longitude: number; direccion: string }) => {
-        setUbicacionSeleccionada({ latitude: ubicacion.latitude, longitude: ubicacion.longitude });
+        console.log('🗺️ [Checkout] Ubicación confirmada desde mapa:', ubicacion);
+
+        setUbicacionSeleccionada({
+            latitude: ubicacion.latitude,
+            longitude: ubicacion.longitude
+        });
         setDireccion(ubicacion.direccion);
         setDireccionCompleta(ubicacion.direccion);
         setDireccionDelPerfil(false);
+
         await guardarUbicacionTemporal({
             latitude: ubicacion.latitude,
             longitude: ubicacion.longitude,
             direccion: ubicacion.direccion,
             seleccionadaPorUsuario: true,
         });
-        calcularCostoEnvio(ubicacion.latitude, ubicacion.longitude);
+
         setMostrarMapa(false);
         toast.exito('📍 Ubicación seleccionada correctamente');
     };
 
+    // ✅ FIX: Ahora usa expo-clipboard
     const copiarAlias = async () => {
-        await Clipboard.setString(ALIAS_TRANSFERENCIA);
+        await Clipboard.setStringAsync(ALIAS_TRANSFERENCIA);
         toast.exito('¡Alias copiado!');
     };
 
@@ -505,6 +610,12 @@ export default function PantallaCheckout(props: any) {
     };
 
     const confirmarPedido = async () => {
+        // ✅ Guard extra por si acaso
+        if (!sesion || !perfil?.id) {
+            Alert.alert('Iniciá sesión', 'Necesitás una cuenta para confirmar el pedido.');
+            return;
+        }
+
         if (!direccion && tipoEntrega === 'domicilio') {
             toast.advertencia('Ingresa una dirección de entrega');
             return;
@@ -575,7 +686,7 @@ export default function PantallaCheckout(props: any) {
             tiempo_estimado: tiempoEstimado,
             descuento_nivel: resumen.descuentoNivel,
             descuento_cupon: resumen.descuentoCupon,
-            descuento_puntos: resumen.descuentoPuntos,   // ✅ FIX #1: guardar descuento de puntos
+            descuento_puntos: resumen.descuentoPuntos,
             envio_gratis: resumen.envioGratis,
             nivel_cliente: nivel?.nombre || 'Bronce',
         };
@@ -606,10 +717,8 @@ export default function PantallaCheckout(props: any) {
             }
         }
 
-        // ✅ FIX #2: Marcar el canje de puntos como usado y asociarlo al pedido
         if (cuponPuntosAplicado?.puntos_usados > 0 && perfil?.id && pedidoId) {
             try {
-                // Buscar el canje más reciente del usuario que coincida con los puntos usados
                 const { data: canjesRecientes, error: errorBuscar } = await supabase
                     .from('canjes')
                     .select('id')
@@ -641,7 +750,6 @@ export default function PantallaCheckout(props: any) {
                 }
             } catch (error) {
                 console.error('❌ Error marcando canje como usado:', error);
-                // No frenamos el flujo del pedido por esto
             }
         }
 
@@ -723,9 +831,27 @@ export default function PantallaCheckout(props: any) {
         });
     };
 
+    // ============================================================
+    // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
+    // ============================================================
+    if (cargandoAuth || !sesion) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                <Text style={{
+                    fontFamily: FUENTES.display,
+                    marginTop: 16,
+                    color: DISENO.colors.textSecondary,
+                    fontSize: 14,
+                }}>
+                    {cargandoAuth ? 'Verificando sesión...' : 'Redirigiendo...'}
+                </Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
-            {/* ✅ FONDO TEMA CLARO */}
             <LinearGradient
                 colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
                 style={styles.backgroundGradient}
@@ -761,7 +887,6 @@ export default function PantallaCheckout(props: any) {
                     }
                 ]}
             >
-                {/* ✅ SECCIÓN DE BENEFICIOS */}
                 {perfil && beneficios && (
                     <Animated.View style={[styles.beneficiosSection, {
                         opacity: fadeAnim,
@@ -826,7 +951,6 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 )}
 
-                {/* ✅ DATOS DE CONTACTO */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }],
                 }]}>
@@ -861,7 +985,6 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 )}
 
-                {/* ✅ TIPO DE ENTREGA */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }]}>
@@ -903,7 +1026,6 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ✅ DIRECCIÓN DE ENTREGA */}
                 {tipoEntrega === 'domicilio' && (
                     <Animated.View style={[styles.section, {
                         opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
@@ -1031,7 +1153,14 @@ export default function PantallaCheckout(props: any) {
                                 borderColor: DISENO.colors.accent + '40',
                                 borderWidth: 1,
                             }]}
-                            onPress={() => setMostrarMapa(true)}
+                            onPress={async () => {
+                                const tienePermiso = await asegurarPermisosUbicacion();
+                                if (!tienePermiso) {
+                                    toast.advertencia('Necesitamos permiso de ubicación para el mapa');
+                                    return;
+                                }
+                                setMostrarMapa(true);
+                            }}
                             activeOpacity={0.7}
                         >
                             <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={DISENO.colors.accent} />
@@ -1077,7 +1206,6 @@ export default function PantallaCheckout(props: any) {
                     titulo="📍 Selecciona tu ubicación"
                 />
 
-                {/* ✅ MÉTODO DE PAGO */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }]}>
@@ -1267,7 +1395,6 @@ export default function PantallaCheckout(props: any) {
                     )}
                 </Animated.View>
 
-                {/* ✅ NOTAS */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }]}>
@@ -1289,7 +1416,6 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ✅ PRODUCTOS */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }]}>
@@ -1308,7 +1434,6 @@ export default function PantallaCheckout(props: any) {
                     ))}
                 </Animated.View>
 
-                {/* ✅ RESUMEN */}
                 <Animated.View style={[styles.section, {
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }]}>
@@ -1387,7 +1512,6 @@ export default function PantallaCheckout(props: any) {
                     )}
                 </Animated.View>
 
-                {/* ✅ BOTÓN CONFIRMAR */}
                 <Animated.View style={{
                     opacity: fadeAnim, transform: [{ translateY: slideUpAnim }], marginTop: 12,
                 }}>
@@ -1420,7 +1544,6 @@ export default function PantallaCheckout(props: any) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ✅ MODAL DE ÉXITO */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modal, {
@@ -1450,7 +1573,6 @@ export default function PantallaCheckout(props: any) {
                 </View>
             </Modal>
 
-            {/* ✅ MODAL DE TRANSFERENCIA */}
             <Modal
                 visible={mostrarModalTransferencia}
                 transparent={true}
@@ -1599,7 +1721,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surface,
         ...DISENO.shadow.sm,
     },
-    // ✅ TÍTULO CON SIMPSONFONT
     title: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1611,7 +1732,6 @@ const styles = StyleSheet.create({
     section: {
         marginBottom: 20,
     },
-    // ✅ SECTION TITLE CON SIMPSONFONT
     sectionTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1630,7 +1750,6 @@ const styles = StyleSheet.create({
         marginRight: 12,
         marginTop: 12,
     },
-    // ✅ INPUT CON FUENTE REGULAR
     input: {
         fontFamily: FUENTES.regular,
         flex: 1,
@@ -1656,13 +1775,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         gap: 8,
     },
-    // ✅ OPTION TEXT CON FUENTE REGULAR
     optionText: {
         fontFamily: FUENTES.regular,
         fontWeight: '600',
         flex: 1,
     },
-    // ✅ OPTION PRICE CON SIMPSONFONT
     optionPrice: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1672,7 +1789,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 10,
     },
-    // ✅ BOTON MAPA CON FUENTE REGULAR
     botonMapaText: {
         fontFamily: FUENTES.regular,
         fontWeight: '600',
@@ -1703,7 +1819,6 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingVertical: 3,
     },
-    // ✅ INFO ENVIO CON FUENTE REGULAR
     infoEnvioText: {
         fontFamily: FUENTES.regular,
         fontSize: 13,
@@ -1715,12 +1830,10 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderBottomWidth: 1,
     },
-    // ✅ PRODUCTO NOMBRE CON FUENTE REGULAR
     productoNombre: {
         fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-    // ✅ PRODUCTO PRECIO CON SIMPSONFONT
     productoPrecio: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1730,12 +1843,10 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 6,
     },
-    // ✅ RESUMEN TEXT CON FUENTE REGULAR
     resumenText: {
         fontFamily: FUENTES.regular,
         opacity: 0.8,
     },
-    // ✅ RESUMEN VALOR CON SIMPSONFONT
     resumenValor: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1745,12 +1856,10 @@ const styles = StyleSheet.create({
         paddingTop: 10,
         marginTop: 4,
     },
-    // ✅ TOTAL TEXT CON SIMPSONFONT
     totalText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ TOTAL PRICE CON SIMPSONFONT
     totalPrice: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1769,7 +1878,6 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         paddingHorizontal: 24,
     },
-    // ✅ BOTÓN CONFIRMAR CON SIMPSONFONT
     botonConfirmarText: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1788,19 +1896,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalIcon: { marginBottom: 12 },
-    // ✅ MODAL TITLE CON SIMPSONFONT
     modalTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
         marginBottom: 8,
     },
-    // ✅ MODAL TEXT CON FUENTE REGULAR
     modalText: {
         fontFamily: FUENTES.regular,
         textAlign: 'center',
         opacity: 0.8,
     },
-    // ✅ MODAL SUBTEXT CON FUENTE REGULAR
     modalSubtext: {
         fontFamily: FUENTES.regular,
         marginTop: 12,
@@ -1829,7 +1934,6 @@ const styles = StyleSheet.create({
         gap: 10,
         backgroundColor: DISENO.colors.surface,
     },
-    // ✅ LOADING CON FUENTE REGULAR
     loadingUbicacionText: {
         fontFamily: FUENTES.regular,
         fontSize: 13,
@@ -1846,13 +1950,11 @@ const styles = StyleSheet.create({
         gap: 6,
         flexWrap: 'wrap',
     },
-    // ✅ DIRECCION LABEL CON FUENTE REGULAR
     direccionPerfilLabel: {
         fontFamily: FUENTES.regular,
         fontWeight: '600',
         opacity: 0.8,
     },
-    // ✅ DIRECCION TEXTO CON FUENTE REGULAR
     direccionPerfilTexto: {
         fontFamily: FUENTES.regular,
         fontWeight: '500',
@@ -1894,7 +1996,6 @@ const styles = StyleSheet.create({
         fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-    // ✅ DATOS GUARDADOS CON FUENTE REGULAR
     datosGuardados: {
         fontFamily: FUENTES.regular,
         fontSize: 11,
@@ -1916,7 +2017,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
     },
-    // ✅ BUSCADOR INPUT CON FUENTE REGULAR
     buscadorManualInput: {
         fontFamily: FUENTES.regular,
         flex: 1,
@@ -1930,14 +2030,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minWidth: 50,
     },
-    // EFECTIVO
     efectivoContainer: {},
-    // ✅ EFECTIVO TITLE CON SIMPSONFONT
     efectivoTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ EFECTIVO SUBTITLE CON FUENTE REGULAR
     efectivoSubtitle: {
         fontFamily: FUENTES.regular,
         opacity: 0.8,
@@ -1947,7 +2044,6 @@ const styles = StyleSheet.create({
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ EFECTIVO INPUT CON SIMPSONFONT
     efectivoInput: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1957,12 +2053,10 @@ const styles = StyleSheet.create({
         opacity: 0.6,
     },
     vueltoContainer: {},
-    // ✅ VUELTO LABEL CON FUENTE REGULAR
     vueltoLabel: {
         fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-    // ✅ VUELTO MONTO CON SIMPSONFONT
     vueltoMonto: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
@@ -1977,7 +2071,6 @@ const styles = StyleSheet.create({
         fontFamily: FUENTES.regular,
         fontWeight: '500',
     },
-    // BENEFICIOS
     beneficiosSection: {
         marginBottom: 12,
     },
@@ -2000,12 +2093,10 @@ const styles = StyleSheet.create({
     },
     beneficiosIcon: { fontSize: 18 },
     beneficiosInfo: { flex: 1 },
-    // ✅ BENEFICIOS TITLE CON SIMPSONFONT
     beneficiosTitle: {
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    // ✅ BENEFICIOS DESC CON FUENTE REGULAR
     beneficiosDesc: {
         fontFamily: FUENTES.regular,
         opacity: 0.8,
@@ -2026,7 +2117,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: DISENO.colors.border,
     },
-    // ✅ BENEFICIO TAG CON FUENTE REGULAR
     beneficioTagText: {
         fontFamily: FUENTES.regular,
         color: DISENO.colors.textSecondary,
@@ -2043,7 +2133,6 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         marginTop: 2,
     },
-    // MODAL TRANSFERENCIA
     modalTransferenciaOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -2077,7 +2166,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    // ✅ TRANSFERENCIA HEADER TITLE CON SIMPSONFONT
     modalTransferenciaHeaderTitle: {
         fontFamily: FUENTES.display,
         fontSize: 16,
@@ -2092,7 +2180,6 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 8,
     },
-    // ✅ MENSAJE CON FUENTE REGULAR
     modalTransferenciaMensaje: {
         fontFamily: FUENTES.regular,
         fontSize: 13,
@@ -2129,7 +2216,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         gap: 8,
     },
-    // ✅ ALIAS TEXTO CON SIMPSONFONT
     modalTransferenciaAliasTexto: {
         fontFamily: FUENTES.display,
         fontSize: 16,
@@ -2192,7 +2278,6 @@ const styles = StyleSheet.create({
         color: DISENO.colors.textSecondary,
         marginBottom: 2,
     },
-    // ✅ MONTO CON SIMPSONFONT
     modalTransferenciaMontoTexto: {
         fontFamily: FUENTES.display,
         fontSize: 26,
@@ -2232,7 +2317,6 @@ const styles = StyleSheet.create({
         backgroundColor: DISENO.colors.surfaceHover,
         borderColor: DISENO.colors.border,
     },
-    // ✅ BOTÓN CON SIMPSONFONT
     modalTransferenciaBotonPrincipalText: {
         fontFamily: FUENTES.display,
         fontSize: 12,

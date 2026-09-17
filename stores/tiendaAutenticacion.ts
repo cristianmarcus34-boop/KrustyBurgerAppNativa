@@ -1,10 +1,13 @@
-// stores/tiendaAutenticacion.ts - ACTUALIZADO
+// stores/tiendaAutenticacion.ts - ACTUALIZADO CON DESASOCIACIÓN DE TOKEN PUSH
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Perfil, UbicacionGuardada } from '../lib/tipos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { tiendaFavoritos } from './tiendaFavoritos';
+import { tiendaCarrito } from './tiendaCarrito';
 
 const STORAGE_UBICACION_KEY = '@ubicacion_seleccionada';
+const STORAGE_ULTIMO_USUARIO = '@ultimo_usuario_id';
 
 // ✅ Importación dinámica de notificacionService
 let notificacionService: any = null;
@@ -18,7 +21,7 @@ const getNotificacionService = async () => {
 };
 
 // ============================================================
-// 🛡️ INTERFACES Y TIPOS
+// 🛡️ INTERFACES
 // ============================================================
 interface EstadoAutenticacion {
   sesion: any | null;
@@ -29,7 +32,6 @@ interface EstadoAutenticacion {
   ubicacionSeleccionada: UbicacionGuardada | null;
   error: string | null;
 
-  // Acciones
   inicializarSesion: () => Promise<void>;
   iniciarSesion: (correo: string, contrasena: string) => Promise<{ success: boolean; error?: string }>;
   registrarCliente: (datos: { correo: string; contrasena: string; nombre: string; telefono: string }) => Promise<{ success: boolean; error?: string }>;
@@ -47,10 +49,9 @@ interface EstadoAutenticacion {
 }
 
 // ============================================================
-// 📦 STORE DE AUTENTICACIÓN
+// 📦 STORE
 // ============================================================
 export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
-  // Estado inicial
   sesion: null,
   perfil: null,
   cargando: true,
@@ -60,7 +61,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   error: null,
 
   // ============================================================
-  // 🔄 INICIALIZAR SESIÓN
+  // 🔄 INICIALIZAR
   // ============================================================
   inicializarSesion: async () => {
     set({ cargando: true, error: null });
@@ -87,13 +88,20 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
           return;
         }
 
+        const ultimoUsuarioId = await AsyncStorage.getItem(STORAGE_ULTIMO_USUARIO);
+        if (ultimoUsuarioId && ultimoUsuarioId !== session.user.id) {
+          console.log('🔄 Cambio de usuario detectado → vaciando carrito');
+          await tiendaCarrito.getState().vaciarCarrito();
+        }
+        await AsyncStorage.setItem(STORAGE_ULTIMO_USUARIO, session.user.id);
+
         set({
           sesion: session,
           perfil: perfil as Perfil,
           esAdministrador: perfil?.rol === 'admin',
           esRepartidor: perfil?.rol === 'repartidor',
           cargando: false,
-          error: null
+          error: null,
         });
 
         try {
@@ -113,15 +121,12 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 🔐 INICIAR SESIÓN - CORREGIDO (sin console.error innecesario)
+  // 🔐 INICIAR SESIÓN
   // ============================================================
   iniciarSesion: async (correo: string, contrasena: string) => {
     set({ error: null });
 
     try {
-      console.log('🔍 [Login] Intentando iniciar sesión:', correo);
-
-      // ✅ Validaciones
       if (!correo || !contrasena) {
         return { success: false, error: 'Completa todos los campos' };
       }
@@ -135,22 +140,16 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return { success: false, error: 'La contraseña debe tener al menos 6 caracteres' };
       }
 
-      // ✅ Autenticar
       const { data, error } = await supabase.auth.signInWithPassword({
         email: correo,
         password: contrasena,
       });
 
       if (error) {
-        // ✅ NO imprimir en consola errores de autenticación (son esperados)
-        // Solo devolvemos el error para que la UI lo maneje
-        console.log('🔑 [Login] Error de autenticación:', error.message);
+        console.log('🔑 [Login] Error:', error.message);
         return { success: false, error: error.message };
       }
 
-      console.log('✅ [Login] Usuario autenticado:', data.user.id);
-
-      // ✅ Cargar perfil
       const { data: perfil, error: perfilError } = await supabase
         .from('perfiles')
         .select('*')
@@ -162,28 +161,29 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return { success: false, error: 'Error al cargar el perfil' };
       }
 
-      // ✅ Actualizar estado
+      const ultimoUsuarioId = await AsyncStorage.getItem(STORAGE_ULTIMO_USUARIO);
+      if (ultimoUsuarioId && ultimoUsuarioId !== data.user.id) {
+        console.log('🔄 Cambio de usuario → vaciando carrito');
+        await tiendaCarrito.getState().vaciarCarrito();
+      }
+      await AsyncStorage.setItem(STORAGE_ULTIMO_USUARIO, data.user.id);
+
       set({
         sesion: data.session,
         perfil: perfil as Perfil,
         esAdministrador: perfil?.rol === 'admin',
         esRepartidor: perfil?.rol === 'repartidor',
-        error: null
+        error: null,
       });
 
-      console.log('✅ [Login] Perfil cargado:', perfil);
-
-      // ✅ Actualizar último acceso
       await supabase
         .from('perfiles')
         .update({ ultimo_acceso: new Date().toISOString() })
         .eq('id', data.user.id);
 
-      // ✅ Registrar token FCM
       try {
         const service = await getNotificacionService();
         await service.registrarToken(data.user.id);
-        console.log('✅ [Login] Token FCM registrado');
       } catch (error) {
         console.warn('⚠️ [Login] No se pudo registrar token FCM:', error);
       }
@@ -197,7 +197,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 📝 REGISTRAR CLIENTE
+  // 📝 REGISTRAR
   // ============================================================
   registrarCliente: async ({ correo, contrasena, nombre, telefono }) => {
     set({ error: null });
@@ -258,7 +258,19 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return { success: false, error: errorPerfil.message };
       }
 
-      console.log('✅ [Registro] Usuario creado:', data.user.id);
+      await AsyncStorage.setItem(STORAGE_ULTIMO_USUARIO, data.user.id);
+
+      // ✅ NUEVO: intentar registrar token después del registro
+      //    (solo funciona si la sesión se crea automáticamente tras el signUp,
+      //     es decir, si la confirmación por email está desactivada)
+      try {
+        const service = await getNotificacionService();
+        await service.registrarToken(data.user.id);
+        console.log('✅ Token FCM registrado tras registro');
+      } catch (error) {
+        console.warn('⚠️ No se pudo registrar token tras registro:', error);
+      }
+
       return { success: true };
     } catch (error: any) {
       console.error('❌ Error en registro:', error);
@@ -268,18 +280,53 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 🚪 CERRAR SESIÓN
+  // 🚪 CERRAR SESIÓN (CON DESASOCIACIÓN DE TOKEN)
   // ============================================================
   cerrarSesion: async () => {
-    try {
-      await supabase.auth.signOut();
+    const { perfil } = get();
 
-      try {
-        await AsyncStorage.clear();
-      } catch (e) {
-        console.warn('Error al limpiar AsyncStorage:', e);
+    try {
+      console.log('🚪 [Logout] Cerrando sesión...');
+
+      // ✅ 1. Desasociar token push del usuario
+      if (perfil?.id) {
+        try {
+          const service = await getNotificacionService();
+          if (typeof service.desasociarUsuario === 'function') {
+            await service.desasociarUsuario(perfil.id);
+            console.log('✅ [Logout] Token push desasociado');
+          } else {
+            console.warn('⚠️ [Logout] desasociarUsuario no existe en el servicio');
+          }
+        } catch (e) {
+          console.warn('⚠️ [Logout] No se pudo desasociar token:', e);
+        }
       }
 
+      // ✅ 2. Cerrar sesión en Supabase
+      await supabase.auth.signOut();
+
+      // ✅ 3. Limpiar estado global de favoritos
+      try {
+        tiendaFavoritos.getState().limpiarFavoritos();
+      } catch (e) {
+        console.warn('⚠️ Error limpiando favoritos:', e);
+      }
+
+      // ✅ 4. Limpiar AsyncStorage selectivamente
+      //    NO vaciamos el carrito (persiste) ni el último usuario ni la ubicación
+      try {
+        const keysToKeep = [STORAGE_ULTIMO_USUARIO, 'carrito_krusty', STORAGE_UBICACION_KEY];
+        const allKeys = await AsyncStorage.getAllKeys();
+        const keysToRemove = allKeys.filter((k) => !keysToKeep.includes(k));
+        if (keysToRemove.length > 0) {
+          await AsyncStorage.multiRemove(keysToRemove);
+        }
+      } catch (e) {
+        console.warn('⚠️ Error limpiando AsyncStorage:', e);
+      }
+
+      // ✅ 5. Resetear estado
       set({
         sesion: null,
         perfil: null,
@@ -308,7 +355,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   // ============================================================
   // 👤 ACTUALIZAR PERFIL
   // ============================================================
-  actualizarPerfil: async (datos: Partial<Perfil>) => {
+  actualizarPerfil: async (datos) => {
     const { perfil, sesion } = get();
 
     if (!perfil || !sesion) {
@@ -316,8 +363,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     }
 
     try {
-      console.log('📝 Actualizando perfil:', datos);
-
       const { error } = await supabase
         .from('perfiles')
         .update(datos)
@@ -331,7 +376,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       const perfilActualizado = { ...perfil, ...datos };
       set({ perfil: perfilActualizado });
 
-      console.log('✅ Perfil actualizado correctamente');
       return { success: true };
     } catch (error: any) {
       console.error('❌ Error en actualizarPerfil:', error);
@@ -344,10 +388,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   // ============================================================
   cargarPerfil: async (id: string) => {
     try {
-      if (!id) {
-        console.warn('⚠️ [cargarPerfil] ID no proporcionado');
-        return;
-      }
+      if (!id) return;
 
       const { data, error } = await supabase
         .from('perfiles')
@@ -362,7 +403,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
       if (data) {
         set({ perfil: data });
-        console.log('✅ [cargarPerfil] Perfil recargado correctamente');
       }
     } catch (error) {
       console.error('❌ [cargarPerfil] Error inesperado:', error);
@@ -370,14 +410,12 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 📍 UBICACIÓN TEMPORAL
+  // 📍 UBICACIÓN
   // ============================================================
-  guardarUbicacionTemporal: async (ubicacion: UbicacionGuardada) => {
+  guardarUbicacionTemporal: async (ubicacion) => {
     try {
       set({ ubicacionSeleccionada: ubicacion });
-      const json = JSON.stringify(ubicacion);
-      await AsyncStorage.setItem(STORAGE_UBICACION_KEY, json);
-      console.log('✅ Ubicación guardada:', ubicacion);
+      await AsyncStorage.setItem(STORAGE_UBICACION_KEY, JSON.stringify(ubicacion));
     } catch (error) {
       console.error('❌ Error guardando ubicación:', error);
     }
@@ -389,7 +427,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       if (data) {
         const ubicacion = JSON.parse(data) as UbicacionGuardada;
         set({ ubicacionSeleccionada: ubicacion });
-        console.log('✅ Ubicación cargada');
         return ubicacion;
       }
       return null;
@@ -403,21 +440,18 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     try {
       set({ ubicacionSeleccionada: null });
       await AsyncStorage.removeItem(STORAGE_UBICACION_KEY);
-      console.log('✅ Ubicación limpiada');
     } catch (error) {
       console.error('❌ Error limpiando ubicación:', error);
     }
   },
 
   // ============================================================
-  // 🔑 RESETEAR CONTRASEÑA
+  // 🔑 RESET PASSWORD
   // ============================================================
   resetearContrasena: async (correo: string) => {
     set({ error: null });
 
     try {
-      console.log('📧 [Reset] Intentando para:', correo);
-
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(correo)) {
         return { success: false, error: 'Ingresa un correo electrónico válido' };
@@ -433,7 +467,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return {
           success: false,
           errorType: 'not_found',
-          error: 'No existe una cuenta con este correo electrónico'
+          error: 'No existe una cuenta con este correo electrónico',
         };
       }
 
@@ -442,102 +476,61 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       });
 
       if (error) {
-        const mensaje = error.message || '';
-        const mensajeLower = mensaje.toLowerCase();
+        const mensajeLower = (error.message || '').toLowerCase();
 
         if (mensajeLower.includes('rate limit') || mensajeLower.includes('too many requests')) {
           return {
             success: false,
             errorType: 'rate_limit',
-            error: '⏳ Has excedido el límite de intentos. Espera 1 hora y vuelve a intentarlo.'
-          };
-        }
-
-        if (mensajeLower.includes('invalid email')) {
-          return {
-            success: false,
-            errorType: 'invalid_email',
-            error: '❌ El formato del correo electrónico no es válido.'
-          };
-        }
-
-        if (mensajeLower.includes('not confirmed')) {
-          return {
-            success: false,
-            errorType: 'unconfirmed',
-            error: '⚠️ Tu correo no ha sido verificado. Por favor, verifica tu correo.'
+            error: '⏳ Has excedido el límite de intentos. Espera 1 hora.',
           };
         }
 
         return {
           success: false,
           errorType: 'unknown',
-          error: '❌ Error al enviar el correo: ' + mensaje
+          error: '❌ Error al enviar el correo: ' + error.message,
         };
       }
 
-      console.log('✅ [Reset] Correo enviado a:', correo);
       return { success: true };
     } catch (error: any) {
-      console.error('❌ Error en resetearContrasena:', error);
-      set({ error: error.message });
       return {
         success: false,
         errorType: 'unknown',
-        error: '❌ Ocurrió un error inesperado. Intenta nuevamente.'
+        error: '❌ Ocurrió un error inesperado. Intenta nuevamente.',
       };
     }
   },
 
   // ============================================================
-  // 🔄 ACTUALIZAR CONTRASEÑA
+  // 🔄 UPDATE PASSWORD
   // ============================================================
   actualizarContrasena: async (nuevaContrasena: string) => {
     set({ error: null });
 
     try {
-      console.log('🔄 [Update] Intentando actualizar contraseña...');
-
       if (!nuevaContrasena || nuevaContrasena.length < 6) {
         return { success: false, error: 'La contraseña debe tener al menos 6 caracteres' };
       }
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        console.error('❌ Error verificando sesión:', sessionError);
-        return { success: false, error: 'Error al verificar la sesión: ' + sessionError.message };
+      if (sessionError || !session) {
+        return { success: false, error: 'No hay sesión activa. Solicita un nuevo enlace.' };
       }
 
-      if (!session) {
-        console.warn('⚠️ No hay sesión activa');
-        return { success: false, error: 'No hay sesión activa. Solicita un nuevo enlace de recuperación.' };
-      }
-
-      console.log('✅ Sesión activa verificada');
-
-      const { error } = await supabase.auth.updateUser({
-        password: nuevaContrasena,
-      });
+      const { error } = await supabase.auth.updateUser({ password: nuevaContrasena });
 
       if (error) {
-        console.error('❌ Error actualizando contraseña:', error);
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Contraseña actualizada correctamente');
       return { success: true };
     } catch (error: any) {
-      console.error('❌ Error en actualizarContrasena:', error);
-      set({ error: error.message });
       return { success: false, error: error.message || 'Error al actualizar la contraseña' };
     }
   },
 
-  // ============================================================
-  // 🧹 LIMPIAR ERROR
-  // ============================================================
-  limpiarError: () => {
-    set({ error: null });
-  },
+  limpiarError: () => set({ error: null }),
 }));

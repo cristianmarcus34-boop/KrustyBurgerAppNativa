@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaDetalleProducto.tsx - CON CARRITO, FAVORITOS Y QUANTITY SELECTOR
+﻿// screens/cliente/PantallaDetalleProducto.tsx - CON INFO "INCLUYE PAPAS"
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View,
@@ -53,57 +53,50 @@ const CATEGORIAS_ETIQUETAS: Record<string, { label: string; icono: string; color
 };
 
 // ============================================================
-// 🏠 PANTALLA DETALLE PRODUCTO
+// 🏠 COMPONENTE
 // ============================================================
 export default function PantallaDetalleProducto(props: any) {
-  // ✅ Hooks
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
-  // ✅ Stores
   const { agregarProducto, cantidadTotal } = tiendaCarrito();
-  const { idsFavoritos, agregarFavorito, eliminarFavorito } = tiendaFavoritos() as any;
-  const { perfil } = tiendaAutenticacion();
+  const { idsFavoritos, agregarFavoritoManual, eliminarFavoritoManual } = tiendaFavoritos();
+  const { perfil, sesion } = tiendaAutenticacion();
 
-  // ✅ Obtener producto
   const producto: Producto = props.route?.params?.producto;
 
-  // ✅ Estados
   const [cantidad, setCantidad] = useState(1);
   const [imagenCargando, setImagenCargando] = useState(true);
   const [imagenError, setImagenError] = useState(false);
 
-  // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(40)).current;
   const imageScale = useRef(new Animated.Value(0.9)).current;
 
-  // ✅ Cálculo de precios
-  const precio = useMemo(() =>
-    typeof producto?.precio === 'number' ? producto.precio : Number(producto?.precio || 0)
-    , [producto]);
+  const precio = useMemo(
+    () => (typeof producto?.precio === 'number' ? producto.precio : Number(producto?.precio || 0)),
+    [producto]
+  );
 
   const precioTotal = useMemo(() => precio * cantidad, [precio, cantidad]);
 
-  // ✅ Info de categoría
-  const categoriaInfo = useMemo(() =>
-    CATEGORIAS_ETIQUETAS[producto?.categoria || ''] || {
-      label: 'Producto',
-      icono: '🍔',
-      color: DISENO.colors.accent,
-    }
-    , [producto]);
+  const categoriaInfo = useMemo(
+    () =>
+      CATEGORIAS_ETIQUETAS[producto?.categoria || ''] || {
+        label: 'Producto',
+        icono: '🍔',
+        color: DISENO.colors.accent,
+      },
+    [producto]
+  );
 
-  // ✅ ¿Es favorito? (Verificación directa contra idsFavoritos)
   const esFavorito = useMemo(() => {
     if (!producto?.id) return false;
     return idsFavoritos?.includes(Number(producto.id));
   }, [idsFavoritos, producto?.id]);
 
-  // ✅ ¿Está disponible?
   const disponible = producto?.disponible !== false;
 
-  // ✅ Tiempo estimado de preparación por categoría
   const tiempoPreparacion = useMemo(() => {
     const tiempos: Record<string, string> = {
       burgers: '15-20 min',
@@ -115,9 +108,7 @@ export default function PantallaDetalleProducto(props: any) {
     return tiempos[producto?.categoria || ''] || '10-15 min';
   }, [producto]);
 
-  // ============================================================
-  // 📦 TAMAÑOS
-  // ============================================================
+  // ✅ Tamaños
   const padding = responsive.getValor({ tablet: 40, normal: 20, small: 16 });
   const imagenHeight = responsive.getValor({ tablet: 420, normal: 320, small: 240 });
   const imagenRadius = responsive.getValor({ tablet: 24, normal: 18, small: 14 });
@@ -126,9 +117,6 @@ export default function PantallaDetalleProducto(props: any) {
   const seccionTituloSize = responsive.getValor({ tablet: 16, normal: 14, small: 13 });
   const cuerpoSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
 
-  // ============================================================
-  // 🎬 EFECTOS
-  // ============================================================
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
@@ -137,25 +125,23 @@ export default function PantallaDetalleProducto(props: any) {
     ]).start();
   }, []);
 
-  // ============================================================
-  // 🎯 MANEJADORES
-  // ============================================================
-  const incrementarCantidad = () => setCantidad(c => Math.min(c + 1, 99));
-  const decrementarCantidad = () => setCantidad(c => Math.max(c - 1, 1));
+  const incrementarCantidad = () => setCantidad((c) => Math.min(c + 1, 99));
+  const decrementarCantidad = () => setCantidad((c) => Math.max(c - 1, 1));
 
   const handleAgregarAlCarrito = useCallback(() => {
     if (!disponible) return;
 
-    for (let i = 0; i < cantidad; i++) {
-      agregarProducto(producto);
-    }
+    agregarProducto(producto, cantidad);
 
     Alert.alert(
       '🎉 ¡Agregado!',
-      `${cantidad} ${cantidad === 1 ? 'unidad' : 'unidades'} de ${producto.nombre} ${cantidad === 1 ? 'fue agregada' : 'fueron agregadas'} al carrito`,
+      `${cantidad} ${cantidad === 1 ? 'unidad' : 'unidades'} de ${producto.nombre} al carrito`,
       [
         { text: 'Seguir viendo', style: 'cancel' },
-        { text: 'Ver carrito', onPress: () => props.navigation.navigate('Carrito') },
+        {
+          text: 'Ver carrito',
+          onPress: () => props.navigation.navigate('Carrito'),
+        },
       ]
     );
   }, [cantidad, producto, disponible, agregarProducto, props.navigation]);
@@ -166,8 +152,18 @@ export default function PantallaDetalleProducto(props: any) {
     if (!perfil?.id) {
       Alert.alert(
         'Iniciá sesión',
-        'Necesitás estar logueado para guardar favoritos',
-        [{ text: 'OK' }]
+        'Necesitás una cuenta para guardar tus favoritos.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Iniciar sesión',
+            onPress: () => props.navigation.navigate('Login'),
+          },
+          {
+            text: 'Registrarme',
+            onPress: () => props.navigation.navigate('Registro'),
+          },
+        ]
       );
       return;
     }
@@ -177,19 +173,16 @@ export default function PantallaDetalleProducto(props: any) {
 
     try {
       if (esFavorito) {
-        await eliminarFavorito(usuarioId, productoId);
+        await eliminarFavoritoManual(usuarioId, productoId);
       } else {
-        await agregarFavorito(usuarioId, productoId);
+        await agregarFavoritoManual(usuarioId, producto);
       }
     } catch (error) {
-      console.error('Error toggle favorito:', error);
+      console.error('❌ Error toggle favorito:', error);
       Alert.alert('Error', 'No pudimos actualizar tus favoritos');
     }
-  }, [producto?.id, perfil?.id, esFavorito, agregarFavorito, eliminarFavorito]);
+  }, [producto, perfil?.id, esFavorito, agregarFavoritoManual, eliminarFavoritoManual, props.navigation]);
 
-  // ============================================================
-  // 🚫 VALIDACIÓN
-  // ============================================================
   if (!producto) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -200,9 +193,7 @@ export default function PantallaDetalleProducto(props: any) {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-        <Text style={[styles.errorText, { fontSize: nombreSize }]}>
-          Producto no encontrado
-        </Text>
+        <Text style={[styles.errorText, { fontSize: nombreSize }]}>Producto no encontrado</Text>
         <TouchableOpacity
           style={styles.botonVolverError}
           onPress={() => props.navigation.goBack()}
@@ -213,14 +204,10 @@ export default function PantallaDetalleProducto(props: any) {
     );
   }
 
-  // ============================================================
-  // 🏗️ RENDER
-  // ============================================================
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* ✅ FONDO CLARO */}
       <LinearGradient
         colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
@@ -228,7 +215,6 @@ export default function PantallaDetalleProducto(props: any) {
         end={{ x: 1, y: 1 }}
       />
 
-      {/* ✅ GRADIENTE SOLO EN EL HEADER */}
       <LinearGradient
         colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
         style={styles.headerGradiente}
@@ -236,19 +222,18 @@ export default function PantallaDetalleProducto(props: any) {
         end={{ x: 1, y: 1 }}
       />
 
-      {/* ============================================================ */}
-      {/* 🔹 HEADER */}
-      {/* ============================================================ */}
-      <Animated.View style={[
-        styles.header,
-        {
-          paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 12, small: 10 }),
-          paddingHorizontal: padding,
-          paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
-          opacity: fadeAnim,
-          transform: [{ translateY: slideUpAnim }],
-        }
-      ]}>
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 12, small: 10 }),
+            paddingHorizontal: padding,
+            paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+            opacity: fadeAnim,
+            transform: [{ translateY: slideUpAnim }],
+          },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => props.navigation.goBack()}
           style={styles.botonHeader}
@@ -261,20 +246,19 @@ export default function PantallaDetalleProducto(props: any) {
           />
         </TouchableOpacity>
 
-        {/* ✅ TÍTULO CON SIMPSONFONT */}
-        <Text style={[
-          styles.headerTitulo,
-          {
-            fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }),
-            color: DISENO.colors.surface,
-          }
-        ]}>
+        <Text
+          style={[
+            styles.headerTitulo,
+            {
+              fontSize: responsive.getValor({ tablet: 22, normal: 18, small: 16 }),
+              color: DISENO.colors.surface,
+            },
+          ]}
+        >
           Detalle
         </Text>
 
-        {/* ✅ BOTONES DEL HEADER */}
         <View style={styles.headerBotonesDerecha}>
-          {/* ✅ FAVORITO */}
           <TouchableOpacity
             onPress={handleToggleFavorito}
             style={styles.botonHeader}
@@ -287,7 +271,6 @@ export default function PantallaDetalleProducto(props: any) {
             />
           </TouchableOpacity>
 
-          {/* ✅ CARRITO CON BADGE */}
           <TouchableOpacity
             onPress={() => props.navigation.navigate('Carrito')}
             style={styles.botonHeader}
@@ -309,27 +292,26 @@ export default function PantallaDetalleProducto(props: any) {
         </View>
       </Animated.View>
 
-      {/* ============================================================ */}
-      {/* 🔹 CONTENIDO */}
-      {/* ============================================================ */}
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: insets.bottom + responsive.getValor({ tablet: 140, normal: 130, small: 120 }),
+          paddingBottom:
+            insets.bottom + responsive.getValor({ tablet: 140, normal: 130, small: 120 }),
         }}
       >
-        {/* ✅ IMAGEN */}
-        <Animated.View style={[
-          styles.imagenContenedor,
-          {
-            height: imagenHeight,
-            marginHorizontal: padding,
-            marginTop: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-            borderRadius: imagenRadius,
-            transform: [{ scale: imageScale }],
-          }
-        ]}>
+        <Animated.View
+          style={[
+            styles.imagenContenedor,
+            {
+              height: imagenHeight,
+              marginHorizontal: padding,
+              marginTop: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+              borderRadius: imagenRadius,
+              transform: [{ scale: imageScale }],
+            },
+          ]}
+        >
           {producto.imagen && !imagenError ? (
             <>
               {imagenCargando && (
@@ -350,17 +332,23 @@ export default function PantallaDetalleProducto(props: any) {
               />
             </>
           ) : (
-            <View style={[
-              styles.imagenPlaceholder,
-              { backgroundColor: categoriaInfo.color + '15' }
-            ]}>
-              <Text style={[styles.emojiGrande, { fontSize: responsive.getValor({ tablet: 100, normal: 80, small: 60 }) }]}>
+            <View
+              style={[
+                styles.imagenPlaceholder,
+                { backgroundColor: categoriaInfo.color + '15' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emojiGrande,
+                  { fontSize: responsive.getValor({ tablet: 100, normal: 80, small: 60 }) },
+                ]}
+              >
                 {categoriaInfo.icono}
               </Text>
             </View>
           )}
 
-          {/* ✅ BADGE DE CATEGORÍA */}
           <LinearGradient
             colors={[categoriaInfo.color, categoriaInfo.color + 'CC']}
             style={[
@@ -371,23 +359,24 @@ export default function PantallaDetalleProducto(props: any) {
                 paddingHorizontal: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
                 paddingVertical: responsive.getValor({ tablet: 8, normal: 6, small: 5 }),
                 borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-              }
+              },
             ]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={[
-              styles.categoriaTextoImagen,
-              {
-                fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
-                color: DISENO.colors.surface,
-              }
-            ]}>
+            <Text
+              style={[
+                styles.categoriaTextoImagen,
+                {
+                  fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                  color: DISENO.colors.surface,
+                },
+              ]}
+            >
               {categoriaInfo.icono} {categoriaInfo.label}
             </Text>
           </LinearGradient>
 
-          {/* ✅ BADGE NO DISPONIBLE */}
           {!disponible && (
             <LinearGradient
               colors={['#E53935', '#B71C1C']}
@@ -399,20 +388,21 @@ export default function PantallaDetalleProducto(props: any) {
                   paddingHorizontal: responsive.getValor({ tablet: 14, normal: 10, small: 8 }),
                   paddingVertical: responsive.getValor({ tablet: 6, normal: 5, small: 4 }),
                   borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
-                }
+                },
               ]}
             >
-              <Text style={[
-                styles.badgeNoDisponibleTexto,
-                { fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }) }
-              ]}>
+              <Text
+                style={[
+                  styles.badgeNoDisponibleTexto,
+                  { fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }) },
+                ]}
+              >
                 No disponible
               </Text>
             </LinearGradient>
           )}
         </Animated.View>
 
-        {/* ✅ INFORMACIÓN */}
         <Animated.View
           style={[
             styles.info,
@@ -421,18 +411,13 @@ export default function PantallaDetalleProducto(props: any) {
               paddingTop: responsive.getValor({ tablet: 24, normal: 20, small: 16 }),
               opacity: fadeAnim,
               transform: [{ translateY: slideUpAnim }],
-            }
+            },
           ]}
         >
-          {/* ✅ NOMBRE */}
-          <Text style={[
-            styles.nombre,
-            { fontSize: nombreSize, color: DISENO.colors.text }
-          ]}>
+          <Text style={[styles.nombre, { fontSize: nombreSize, color: DISENO.colors.text }]}>
             {producto.nombre}
           </Text>
 
-          {/* ✅ RATING Y TIEMPO */}
           <View style={styles.metaRow}>
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color={DISENO.colors.oro} />
@@ -445,66 +430,111 @@ export default function PantallaDetalleProducto(props: any) {
             </View>
           </View>
 
-          {/* ✅ PRECIO */}
-          <Text style={[
-            styles.precio,
-            { fontSize: precioSize, color: DISENO.colors.accent, marginTop: 8 }
-          ]}>
+          <Text
+            style={[
+              styles.precio,
+              { fontSize: precioSize, color: DISENO.colors.accent, marginTop: 8 },
+            ]}
+          >
             {formatearPrecio(precio)}
           </Text>
 
-          {/* ✅ DESCRIPCIÓN */}
-          <View style={[
-            styles.seccion,
-            { marginTop: responsive.getValor({ tablet: 20, normal: 16, small: 12 }) }
-          ]}>
-            <Text style={[
-              styles.seccionTitulo,
-              {
-                fontSize: seccionTituloSize,
-                color: DISENO.colors.text,
-                marginBottom: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
-              }
-            ]}>
+          {/* ✅ NUEVO: Sección "Incluye" (solo si incluye_papas) */}
+          {producto.incluye_papas && (
+            <View
+              style={[
+                styles.incluyeContainer,
+                {
+                  marginTop: responsive.getValor({ tablet: 18, normal: 14, small: 12 }),
+                  padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                  borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                },
+              ]}
+            >
+              <View style={styles.incluyeHeader}>
+                <Ionicons name="gift-outline" size={18} color={DISENO.colors.verde} />
+                <Text
+                  style={[
+                    styles.incluyeTitulo,
+                    { fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }) },
+                  ]}
+                >
+                  Incluye
+                </Text>
+              </View>
+              <View style={styles.incluyeItem}>
+                <Ionicons name="checkmark-circle" size={16} color={DISENO.colors.verde} />
+                <Text
+                  style={[
+                    styles.incluyeTexto,
+                    { fontSize: responsive.getValor({ tablet: 14, normal: 13, small: 12 }) },
+                  ]}
+                >
+                  🍟 Papas fritas
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <View
+            style={[
+              styles.seccion,
+              { marginTop: responsive.getValor({ tablet: 20, normal: 16, small: 12 }) },
+            ]}
+          >
+            <Text
+              style={[
+                styles.seccionTitulo,
+                {
+                  fontSize: seccionTituloSize,
+                  color: DISENO.colors.text,
+                  marginBottom: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                },
+              ]}
+            >
               📝 Descripción
             </Text>
-            <Text style={[
-              styles.descripcion,
-              {
-                fontSize: cuerpoSize,
-                color: DISENO.colors.textSecondary,
-                lineHeight: responsive.getValor({ tablet: 24, normal: 22, small: 20 }),
-              }
-            ]}>
-              {producto.descripcion || 'Delicioso producto Krusty preparado con ingredientes frescos y la salsa secreta de la casa que lo hace único. ¡Una experiencia de sabor inolvidable!'}
+            <Text
+              style={[
+                styles.descripcion,
+                {
+                  fontSize: cuerpoSize,
+                  color: DISENO.colors.textSecondary,
+                  lineHeight: responsive.getValor({ tablet: 24, normal: 22, small: 20 }),
+                },
+              ]}
+            >
+              {producto.descripcion ||
+                'Delicioso producto Krusty preparado con ingredientes frescos y la salsa secreta de la casa que lo hace único. ¡Una experiencia de sabor inolvidable!'}
             </Text>
           </View>
         </Animated.View>
       </ScrollView>
 
-      {/* ============================================================ */}
-      {/* 🔹 FOOTER STICKY - SELECTOR + AGREGAR */}
-      {/* ============================================================ */}
-      <Animated.View style={[
-        styles.footer,
-        {
-          paddingHorizontal: padding,
-          paddingBottom: insets.bottom + responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
-          paddingTop: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
-          opacity: fadeAnim,
-          backgroundColor: DISENO.colors.surface + 'F5',
-          borderTopColor: DISENO.colors.border,
-        }
-      ]}>
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            paddingHorizontal: padding,
+            paddingBottom:
+              insets.bottom + responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
+            paddingTop: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+            opacity: fadeAnim,
+            backgroundColor: DISENO.colors.surface + 'F5',
+            borderTopColor: DISENO.colors.border,
+          },
+        ]}
+      >
         <View style={styles.footerContenido}>
-          {/* ✅ SELECTOR DE CANTIDAD */}
-          <View style={[
-            styles.cantidadSelector,
-            {
-              borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
-              borderColor: DISENO.colors.border,
-            }
-          ]}>
+          <View
+            style={[
+              styles.cantidadSelector,
+              {
+                borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+                borderColor: DISENO.colors.border,
+              },
+            ]}
+          >
             <TouchableOpacity
               style={styles.cantidadBoton}
               onPress={decrementarCantidad}
@@ -518,10 +548,12 @@ export default function PantallaDetalleProducto(props: any) {
               />
             </TouchableOpacity>
 
-            <Text style={[
-              styles.cantidadTexto,
-              { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }) }
-            ]}>
+            <Text
+              style={[
+                styles.cantidadTexto,
+                { fontSize: responsive.getValor({ tablet: 18, normal: 16, small: 14 }) },
+              ]}
+            >
               {cantidad}
             </Text>
 
@@ -539,23 +571,24 @@ export default function PantallaDetalleProducto(props: any) {
             </TouchableOpacity>
           </View>
 
-          {/* ✅ BOTÓN AGREGAR */}
           <TouchableOpacity
             style={[
               styles.addButton,
               {
                 borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
                 opacity: disponible ? 1 : 0.5,
-              }
+              },
             ]}
             onPress={handleAgregarAlCarrito}
             disabled={!disponible}
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={disponible
-                ? [DISENO.colors.accentSecondary, DISENO.colors.accent]
-                : [DISENO.colors.grisClaro, DISENO.colors.gris]}
+              colors={
+                disponible
+                  ? [DISENO.colors.accentSecondary, DISENO.colors.accent]
+                  : [DISENO.colors.grisClaro, DISENO.colors.gris]
+              }
               style={styles.addButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -568,7 +601,7 @@ export default function PantallaDetalleProducto(props: any) {
               <Text
                 style={[
                   styles.addButtonText,
-                  { fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }) }
+                  { fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }) },
                 ]}
                 numberOfLines={1}
                 ellipsizeMode="tail"
@@ -576,17 +609,19 @@ export default function PantallaDetalleProducto(props: any) {
                 {disponible ? `Agregar ${cantidad > 1 ? `(${cantidad})` : ''}` : 'No disponible'}
               </Text>
               {disponible && (
-                <View style={[
-                  styles.priceButton,
-                  {
-                    borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
-                    backgroundColor: DISENO.colors.text + '20',
-                  }
-                ]}>
+                <View
+                  style={[
+                    styles.priceButton,
+                    {
+                      borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                      backgroundColor: DISENO.colors.text + '20',
+                    },
+                  ]}
+                >
                   <Text
                     style={[
                       styles.priceButtonText,
-                      { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }) }
+                      { fontSize: responsive.getValor({ tablet: 12, normal: 11, small: 10 }) },
                     ]}
                     numberOfLines={1}
                   >
@@ -606,274 +641,135 @@ export default function PantallaDetalleProducto(props: any) {
 // 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DISENO.colors.fondo,
-  },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-  },
+  container: { flex: 1, backgroundColor: DISENO.colors.fondo },
+  backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   headerGradiente: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    position: 'absolute', top: 0, left: 0, right: 0,
+    borderBottomLeftRadius: 30, borderBottomRightRadius: 30,
     height: '19%',
     shadowColor: DISENO.colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 1, shadowRadius: 12, elevation: 4,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    zIndex: 20,
-  },
-  botonHeader: {
-    padding: 4,
-    position: 'relative',
-  },
-  headerBotonesDerecha: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 20 },
+  botonHeader: { padding: 4, position: 'relative' },
+  headerBotonesDerecha: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.5,
-    flex: 1,
-    textAlign: 'center',
+    fontFamily: FUENTES.display, fontWeight: '400', letterSpacing: 0.5, flex: 1, textAlign: 'center',
   },
   badgeCarrito: {
-    position: 'absolute',
-    top: -2,
-    right: -6,
+    position: 'absolute', top: -2, right: -6,
     backgroundColor: DISENO.colors.accentSecondary,
-    borderRadius: 8,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: DISENO.colors.surface,
+    borderRadius: 8, minWidth: 18, height: 18, paddingHorizontal: 4,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: DISENO.colors.surface,
   },
   badgeCarritoTexto: {
-    color: DISENO.colors.text,
-    fontSize: 8,
-    fontWeight: '600',
-    fontFamily: FUENTES.display,
+    color: DISENO.colors.text, fontSize: 8, fontWeight: '600', fontFamily: FUENTES.display,
   },
-  errorText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    textAlign: 'center',
-  },
+  errorText: { fontFamily: FUENTES.display, fontWeight: '400', color: DISENO.colors.text, textAlign: 'center' },
   botonVolverError: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: DISENO.colors.accentSecondary,
-    ...DISENO.shadow.sm,
+    marginTop: 20, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: DISENO.colors.accentSecondary, ...DISENO.shadow.sm,
   },
   botonVolverErrorText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    fontSize: 16,
+    fontFamily: FUENTES.display, fontWeight: '400', color: DISENO.colors.text, fontSize: 16,
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   imagenContenedor: {
-    width: 'auto',
-    overflow: 'hidden',
-    position: 'relative',
+    width: 'auto', overflow: 'hidden', position: 'relative',
     backgroundColor: DISENO.colors.surfaceHover,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
+    borderWidth: 1, borderColor: DISENO.colors.border,
   },
-  imagen: {
-    width: '100%',
-    height: '100%',
-  },
+  imagen: { width: '100%', height: '100%' },
   imagenSkeleton: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: DISENO.colors.surfaceHover,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
+    justifyContent: 'center', alignItems: 'center', zIndex: 1,
   },
   imagenSkeletonShimmer: {
-    width: '60%',
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: DISENO.colors.borderLight,
+    width: '60%', height: 4, borderRadius: 2, backgroundColor: DISENO.colors.borderLight,
   },
-  imagenPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  imagenPlaceholder: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   emojiGrande: {},
-  categoriaBadge: {
-    position: 'absolute',
-    zIndex: 10,
-  },
+  categoriaBadge: { position: 'absolute', zIndex: 10 },
   categoriaTextoImagen: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.5,
+    fontFamily: FUENTES.display, fontWeight: '400', letterSpacing: 0.5,
   },
-  badgeNoDisponible: {
-    position: 'absolute',
-    zIndex: 10,
-  },
+  badgeNoDisponible: { position: 'absolute', zIndex: 10 },
   badgeNoDisponibleTexto: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.surface,
-    fontWeight: 'bold',
+    fontFamily: FUENTES.regular, color: DISENO.colors.surface, fontWeight: 'bold',
   },
-  info: {
-    flex: 1,
+  info: { flex: 1 },
+  nombre: { fontFamily: FUENTES.display, fontWeight: '400', letterSpacing: 0.3 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 6, flexWrap: 'wrap' },
+  ratingContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ratingTexto: { fontFamily: FUENTES.display, fontWeight: '400', fontSize: 13, color: DISENO.colors.text },
+  ratingOpiniones: { fontFamily: FUENTES.regular, fontSize: 11, color: DISENO.colors.textTertiary },
+  tiempoContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tiempoTexto: { fontFamily: FUENTES.regular, fontSize: 12, color: DISENO.colors.textSecondary },
+  precio: { fontFamily: FUENTES.display, fontWeight: '400' },
+  // ✅ NUEVO: sección "Incluye"
+  incluyeContainer: {
+    backgroundColor: DISENO.colors.verde + '10',
+    borderWidth: 1,
+    borderColor: DISENO.colors.verde + '30',
+    gap: 6,
   },
-  nombre: {
+  incluyeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  incluyeTitulo: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
+    color: DISENO.colors.verde,
     letterSpacing: 0.3,
   },
-  metaRow: {
+  incluyeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginTop: 6,
-    flexWrap: 'wrap',
+    gap: 6,
   },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingTexto: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    fontSize: 13,
+  incluyeTexto: {
+    fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
   },
-  ratingOpiniones: {
-    fontFamily: FUENTES.regular,
-    fontSize: 11,
-    color: DISENO.colors.textTertiary,
-  },
-  tiempoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  tiempoTexto: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    color: DISENO.colors.textSecondary,
-  },
-  precio: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-  },
-  seccion: {
-    marginTop: 20,
-  },
-  seccionTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.3,
-  },
-  descripcion: {
-    fontFamily: FUENTES.regular,
-    opacity: 0.9,
-  },
+  seccion: { marginTop: 20 },
+  seccionTitulo: { fontFamily: FUENTES.display, fontWeight: '400', letterSpacing: 0.3 },
+  descripcion: { fontFamily: FUENTES.regular, opacity: 0.9 },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
+    position: 'absolute', bottom: 0, left: 0, right: 0, borderTopWidth: 1,
     shadowColor: DISENO.colors.cardShadow,
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 1, shadowRadius: 12, elevation: 8,
   },
-  footerContenido: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  footerContenido: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cantidadSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    backgroundColor: DISENO.colors.surface,
-    height: 44,
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, backgroundColor: DISENO.colors.surface, height: 44,
   },
-  cantidadBoton: {
-    width: 40,
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  cantidadBoton: { width: 40, height: '100%', justifyContent: 'center', alignItems: 'center' },
   cantidadTexto: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    minWidth: 28,
-    textAlign: 'center',
+    fontFamily: FUENTES.display, fontWeight: '400', minWidth: 28, textAlign: 'center',
     color: DISENO.colors.text,
   },
   addButton: {
-    flex: 1,
-    overflow: 'hidden',
-    elevation: 8,
+    flex: 1, overflow: 'hidden', elevation: 8,
     shadowColor: DISENO.colors.accentSecondary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    shadowOpacity: 0.4, shadowRadius: 20,
   },
   addButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    height: 44,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 8, paddingHorizontal: 10, height: 44,
   },
   addButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '300',
-    letterSpacing: 0.3,
-    color: DISENO.colors.text,
-    flexShrink: 1,
+    fontFamily: FUENTES.display, fontWeight: '300', letterSpacing: 0.3,
+    color: DISENO.colors.text, flexShrink: 1,
   },
-  priceButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 0,
-    flexShrink: 0,
-  },
-  priceButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-  },
+  priceButton: { paddingHorizontal: 4, paddingVertical: 0, flexShrink: 0 },
+  priceButtonText: { fontFamily: FUENTES.display, fontWeight: '400', color: DISENO.colors.text },
 });
