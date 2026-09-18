@@ -1,4 +1,4 @@
-// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO
+// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
@@ -82,7 +82,7 @@ Notifications.setNotificationHandler({
 const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send';
 const NOTIFICACIONES_OCULTAS_KEY = '@notificaciones_ocultas';
 
-// ✅ Project ID (usa tu valor existente)
+// ✅ Project ID
 const getProjectId = (): string => {
     const config = Constants.expoConfig as any;
     return config?.extra?.eas?.projectId ||
@@ -96,16 +96,12 @@ export const notificacionService = {
     // 📱 REGISTRO Y PERMISOS
     // ============================================================
 
-    /**
-     * Registra el token en `dispositivos_push` Y en `perfiles.fcm_token` (compatibilidad)
-     */
     async registrarToken(usuarioId: string) {
         try {
             const projectId = getProjectId();
             const token = await Notifications.getExpoPushTokenAsync({ projectId });
             const plataforma = Platform.OS;
 
-            // ✅ 1. Upsert en dispositivos_push
             const { error: errorDispositivo } = await supabase
                 .from('dispositivos_push')
                 .upsert(
@@ -123,7 +119,6 @@ export const notificacionService = {
                 console.error('❌ Error en dispositivos_push:', errorDispositivo);
             }
 
-            // ✅ 2. Compatibilidad: mantener perfiles.fcm_token actualizado
             const { error: errorPerfil } = await supabase
                 .from('perfiles')
                 .update({
@@ -144,9 +139,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Obtiene el token actual sin guardarlo
-     */
     async obtenerTokenActual(): Promise<string | null> {
         try {
             const projectId = getProjectId();
@@ -158,9 +150,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Desasocia el usuario del dispositivo actual (NO borra el token)
-     */
     async desasociarUsuario(usuarioId: string): Promise<boolean> {
         if (!usuarioId) return false;
 
@@ -183,9 +172,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Actualiza ultima_actividad (heartbeat)
-     */
     async actualizarActividad(usuarioId?: string): Promise<boolean> {
         try {
             const token = await this.obtenerTokenActual();
@@ -217,9 +203,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Permisos + canales de Android con sonidos personalizados
-     */
     async solicitarPermisos() {
         try {
             const { status } = await Notifications.requestPermissionsAsync();
@@ -279,7 +262,7 @@ export const notificacionService = {
 
                 await Notifications.setNotificationChannelAsync('sistema', {
                     name: '⚙️ Sistema',
-                    importance: Notifications.AndroidImportance.HIGH,
+                    importance: Notifications.AndroidImportance.MAX,
                     vibrationPattern: [0, 250, 250, 250],
                     lightColor: '#42A5F5',
                     enableVibrate: true,
@@ -289,11 +272,24 @@ export const notificacionService = {
 
                 await Notifications.setNotificationChannelAsync('default', {
                     name: '🔔 General',
-                    importance: Notifications.AndroidImportance.HIGH,
+                    importance: Notifications.AndroidImportance.MAX,
                     vibrationPattern: [0, 250, 250, 250],
                     lightColor: '#B0B0B0',
                     enableVibrate: true,
                     enableLights: true,
+                    sound: 'saxolisa.wav',
+                });
+
+                // ✅ Canal dedicado para notificaciones con imagen
+                await Notifications.setNotificationChannelAsync('imagenes', {
+                    name: '🖼️ Promociones con imagen',
+                    importance: Notifications.AndroidImportance.MAX,
+                    vibrationPattern: [0, 250, 250, 250],
+                    lightColor: '#F5C518',
+                    enableVibrate: true,
+                    enableLights: true,
+                    bypassDnd: true,
+                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
                     sound: 'saxolisa.wav',
                 });
             }
@@ -305,12 +301,11 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Escucha notificaciones
-     */
     escucharNotificaciones() {
         const subscription = Notifications.addNotificationReceivedListener(n => {
             console.log('📱 Notificación recibida:', n.request.content.title);
+            console.log('   attachments:', (n.request.content as any).attachments);
+            console.log('   data:', n.request.content.data);
         });
 
         const responseSubscription = Notifications.addNotificationResponseReceivedListener(n => {
@@ -321,9 +316,6 @@ export const notificacionService = {
         return { subscription, responseSubscription };
     },
 
-    /**
-     * Procesa notificación inicial
-     */
     async procesarNotificacionInicial() {
         try {
             const response = await Notifications.getLastNotificationResponseAsync();
@@ -346,6 +338,13 @@ export const notificacionService = {
 
     /**
      * Envía a múltiples tokens (con imagen y sonido)
+     *
+     * ✅ CAMBIOS IMPORTANTES:
+     * - Quitado `sticky: true` (interfería con la imagen)
+     * - Si hay imagen → fuerza `sound: 'default'` (sonidos custom rompen BigPicture)
+     * - Si hay imagen → usa canal 'imagenes' con importance MAX
+     * - ✅ NUEVO: usa `richContent.image` (formato correcto de Expo Push API para renderizar imagen)
+     * - Log del payload final para debug
      */
     async enviarNotificacionesMasivas(tokens: string[], titulo: string, mensaje: string, data?: any) {
         try {
@@ -356,10 +355,37 @@ export const notificacionService = {
 
             console.log('📷 ========== ENVIANDO ==========');
             console.log('📷 Tokens:', tokensValidos.length, '| Título:', titulo);
+            console.log('📷 Imagen:', data?.imagen ? 'SÍ' : 'NO');
 
             const messages = tokensValidos.map(token => {
                 const sonidoSeleccionado = data?.sonido;
-                const hasCustomSound = sonidoSeleccionado && sonidoSeleccionado !== 'default';
+                const imagenUrl = data?.imagen;
+
+                // ✅ ¿Tiene imagen válida?
+                const tieneImagen = !!(imagenUrl
+                    && typeof imagenUrl === 'string'
+                    && imagenUrl.startsWith('https://'));
+
+                // ✅ Si hay imagen, NO usar sonido custom (rompe el BigPicture)
+                const hasCustomSound = !!sonidoSeleccionado
+                    && sonidoSeleccionado !== 'default'
+                    && !tieneImagen;
+
+                // ✅ Elegir canal
+                let channelId = 'default';
+                if (tieneImagen) {
+                    channelId = 'imagenes';
+                } else if (data?.tipo === 'promocion') {
+                    channelId = 'promociones';
+                } else if (data?.tipo === 'oferta') {
+                    channelId = 'ofertas';
+                } else if (data?.tipo === 'recompensa') {
+                    channelId = 'recompensa';
+                } else if (data?.tipo === 'pedido') {
+                    channelId = 'pedidos';
+                } else if (data?.tipo === 'sistema') {
+                    channelId = 'sistema';
+                }
 
                 const message: any = {
                     to: token,
@@ -371,27 +397,39 @@ export const notificacionService = {
                         timestamp: Date.now(),
                     },
                     priority: 'high',
-                    channelId: data?.tipo === 'promocion' ? 'promociones' :
-                        data?.tipo === 'oferta' ? 'ofertas' :
-                            data?.tipo === 'recompensa' ? 'recompensa' :
-                                data?.tipo === 'pedido' ? 'pedidos' :
-                                    data?.tipo === 'sistema' ? 'sistema' : 'default',
+                    channelId,
                 };
 
+                // ✅ Sonido
                 if (hasCustomSound) {
                     const soundFile = sonidoSeleccionado.endsWith('.wav')
                         ? sonidoSeleccionado
                         : `${sonidoSeleccionado}.wav`;
                     message.sound = soundFile;
+                } else {
+                    message.sound = 'default';
                 }
 
-                const imagenUrl = data?.imagen;
-                if (imagenUrl && typeof imagenUrl === 'string') {
-                    if (imagenUrl.startsWith('http://') || imagenUrl.startsWith('https://')) {
-                        message.image = imagenUrl;
-                        message.sticky = true;
-                    }
+                // ✅ Imagen (formato correcto Expo Push API)
+                if (tieneImagen) {
+                    message.richContent = {
+                        image: imagenUrl,
+                    };
+                    // Compatibilidad con algunos clientes que siguen leyendo "image"
+                    message.image = imagenUrl;
                 }
+
+                // Log del payload final
+                console.log('📦 [Notif] Payload final:', JSON.stringify({
+                    to: '...' + token.slice(-10),
+                    title: message.title,
+                    body: message.body,
+                    sound: message.sound,
+                    channelId: message.channelId,
+                    image: message.image,
+                    richContent: message.richContent,
+                    hasSticky: 'sticky' in message,
+                }, null, 2));
 
                 return message;
             });
@@ -425,9 +463,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Envía a un usuario (a TODOS sus dispositivos)
-     */
     async enviarNotificacionAUsuario(
         usuarioId: string,
         titulo: string,
@@ -437,7 +472,6 @@ export const notificacionService = {
         sonido?: string
     ) {
         try {
-            // 1. Guardar en notificaciones_usuarios
             const { error: insertError } = await supabase
                 .from('notificaciones_usuarios')
                 .insert({
@@ -451,7 +485,6 @@ export const notificacionService = {
 
             if (insertError) throw insertError;
 
-            // 2. Traer TODOS los tokens del usuario
             const { data: dispositivos } = await supabase
                 .from('dispositivos_push')
                 .select('expo_push_token')
@@ -474,9 +507,6 @@ export const notificacionService = {
         }
     },
 
-    /**
-     * Envía a TODOS los dispositivos activos (marketing masivo)
-     */
     async enviarNotificacionMasiva(
         titulo: string,
         mensaje: string,
@@ -500,7 +530,6 @@ export const notificacionService = {
 
             const tokens = dispositivos.map((d: any) => d.expo_push_token);
 
-            // Batches de 100 (límite de Expo)
             const BATCH_SIZE = 100;
             let exitosTotales = 0;
             let fallidosTotales = 0;
