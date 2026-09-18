@@ -3,61 +3,41 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     Alert, Modal, TextInput, ScrollView,
-    Dimensions, Animated, RefreshControl, ActivityIndicator,
-    useWindowDimensions
+    Animated, RefreshControl, ActivityIndicator,
+    useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase, supabaseAdmin } from '../../lib/supabase';
 import { Perfil } from '../../lib/tipos';
-import { Colores } from '../../lib/colores';
+import { adminUsuariosService } from '../../lib/adminUsuariosService';
 
 // ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
+// 🎨 DISEÑO
 // ============================================================
 const DESIGN = {
     colors: {
         fondo: '#F5F2ED',
         surface: '#FFFFFF',
         surfaceHover: '#F8F6F2',
-        card: '#FFFFFF',
         cardShadow: 'rgba(0,0,0,0.06)',
         border: 'rgba(0,0,0,0.06)',
-        borderLight: 'rgba(0,0,0,0.04)',
         text: '#1A1A1A',
         textSecondary: 'rgba(0,0,0,0.55)',
         textTertiary: 'rgba(0,0,0,0.30)',
         accent: '#E53935',
-        accentLight: '#FF6B6B',
         accentSecondary: '#F5C518',
-        accentSecondaryLight: '#FFE135',
         gradientStart: '#E53935',
         gradientEnd: '#F5C518',
         verde: '#43A047',
-        verdeClaro: '#66BB6A',
-        rosa: '#EC407A',
-        azul: '#1A237E',
         azulClaro: '#3949AB',
         platino: '#78909C',
         oro: '#F9A825',
         plata: '#BDBDBD',
         bronce: '#A1887F',
-    },
-    spacing: {
-        xs: 4,
-        sm: 8,
-        md: 16,
-        lg: 24,
-        xl: 32,
-        '2xl': 48,
-    },
-    radius: {
-        sm: 8,
-        md: 12,
-        lg: 16,
-        xl: 20,
-        full: 999,
+        naranja: '#FF9800',
+        morado: '#7B1FA2',
     },
 };
 
@@ -67,19 +47,13 @@ const DESIGN = {
 const useResponsive = () => {
     const { width, height } = useWindowDimensions();
     const isTablet = width >= 768;
-    const isDesktop = width >= 1024;
     const isSmallPhone = width < 375;
-
-    const getValor = useCallback((valores: { tablet: any; normal: any; small: any }) => {
-        if (isDesktop || isTablet) return valores.tablet;
-        if (isSmallPhone) return valores.small;
-        return valores.normal;
-    }, [isDesktop, isTablet, isSmallPhone]);
-
-    return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
+    return { isTablet, isSmallPhone, width, height };
 };
 
-// ✅ Configuración de roles
+// ============================================================
+// 🎭 TIPOS Y ROLES
+// ============================================================
 type RolKey = 'admin' | 'cliente' | 'repartidor';
 
 interface RolConfig {
@@ -94,20 +68,26 @@ const ROLES: Record<RolKey, RolConfig> = {
     repartidor: { label: 'Repartidor', color: DESIGN.colors.azulClaro, icono: 'bicycle' },
 };
 
-const getRol = (rol: string): RolConfig => {
-    return ROLES[rol as RolKey] || ROLES.cliente;
-};
+const getRol = (rol: string): RolConfig => ROLES[rol as RolKey] || ROLES.cliente;
 
-// ✅ INTERFAZ PARA DETALLE DEL CLIENTE
-interface DetalleCliente extends Perfil {
+interface PerfilExtendido extends Perfil {
+    activo?: boolean;
+    created_at?: string;
+    updated_at?: string;
+    baneado_hasta?: string | null;
+    motivo_ban?: string | null;
+    notas_admin?: string | null;
+}
+
+interface DetalleCliente extends PerfilExtendido {
     total_pedidos: number;
     total_gastado: number;
     ultimo_pedido: string | null;
     direccion_completa: string;
     fecha_registro: string;
+    estado_cuenta: 'activo' | 'inactivo' | 'baneado';
 }
 
-// ✅ INTERFAZ PARA PEDIDO CON ITEMS
 interface PedidoConItems {
     id: number;
     creado_en: string;
@@ -118,28 +98,59 @@ interface PedidoConItems {
     metodo_pago: string;
 }
 
+// ============================================================
+// 🏠 COMPONENTE
+// ============================================================
 export default function PantallaGestionClientes(props: any) {
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
 
-    const [clientes, setClientes] = useState<Perfil[]>([]);
+    const [clientes, setClientes] = useState<PerfilExtendido[]>([]);
+    const [clientesFiltrados, setClientesFiltrados] = useState<PerfilExtendido[]>([]);
     const [cargando, setCargando] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
-    const [modalKey, setModalKey] = useState(0);
 
-    // ✅ Estado para detalle del cliente
+    const [busqueda, setBusqueda] = useState('');
+    const [filtroRol, setFiltroRol] = useState<'todos' | RolKey>('todos');
+    const [filtroEstado, setFiltroEstado] = useState<'todos' | 'activo' | 'inactivo' | 'baneado'>('todos');
+
+    // Detalle
     const [modalDetalleVisible, setModalDetalleVisible] = useState(false);
     const [clienteSeleccionado, setClienteSeleccionado] = useState<DetalleCliente | null>(null);
     const [cargandoDetalle, setCargandoDetalle] = useState(false);
     const [historialPedidos, setHistorialPedidos] = useState<PedidoConItems[]>([]);
     const [historialCanjes, setHistorialCanjes] = useState<any[]>([]);
+    const [historialPuntos, setHistorialPuntos] = useState<any[]>([]);
     const [notificaciones, setNotificaciones] = useState<any[]>([]);
+    const [dispositivos, setDispositivos] = useState<any[]>([]);
+    const [auditoria, setAuditoria] = useState<any[]>([]);
 
+    // Crear cliente
     const [nombre, setNombre] = useState('');
     const [email, setEmail] = useState('');
     const [telefono, setTelefono] = useState('');
     const [password, setPassword] = useState('');
+
+    // Modales de acción
+    const [modalBan, setModalBan] = useState(false);
+    const [modalPuntos, setModalPuntos] = useState(false);
+    const [modalNotificar, setModalNotificar] = useState(false);
+    const [modalNotas, setModalNotas] = useState(false);
+    const [modalEditar, setModalEditar] = useState(false);
+    const [procesando, setProcesando] = useState(false);
+
+    // Estados de los inputs
+    const [banMotivo, setBanMotivo] = useState('');
+    const [banFecha, setBanFecha] = useState('');
+    const [puntosCantidad, setPuntosCantidad] = useState('');
+    const [puntosMotivo, setPuntosMotivo] = useState('');
+    const [notifTitulo, setNotifTitulo] = useState('');
+    const [notifMensaje, setNotifMensaje] = useState('');
+    const [notas, setNotas] = useState('');
+    const [editNombre, setEditNombre] = useState('');
+    const [editTelefono, setEditTelefono] = useState('');
+    const [editDireccion, setEditDireccion] = useState('');
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
@@ -147,34 +158,59 @@ export default function PantallaGestionClientes(props: any) {
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
 
+    // ============================================================
+    // 🎬 EFECTOS
+    // ============================================================
     useEffect(() => {
         cargarClientes();
         Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 600,
-                useNativeDriver: true,
-            }),
-            Animated.timing(slideUpAnim, {
-                toValue: 0,
-                duration: 500,
-                useNativeDriver: true,
-            }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
         ]).start();
     }, []);
 
+    useEffect(() => {
+        let filtrados = [...clientes];
+
+        if (filtroRol !== 'todos') filtrados = filtrados.filter((c) => c.rol === filtroRol);
+
+        if (filtroEstado !== 'todos') {
+            filtrados = filtrados.filter((c) => getEstadoCuenta(c) === filtroEstado);
+        }
+
+        if (busqueda.trim()) {
+            const q = busqueda.toLowerCase().trim();
+            filtrados = filtrados.filter((c) =>
+                (c.nombre_cliente || '').toLowerCase().includes(q) ||
+                (c.email || '').toLowerCase().includes(q) ||
+                (c.telefono || '').toLowerCase().includes(q)
+            );
+        }
+
+        setClientesFiltrados(filtrados);
+    }, [clientes, filtroRol, filtroEstado, busqueda]);
+
+    // ============================================================
+    // 📋 CARGAR
+    // ============================================================
     const cargarClientes = async () => {
         try {
             const { data, error } = await supabase
                 .from('perfiles')
                 .select('*')
-                .order('ultimo_acceso', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(200);
 
-            if (error) throw error;
-            setClientes(data as Perfil[] || []);
-        } catch (error) {
-            console.error('Error cargando clientes:', error);
-            Alert.alert('Error', 'No se pudieron cargar los clientes');
+            if (error) {
+                if (error.code === 'PGRST303') return;
+                throw error;
+            }
+
+            setClientes((data as PerfilExtendido[]) || []);
+        } catch (error: any) {
+            if (error?.code !== 'PGRST303') {
+                console.error('Error cargando clientes:', error);
+            }
         } finally {
             setCargando(false);
             setRefrescando(false);
@@ -186,79 +222,109 @@ export default function PantallaGestionClientes(props: any) {
         cargarClientes();
     }, []);
 
-    // ✅ FUNCIÓN PARA CARGAR DETALLE COMPLETO DEL CLIENTE
-    const cargarDetalleCliente = async (cliente: Perfil) => {
+    // ============================================================
+    // 🧮 HELPERS
+    // ============================================================
+    const getEstadoCuenta = (perfil: PerfilExtendido): 'activo' | 'inactivo' | 'baneado' => {
+        if (perfil.baneado_hasta && new Date(perfil.baneado_hasta) > new Date()) return 'baneado';
+        if (perfil.activo === false) return 'inactivo';
+        return 'activo';
+    };
+
+    const nivelCliente = (puntos: number) => {
+        if (puntos >= 5000) return { label: '💎 Platino', color: DESIGN.colors.platino };
+        if (puntos >= 1500) return { label: '👑 Oro', color: DESIGN.colors.oro };
+        if (puntos >= 500) return { label: '🥈 Plata', color: DESIGN.colors.plata };
+        return { label: '🥉 Bronce', color: DESIGN.colors.bronce };
+    };
+
+    const formatFecha = (fecha?: string | null) => {
+        if (!fecha) return 'N/A';
+        return new Date(fecha).toLocaleDateString('es-AR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+        });
+    };
+
+    // ============================================================
+    // 📂 CARGAR DETALLE
+    // ============================================================
+    const cargarDetalleCliente = async (cliente: PerfilExtendido) => {
         setCargandoDetalle(true);
         setModalDetalleVisible(true);
         setHistorialPedidos([]);
         setHistorialCanjes([]);
+        setHistorialPuntos([]);
         setNotificaciones([]);
+        setDispositivos([]);
+        setAuditoria([]);
 
         try {
-            // 1. Obtener dirección completa
-            const partesDireccion = [];
-            if (cliente.direccion_calle) partesDireccion.push(cliente.direccion_calle);
-            if (cliente.direccion_numero) partesDireccion.push(cliente.direccion_numero);
-            if (cliente.direccion_piso) partesDireccion.push(`Piso ${cliente.direccion_piso}`);
-            if (cliente.direccion_departamento) partesDireccion.push(`Depto ${cliente.direccion_departamento}`);
-            if (cliente.direccion_barrio) partesDireccion.push(cliente.direccion_barrio);
-            if (cliente.direccion_ciudad) partesDireccion.push(cliente.direccion_ciudad);
-            if (cliente.direccion_codigo_postal) partesDireccion.push(`CP ${cliente.direccion_codigo_postal}`);
-            const direccionCompleta = partesDireccion.length > 0 ? partesDireccion.join(', ') : 'No especificada';
+            const partes = [];
+            if (cliente.direccion_calle) partes.push(cliente.direccion_calle);
+            if (cliente.direccion_numero) partes.push(cliente.direccion_numero);
+            if (cliente.direccion_piso) partes.push(`Piso ${cliente.direccion_piso}`);
+            if (cliente.direccion_departamento) partes.push(`Depto ${cliente.direccion_departamento}`);
+            if (cliente.direccion_barrio) partes.push(cliente.direccion_barrio);
+            if (cliente.direccion_ciudad) partes.push(cliente.direccion_ciudad);
+            if (cliente.direccion_codigo_postal) partes.push(`CP ${cliente.direccion_codigo_postal}`);
+            const direccionCompleta = partes.length > 0 ? partes.join(', ') : 'No especificada';
 
-            // 2. Obtener pedidos del cliente
-            const { data: pedidosData, error: pedidosError } = await supabase
+            const { data: pedidosData } = await supabase
                 .from('pedidos')
-                .select('*')
+                .select('id, creado_en, estado, total, tipo_entrega, metodo_pago')
                 .eq('id_de_usuario', cliente.id)
                 .order('creado_en', { ascending: false });
 
-            if (!pedidosError && pedidosData) {
-                setHistorialPedidos(pedidosData as PedidoConItems[]);
-            }
+            if (pedidosData) setHistorialPedidos(pedidosData as PedidoConItems[]);
 
-            // 3. Calcular total de pedidos y gastado
             const totalPedidos = pedidosData?.length || 0;
-            let totalGastado = 0;
-            if (pedidosData) {
-                totalGastado = pedidosData.reduce((sum, p) => sum + (p.total || 0), 0);
-            }
-
-            // 4. Obtener último pedido
+            const totalGastado = (pedidosData || []).reduce((s, p) => s + (p.total || 0), 0);
             const ultimoPedido = pedidosData && pedidosData.length > 0 ? pedidosData[0].creado_en : null;
 
-            // 5. Obtener historial de canjes
-            const { data: canjesData, error: canjesError } = await supabase
+            const { data: canjesData } = await supabase
                 .from('canjes')
-                .select(`
-                    *,
-                    recompensas:recompensa_id (
-                        nombre,
-                        descripcion,
-                        puntos_necesarios,
-                        tipo
-                    )
-                `)
+                .select('*, recompensas:recompensa_id (nombre, descripcion, puntos_necesarios, tipo)')
                 .eq('usuario_id', cliente.id)
                 .order('created_at', { ascending: false });
 
-            if (!canjesError && canjesData) {
-                setHistorialCanjes(canjesData);
-            }
+            if (canjesData) setHistorialCanjes(canjesData);
 
-            // 6. Obtener notificaciones del usuario
-            const { data: notificacionesData, error: notifError } = await supabase
+            const { data: puntosData } = await supabase
+                .from('historial_puntos')
+                .select('*')
+                .eq('usuario_id', cliente.id)
+                .order('fecha', { ascending: false })
+                .limit(20);
+
+            if (puntosData) setHistorialPuntos(puntosData);
+
+            const { data: notifData } = await supabase
                 .from('notificaciones_usuarios')
                 .select('*')
                 .eq('usuario_id', cliente.id)
                 .order('created_at', { ascending: false })
-                .limit(5);
+                .limit(10);
 
-            if (!notifError && notificacionesData) {
-                setNotificaciones(notificacionesData);
-            }
+            if (notifData) setNotificaciones(notifData);
 
-            // 7. Actualizar cliente seleccionado con todos los datos
+            const { data: dispData } = await supabase
+                .from('dispositivos_push')
+                .select('*')
+                .eq('usuario_actual_id', cliente.id)
+                .eq('activo', true);
+
+            if (dispData) setDispositivos(dispData);
+
+            const { data: audData } = await supabase
+                .from('admin_audit_log')
+                .select('*')
+                .eq('usuario_id', cliente.id)
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (audData) setAuditoria(audData);
+
             setClienteSeleccionado({
                 ...cliente,
                 direccion_completa: direccionCompleta,
@@ -266,23 +332,29 @@ export default function PantallaGestionClientes(props: any) {
                 total_gastado: totalGastado,
                 ultimo_pedido: ultimoPedido,
                 fecha_registro: cliente.created_at || cliente.ultimo_acceso || '',
+                estado_cuenta: getEstadoCuenta(cliente),
             });
-
         } catch (error) {
             console.error('Error cargando detalle:', error);
-            Alert.alert('Error', 'No se pudo cargar el detalle del cliente');
+            Alert.alert('Error', 'No se pudo cargar el detalle');
         } finally {
             setCargandoDetalle(false);
         }
     };
 
-    // ✅ FUNCIÓN CREAR CLIENTE
+    const recargarDetalle = async () => {
+        if (!clienteSeleccionado) return;
+        await cargarDetalleCliente(clienteSeleccionado);
+    };
+
+    // ============================================================
+    // ✅ CREAR CLIENTE
+    // ============================================================
     const crearCliente = async () => {
         if (!nombre || !email || !password) {
             Alert.alert('Error', 'Completa nombre, email y contraseña');
             return;
         }
-
         if (password.length < 6) {
             Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
             return;
@@ -290,21 +362,15 @@ export default function PantallaGestionClientes(props: any) {
 
         try {
             const { data, error } = await supabaseAdmin.auth.admin.createUser({
-                email: email,
-                password: password,
+                email,
+                password,
                 email_confirm: true,
-                user_metadata: {
-                    nombre_cliente: nombre,
-                    telefono: telefono || '',
-                },
+                user_metadata: { nombre_cliente: nombre, telefono: telefono || '' },
             });
 
             if (error) {
-                if (error.message && error.message.includes('rate limit')) {
-                    Alert.alert(
-                        '⏳ Límite de intentos',
-                        'Has excedido el límite de envío de emails. Espera 1 hora para continuar.'
-                    );
+                if (error.message?.includes('rate limit')) {
+                    Alert.alert('⏳ Límite', 'Has excedido el límite de envío de emails.');
                     return;
                 }
                 Alert.alert('Error', error.message);
@@ -315,48 +381,114 @@ export default function PantallaGestionClientes(props: any) {
                 const { error: errorPerfil } = await supabase.from('perfiles').insert({
                     id: data.user.id,
                     nombre_cliente: nombre,
-                    email: email,
+                    email,
                     telefono: telefono || null,
                     rol: 'cliente',
-                    puntos_acumulados: 100,
+                    puntos_acumulados: 500,
+                    puntos_disponibles: 500,
+                    activo: true,
                     ultimo_acceso: new Date().toISOString(),
                 });
 
                 if (errorPerfil) {
-                    console.error('Error creando perfil:', errorPerfil);
-                    Alert.alert('Error', 'El usuario se creó pero hubo un problema con el perfil.');
+                    Alert.alert('Error', 'Usuario creado pero con error en el perfil');
                     return;
+                }
+
+                // ✅ NUEVO: registrar bonus en historial
+                try {
+                    await supabase.from('historial_puntos').insert({
+                        usuario_id: data.user.id,
+                        tipo: 'bonus_bienvenida',
+                        puntos: 500,
+                        descripcion: 'Bonus de bienvenida al registrarte 🎉',
+                    });
+                } catch (errorHistorial) {
+                    console.warn('⚠️ No se pudo registrar bonus en historial:', errorHistorial);
                 }
             }
 
             setModalVisible(false);
-            setNombre('');
-            setEmail('');
-            setTelefono('');
-            setPassword('');
+            setNombre(''); setEmail(''); setTelefono(''); setPassword('');
             cargarClientes();
-            Alert.alert('✅ Éxito', 'Cliente creado correctamente');
-
+            Alert.alert('✅ Éxito', 'Cliente creado');
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Ocurrió un error al crear el cliente');
+            Alert.alert('Error', error.message || 'Error al crear');
         }
     };
 
-    const cambiarRol = async (id: string, nuevoRol: string) => {
+    // ============================================================
+    // 🔄 ACCIONES
+    // ============================================================
+    const cambiarRol = async (id: string, nuevoRol: RolKey) => {
         const rolInfo = getRol(nuevoRol);
         Alert.alert(
             'Cambiar rol',
-            `¿Estás seguro de cambiar el rol a "${rolInfo.label}"?`,
+            `¿Cambiar el rol a "${rolInfo.label}"?`,
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
                     text: 'Cambiar',
                     onPress: async () => {
-                        await supabase.from('perfiles').update({ rol: nuevoRol }).eq('id', id);
+                        const { error } = await supabase
+                            .from('perfiles')
+                            .update({ rol: nuevoRol })
+                            .eq('id', id);
+
+                        if (error) {
+                            Alert.alert('Error', 'No se pudo cambiar el rol');
+                            return;
+                        }
+
+                        await supabase.from('admin_audit_log').insert({
+                            admin_id: (await supabase.auth.getUser()).data.user?.id,
+                            usuario_id: id,
+                            accion: 'cambio_rol',
+                            datos_despues: { rol: nuevoRol },
+                        });
+
                         cargarClientes();
-                        Alert.alert('Éxito', 'Rol actualizado correctamente');
-                    }
-                }
+                        if (clienteSeleccionado?.id === id) recargarDetalle();
+                        Alert.alert('Éxito', 'Rol actualizado');
+                    },
+                },
+            ]
+        );
+    };
+
+    const toggleActivo = async (cliente: PerfilExtendido) => {
+        const nuevoEstado = !cliente.activo;
+        Alert.alert(
+            nuevoEstado ? 'Activar cuenta' : 'Desactivar cuenta',
+            `¿${nuevoEstado ? 'activar' : 'desactivar'} a "${cliente.nombre_cliente}"?`,
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: nuevoEstado ? 'Activar' : 'Desactivar',
+                    style: nuevoEstado ? 'default' : 'destructive',
+                    onPress: async () => {
+                        const { error } = await supabase
+                            .from('perfiles')
+                            .update({ activo: nuevoEstado })
+                            .eq('id', cliente.id);
+
+                        if (error) {
+                            Alert.alert('Error', 'No se pudo actualizar');
+                            return;
+                        }
+
+                        await supabase.from('admin_audit_log').insert({
+                            admin_id: (await supabase.auth.getUser()).data.user?.id,
+                            usuario_id: cliente.id,
+                            accion: nuevoEstado ? 'activar_cuenta' : 'desactivar_cuenta',
+                            datos_antes: { activo: cliente.activo },
+                            datos_despues: { activo: nuevoEstado },
+                        });
+
+                        cargarClientes();
+                        if (clienteSeleccionado?.id === cliente.id) recargarDetalle();
+                    },
+                },
             ]
         );
     };
@@ -364,208 +496,339 @@ export default function PantallaGestionClientes(props: any) {
     const eliminarCliente = (id: string, nombre: string) => {
         Alert.alert(
             'Eliminar cliente',
-            `¿Estás seguro de eliminar a "${nombre}"?`,
+            `¿Eliminar a "${nombre}"? No se puede deshacer.`,
             [
                 { text: 'Cancelar', style: 'cancel' },
                 {
                     text: 'Eliminar',
                     style: 'destructive',
                     onPress: async () => {
-                        await supabase.from('perfiles').delete().eq('id', id);
+                        const { error } = await supabase.from('perfiles').delete().eq('id', id);
+                        if (error) {
+                            Alert.alert('Error', 'No se pudo eliminar');
+                            return;
+                        }
                         cargarClientes();
-                        Alert.alert('Éxito', 'Cliente eliminado correctamente');
-                    }
-                }
+                        Alert.alert('Éxito', 'Cliente eliminado');
+                    },
+                },
             ]
         );
+    };
+
+    // ============================================================
+    // 🎯 ABRIR MODALES
+    // ============================================================
+    const abrirModalBan = (cliente: DetalleCliente) => {
+        setBanMotivo('');
+        setBanFecha('');
+        setModalBan(true);
+    };
+
+    const abrirModalPuntos = (cliente: DetalleCliente) => {
+        setPuntosCantidad('');
+        setPuntosMotivo('');
+        setModalPuntos(true);
+    };
+
+    const abrirModalNotificar = (cliente: DetalleCliente) => {
+        setNotifTitulo('');
+        setNotifMensaje('');
+        setModalNotificar(true);
+    };
+
+    const abrirModalNotas = (cliente: DetalleCliente) => {
+        setNotas(cliente.notas_admin || '');
+        setModalNotas(true);
+    };
+
+    const abrirModalEditar = (cliente: DetalleCliente) => {
+        setEditNombre(cliente.nombre_cliente || '');
+        setEditTelefono(cliente.telefono || '');
+        setEditDireccion(cliente.direccion_manual || '');
+        setModalEditar(true);
+    };
+
+    // ============================================================
+    // ✅ EJECUTAR ACCIONES
+    // ============================================================
+    const ejecutarBan = async () => {
+        if (!clienteSeleccionado) return;
+
+        if (clienteSeleccionado.estado_cuenta === 'baneado') {
+            setProcesando(true);
+            const res = await adminUsuariosService.desbanearUsuario(clienteSeleccionado.id);
+            setProcesando(false);
+            if (res.success) {
+                setModalBan(false);
+                await recargarDetalle();
+                await cargarClientes();
+                Alert.alert('✅ Desbaneado', 'Cuenta reactivada');
+            } else {
+                Alert.alert('Error', res.error || 'Error al desbanear');
+            }
+            return;
+        }
+
+        if (!banMotivo.trim()) {
+            Alert.alert('Error', 'Ingresá un motivo');
+            return;
+        }
+
+        setProcesando(true);
+        const fechaISO = banFecha.trim()
+            ? new Date(banFecha).toISOString()
+            : null;
+
+        const res = await adminUsuariosService.banearUsuario(
+            clienteSeleccionado.id,
+            banMotivo.trim(),
+            fechaISO,
+        );
+        setProcesando(false);
+
+        if (res.success) {
+            setModalBan(false);
+            await recargarDetalle();
+            await cargarClientes();
+            Alert.alert('✅ Baneado', 'Usuario baneado correctamente');
+        } else {
+            Alert.alert('Error', res.error || 'Error al banear');
+        }
+    };
+
+    const ejecutarPuntos = async () => {
+        if (!clienteSeleccionado) return;
+
+        const cant = parseInt(puntosCantidad);
+        if (isNaN(cant) || cant === 0) {
+            Alert.alert('Error', 'Ingresá una cantidad válida (positiva o negativa)');
+            return;
+        }
+        if (!puntosMotivo.trim()) {
+            Alert.alert('Error', 'Ingresá un motivo');
+            return;
+        }
+
+        setProcesando(true);
+        const res = await adminUsuariosService.ajustarPuntos(
+            clienteSeleccionado.id,
+            cant,
+            puntosMotivo.trim(),
+        );
+        setProcesando(false);
+
+        if (res.success) {
+            setModalPuntos(false);
+            await recargarDetalle();
+            await cargarClientes();
+            Alert.alert('✅ Puntos ajustados', `${cant > 0 ? '+' : ''}${cant} puntos`);
+        } else {
+            Alert.alert('Error', res.error || 'Error al ajustar puntos');
+        }
+    };
+
+    const ejecutarNotificar = async () => {
+        if (!clienteSeleccionado) return;
+
+        if (!notifTitulo.trim() || !notifMensaje.trim()) {
+            Alert.alert('Error', 'Completá título y mensaje');
+            return;
+        }
+
+        setProcesando(true);
+        const res = await adminUsuariosService.enviarNotificacionIndividual(
+            clienteSeleccionado.id,
+            notifTitulo.trim(),
+            notifMensaje.trim(),
+        );
+        setProcesando(false);
+
+        if (res.success) {
+            setModalNotificar(false);
+            await recargarDetalle();
+            Alert.alert('✅ Enviada', 'Notificación enviada');
+        } else {
+            Alert.alert('Error', res.error || 'Error al enviar');
+        }
+    };
+
+    const ejecutarNotas = async () => {
+        if (!clienteSeleccionado) return;
+
+        setProcesando(true);
+        const res = await adminUsuariosService.actualizarNotas(
+            clienteSeleccionado.id,
+            notas.trim(),
+        );
+        setProcesando(false);
+
+        if (res.success) {
+            setModalNotas(false);
+            await recargarDetalle();
+            Alert.alert('✅ Guardado', 'Notas actualizadas');
+        } else {
+            Alert.alert('Error', res.error || 'Error al guardar');
+        }
+    };
+
+    const ejecutarEditar = async () => {
+        if (!clienteSeleccionado) return;
+
+        if (!editNombre.trim()) {
+            Alert.alert('Error', 'El nombre es obligatorio');
+            return;
+        }
+
+        setProcesando(true);
+        const res = await adminUsuariosService.actualizarDatosBasicos(
+            clienteSeleccionado.id,
+            {
+                nombre_cliente: editNombre.trim(),
+                telefono: editTelefono.trim() || undefined,
+                direccion_manual: editDireccion.trim() || undefined,
+            },
+        );
+        setProcesando(false);
+
+        if (res.success) {
+            setModalEditar(false);
+            await recargarDetalle();
+            await cargarClientes();
+            Alert.alert('✅ Guardado', 'Datos actualizados');
+        } else {
+            Alert.alert('Error', res.error || 'Error al guardar');
+        }
     };
 
     const cerrarModal = () => {
         setModalVisible(false);
         setTimeout(() => {
-            setNombre('');
-            setEmail('');
-            setTelefono('');
-            setPassword('');
+            setNombre(''); setEmail(''); setTelefono(''); setPassword('');
         }, 300);
     };
 
-    const rolColor = (rol: string) => getRol(rol).color;
-    const rolLabel = (rol: string) => getRol(rol).label;
-    const rolIcono = (rol: string) => getRol(rol).icono;
-
-    const nivelCliente = (puntos: number) => {
-        if (puntos >= 5000) return { label: '💎 Platino', color: DESIGN.colors.platino };
-        if (puntos >= 1500) return { label: '👑 Oro', color: DESIGN.colors.oro };
-        if (puntos >= 500) return { label: '🥈 Plata', color: DESIGN.colors.plata };
-        return { label: '🥉 Bronce', color: DESIGN.colors.bronce };
-    };
-
+    // ============================================================
+    // 🎨 RENDER
+    // ============================================================
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
     const tarjetaPadding = isTablet ? 18 : isSmallPhone ? 12 : 14;
     const avatarSize = isTablet ? 56 : isSmallPhone ? 40 : 48;
     const nombreSize = isTablet ? 18 : isSmallPhone ? 14 : 16;
 
-    const formatFecha = (fecha: string) => {
-        if (!fecha) return 'N/A';
-        return new Date(fecha).toLocaleDateString('es-AR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    // ✅ RENDER CLIENTE
-    const renderCliente = ({ item, index }: { item: Perfil; index: number }) => {
-        const delay = index * 100;
-        const itemFade = fadeAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.2, 1],
-        });
-        const itemSlide = slideUpAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20 * (index + 1), 0],
-        });
-        const nivel = nivelCliente(item.puntos_acumulados || 0);
-        const rolInfo = getRol(item.rol || 'cliente');
+    const renderEstadoBadge = (estado: 'activo' | 'inactivo' | 'baneado') => {
+        const config = {
+            activo: { color: DESIGN.colors.verde, label: 'Activo', icono: 'checkmark-circle' as const },
+            inactivo: { color: DESIGN.colors.textTertiary, label: 'Inactivo', icono: 'pause-circle' as const },
+            baneado: { color: DESIGN.colors.naranja, label: 'Baneado', icono: 'ban' as const },
+        }[estado];
 
         return (
-            <Animated.View
-                style={{
-                    opacity: itemFade,
-                    transform: [{ translateY: itemSlide }],
-                }}
-            >
-                <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => cargarDetalleCliente(item)}
-                >
-                    <View style={[
-                        estilos.tarjeta,
-                        {
-                            padding: tarjetaPadding,
-                            borderRadius: isTablet ? 18 : isSmallPhone ? 12 : 16,
-                            borderColor: rolInfo.color + '40',
-                            backgroundColor: DESIGN.colors.surface,
-                            shadowColor: DESIGN.colors.cardShadow,
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 1,
-                            shadowRadius: 8,
-                            elevation: 3,
-                        }
-                    ]}>
+            <View style={[estilos.estadoBadge, { backgroundColor: config.color + '20', borderColor: config.color + '40' }]}>
+                <Ionicons name={config.icono} size={12} color={config.color} />
+                <Text style={[estilos.estadoTexto, { color: config.color, fontSize: 10 }]}>
+                    {config.label}
+                </Text>
+            </View>
+        );
+    };
+
+    const renderCliente = ({ item, index }: { item: PerfilExtendido; index: number }) => {
+        const itemFade = fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] });
+        const itemSlide = slideUpAnim.interpolate({ inputRange: [0, 1], outputRange: [20 * Math.min(index + 1, 5), 0] });
+        const nivel = nivelCliente(item.puntos_acumulados || 0);
+        const rolInfo = getRol(item.rol || 'cliente');
+        const estado = getEstadoCuenta(item);
+
+        return (
+            <Animated.View style={{ opacity: itemFade, transform: [{ translateY: itemSlide }] }}>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => cargarDetalleCliente(item)}>
+                    <View style={[estilos.tarjeta, {
+                        padding: tarjetaPadding,
+                        borderRadius: 16,
+                        borderColor: rolInfo.color + '40',
+                        backgroundColor: DESIGN.colors.surface,
+                        shadowColor: DESIGN.colors.cardShadow,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 1,
+                        shadowRadius: 8,
+                        elevation: 3,
+                    }]}>
                         <View style={estilos.fila}>
-                            <View style={[
-                                estilos.avatar,
-                                {
-                                    width: avatarSize,
-                                    height: avatarSize,
-                                    borderRadius: avatarSize / 2,
-                                    backgroundColor: rolInfo.color + '20',
-                                    borderColor: rolInfo.color + '30',
-                                }
-                            ]}>
-                                <Text style={[estilos.avatarTexto, { fontSize: isTablet ? 24 : isSmallPhone ? 16 : 20 }]}>
+                            <View style={[estilos.avatar, {
+                                width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2,
+                                backgroundColor: rolInfo.color + '20', borderColor: rolInfo.color + '30',
+                            }]}>
+                                <Text style={[estilos.avatarTexto, { fontSize: 20 }]}>
                                     {item.nombre_cliente?.charAt(0)?.toUpperCase() || '?'}
                                 </Text>
                             </View>
 
                             <View style={estilos.info}>
-                                <Text style={[estilos.nombre, { fontSize: nombreSize, color: DESIGN.colors.text }]} numberOfLines={1}>
-                                    {item.nombre_cliente || 'Sin nombre'}
-                                </Text>
-                                <Text style={[estilos.email, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]} numberOfLines={1}>
-                                    {item.email}
-                                </Text>
-                                <Text style={[estilos.telefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                    {item.telefono || 'Sin teléfono'}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <Text style={[estilos.nombre, { fontSize: nombreSize }]} numberOfLines={1}>
+                                        {item.nombre_cliente || 'Sin nombre'}
+                                    </Text>
+                                    {renderEstadoBadge(estado)}
+                                </View>
+                                <Text style={estilos.email} numberOfLines={1}>{item.email}</Text>
+                                <Text style={estilos.telefono}>{item.telefono || 'Sin teléfono'}</Text>
                             </View>
 
-                            <TouchableOpacity
-                                onPress={() => eliminarCliente(item.id, item.nombre_cliente || 'Cliente')}
-                                style={estilos.botonEliminar}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="trash-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.accent} />
+                            <TouchableOpacity onPress={() => eliminarCliente(item.id, item.nombre_cliente || 'Cliente')} style={estilos.botonEliminar}>
+                                <Ionicons name="trash-outline" size={20} color={DESIGN.colors.accent} />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={[estilos.detalles, { borderColor: DESIGN.colors.border }]}>
+                        <View style={estilos.detalles}>
                             <View style={estilos.detalleItem}>
-                                <Text style={[estilos.detalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
-                                    ⭐ {item.puntos_acumulados || 0}
-                                </Text>
-                                <Text style={[estilos.detalleLabel, { fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10, color: DESIGN.colors.textSecondary }]}>
-                                    Puntos
-                                </Text>
+                                <Text style={estilos.detalleValor}>⭐ {item.puntos_acumulados || 0}</Text>
+                                <Text style={estilos.detalleLabel}>Puntos</Text>
                             </View>
-
                             <View style={estilos.detalleItem}>
-                                <Text style={[estilos.detalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: nivel.color }]}>
-                                    {nivel.label}
-                                </Text>
-                                <Text style={[estilos.detalleLabel, { fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10, color: DESIGN.colors.textSecondary }]}>
-                                    Nivel
-                                </Text>
+                                <Text style={[estilos.detalleValor, { color: nivel.color }]}>{nivel.label}</Text>
+                                <Text style={estilos.detalleLabel}>Nivel</Text>
                             </View>
-
-                            <View style={[
-                                estilos.rolBadge,
-                                {
-                                    backgroundColor: rolInfo.color + '20',
-                                    paddingHorizontal: isTablet ? 14 : isSmallPhone ? 8 : 10,
-                                    paddingVertical: isTablet ? 6 : isSmallPhone ? 4 : 5,
-                                    borderRadius: isTablet ? 14 : isSmallPhone ? 8 : 10,
-                                    borderColor: rolInfo.color + '30',
-                                    borderWidth: 1,
-                                }
-                            ]}>
-                                <Ionicons name={rolInfo.icono} size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={rolInfo.color} />
-                                <Text style={[
-                                    estilos.rolTexto,
-                                    {
-                                        fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
-                                        color: rolInfo.color,
-                                    }
-                                ]}>
-                                    {rolInfo.label}
-                                </Text>
+                            <View style={[estilos.rolBadge, { backgroundColor: rolInfo.color + '20', borderColor: rolInfo.color + '30' }]}>
+                                <Ionicons name={rolInfo.icono} size={14} color={rolInfo.color} />
+                                <Text style={[estilos.rolTexto, { color: rolInfo.color }]}>{rolInfo.label}</Text>
                             </View>
                         </View>
 
-                        <View style={[estilos.acciones, { gap: isTablet ? 10 : isSmallPhone ? 6 : 8 }]}>
+                        <View style={[estilos.acciones, { gap: 8 }]}>
                             {Object.entries(ROLES).map(([key, value]) => (
                                 <TouchableOpacity
                                     key={key}
-                                    style={[
-                                        estilos.botonAccion,
-                                        {
-                                            backgroundColor: value.color,
-                                            paddingVertical: isTablet ? 8 : isSmallPhone ? 5 : 6,
-                                            borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                                            opacity: item.rol === key ? 0.5 : 1,
-                                        }
-                                    ]}
-                                    onPress={() => cambiarRol(item.id, key)}
+                                    style={[estilos.botonAccion, {
+                                        backgroundColor: value.color,
+                                        paddingVertical: 6, borderRadius: 8,
+                                        opacity: item.rol === key ? 0.5 : 1,
+                                    }]}
+                                    onPress={() => cambiarRol(item.id, key as RolKey)}
                                     disabled={item.rol === key}
-                                    activeOpacity={0.7}
                                 >
-                                    <Text style={[estilos.botonAccionTexto, { fontSize: isTablet ? 13 : isSmallPhone ? 9 : 11, color: DESIGN.colors.surface }]}>
-                                        {value.label}
-                                    </Text>
+                                    <Text style={[estilos.botonAccionTexto, { color: DESIGN.colors.surface }]}>{value.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
 
-                        <View style={[estilos.verDetalle, { borderTopColor: DESIGN.colors.border }]}>
-                            <Text style={[estilos.verDetalleTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                👆 Toca para ver todos los detalles
+                        <TouchableOpacity
+                            style={[estilos.botonEstado, {
+                                backgroundColor: item.activo === false ? DESIGN.colors.verde : DESIGN.colors.naranja,
+                                marginTop: 6, paddingVertical: 6,
+                            }]}
+                            onPress={() => toggleActivo(item)}
+                        >
+                            <Ionicons name={item.activo === false ? 'checkmark-circle-outline' : 'pause-circle-outline'} size={14} color="#FFF" />
+                            <Text style={estilos.botonEstadoTexto}>
+                                {item.activo === false ? 'Activar cuenta' : 'Desactivar cuenta'}
                             </Text>
-                            <Ionicons name="chevron-forward" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.textTertiary} />
+                        </TouchableOpacity>
+
+                        <View style={estilos.verDetalle}>
+                            <Text style={estilos.verDetalleTexto}>👆 Toca para ver todos los detalles</Text>
+                            <Ionicons name="chevron-forward" size={16} color={DESIGN.colors.textTertiary} />
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -573,220 +836,170 @@ export default function PantallaGestionClientes(props: any) {
         );
     };
 
+    // ============================================================
+    // 🖥️ RENDER PRINCIPAL
+    // ============================================================
     return (
         <View style={estilos.contenedor}>
             <LinearGradient
                 colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
                 style={estilos.fondoGradiente}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             />
 
-            <View style={[
-                estilos.header,
-                {
-                    paddingTop: insets.top + (isTablet ? 20 : 10),
-                    paddingHorizontal: paddingHorizontal,
-                    paddingBottom: isTablet ? 16 : 12,
-                }
-            ]}>
-                <TouchableOpacity
-                    style={estilos.botonVolver}
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="arrow-back" size={isTablet ? 28 : 24} color={DESIGN.colors.surface} />
+            {/* HEADER */}
+            <View style={[estilos.header, {
+                paddingTop: insets.top + 10,
+                paddingHorizontal,
+                paddingBottom: 12,
+            }]}>
+                <TouchableOpacity style={estilos.botonVolver} onPress={() => props.navigation.goBack()}>
+                    <Ionicons name="arrow-back" size={24} color={DESIGN.colors.surface} />
                 </TouchableOpacity>
-                <Text style={[estilos.titulo, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
-                    👥 Clientes
-                </Text>
+                <Text style={[estilos.titulo, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>👥 Clientes</Text>
                 <TouchableOpacity
-                    style={[estilos.botonAgregar, {
-                        paddingHorizontal: isTablet ? 18 : isSmallPhone ? 12 : 16,
-                        paddingVertical: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                        backgroundColor: DESIGN.colors.accentSecondary,
-                    }]}
+                    style={[estilos.botonAgregar, { backgroundColor: DESIGN.colors.accentSecondary }]}
                     onPress={() => setModalVisible(true)}
-                    activeOpacity={0.7}
                 >
-                    <Ionicons name="add" size={isTablet ? 26 : isSmallPhone ? 18 : 22} color={DESIGN.colors.text} />
+                    <Ionicons name="add" size={22} color={DESIGN.colors.text} />
                 </TouchableOpacity>
             </View>
 
-            <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal, borderColor: DESIGN.colors.border }]}>
-                <Text style={[estilos.contador, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
-                    {clientes.length} {clientes.length === 1 ? 'cliente registrado' : 'clientes registrados'}
+            {/* BÚSQUEDA */}
+            <View style={{ paddingHorizontal, paddingVertical: 10 }}>
+                <View style={estilos.busquedaInput}>
+                    <Ionicons name="search" size={18} color={DESIGN.colors.textSecondary} />
+                    <TextInput
+                        style={estilos.busquedaTexto}
+                        value={busqueda}
+                        onChangeText={setBusqueda}
+                        placeholder="Buscar por nombre, email o teléfono..."
+                        placeholderTextColor={DESIGN.colors.textTertiary}
+                    />
+                    {busqueda.length > 0 && (
+                        <TouchableOpacity onPress={() => setBusqueda('')}>
+                            <Ionicons name="close-circle" size={18} color={DESIGN.colors.textTertiary} />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
+            {/* FILTROS */}
+            <View style={{ paddingHorizontal, paddingBottom: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    <TouchableOpacity
+                        style={[estilos.filtroChip, filtroRol === 'todos' && estilos.filtroChipActivo]}
+                        onPress={() => setFiltroRol('todos')}
+                    >
+                        <Text style={[estilos.filtroChipTexto, filtroRol === 'todos' && estilos.filtroChipTextoActivo]}>Todos</Text>
+                    </TouchableOpacity>
+                    {Object.entries(ROLES).map(([key, value]) => (
+                        <TouchableOpacity
+                            key={key}
+                            style={[estilos.filtroChip, filtroRol === key && estilos.filtroChipActivo]}
+                            onPress={() => setFiltroRol(key as RolKey)}
+                        >
+                            <Ionicons name={value.icono} size={12} color={filtroRol === key ? DESIGN.colors.text : value.color} />
+                            <Text style={[estilos.filtroChipTexto, filtroRol === key && estilos.filtroChipTextoActivo]}>
+                                {value.label}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 6 }}>
+                    {(['todos', 'activo', 'inactivo', 'baneado'] as const).map((estado) => (
+                        <TouchableOpacity
+                            key={estado}
+                            style={[estilos.filtroChip, filtroEstado === estado && estilos.filtroChipActivo]}
+                            onPress={() => setFiltroEstado(estado)}
+                        >
+                            <Text style={[estilos.filtroChipTexto, filtroEstado === estado && estilos.filtroChipTextoActivo]}>
+                                {estado === 'todos' ? '📋 Todos' : estado === 'activo' ? '✅ Activos' : estado === 'inactivo' ? '⏸️ Inactivos' : '🚫 Baneados'}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+
+            {/* CONTADOR */}
+            <View style={[estilos.contadorContainer, { paddingHorizontal }]}>
+                <Text style={estilos.contador}>
+                    {clientesFiltrados.length} de {clientes.length} {clientes.length === 1 ? 'cliente' : 'clientes'}
                 </Text>
             </View>
 
-            <FlatList
-                data={clientes}
-                keyExtractor={item => item.id}
-                renderItem={renderCliente}
-                contentContainerStyle={[
-                    estilos.lista,
-                    {
-                        paddingHorizontal: paddingHorizontal,
-                        paddingBottom: insets.bottom + 150,
-                        paddingTop: isTablet ? 8 : 4,
+            {/* LISTA */}
+            {cargando ? (
+                <View style={estilos.cargandoContainer}>
+                    <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
+                    <Text style={estilos.cargandoTexto}>Cargando clientes...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={clientesFiltrados}
+                    keyExtractor={(item) => item.id}
+                    renderItem={renderCliente}
+                    contentContainerStyle={[
+                        estilos.lista,
+                        { paddingHorizontal, paddingBottom: insets.bottom + 150, paddingTop: 4 },
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                        <View style={estilos.vacioContenedor}>
+                            <Ionicons name="people-outline" size={60} color={DESIGN.colors.textTertiary + '30'} />
+                            <Text style={estilos.vacio}>
+                                {clientes.length === 0 ? 'No hay clientes registrados' : 'No hay resultados'}
+                            </Text>
+                            <Text style={estilos.vacioSubtexto}>
+                                {clientes.length === 0 ? 'Los clientes aparecerán aquí' : 'Probá cambiando los filtros'}
+                            </Text>
+                        </View>
                     }
-                ]}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={estilos.vacioContenedor}>
-                        <Ionicons name="people-outline" size={isTablet ? 80 : 60} color={DESIGN.colors.textTertiary + '30'} />
-                        <Text style={[estilos.vacio, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16, color: DESIGN.colors.text }]}>
-                            No hay clientes registrados
-                        </Text>
-                        <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
-                            Los clientes aparecerán aquí cuando se registren
-                        </Text>
-                    </View>
-                }
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refrescando}
-                        onRefresh={manejarRefresh}
-                        tintColor={DESIGN.colors.accentSecondary}
-                        colors={[DESIGN.colors.accentSecondary]}
-                    />
-                }
-            />
+                    refreshControl={
+                        <RefreshControl refreshing={refrescando} onRefresh={manejarRefresh} tintColor={DESIGN.colors.accentSecondary} />
+                    }
+                />
+            )}
 
-            {/* ✅ MODAL - NUEVO CLIENTE */}
-            <Modal
-                key={modalKey}
-                visible={modalVisible}
-                transparent
-                animationType="slide"
-                onRequestClose={cerrarModal}
-            >
+            {/* MODAL NUEVO CLIENTE */}
+            <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={cerrarModal}>
                 <View style={estilos.modalFondo}>
-                    <LinearGradient
-                        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
-                        style={estilos.modalGradiente}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    />
-
-                    <View style={[
-                        estilos.modal,
-                        {
-                            padding: isTablet ? 32 : isSmallPhone ? 20 : 24,
-                            borderRadius: isTablet ? 28 : 24,
-                            width: isTablet ? '70%' : '92%',
-                            maxHeight: isTablet ? '80%' : '85%',
-                            borderColor: DESIGN.colors.accentSecondary + '30',
-                            backgroundColor: DESIGN.colors.surface,
-                        }
-                    ]}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '92%', maxHeight: '85%' }]}>
                         <View style={estilos.modalHeader}>
-                            <LinearGradient
-                                colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
-                                style={estilos.modalHeaderGradiente}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                            >
-                                <Ionicons name="person-add" size={isTablet ? 32 : isSmallPhone ? 24 : 28} color={DESIGN.colors.text} />
-                                <Text style={[estilos.modalTitulo, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22, color: DESIGN.colors.text }]}>
-                                    Nuevo Cliente
-                                </Text>
+                            <LinearGradient colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]} style={estilos.modalHeaderGradiente} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                                <Ionicons name="person-add" size={28} color={DESIGN.colors.text} />
+                                <Text style={[estilos.modalTitulo, { color: DESIGN.colors.text }]}>Nuevo Cliente</Text>
                             </LinearGradient>
                         </View>
 
-                        <ScrollView
-                            style={estilos.modalScroll}
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 10 }}
-                        >
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
-                                <Ionicons name="person-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accentSecondary} /> Nombre *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text, borderColor: DESIGN.colors.border }]}
-                                value={nombre}
-                                onChangeText={setNombre}
-                                placeholder="Nombre completo"
-                                placeholderTextColor={DESIGN.colors.textTertiary}
-                                selectionColor={DESIGN.colors.accentSecondary}
-                            />
+                        <ScrollView style={estilos.modalScroll} showsVerticalScrollIndicator={false}>
+                            <Text style={estilos.label}>Nombre *</Text>
+                            <TextInput style={estilos.input} value={nombre} onChangeText={setNombre} placeholder="Nombre completo" placeholderTextColor={DESIGN.colors.textTertiary} />
 
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text, marginTop: 14 }]}>
-                                <Ionicons name="mail-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accentSecondary} /> Email *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text, borderColor: DESIGN.colors.border }]}
-                                value={email}
-                                onChangeText={setEmail}
-                                placeholder="cliente@ejemplo.com"
-                                placeholderTextColor={DESIGN.colors.textTertiary}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                selectionColor={DESIGN.colors.accentSecondary}
-                            />
+                            <Text style={estilos.label}>Email *</Text>
+                            <TextInput style={estilos.input} value={email} onChangeText={setEmail} placeholder="cliente@ejemplo.com" placeholderTextColor={DESIGN.colors.textTertiary} keyboardType="email-address" autoCapitalize="none" />
 
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text, marginTop: 14 }]}>
-                                <Ionicons name="call-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accentSecondary} /> Teléfono
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text, borderColor: DESIGN.colors.border }]}
-                                value={telefono}
-                                onChangeText={setTelefono}
-                                placeholder="1134567890"
-                                placeholderTextColor={DESIGN.colors.textTertiary}
-                                keyboardType="phone-pad"
-                                selectionColor={DESIGN.colors.accentSecondary}
-                            />
+                            <Text style={estilos.label}>Teléfono</Text>
+                            <TextInput style={estilos.input} value={telefono} onChangeText={setTelefono} placeholder="1134567890" placeholderTextColor={DESIGN.colors.textTertiary} keyboardType="phone-pad" />
 
-                            <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text, marginTop: 14 }]}>
-                                <Ionicons name="lock-closed-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accentSecondary} /> Contraseña *
-                            </Text>
-                            <TextInput
-                                style={[estilos.input, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text, borderColor: DESIGN.colors.border }]}
-                                value={password}
-                                onChangeText={setPassword}
-                                placeholder="Mínimo 6 caracteres"
-                                placeholderTextColor={DESIGN.colors.textTertiary}
-                                secureTextEntry
-                                selectionColor={DESIGN.colors.accentSecondary}
-                            />
+                            <Text style={estilos.label}>Contraseña *</Text>
+                            <TextInput style={estilos.input} value={password} onChangeText={setPassword} placeholder="Mínimo 6 caracteres" placeholderTextColor={DESIGN.colors.textTertiary} secureTextEntry />
                         </ScrollView>
 
-                        <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
                             <TouchableOpacity
-                                style={[estilos.modalBoton, estilos.modalCancelar, {
-                                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                                    backgroundColor: DESIGN.colors.surfaceHover,
-                                    borderColor: DESIGN.colors.border,
-                                    borderWidth: 1,
-                                }]}
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
                                 onPress={cerrarModal}
-                                activeOpacity={0.7}
                             >
-                                <Ionicons name="close" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.textSecondary} />
-                                <Text style={[estilos.modalCancelarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.textSecondary }]}>
-                                    Cancelar
-                                </Text>
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity
-                                style={[estilos.modalBoton, estilos.modalGuardar, {
-                                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                                    overflow: 'hidden',
-                                }]}
+                                style={[estilos.modalBoton, { overflow: 'hidden', paddingVertical: 14 }]}
                                 onPress={crearCliente}
-                                activeOpacity={0.7}
                             >
-                                <LinearGradient
-                                    colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]}
-                                    style={estilos.modalGuardarGradient}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                >
-                                    <Ionicons name="person-add" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.text} />
-                                    <Text style={[estilos.modalGuardarTexto, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                        Crear Cliente
-                                    </Text>
+                                <LinearGradient colors={[DESIGN.colors.accentSecondary, DESIGN.colors.accent]} style={estilos.modalGuardarGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                                    <Text style={{ fontWeight: 'bold', color: DESIGN.colors.text }}>Crear Cliente</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
@@ -794,303 +1007,239 @@ export default function PantallaGestionClientes(props: any) {
                 </View>
             </Modal>
 
-            {/* ✅ MODAL DE DETALLE COMPLETO DEL CLIENTE */}
+            {/* MODAL DETALLE */}
             <Modal
                 visible={modalDetalleVisible}
-                transparent
-                animationType="slide"
-                onRequestClose={() => {
-                    setModalDetalleVisible(false);
-                    setClienteSeleccionado(null);
-                }}
+                transparent animationType="slide"
+                onRequestClose={() => { setModalDetalleVisible(false); setClienteSeleccionado(null); }}
             >
                 <View style={estilos.modalFondo}>
-                    <LinearGradient
-                        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
-                        style={estilos.modalGradiente}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    />
-
-                    <View style={[
-                        estilos.modalDetalle,
-                        {
-                            padding: isTablet ? 28 : isSmallPhone ? 16 : 20,
-                            borderRadius: isTablet ? 28 : 24,
-                            width: isTablet ? '80%' : '95%',
-                            maxHeight: isTablet ? '85%' : '90%',
-                            borderColor: DESIGN.colors.accentSecondary + '30',
-                            backgroundColor: DESIGN.colors.surface,
-                        }
-                    ]}>
+                    <View style={[estilos.modalDetalle, { padding: 20, borderRadius: 24, width: '95%', maxHeight: '90%' }]}>
                         {cargandoDetalle ? (
                             <View style={estilos.cargandoDetalle}>
                                 <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
-                                <Text style={[estilos.cargandoDetalleTexto, { color: DESIGN.colors.textSecondary }]}>
-                                    Cargando datos del cliente...
-                                </Text>
+                                <Text style={estilos.cargandoDetalleTexto}>Cargando datos...</Text>
                             </View>
                         ) : clienteSeleccionado ? (
                             <>
-                                {/* HEADER */}
                                 <View style={estilos.modalDetalleHeader}>
                                     <View style={estilos.modalDetalleHeaderLeft}>
-                                        <View style={[
-                                            estilos.modalDetalleAvatar,
-                                            {
-                                                width: isTablet ? 56 : 48,
-                                                height: isTablet ? 56 : 48,
-                                                borderRadius: isTablet ? 28 : 24,
-                                                backgroundColor: (clienteSeleccionado.rol ? getRol(clienteSeleccionado.rol).color : DESIGN.colors.verde) + '20',
-                                                borderColor: (clienteSeleccionado.rol ? getRol(clienteSeleccionado.rol).color : DESIGN.colors.verde) + '30',
-                                                borderWidth: 2,
-                                            }
-                                        ]}>
-                                            <Text style={[estilos.modalDetalleAvatarTexto, { fontSize: isTablet ? 24 : isSmallPhone ? 18 : 20 }]}>
+                                        <View style={[estilos.modalDetalleAvatar, {
+                                            backgroundColor: getRol(clienteSeleccionado.rol || 'cliente').color + '20',
+                                            borderColor: getRol(clienteSeleccionado.rol || 'cliente').color + '30',
+                                        }]}>
+                                            <Text style={estilos.modalDetalleAvatarTexto}>
                                                 {clienteSeleccionado.nombre_cliente?.charAt(0)?.toUpperCase() || '?'}
                                             </Text>
                                         </View>
                                         <View style={estilos.modalDetalleHeaderInfo}>
-                                            <Text style={[estilos.modalDetalleNombre, { fontSize: isTablet ? 20 : isSmallPhone ? 16 : 18, color: DESIGN.colors.text }]}>
-                                                {clienteSeleccionado.nombre_cliente}
-                                            </Text>
-                                            <Text style={[estilos.modalDetalleEmail, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
-                                                {clienteSeleccionado.email}
-                                            </Text>
-                                            <View style={estilos.modalDetalleRolBadge}>
-                                                <Ionicons
-                                                    name={(clienteSeleccionado.rol ? getRol(clienteSeleccionado.rol).icono : 'person') as any}
-                                                    size={isTablet ? 14 : 12}
-                                                    color={clienteSeleccionado.rol ? getRol(clienteSeleccionado.rol).color : DESIGN.colors.verde}
-                                                />
-                                                <Text style={[
-                                                    estilos.modalDetalleRolText,
-                                                    {
-                                                        fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
-                                                        color: clienteSeleccionado.rol ? getRol(clienteSeleccionado.rol).color : DESIGN.colors.verde,
-                                                    }
-                                                ]}>
-                                                    {clienteSeleccionado.rol ? rolLabel(clienteSeleccionado.rol) : 'Cliente'}
-                                                </Text>
+                                            <Text style={estilos.modalDetalleNombre}>{clienteSeleccionado.nombre_cliente}</Text>
+                                            <Text style={estilos.modalDetalleEmail}>{clienteSeleccionado.email}</Text>
+                                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                                <View style={[estilos.modalDetalleRolBadge, {
+                                                    backgroundColor: getRol(clienteSeleccionado.rol || 'cliente').color + '15',
+                                                    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+                                                }]}>
+                                                    <Ionicons name={getRol(clienteSeleccionado.rol || 'cliente').icono} size={12} color={getRol(clienteSeleccionado.rol || 'cliente').color} />
+                                                    <Text style={[estilos.modalDetalleRolText, { fontSize: 11, color: getRol(clienteSeleccionado.rol || 'cliente').color }]}>
+                                                        {getRol(clienteSeleccionado.rol || 'cliente').label}
+                                                    </Text>
+                                                </View>
+                                                {renderEstadoBadge(clienteSeleccionado.estado_cuenta)}
                                             </View>
                                         </View>
                                     </View>
-                                    <TouchableOpacity
-                                        onPress={() => {
-                                            setModalDetalleVisible(false);
-                                            setClienteSeleccionado(null);
-                                        }}
-                                        style={estilos.modalDetalleCerrar}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Ionicons name="close" size={isTablet ? 28 : 24} color={DESIGN.colors.text} />
+                                    <TouchableOpacity onPress={() => { setModalDetalleVisible(false); setClienteSeleccionado(null); }} style={estilos.modalDetalleCerrar}>
+                                        <Ionicons name="close" size={24} color={DESIGN.colors.text} />
                                     </TouchableOpacity>
                                 </View>
 
-                                <ScrollView
-                                    style={estilos.modalDetalleScroll}
-                                    showsVerticalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingBottom: 10 }}
-                                >
-                                    {/* 📊 ESTADÍSTICAS RÁPIDAS */}
-                                    <View style={[estilos.modalDetalleStats, { gap: isTablet ? 12 : 8 }]}>
-                                        <View style={[estilos.modalDetalleStatItem, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
-                                            <Text style={[estilos.modalDetalleStatValor, { fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20, color: DESIGN.colors.accentSecondary }]}>
+                                <ScrollView style={estilos.modalDetalleScroll} showsVerticalScrollIndicator={false}>
+                                    {/* STATS */}
+                                    <View style={[estilos.modalDetalleStats, { gap: 8 }]}>
+                                        <View style={estilos.modalDetalleStatItem}>
+                                            <Text style={[estilos.modalDetalleStatValor, { color: DESIGN.colors.accentSecondary }]}>
                                                 {clienteSeleccionado.total_pedidos}
                                             </Text>
-                                            <Text style={[estilos.modalDetalleStatLabel, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                                Pedidos
-                                            </Text>
+                                            <Text style={estilos.modalDetalleStatLabel}>Pedidos</Text>
                                         </View>
-                                        <View style={[estilos.modalDetalleStatItem, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
-                                            <Text style={[estilos.modalDetalleStatValor, { fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20, color: DESIGN.colors.verde }]}>
-                                                ${clienteSeleccionado.total_gastado?.toFixed(2) || '0'}
+                                        <View style={estilos.modalDetalleStatItem}>
+                                            <Text style={[estilos.modalDetalleStatValor, { color: DESIGN.colors.verde }]}>
+                                                ${clienteSeleccionado.total_gastado?.toFixed(0) || '0'}
                                             </Text>
-                                            <Text style={[estilos.modalDetalleStatLabel, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                                Gastado
-                                            </Text>
+                                            <Text style={estilos.modalDetalleStatLabel}>Gastado</Text>
                                         </View>
-                                        <View style={[estilos.modalDetalleStatItem, { backgroundColor: DESIGN.colors.surfaceHover, borderColor: DESIGN.colors.border }]}>
-                                            <Text style={[estilos.modalDetalleStatValor, { fontSize: isTablet ? 22 : isSmallPhone ? 18 : 20, color: DESIGN.colors.accent }]}>
+                                        <View style={estilos.modalDetalleStatItem}>
+                                            <Text style={[estilos.modalDetalleStatValor, { color: DESIGN.colors.accent }]}>
                                                 ⭐ {clienteSeleccionado.puntos_acumulados || 0}
                                             </Text>
-                                            <Text style={[estilos.modalDetalleStatLabel, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                                Puntos
-                                            </Text>
+                                            <Text style={estilos.modalDetalleStatLabel}>Puntos</Text>
                                         </View>
                                     </View>
 
-                                    {/* 👤 DATOS PERSONALES */}
-                                    <View style={[estilos.modalDetalleSeccion, { borderColor: DESIGN.colors.border }]}>
-                                        <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15, color: DESIGN.colors.accentSecondary }]}>
-                                            👤 Datos Personales
-                                        </Text>
-                                        <View style={estilos.modalDetalleFila}>
-                                            <Ionicons name="call-outline" size={isTablet ? 18 : 16} color={DESIGN.colors.textSecondary} />
-                                            <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                                {clienteSeleccionado.telefono || 'No especificado'}
+                                    {/* BOTONES DE ACCIÓN */}
+                                    <View style={[estilos.accionesAdmin, { gap: 6, marginBottom: 16 }]}>
+                                        <TouchableOpacity
+                                            style={[estilos.botonAdmin, { backgroundColor: clienteSeleccionado.estado_cuenta === 'baneado' ? DESIGN.colors.verde : DESIGN.colors.naranja }]}
+                                            onPress={() => abrirModalBan(clienteSeleccionado)}
+                                        >
+                                            <Ionicons name={clienteSeleccionado.estado_cuenta === 'baneado' ? 'checkmark-circle' : 'ban'} size={14} color="#FFF" />
+                                            <Text style={estilos.botonAdminTexto}>
+                                                {clienteSeleccionado.estado_cuenta === 'baneado' ? 'Desbanear' : 'Banear'}
                                             </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[estilos.botonAdmin, { backgroundColor: DESIGN.colors.accentSecondary }]}
+                                            onPress={() => abrirModalPuntos(clienteSeleccionado)}
+                                        >
+                                            <Ionicons name="star" size={14} color={DESIGN.colors.text} />
+                                            <Text style={[estilos.botonAdminTexto, { color: DESIGN.colors.text }]}>Puntos</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[estilos.botonAdmin, { backgroundColor: DESIGN.colors.azulClaro }]}
+                                            onPress={() => abrirModalNotificar(clienteSeleccionado)}
+                                        >
+                                            <Ionicons name="notifications" size={14} color="#FFF" />
+                                            <Text style={estilos.botonAdminTexto}>Notificar</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[estilos.botonAdmin, { backgroundColor: DESIGN.colors.verde }]}
+                                            onPress={() => abrirModalNotas(clienteSeleccionado)}
+                                        >
+                                            <Ionicons name="document-text" size={14} color="#FFF" />
+                                            <Text style={estilos.botonAdminTexto}>Notas</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={[estilos.botonAdmin, { backgroundColor: DESIGN.colors.morado }]}
+                                            onPress={() => abrirModalEditar(clienteSeleccionado)}
+                                        >
+                                            <Ionicons name="create" size={14} color="#FFF" />
+                                            <Text style={estilos.botonAdminTexto}>Editar</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* INFO */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>👤 Datos Personales</Text>
+                                        <View style={estilos.modalDetalleFila}>
+                                            <Ionicons name="call-outline" size={16} color={DESIGN.colors.textSecondary} />
+                                            <Text style={estilos.modalDetalleValor}>{clienteSeleccionado.telefono || 'No especificado'}</Text>
                                         </View>
                                         <View style={estilos.modalDetalleFila}>
-                                            <Ionicons name="calendar-outline" size={isTablet ? 18 : 16} color={DESIGN.colors.textSecondary} />
-                                            <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                                Registro: {formatFecha(clienteSeleccionado.fecha_registro)}
-                                            </Text>
+                                            <Ionicons name="calendar-outline" size={16} color={DESIGN.colors.textSecondary} />
+                                            <Text style={estilos.modalDetalleValor}>Registro: {formatFecha(clienteSeleccionado.fecha_registro)}</Text>
                                         </View>
                                         <View style={estilos.modalDetalleFila}>
-                                            <Ionicons name="time-outline" size={isTablet ? 18 : 16} color={DESIGN.colors.textSecondary} />
-                                            <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                                Último acceso: {formatFecha(clienteSeleccionado.ultimo_acceso)}
-                                            </Text>
+                                            <Ionicons name="time-outline" size={16} color={DESIGN.colors.textSecondary} />
+                                            <Text style={estilos.modalDetalleValor}>Último acceso: {formatFecha(clienteSeleccionado.ultimo_acceso)}</Text>
                                         </View>
-                                        {clienteSeleccionado.ultimo_pedido && (
-                                            <View style={estilos.modalDetalleFila}>
-                                                <Ionicons name="receipt-outline" size={isTablet ? 18 : 16} color={DESIGN.colors.textSecondary} />
-                                                <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                                    Último pedido: {formatFecha(clienteSeleccionado.ultimo_pedido)}
+                                        {clienteSeleccionado.baneado_hasta && (
+                                            <View style={[estilos.modalDetalleFila, { backgroundColor: DESIGN.colors.naranja + '15', padding: 8, borderRadius: 8, marginTop: 6 }]}>
+                                                <Ionicons name="ban" size={16} color={DESIGN.colors.naranja} />
+                                                <Text style={[estilos.modalDetalleValor, { color: DESIGN.colors.naranja }]}>
+                                                    Baneado hasta: {formatFecha(clienteSeleccionado.baneado_hasta)}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {clienteSeleccionado.motivo_ban && (
+                                            <Text style={{ fontSize: 12, color: DESIGN.colors.textSecondary, marginTop: 4, fontStyle: 'italic' }}>
+                                                Motivo: {clienteSeleccionado.motivo_ban}
+                                            </Text>
+                                        )}
+                                        {clienteSeleccionado.notas_admin && (
+                                            <View style={[estilos.modalDetalleFila, { marginTop: 6, backgroundColor: DESIGN.colors.accentSecondary + '10', padding: 8, borderRadius: 8 }]}>
+                                                <Ionicons name="document-text-outline" size={16} color={DESIGN.colors.accentSecondary} />
+                                                <Text style={[estilos.modalDetalleValor, { fontSize: 13 }]}>
+                                                    Notas: {clienteSeleccionado.notas_admin}
                                                 </Text>
                                             </View>
                                         )}
                                     </View>
 
-                                    {/* 📍 DIRECCIÓN */}
-                                    <View style={[estilos.modalDetalleSeccion, { borderColor: DESIGN.colors.border }]}>
-                                        <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15, color: DESIGN.colors.accentSecondary }]}>
-                                            📍 Dirección
-                                        </Text>
-                                        <Text style={[estilos.modalDetalleDireccion, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DESIGN.colors.text }]}>
-                                            {clienteSeleccionado.direccion_completa}
-                                        </Text>
-                                        {clienteSeleccionado.direccion_calle && (
-                                            <View style={estilos.modalDetalleFila}>
-                                                <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
-                                                    Preferencias: {clienteSeleccionado.preferencias_comida || 'No especificadas'}
-                                                </Text>
-                                            </View>
-                                        )}
-                                        {clienteSeleccionado.metodo_pago && (
-                                            <View style={estilos.modalDetalleFila}>
-                                                <Text style={[estilos.modalDetalleValor, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.textSecondary }]}>
-                                                    Pago preferido: {clienteSeleccionado.metodo_pago}
-                                                </Text>
-                                            </View>
-                                        )}
+                                    {/* DIRECCIÓN */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>📍 Dirección</Text>
+                                        <Text style={estilos.modalDetalleDireccion}>{clienteSeleccionado.direccion_completa}</Text>
                                     </View>
 
-                                    {/* 📦 HISTORIAL DE PEDIDOS */}
-                                    <View style={[estilos.modalDetalleSeccion, { borderColor: DESIGN.colors.border }]}>
-                                        <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15, color: DESIGN.colors.accentSecondary }]}>
-                                            📦 Pedidos ({historialPedidos.length})
-                                        </Text>
+                                    {/* PEDIDOS */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>📦 Pedidos ({historialPedidos.length})</Text>
                                         {historialPedidos.length > 0 ? (
-                                            historialPedidos.slice(0, 5).map((pedido, idx) => (
-                                                <View key={idx} style={[estilos.modalDetallePedido, { borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover }]}>
+                                            historialPedidos.slice(0, 5).map((p, i) => (
+                                                <View key={i} style={estilos.modalDetallePedido}>
                                                     <View style={estilos.modalDetallePedidoHeader}>
-                                                        <Text style={[estilos.modalDetallePedidoId, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
-                                                            Pedido #{pedido.id}
-                                                        </Text>
-                                                        <View style={[
-                                                            estilos.modalDetallePedidoEstado,
-                                                            {
-                                                                backgroundColor:
-                                                                    pedido.estado === 'entregado' ? DESIGN.colors.verde + '20' :
-                                                                        pedido.estado === 'cancelado' ? DESIGN.colors.accent + '20' :
-                                                                            DESIGN.colors.accentSecondary + '20',
-                                                                paddingHorizontal: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                                                                paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
-                                                                borderRadius: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                                                            }
-                                                        ]}>
-                                                            <Text style={[
-                                                                estilos.modalDetallePedidoEstadoText,
-                                                                {
-                                                                    fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10,
-                                                                    color:
-                                                                        pedido.estado === 'entregado' ? DESIGN.colors.verde :
-                                                                            pedido.estado === 'cancelado' ? DESIGN.colors.accent :
-                                                                                DESIGN.colors.accentSecondary,
-                                                                }
-                                                            ]}>
-                                                                {pedido.estado}
+                                                        <Text style={estilos.modalDetallePedidoId}>Pedido #{p.id}</Text>
+                                                        <View style={[estilos.modalDetallePedidoEstado, {
+                                                            backgroundColor: p.estado === 'entregado' ? DESIGN.colors.verde + '20' :
+                                                                p.estado === 'cancelado' ? DESIGN.colors.accent + '20' :
+                                                                    DESIGN.colors.accentSecondary + '20',
+                                                        }]}>
+                                                            <Text style={{ fontSize: 10, color: p.estado === 'entregado' ? DESIGN.colors.verde : DESIGN.colors.accent }}>
+                                                                {p.estado}
                                                             </Text>
                                                         </View>
                                                     </View>
                                                     <View style={estilos.modalDetallePedidoInfo}>
-                                                        <Text style={[estilos.modalDetallePedidoFecha, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                                            {formatFecha(pedido.creado_en)}
-                                                        </Text>
-                                                        <Text style={[estilos.modalDetallePedidoTotal, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.accentSecondary }]}>
-                                                            ${pedido.total?.toFixed(2) || '0'}
-                                                        </Text>
+                                                        <Text style={estilos.modalDetallePedidoFecha}>{formatFecha(p.creado_en)}</Text>
+                                                        <Text style={estilos.modalDetallePedidoTotal}>${p.total?.toFixed(2) || '0'}</Text>
                                                     </View>
-                                                    <Text style={[estilos.modalDetallePedidoMeta, { fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10, color: DESIGN.colors.textTertiary }]}>
-                                                        {pedido.tipo_entrega === 'retiro' ? '📦 Retiro' : '🚚 Domicilio'} · {pedido.metodo_pago || 'Efectivo'}
-                                                    </Text>
                                                 </View>
                                             ))
                                         ) : (
-                                            <Text style={[estilos.modalDetalleVacio, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
-                                                No hay pedidos registrados
-                                            </Text>
+                                            <Text style={estilos.modalDetalleVacio}>Sin pedidos</Text>
                                         )}
                                     </View>
 
-                                    {/* 🎁 HISTORIAL DE CANJES */}
-                                    <View style={[estilos.modalDetalleSeccion, { borderColor: DESIGN.colors.border }]}>
-                                        <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15, color: DESIGN.colors.accentSecondary }]}>
-                                            🎁 Canjes ({historialCanjes.length})
-                                        </Text>
+                                    {/* CANJES */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>🎁 Canjes ({historialCanjes.length})</Text>
                                         {historialCanjes.length > 0 ? (
-                                            historialCanjes.slice(0, 5).map((canje, idx) => (
-                                                <View key={idx} style={[estilos.modalDetalleCanje, { borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover }]}>
+                                            historialCanjes.slice(0, 5).map((c, i) => (
+                                                <View key={i} style={estilos.modalDetalleCanje}>
                                                     <View style={estilos.modalDetalleCanjeHeader}>
-                                                        <Text style={[estilos.modalDetalleCanjeRecompensa, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.text }]}>
-                                                            {canje.recompensas?.nombre || 'Recompensa'}
-                                                        </Text>
-                                                        <Text style={[estilos.modalDetalleCanjePuntos, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.accent }]}>
-                                                            -{canje.puntos_usados} pts
-                                                        </Text>
+                                                        <Text style={estilos.modalDetalleCanjeRecompensa}>{c.recompensas?.nombre || 'Recompensa'}</Text>
+                                                        <Text style={estilos.modalDetalleCanjePuntos}>-{c.puntos_usados} pts</Text>
                                                     </View>
-                                                    <Text style={[estilos.modalDetalleCanjeFecha, { fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10, color: DESIGN.colors.textSecondary }]}>
-                                                        {formatFecha(canje.created_at)}
-                                                    </Text>
-                                                    {canje.usado_en_pedido && (
-                                                        <Text style={[estilos.modalDetalleCanjeUsado, { fontSize: isTablet ? 11 : isSmallPhone ? 9 : 10, color: DESIGN.colors.verde }]}>
-                                                            ✅ Usado en pedido
-                                                        </Text>
-                                                    )}
+                                                    <Text style={estilos.modalDetalleCanjeFecha}>{formatFecha(c.created_at)}</Text>
                                                 </View>
                                             ))
                                         ) : (
-                                            <Text style={[estilos.modalDetalleVacio, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
-                                                No hay canjes registrados
-                                            </Text>
+                                            <Text style={estilos.modalDetalleVacio}>Sin canjes</Text>
                                         )}
                                     </View>
 
-                                    {/* 🔔 NOTIFICACIONES RECIENTES */}
-                                    <View style={[estilos.modalDetalleSeccion, { borderColor: DESIGN.colors.border }]}>
-                                        <Text style={[estilos.modalDetalleSeccionTitulo, { fontSize: isTablet ? 16 : isSmallPhone ? 14 : 15, color: DESIGN.colors.accentSecondary }]}>
-                                            🔔 Notificaciones ({notificaciones.length})
-                                        </Text>
-                                        {notificaciones.length > 0 ? (
-                                            notificaciones.slice(0, 3).map((notif, idx) => (
-                                                <View key={idx} style={[estilos.modalDetalleNotif, { borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover }]}>
-                                                    <Text style={[estilos.modalDetalleNotifTitulo, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DESIGN.colors.text }]}>
-                                                        {notif.titulo}
-                                                    </Text>
-                                                    <Text style={[estilos.modalDetalleNotifMensaje, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DESIGN.colors.textSecondary }]}>
-                                                        {notif.mensaje}
-                                                    </Text>
-                                                    <Text style={[estilos.modalDetalleNotifFecha, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DESIGN.colors.textTertiary }]}>
-                                                        {formatFecha(notif.created_at)}
-                                                    </Text>
+                                    {/* DISPOSITIVOS */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>📱 Dispositivos ({dispositivos.length})</Text>
+                                        {dispositivos.length > 0 ? (
+                                            dispositivos.map((d, i) => (
+                                                <View key={i} style={estilos.modalDetalleNotif}>
+                                                    <Text style={{ fontSize: 12, fontWeight: '500' }}>{d.plataforma === 'ios' ? '🍎 iOS' : '🤖 Android'}</Text>
+                                                    <Text style={{ fontSize: 10, color: DESIGN.colors.textTertiary }}>{formatFecha(d.ultima_actividad)}</Text>
                                                 </View>
                                             ))
                                         ) : (
-                                            <Text style={[estilos.modalDetalleVacio, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DESIGN.colors.textSecondary }]}>
-                                                No hay notificaciones
-                                            </Text>
+                                            <Text style={estilos.modalDetalleVacio}>Sin dispositivos</Text>
+                                        )}
+                                    </View>
+
+                                    {/* AUDITORÍA */}
+                                    <View style={estilos.modalDetalleSeccion}>
+                                        <Text style={estilos.modalDetalleSeccionTitulo}>📋 Historial de cambios ({auditoria.length})</Text>
+                                        {auditoria.length > 0 ? (
+                                            auditoria.slice(0, 5).map((a, i) => (
+                                                <View key={i} style={estilos.modalDetalleNotif}>
+                                                    <Text style={{ fontSize: 12, fontWeight: '500' }}>{a.accion}</Text>
+                                                    <Text style={{ fontSize: 10, color: DESIGN.colors.textTertiary }}>{formatFecha(a.created_at)}</Text>
+                                                </View>
+                                            ))
+                                        ) : (
+                                            <Text style={estilos.modalDetalleVacio}>Sin cambios</Text>
                                         )}
                                     </View>
                                 </ScrollView>
@@ -1099,436 +1248,439 @@ export default function PantallaGestionClientes(props: any) {
                     </View>
                 </View>
             </Modal>
+
+            {/* MODAL BAN */}
+            <Modal visible={modalBan} transparent animationType="fade" onRequestClose={() => setModalBan(false)}>
+                <View style={estilos.modalFondo}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '90%', maxHeight: '80%' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>
+                            {clienteSeleccionado?.estado_cuenta === 'baneado' ? '🚫 Desbanear usuario' : '🚫 Banear usuario'}
+                        </Text>
+
+                        {clienteSeleccionado?.estado_cuenta === 'baneado' ? (
+                            <Text style={{ fontSize: 14, color: DESIGN.colors.textSecondary, marginBottom: 16 }}>
+                                ¿Reactivar la cuenta de {clienteSeleccionado.nombre_cliente}? Se le quitará el ban y podrá volver a usar la app.
+                            </Text>
+                        ) : (
+                            <>
+                                <Text style={estilos.label}>Motivo *</Text>
+                                <TextInput
+                                    style={estilos.input}
+                                    value={banMotivo}
+                                    onChangeText={setBanMotivo}
+                                    placeholder="Ej: Comportamiento inapropiado"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                    multiline
+                                />
+
+                                <Text style={estilos.label}>Fecha de fin (opcional)</Text>
+                                <TextInput
+                                    style={estilos.input}
+                                    value={banFecha}
+                                    onChangeText={setBanFecha}
+                                    placeholder="YYYY-MM-DD (vacío = indefinido)"
+                                    placeholderTextColor={DESIGN.colors.textTertiary}
+                                />
+                                <Text style={{ fontSize: 11, color: DESIGN.colors.textTertiary, marginTop: 4 }}>
+                                    Dejalo vacío para un ban permanente.
+                                </Text>
+                            </>
+                        )}
+
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
+                                onPress={() => setModalBan(false)}
+                                disabled={procesando}
+                            >
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, {
+                                    backgroundColor: clienteSeleccionado?.estado_cuenta === 'baneado' ? DESIGN.colors.verde : DESIGN.colors.naranja,
+                                    paddingVertical: 14,
+                                }]}
+                                onPress={ejecutarBan}
+                                disabled={procesando}
+                            >
+                                {procesando ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={{ fontWeight: 'bold', color: '#FFF' }}>
+                                        {clienteSeleccionado?.estado_cuenta === 'baneado' ? 'Desbanear' : 'Banear'}
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* MODAL PUNTOS */}
+            <Modal visible={modalPuntos} transparent animationType="fade" onRequestClose={() => setModalPuntos(false)}>
+                <View style={estilos.modalFondo}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '90%' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>⭐ Ajustar puntos</Text>
+                        <Text style={{ fontSize: 13, color: DESIGN.colors.textSecondary, marginBottom: 12 }}>
+                            Puntos actuales: {clienteSeleccionado?.puntos_acumulados || 0}
+                        </Text>
+
+                        <Text style={estilos.label}>Cantidad * (+/-)</Text>
+                        <TextInput
+                            style={estilos.input}
+                            value={puntosCantidad}
+                            onChangeText={setPuntosCantidad}
+                            placeholder="Ej: 50 (suma) o -30 (resta)"
+                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            keyboardType="numeric"
+                        />
+
+                        <Text style={estilos.label}>Motivo *</Text>
+                        <TextInput
+                            style={estilos.input}
+                            value={puntosMotivo}
+                            onChangeText={setPuntosMotivo}
+                            placeholder="Ej: Compensación por demora"
+                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            multiline
+                        />
+
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
+                                onPress={() => setModalPuntos(false)}
+                                disabled={procesando}
+                            >
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.accentSecondary, paddingVertical: 14 }]}
+                                onPress={ejecutarPuntos}
+                                disabled={procesando}
+                            >
+                                {procesando ? (
+                                    <ActivityIndicator color={DESIGN.colors.text} />
+                                ) : (
+                                    <Text style={{ fontWeight: 'bold', color: DESIGN.colors.text }}>Aplicar</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* MODAL NOTIFICAR */}
+            <Modal visible={modalNotificar} transparent animationType="fade" onRequestClose={() => setModalNotificar(false)}>
+                <View style={estilos.modalFondo}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '90%' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>🔔 Enviar notificación</Text>
+
+                        <Text style={estilos.label}>Título *</Text>
+                        <TextInput
+                            style={estilos.input}
+                            value={notifTitulo}
+                            onChangeText={setNotifTitulo}
+                            placeholder="Ej: ¡Tenés una promoción!"
+                            placeholderTextColor={DESIGN.colors.textTertiary}
+                        />
+
+                        <Text style={estilos.label}>Mensaje *</Text>
+                        <TextInput
+                            style={[estilos.input, { minHeight: 80, textAlignVertical: 'top' }]}
+                            value={notifMensaje}
+                            onChangeText={setNotifMensaje}
+                            placeholder="Escribí el mensaje..."
+                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            multiline
+                        />
+
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
+                                onPress={() => setModalNotificar(false)}
+                                disabled={procesando}
+                            >
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.azulClaro, paddingVertical: 14 }]}
+                                onPress={ejecutarNotificar}
+                                disabled={procesando}
+                            >
+                                {procesando ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={{ fontWeight: 'bold', color: '#FFF' }}>Enviar</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* MODAL NOTAS */}
+            <Modal visible={modalNotas} transparent animationType="fade" onRequestClose={() => setModalNotas(false)}>
+                <View style={estilos.modalFondo}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '90%' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>📝 Notas internas</Text>
+
+                        <TextInput
+                            style={[estilos.input, { minHeight: 120, textAlignVertical: 'top' }]}
+                            value={notas}
+                            onChangeText={setNotas}
+                            placeholder="Notas sobre el cliente (solo visibles para admins)..."
+                            placeholderTextColor={DESIGN.colors.textTertiary}
+                            multiline
+                        />
+
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
+                                onPress={() => setModalNotas(false)}
+                                disabled={procesando}
+                            >
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.verde, paddingVertical: 14 }]}
+                                onPress={ejecutarNotas}
+                                disabled={procesando}
+                            >
+                                {procesando ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={{ fontWeight: 'bold', color: '#FFF' }}>Guardar</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* MODAL EDITAR */}
+            <Modal visible={modalEditar} transparent animationType="fade" onRequestClose={() => setModalEditar(false)}>
+                <View style={estilos.modalFondo}>
+                    <View style={[estilos.modal, { padding: 24, borderRadius: 24, width: '90%', maxHeight: '85%' }]}>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>✏️ Editar datos</Text>
+
+                        <ScrollView>
+                            <Text style={estilos.label}>Nombre *</Text>
+                            <TextInput
+                                style={estilos.input}
+                                value={editNombre}
+                                onChangeText={setEditNombre}
+                                placeholder="Nombre completo"
+                                placeholderTextColor={DESIGN.colors.textTertiary}
+                            />
+
+                            <Text style={estilos.label}>Teléfono</Text>
+                            <TextInput
+                                style={estilos.input}
+                                value={editTelefono}
+                                onChangeText={setEditTelefono}
+                                placeholder="1134567890"
+                                placeholderTextColor={DESIGN.colors.textTertiary}
+                                keyboardType="phone-pad"
+                            />
+
+                            <Text style={estilos.label}>Dirección manual</Text>
+                            <TextInput
+                                style={[estilos.input, { minHeight: 60, textAlignVertical: 'top' }]}
+                                value={editDireccion}
+                                onChangeText={setEditDireccion}
+                                placeholder="Dirección completa"
+                                placeholderTextColor={DESIGN.colors.textTertiary}
+                                multiline
+                            />
+                        </ScrollView>
+
+                        <View style={[estilos.modalBotones, { gap: 12, marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.surfaceHover, borderWidth: 1, borderColor: DESIGN.colors.border, paddingVertical: 14 }]}
+                                onPress={() => setModalEditar(false)}
+                                disabled={procesando}
+                            >
+                                <Text style={{ fontWeight: '600', color: DESIGN.colors.textSecondary }}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, { backgroundColor: DESIGN.colors.morado, paddingVertical: 14 }]}
+                                onPress={ejecutarEditar}
+                                disabled={procesando}
+                            >
+                                {procesando ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={{ fontWeight: 'bold', color: '#FFF' }}>Guardar</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS
 // ============================================================
 const estilos = StyleSheet.create({
-    contenedor: {
-        flex: 1,
-        backgroundColor: DESIGN.colors.fondo,
-    },
-    fondoGradiente: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
+    contenedor: { flex: 1, backgroundColor: DESIGN.colors.fondo },
+    fondoGradiente: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: DESIGN.colors.border,
-        backgroundColor: DESIGN.colors.surface + '10',
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        borderBottomWidth: 1, borderBottomColor: DESIGN.colors.border,
     },
-    botonVolver: {
-        padding: 4,
-    },
-    titulo: {
-        fontWeight: 'bold',
-        letterSpacing: 1,
-        flex: 1,
-        textAlign: 'center',
-    },
+    botonVolver: { padding: 4 },
+    titulo: { fontWeight: 'bold', letterSpacing: 1, flex: 1, textAlign: 'center' },
     botonAgregar: {
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 4,
-        shadowColor: DESIGN.colors.accentSecondary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        borderRadius: 30, justifyContent: 'center', alignItems: 'center',
+        paddingHorizontal: 14, paddingVertical: 10,
     },
-    contadorContainer: {
-        paddingVertical: 8,
-        borderBottomWidth: 1,
+    busquedaInput: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: DESIGN.colors.surface, borderRadius: 12,
+        paddingHorizontal: 14, paddingVertical: 10,
+        borderWidth: 1, borderColor: DESIGN.colors.border,
     },
-    contador: {
-        fontWeight: '500',
-        opacity: 0.7,
+    busquedaTexto: { flex: 1, padding: 0, fontSize: 13, color: DESIGN.colors.text },
+    filtroChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        paddingHorizontal: 12, paddingVertical: 6,
+        borderRadius: 20, backgroundColor: DESIGN.colors.surface,
+        borderWidth: 1, borderColor: DESIGN.colors.border,
     },
-    lista: {
-        flexGrow: 1,
+    filtroChipActivo: { backgroundColor: DESIGN.colors.accentSecondary, borderColor: DESIGN.colors.accentSecondary },
+    filtroChipTexto: { fontSize: 12, fontWeight: '500', color: DESIGN.colors.textSecondary },
+    filtroChipTextoActivo: { color: DESIGN.colors.text, fontWeight: '600' },
+    contadorContainer: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: DESIGN.colors.border },
+    contador: { fontSize: 12, fontWeight: '500', opacity: 0.7, color: DESIGN.colors.textSecondary },
+    lista: { flexGrow: 1 },
+    tarjeta: { marginBottom: 10, borderWidth: 1 },
+    fila: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    avatar: { justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 2 },
+    avatarTexto: { fontWeight: 'bold', color: DESIGN.colors.accentSecondary },
+    info: { flex: 1 },
+    nombre: { fontWeight: 'bold', color: DESIGN.colors.text },
+    email: { fontSize: 11, marginTop: 2, opacity: 0.7, color: DESIGN.colors.textSecondary },
+    telefono: { fontSize: 11, marginTop: 2, opacity: 0.5, color: DESIGN.colors.textSecondary },
+    botonEliminar: { padding: 4 },
+    estadoBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 3,
+        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1,
     },
-    tarjeta: {
-        marginBottom: 10,
-        borderWidth: 1,
-    },
-    fila: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    avatar: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-        borderWidth: 2,
-    },
-    avatarTexto: {
-        fontWeight: 'bold',
-        color: DESIGN.colors.accentSecondary,
-    },
-    info: {
-        flex: 1,
-    },
-    nombre: {
-        fontWeight: 'bold',
-    },
-    email: {
-        marginTop: 2,
-        opacity: 0.7,
-    },
-    telefono: {
-        marginTop: 2,
-        opacity: 0.5,
-    },
-    botonEliminar: {
-        padding: 4,
-    },
+    estadoTexto: { fontWeight: '600' },
     detalles: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 10,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        marginBottom: 10,
+        flexDirection: 'row', justifyContent: 'space-around',
+        paddingVertical: 10, borderTopWidth: 1, borderBottomWidth: 1,
+        borderColor: DESIGN.colors.border, marginBottom: 10,
     },
-    detalleItem: {
-        alignItems: 'center',
-    },
-    detalleValor: {
-        fontWeight: 'bold',
-    },
-    detalleLabel: {
-        marginTop: 2,
-        opacity: 0.6,
-    },
-    rolBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        alignSelf: 'center',
-        borderWidth: 1,
-    },
-    rolTexto: {
-        fontWeight: 'bold',
-        textTransform: 'capitalize',
-    },
-    acciones: {
-        flexDirection: 'row',
-    },
-    botonAccion: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    botonAccionTexto: {
-        fontWeight: 'bold',
-        textTransform: 'capitalize',
-    },
+    detalleItem: { alignItems: 'center' },
+    detalleValor: { fontSize: 13, fontWeight: 'bold', color: DESIGN.colors.text },
+    detalleLabel: { fontSize: 10, marginTop: 2, opacity: 0.6, color: DESIGN.colors.textSecondary },
+    rolBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'center', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+    rolTexto: { fontSize: 11, fontWeight: 'bold', textTransform: 'capitalize' },
+    acciones: { flexDirection: 'row' },
+    botonAccion: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    botonAccionTexto: { fontSize: 11, fontWeight: 'bold', textTransform: 'capitalize' },
+    botonEstado: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8 },
+    botonEstadoTexto: { fontSize: 11, fontWeight: '600', color: DESIGN.colors.surface },
     verDetalle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 8,
-        paddingTop: 8,
-        borderTopWidth: 1,
-        gap: 4,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: DESIGN.colors.border, gap: 4,
     },
-    verDetalleTexto: {
-        fontWeight: '500',
-        opacity: 0.6,
-    },
-    vacioContenedor: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 80,
-    },
-    vacio: {
-        fontWeight: 'bold',
-        marginTop: 16,
-        textAlign: 'center',
-    },
-    vacioSubtexto: {
-        textAlign: 'center',
-        marginTop: 4,
-        opacity: 0.6,
-    },
+    verDetalleTexto: { fontSize: 11, fontWeight: '500', opacity: 0.6, color: DESIGN.colors.textSecondary },
+    vacioContenedor: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+    vacio: { fontSize: 16, fontWeight: 'bold', marginTop: 16, textAlign: 'center', color: DESIGN.colors.text },
+    vacioSubtexto: { fontSize: 12, textAlign: 'center', marginTop: 4, opacity: 0.6, color: DESIGN.colors.textSecondary },
+    cargandoContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    cargandoTexto: { fontSize: 14, fontWeight: '500', color: DESIGN.colors.text },
     modalFondo: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.85)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
+        flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center', alignItems: 'center', padding: 20,
     },
-    modalGradiente: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    modal: {
-        borderWidth: 2,
-        overflow: 'hidden',
-    },
-    modalHeader: {
-        marginBottom: 16,
-    },
+    modal: { backgroundColor: DESIGN.colors.surface, borderWidth: 2, borderColor: DESIGN.colors.border, overflow: 'hidden' },
+    modalHeader: { marginBottom: 16 },
     modalHeaderGradiente: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 12,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 10, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12,
     },
-    modalTitulo: {
-        fontWeight: 'bold',
-    },
-    modalScroll: {
-        maxHeight: '70%',
-        paddingHorizontal: 4,
-    },
-    label: {
-        fontWeight: '600',
-        marginBottom: 6,
-        marginTop: 14,
-    },
+    modalTitulo: { fontWeight: 'bold', fontSize: 20 },
+    modalScroll: { maxHeight: 400 },
+    label: { fontSize: 13, fontWeight: '600', marginBottom: 6, marginTop: 14, color: DESIGN.colors.text },
     input: {
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderWidth: 1,
+        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+        borderWidth: 1, borderColor: DESIGN.colors.border,
+        backgroundColor: DESIGN.colors.surfaceHover,
+        fontSize: 14, color: DESIGN.colors.text,
     },
-    modalBotones: {
-        flexDirection: 'row',
-        marginTop: 8,
-    },
-    modalBoton: {
-        flex: 1,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 6,
-        overflow: 'hidden',
-    },
-    modalCancelar: {
-        borderWidth: 1,
-    },
-    modalCancelarTexto: {
-        fontWeight: '600',
-    },
-    modalGuardar: {
-        overflow: 'hidden',
-    },
+    modalBotones: { flexDirection: 'row' },
+    modalBoton: { flex: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     modalGuardarGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        width: '100%',
-        height: '100%',
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 6, width: '100%', height: '100%',
     },
-    modalGuardarTexto: {
-        fontWeight: 'bold',
-    },
-    // ✅ MODAL DE DETALLE
-    modalDetalle: {
-        borderWidth: 2,
-        overflow: 'hidden',
-    },
+    modalDetalle: { backgroundColor: DESIGN.colors.surface, borderWidth: 2, borderColor: DESIGN.colors.border, overflow: 'hidden' },
     modalDetalleHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        borderBottomWidth: 1,
-        borderBottomColor: DESIGN.colors.border,
-        paddingBottom: 12,
-        marginBottom: 16,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+        borderBottomWidth: 1, borderBottomColor: DESIGN.colors.border,
+        paddingBottom: 12, marginBottom: 16,
     },
-    modalDetalleHeaderLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
+    modalDetalleHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     modalDetalleAvatar: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
+        width: 48, height: 48, borderRadius: 24,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 2,
     },
-    modalDetalleAvatarTexto: {
-        fontWeight: 'bold',
-        color: DESIGN.colors.accentSecondary,
-    },
-    modalDetalleHeaderInfo: {
-        flex: 1,
-    },
-    modalDetalleNombre: {
-        fontWeight: 'bold',
-    },
-    modalDetalleEmail: {
-        marginTop: 2,
-        opacity: 0.7,
-    },
-    modalDetalleRolBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginTop: 4,
-    },
-    modalDetalleRolText: {
-        fontWeight: '600',
-        textTransform: 'capitalize',
-    },
-    modalDetalleCerrar: {
-        padding: 4,
-    },
-    modalDetalleScroll: {
-        maxHeight: '70%',
-    },
-    cargandoDetalle: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 60,
-        gap: 16,
-    },
-    cargandoDetalleTexto: {
-        fontWeight: '500',
-        opacity: 0.7,
-    },
-    modalDetalleStats: {
-        flexDirection: 'row',
-        marginBottom: 16,
-    },
+    modalDetalleAvatarTexto: { fontSize: 20, fontWeight: 'bold', color: DESIGN.colors.accentSecondary },
+    modalDetalleHeaderInfo: { flex: 1 },
+    modalDetalleNombre: { fontSize: 18, fontWeight: 'bold', color: DESIGN.colors.text },
+    modalDetalleEmail: { fontSize: 13, marginTop: 2, opacity: 0.7, color: DESIGN.colors.textSecondary },
+    modalDetalleRolBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    modalDetalleRolText: { fontWeight: '600', textTransform: 'capitalize' },
+    modalDetalleCerrar: { padding: 4 },
+    modalDetalleScroll: { maxHeight: 500 },
+    cargandoDetalle: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 16 },
+    cargandoDetalleTexto: { fontSize: 14, fontWeight: '500', opacity: 0.7, color: DESIGN.colors.textSecondary },
+    modalDetalleStats: { flexDirection: 'row', marginBottom: 16 },
     modalDetalleStatItem: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderRadius: 12,
-        borderWidth: 1,
+        flex: 1, alignItems: 'center', paddingVertical: 10,
+        borderRadius: 12, borderWidth: 1,
+        borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover,
     },
-    modalDetalleStatValor: {
-        fontWeight: 'bold',
+    modalDetalleStatValor: { fontSize: 20, fontWeight: 'bold' },
+    modalDetalleStatLabel: { fontSize: 11, marginTop: 2, opacity: 0.6, color: DESIGN.colors.textSecondary },
+    accionesAdmin: { flexDirection: 'row', flexWrap: 'wrap' },
+    botonAdmin: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10,
     },
-    modalDetalleStatLabel: {
-        marginTop: 2,
-        opacity: 0.6,
-    },
-    modalDetalleSeccion: {
-        marginBottom: 16,
-        borderTopWidth: 1,
-        paddingTop: 12,
-    },
-    modalDetalleSeccionTitulo: {
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    modalDetalleFila: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 4,
-    },
-    modalDetalleValor: {
-        fontWeight: '500',
-        flex: 1,
-    },
-    modalDetalleDireccion: {
-        fontWeight: '500',
-        marginBottom: 4,
-    },
-    modalDetalleVacio: {
-        textAlign: 'center',
-        paddingVertical: 8,
-        opacity: 0.6,
-    },
+    botonAdminTexto: { fontSize: 11, fontWeight: '600', color: '#FFF' },
+    modalDetalleSeccion: { marginBottom: 16, borderTopWidth: 1, borderTopColor: DESIGN.colors.border, paddingTop: 12 },
+    modalDetalleSeccionTitulo: { fontSize: 15, fontWeight: 'bold', marginBottom: 8, color: DESIGN.colors.accentSecondary },
+    modalDetalleFila: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    modalDetalleValor: { fontSize: 14, fontWeight: '500', flex: 1, color: DESIGN.colors.text },
+    modalDetalleDireccion: { fontSize: 14, fontWeight: '500', color: DESIGN.colors.text },
+    modalDetalleVacio: { fontSize: 13, textAlign: 'center', paddingVertical: 8, opacity: 0.6, color: DESIGN.colors.textSecondary },
     modalDetallePedido: {
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 6,
-        borderWidth: 1,
+        borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1,
+        borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover,
     },
-    modalDetallePedidoHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    modalDetallePedidoId: {
-        fontWeight: 'bold',
-    },
-    modalDetallePedidoEstado: {
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: 'transparent',
-    },
-    modalDetallePedidoEstadoText: {
-        fontWeight: '600',
-    },
-    modalDetallePedidoInfo: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 4,
-    },
-    modalDetallePedidoFecha: {
-        opacity: 0.6,
-    },
-    modalDetallePedidoTotal: {
-        fontWeight: 'bold',
-    },
-    modalDetallePedidoMeta: {
-        marginTop: 2,
-        opacity: 0.5,
-    },
+    modalDetallePedidoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modalDetallePedidoId: { fontSize: 13, fontWeight: 'bold', color: DESIGN.colors.text },
+    modalDetallePedidoEstado: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    modalDetallePedidoInfo: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+    modalDetallePedidoFecha: { fontSize: 11, opacity: 0.6, color: DESIGN.colors.textSecondary },
+    modalDetallePedidoTotal: { fontSize: 13, fontWeight: 'bold', color: DESIGN.colors.accentSecondary },
     modalDetalleCanje: {
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 6,
-        borderWidth: 1,
+        borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1,
+        borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover,
     },
-    modalDetalleCanjeHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    modalDetalleCanjeRecompensa: {
-        fontWeight: 'bold',
-    },
-    modalDetalleCanjePuntos: {
-        fontWeight: 'bold',
-    },
-    modalDetalleCanjeFecha: {
-        opacity: 0.6,
-    },
-    modalDetalleCanjeUsado: {
-        fontWeight: '500',
-    },
+    modalDetalleCanjeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modalDetalleCanjeRecompensa: { fontSize: 13, fontWeight: 'bold', color: DESIGN.colors.text },
+    modalDetalleCanjePuntos: { fontSize: 12, fontWeight: 'bold', color: DESIGN.colors.accent },
+    modalDetalleCanjeFecha: { fontSize: 10, opacity: 0.6, color: DESIGN.colors.textSecondary },
     modalDetalleNotif: {
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 6,
-        borderWidth: 1,
-    },
-    modalDetalleNotifTitulo: {
-        fontWeight: 'bold',
-    },
-    modalDetalleNotifMensaje: {
-        opacity: 0.7,
-        marginTop: 2,
-    },
-    modalDetalleNotifFecha: {
-        opacity: 0.4,
-        marginTop: 2,
+        borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1,
+        borderColor: DESIGN.colors.border, backgroundColor: DESIGN.colors.surfaceHover,
     },
 });

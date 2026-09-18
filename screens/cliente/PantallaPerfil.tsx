@@ -1,4 +1,4 @@
-// screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO + NOTIFICACIONES
+// screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO + NOTIFICACIONES + HISTORIAL DE PUNTOS
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
@@ -82,6 +82,9 @@ export default function PantallaPerfil(props: any) {
   // ✅ NUEVO: contador de notificaciones no leídas
   const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
 
+  // ✅ NUEVO: historial de puntos
+  const [historialPuntos, setHistorialPuntos] = useState<any[]>([]);
+
   const [telefono, setTelefono] = useState('');
   const [direccionCalle, setDireccionCalle] = useState('');
   const [direccionNumero, setDireccionNumero] = useState('');
@@ -121,6 +124,7 @@ export default function PantallaPerfil(props: any) {
       cargarDatosPerfil();
       cargarEstadisticas();
       cargarNotificacionesNoLeidas();
+      cargarHistorialPuntos();
 
       if (perfil.avatar_url) {
         setImagenPerfil(perfil.avatar_url);
@@ -138,6 +142,7 @@ export default function PantallaPerfil(props: any) {
       if (perfil?.id) {
         cargarPerfil(perfil.id);
         cargarNotificacionesNoLeidas();
+        cargarHistorialPuntos();
       }
     }, [perfil?.id])
   );
@@ -153,6 +158,27 @@ export default function PantallaPerfil(props: any) {
     } catch (error) {
       console.warn('⚠️ Error cargando notificaciones no leídas:', error);
       setNotificacionesNoLeidas(0);
+    }
+  };
+
+  // ============================================================
+  // ⭐ CARGAR HISTORIAL DE PUNTOS
+  // ============================================================
+  const cargarHistorialPuntos = async () => {
+    if (!perfil?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('historial_puntos')
+        .select('*')
+        .eq('usuario_id', perfil.id)
+        .order('fecha', { ascending: false })
+        .limit(15);
+
+      if (error) throw error;
+      setHistorialPuntos(data || []);
+    } catch (error) {
+      console.warn('⚠️ Error cargando historial de puntos:', error);
+      setHistorialPuntos([]);
     }
   };
 
@@ -311,6 +337,7 @@ export default function PantallaPerfil(props: any) {
       cargarDatosPerfil(),
       cargarEstadisticas(),
       cargarNotificacionesNoLeidas(),
+      cargarHistorialPuntos(),
     ]);
     setRefrescando(false);
   };
@@ -473,7 +500,7 @@ export default function PantallaPerfil(props: any) {
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('perfiles').getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;
+      const publicUrl = urlData.publicUrl;   // ✅
 
       const { error: updateError } = await supabase
         .from('perfiles')
@@ -878,6 +905,95 @@ export default function PantallaPerfil(props: any) {
                 </View>
               </View>
             ))}
+          </Animated.View>
+        )}
+
+        {/* Historial de Puntos */}
+        {perfil?.id && historialPuntos.length > 0 && (
+          <Animated.View style={[
+            styles.historialPuntosContainer,
+            {
+              paddingHorizontal: padding,
+              marginTop: 12,
+              opacity: fadeAnim,
+              transform: [{ translateY: slideUpAnim }],
+            },
+          ]}>
+            <Text style={[styles.historialPuntosTitulo, { fontSize: isTablet ? 15 : 13 }]}>
+              ⭐ Historial de puntos
+            </Text>
+
+            {historialPuntos.slice(0, 10).map((item, index) => {
+              const esPositivo = item.puntos > 0;
+              const color = esPositivo ? DISENO.colors.success : DISENO.colors.accent;
+              const esAdmin = item.tipo?.startsWith('ajuste_admin');
+              const esBonus = item.tipo === 'bonus_bienvenida';
+
+              return (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.historialPuntosItem,
+                    {
+                      paddingVertical: isTablet ? 12 : 10,
+                      borderBottomWidth: index < historialPuntos.length - 1 ? 1 : 0,
+                      borderBottomColor: DISENO.colors.border,
+                    },
+                  ]}
+                >
+                  <View style={[
+                    styles.historialPuntosIcono,
+                    {
+                      backgroundColor: color + '15',
+                      width: isTablet ? 40 : 34,
+                      height: isTablet ? 40 : 34,
+                      borderRadius: isTablet ? 20 : 17,
+                    },
+                  ]}>
+                    <Ionicons
+                      name={
+                        esBonus ? 'gift' :
+                          esAdmin ? 'shield-checkmark' :
+                            esPositivo ? 'add-circle' : 'remove-circle'
+                      }
+                      size={isTablet ? 22 : 18}
+                      color={color}
+                    />
+                  </View>
+
+                  <View style={styles.historialPuntosInfo}>
+                    <Text style={[
+                      styles.historialPuntosDescripcion,
+                      { fontSize: isTablet ? 13 : 12 },
+                    ]} numberOfLines={2}>
+                      {item.descripcion || 'Ajuste de puntos'}
+                    </Text>
+                    <Text style={[
+                      styles.historialPuntosFecha,
+                      { fontSize: isTablet ? 11 : 10 },
+                    ]}>
+                      {new Date(item.fecha).toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+
+                  <Text style={[
+                    styles.historialPuntosCantidad,
+                    {
+                      fontSize: isTablet ? 15 : 13,
+                      color: color,
+                    },
+                  ]}>
+                    {esPositivo ? '+' : ''}{item.puntos}
+                  </Text>
+                </View>
+              );
+            })}
           </Animated.View>
         )}
 
@@ -1443,6 +1559,48 @@ const styles = StyleSheet.create({
     color: DISENO.colors.textTertiary,
     marginTop: 1,
   },
+  // ✅ NUEVOS ESTILOS: HISTORIAL DE PUNTOS
+  historialPuntosContainer: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.lg,
+    paddingVertical: 16,
+    ...DISENO.shadow.sm,
+  },
+  historialPuntosTitulo: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.text,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  historialPuntosItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  historialPuntosIcono: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  historialPuntosInfo: {
+    flex: 1,
+  },
+  historialPuntosDescripcion: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    fontWeight: '500',
+  },
+  historialPuntosFecha: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textTertiary,
+    marginTop: 2,
+  },
+  historialPuntosCantidad: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+  },
   infoContainer: {
     backgroundColor: DISENO.colors.surface,
     borderRadius: DISENO.radius.lg,
@@ -1613,7 +1771,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     position: 'relative',
   },
-  // ✅ NUEVO: badge de notificaciones en el ícono
   badgeNotificaciones: {
     position: 'absolute',
     top: -4,
@@ -1714,169 +1871,6 @@ const styles = StyleSheet.create({
   },
   modalButtonConfirmText: {
     color: DISENO.colors.surface,
-  },
-  // ESTILOS MODAL ELIMINAR (sin usar)
-  modalEliminarOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalEliminarContainer: {
-    width: '100%',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    maxHeight: '90%',
-  },
-  modalEliminarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  modalEliminarHeaderContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  modalEliminarIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalEliminarTitle: {
-    fontFamily: FUENTES.display,
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#FFFFFF',
-  },
-  modalEliminarClose: {
-    padding: 8,
-  },
-  modalEliminarBodyScroll: {
-    maxHeight: '80%',
-  },
-  modalEliminarBodyContent: {
-    padding: 20,
-    paddingBottom: 8,
-  },
-  modalEliminarWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(229, 57, 53, 0.08)',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(229, 57, 53, 0.15)',
-    marginBottom: 16,
-  },
-  modalEliminarWarningText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 14,
-    color: '#B0B0B0',
-    flex: 1,
-  },
-  modalEliminarSubtitle: {
-    fontFamily: FUENTES.regular,
-    fontSize: 14,
-    color: '#94A3B8',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  modalEliminarInputGroup: {
-    marginBottom: 16,
-  },
-  modalEliminarLabel: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#B0B0B0',
-    marginBottom: 8,
-  },
-  modalEliminarPasswordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    paddingHorizontal: 14,
-  },
-  modalEliminarInput: {
-    fontFamily: FUENTES.regular,
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
-  modalEliminarPasswordToggle: {
-    padding: 8,
-  },
-  modalEliminarTextArea: {
-    minHeight: 80,
-    paddingTop: 14,
-    textAlignVertical: 'top',
-  },
-  modalEliminarContador: {
-    fontFamily: FUENTES.regular,
-    fontSize: 11,
-    textAlign: 'right',
-    marginTop: 4,
-    opacity: 0.7,
-  },
-  modalEliminarBotones: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalEliminarBoton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  modalEliminarBotonSecundario: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  modalEliminarBotonSecundarioText: {
-    fontFamily: FUENTES.display,
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#B0B0B0',
-  },
-  modalEliminarBotonPeligro: {
-    backgroundColor: '#E53935',
-  },
-  modalEliminarBotonPeligroText: {
-    fontFamily: FUENTES.display,
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#FFFFFF',
-  },
-  modalEliminarBotonDisabled: {
-    opacity: 0.5,
-  },
-  modalEliminarFooter: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 8,
   },
   loginButtonGuest: {
     borderRadius: DISENO.radius.md,

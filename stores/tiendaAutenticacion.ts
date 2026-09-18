@@ -9,7 +9,6 @@ import { tiendaCarrito } from './tiendaCarrito';
 const STORAGE_UBICACION_KEY = '@ubicacion_seleccionada';
 const STORAGE_ULTIMO_USUARIO = '@ultimo_usuario_id';
 
-// ✅ Importación dinámica de notificacionService
 let notificacionService: any = null;
 
 const getNotificacionService = async () => {
@@ -20,9 +19,6 @@ const getNotificacionService = async () => {
   return notificacionService;
 };
 
-// ============================================================
-// 🛡️ INTERFACES
-// ============================================================
 interface EstadoAutenticacion {
   sesion: any | null;
   perfil: Perfil | null;
@@ -48,9 +44,6 @@ interface EstadoAutenticacion {
   limpiarError: () => void;
 }
 
-// ============================================================
-// 📦 STORE
-// ============================================================
 export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   sesion: null,
   perfil: null,
@@ -241,6 +234,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         telefono: telefono,
         rol: 'cliente',
         puntos_acumulados: 500,
+        puntos_disponibles: 500,
         ultimo_acceso: new Date().toISOString(),
         direccion_calle: null,
         direccion_numero: null,
@@ -258,11 +252,21 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         return { success: false, error: errorPerfil.message };
       }
 
+      // ✅ NUEVO: registrar el bonus en historial_puntos
+      try {
+        await supabase.from('historial_puntos').insert({
+          usuario_id: data.user.id,
+          tipo: 'bonus_bienvenida',
+          puntos: 500,
+          descripcion: 'Bonus de bienvenida al registrarte 🎉',
+        });
+        console.log('✅ Bonus registrado en historial');
+      } catch (errorHistorial) {
+        console.warn('⚠️ No se pudo registrar bonus en historial:', errorHistorial);
+      }
+
       await AsyncStorage.setItem(STORAGE_ULTIMO_USUARIO, data.user.id);
 
-      // ✅ NUEVO: intentar registrar token después del registro
-      //    (solo funciona si la sesión se crea automáticamente tras el signUp,
-      //     es decir, si la confirmación por email está desactivada)
       try {
         const service = await getNotificacionService();
         await service.registrarToken(data.user.id);
@@ -280,7 +284,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
   },
 
   // ============================================================
-  // 🚪 CERRAR SESIÓN (CON DESASOCIACIÓN DE TOKEN)
+  // 🚪 CERRAR SESIÓN
   // ============================================================
   cerrarSesion: async () => {
     const { perfil } = get();
@@ -288,7 +292,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
     try {
       console.log('🚪 [Logout] Cerrando sesión...');
 
-      // ✅ 1. Desasociar token push del usuario
       if (perfil?.id) {
         try {
           const service = await getNotificacionService();
@@ -303,18 +306,14 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         }
       }
 
-      // ✅ 2. Cerrar sesión en Supabase
       await supabase.auth.signOut();
 
-      // ✅ 3. Limpiar estado global de favoritos
       try {
         tiendaFavoritos.getState().limpiarFavoritos();
       } catch (e) {
         console.warn('⚠️ Error limpiando favoritos:', e);
       }
 
-      // ✅ 4. Limpiar AsyncStorage selectivamente
-      //    NO vaciamos el carrito (persiste) ni el último usuario ni la ubicación
       try {
         const keysToKeep = [STORAGE_ULTIMO_USUARIO, 'carrito_krusty', STORAGE_UBICACION_KEY];
         const allKeys = await AsyncStorage.getAllKeys();
@@ -326,7 +325,6 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         console.warn('⚠️ Error limpiando AsyncStorage:', e);
       }
 
-      // ✅ 5. Resetear estado
       set({
         sesion: null,
         perfil: null,
