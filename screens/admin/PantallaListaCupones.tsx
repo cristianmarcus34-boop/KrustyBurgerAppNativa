@@ -31,6 +31,8 @@ import { useToast, Toast } from '../../components/Toast';
 import CuponQRGenerator from '../../screens/admin/CuponQRGenerator';
 import { supabase } from '../../lib/supabase';
 
+import ModalGenerarCuponesFisicos from './ModalGenerarCuponesFisicos';
+
 // ============================================================
 // 🎨 DISEÑO
 // ============================================================
@@ -87,6 +89,10 @@ export default function PantallaListaCupones({ navigation }: any) {
     const [contadoresUsuarios, setContadoresUsuarios] = useState<Record<number, number>>({});
     const [filtroRol, setFiltroRol] = useState<'todos' | 'clientes' | 'admins'>('todos');
     const [seleccionarTodos, setSeleccionarTodos] = useState(false);
+
+    // ✅ Estados para cupones físicos (PDF)
+    const [mostrarGenerarFisicos, setMostrarGenerarFisicos] = useState(false);
+    const [cuponParaFisicos, setCuponParaFisicos] = useState<Cupon | null>(null);
 
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
@@ -502,7 +508,6 @@ export default function PantallaListaCupones({ navigation }: any) {
         try {
             const asignaciones = await verificarAsignaciones(cupon.id);
 
-            // ✅ CASO 1: Tiene cupones usados → NO permitir eliminar
             if (asignaciones.usados > 0) {
                 toast.advertencia(
                     `⚠️ Este cupón ya fue usado por ${asignaciones.usados} usuario(s). ` +
@@ -511,7 +516,6 @@ export default function PantallaListaCupones({ navigation }: any) {
                 return;
             }
 
-            // ✅ CASO 2: Tiene asignaciones pero no usados
             if (asignaciones.tieneAsignaciones) {
                 Alert.alert(
                     '⚠️ Cupón con asignaciones',
@@ -534,7 +538,6 @@ export default function PantallaListaCupones({ navigation }: any) {
                 return;
             }
 
-            // ✅ CASO 3: No tiene asignaciones → Eliminar directo
             confirmarEliminacion(cupon, 0);
 
         } catch (error) {
@@ -592,7 +595,6 @@ export default function PantallaListaCupones({ navigation }: any) {
             });
             if (resultado.success) {
                 toast.exito(`✅ Cupón ${cupon.activo ? 'desactivado' : 'activado'}`);
-                // ✅ Actualizar lista local
                 setCupones(prev => prev.map(c =>
                     c.id === cupon.id ? { ...c, activo: !cupon.activo } : c
                 ));
@@ -733,6 +735,19 @@ export default function PantallaListaCupones({ navigation }: any) {
                             <Text style={[styles.accionTexto, { color: DESIGN.colors.accent }]}>Eliminar</Text>
                         )}
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.accionBoton, styles.accionPDF]}
+                        onPress={() => {
+                            setCuponParaFisicos(item);
+                            setMostrarGenerarFisicos(true);
+                        }}
+                    >
+                        <Ionicons name="print-outline" size={20} color={DESIGN.colors.morado} />
+                        {!isSmallPhone && (
+                            <Text style={[styles.accionTexto, { color: DESIGN.colors.morado }]}>PDF</Text>
+                        )}
+                    </TouchableOpacity>
                 </View>
             </View>
         );
@@ -826,6 +841,19 @@ export default function PantallaListaCupones({ navigation }: any) {
                 onClose={() => {
                     setMostrarQR(false);
                     setCuponSeleccionado(null);
+                }}
+            />
+
+            {/* Modal Generar Cupones Físicos (PDF) */}
+            <ModalGenerarCuponesFisicos
+                visible={mostrarGenerarFisicos}
+                cupon={cuponParaFisicos}
+                onClose={() => {
+                    setMostrarGenerarFisicos(false);
+                    setCuponParaFisicos(null);
+                }}
+                onSuccess={() => {
+                    cargarCupones();
                 }}
             />
 
@@ -1233,12 +1261,12 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 4,
         paddingVertical: 8,
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
         borderRadius: 8,
         backgroundColor: DESIGN.colors.fondo,
         flex: 1,
-        minWidth: 40,
-        maxWidth: '25%',
+        minWidth: 36,
+        maxWidth: '20%',
     },
     accionDisabled: {
         opacity: 0.5,
@@ -1254,6 +1282,9 @@ const styles = StyleSheet.create({
     },
     accionEliminar: {
         backgroundColor: 'rgba(229, 57, 53, 0.08)',
+    },
+    accionPDF: {
+        backgroundColor: 'rgba(123, 31, 162, 0.08)',
     },
     accionTexto: {
         fontSize: 10,

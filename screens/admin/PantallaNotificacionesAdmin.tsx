@@ -370,8 +370,8 @@ export default function PantallaNotificacionesAdmin(props: any) {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
-                aspect: [16, 9],
-                quality: 0.8,
+                aspect: [2, 1],   // ✅ antes [16, 9]
+                quality: 0.7,     // ✅ antes 0.8
             });
 
             if (!result.canceled && result.assets[0]) {
@@ -395,8 +395,8 @@ export default function PantallaNotificacionesAdmin(props: any) {
 
             const result = await ImagePicker.launchCameraAsync({
                 allowsEditing: true,
-                aspect: [16, 9],
-                quality: 0.8,
+                aspect: [2, 1],   // ✅ antes [16, 9]
+                quality: 0.7,     // ✅ antes 0.8
             });
 
             if (!result.canceled && result.assets[0]) {
@@ -416,13 +416,26 @@ export default function PantallaNotificacionesAdmin(props: any) {
             const response = await fetch(uri);
             const blob = await response.blob();
 
-            const fileExt = uri.split('.').pop() || 'jpg';
+            // ✅ Log del peso
+            console.log('📷 [Imagen] Peso:', (blob.size / 1024).toFixed(1), 'KB');
+
+            if (blob.size > 1024 * 1024) {
+                Alert.alert(
+                    'Imagen muy pesada',
+                    'La imagen pesa más de 1MB. Elige una más liviana o reduce la calidad.'
+                );
+                setSubiendoImagen(false);
+                return;
+            }
+
+            const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+            const mimeType = fileExt === 'jpg' ? 'image/jpeg' : `image/${fileExt}`;  // ✅ fix
             const fileName = `notificacion-${Date.now()}.${fileExt}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('notificaciones')
                 .upload(fileName, blob, {
-                    contentType: `image/${fileExt}`,
+                    contentType: mimeType,   // ✅ antes `image/${fileExt}`
                     cacheControl: '3600',
                     upsert: true,
                 });

@@ -45,7 +45,7 @@ type ResultadoRPC = {
 export const cuponService = {
 
     // ============================================================
-    // ✅ VERIFICAR ESTADO DEL CUPÓN (NUEVO)
+    // ✅ VERIFICAR ESTADO DEL CUPÓN
     // ============================================================
     async verificarEstadoCupon(cuponId: number): Promise<{
         activo: boolean;
@@ -161,7 +161,6 @@ export const cuponService = {
     // ============================================================
     // 🔎 OBTENER CUPÓN POR ID
     // ============================================================
-
     async obtenerCuponPorId(id: number): Promise<Cupon | null> {
         try {
             const { data, error } = await supabase
@@ -193,7 +192,6 @@ export const cuponService = {
     // ============================================================
     // 🔎 OBTENER CUPÓN POR CÓDIGO
     // ============================================================
-
     async obtenerCuponPorCodigo(codigo: string): Promise<Cupon | null> {
         try {
             const codigoNormalizado = codigo?.trim().toUpperCase();
@@ -231,7 +229,6 @@ export const cuponService = {
     // ============================================================
     // ➕ CREAR CUPÓN
     // ============================================================
-
     async crearCupon(datos: CrearCuponDTO): Promise<{
         success: boolean;
         data?: Cupon;
@@ -283,7 +280,6 @@ export const cuponService = {
     // ============================================================
     // ✏️ ACTUALIZAR CUPÓN
     // ============================================================
-
     async actualizarCupon(
         id: number,
         datos: Partial<CrearCuponDTO>
@@ -322,7 +318,6 @@ export const cuponService = {
     // ============================================================
     // 🗑️ DESACTIVAR CUPÓN
     // ============================================================
-
     async eliminarCupon(id: number): Promise<{
         success: boolean;
         error?: string;
@@ -358,7 +353,6 @@ export const cuponService = {
     // ============================================================
     // 🗑️ ELIMINAR CUPÓN PERMANENTEMENTE
     // ============================================================
-
     async eliminarCuponPermanente(id: number): Promise<{
         success: boolean;
         error?: string;
@@ -391,7 +385,6 @@ export const cuponService = {
     // ============================================================
     // 👤 CUPONES DEL USUARIO
     // ============================================================
-
     async obtenerCuponesUsuario(usuarioId: string): Promise<CuponUsuario[]> {
         try {
             const { data, error } = await supabase
@@ -429,7 +422,6 @@ export const cuponService = {
     // ============================================================
     // 🎟️ CUPONES DISPONIBLES
     // ============================================================
-
     async obtenerCuponesDisponibles(usuarioId: string): Promise<CuponUsuario[]> {
         try {
             if (!usuarioId) {
@@ -476,9 +468,8 @@ export const cuponService = {
     },
 
     // ============================================================
-    // 🎟️ ASIGNAR CUPÓN A USUARIO (COMPLETAMENTE CORREGIDO)
+    // 🎟️ ASIGNAR CUPÓN A USUARIO
     // ============================================================
-
     async asignarCuponAUsuario(
         cuponId: number,
         usuarioId: string
@@ -504,15 +495,10 @@ export const cuponService = {
                 };
             }
 
-            // ============================================================
-            // ✅ VALIDACIONES MEJORADAS (FECHAS, ACTIVO, ETC)
-            // ============================================================
-
             const ahora = new Date();
             const fechaInicio = new Date(cupon.fecha_inicio);
             const fechaExpiracion = new Date(cupon.fecha_expiracion);
 
-            // 1. Verificar si el cupón está inactivo
             if (!cupon.activo) {
                 return {
                     success: false,
@@ -520,7 +506,6 @@ export const cuponService = {
                 };
             }
 
-            // 2. Verificar si la fecha de inicio es inválida
             if (isNaN(fechaInicio.getTime())) {
                 return {
                     success: false,
@@ -528,7 +513,6 @@ export const cuponService = {
                 };
             }
 
-            // 3. Verificar si la fecha de expiración es inválida
             if (isNaN(fechaExpiracion.getTime())) {
                 return {
                     success: false,
@@ -536,7 +520,6 @@ export const cuponService = {
                 };
             }
 
-            // 4. Verificar si el cupón aún no comenzó
             if (ahora < fechaInicio) {
                 const fechaFormateada = fechaInicio.toLocaleDateString('es-AR', {
                     day: '2-digit',
@@ -549,7 +532,6 @@ export const cuponService = {
                 };
             }
 
-            // 5. Verificar si el cupón ya expiró
             if (ahora > fechaExpiracion) {
                 const fechaFormateada = fechaExpiracion.toLocaleDateString('es-AR', {
                     day: '2-digit',
@@ -561,10 +543,6 @@ export const cuponService = {
                     error: `⏰ El cupón expiró el ${fechaFormateada}`,
                 };
             }
-
-            // ----------------------------------------------------
-            // Verificar si ya existe
-            // ----------------------------------------------------
 
             const {
                 data: existente,
@@ -584,10 +562,6 @@ export const cuponService = {
                 throw existenteError;
             }
 
-            // ----------------------------------------------------
-            // Ya existe
-            // ----------------------------------------------------
-
             if (existente) {
                 if (existente.usado_en_pedido) {
                     return {
@@ -606,16 +580,11 @@ export const cuponService = {
                     };
                 }
 
-                // ✅ El usuario ya tiene el cupón asignado (pero no usado)
                 return {
                     success: true,
                     yaAsignado: true,
                 };
             }
-
-            // ----------------------------------------------------
-            // Límite global
-            // ----------------------------------------------------
 
             if (
                 cupon.usos_maximos !== null &&
@@ -626,10 +595,6 @@ export const cuponService = {
                     error: '❌ Cupón agotado (límite global alcanzado)',
                 };
             }
-
-            // ----------------------------------------------------
-            // Generar código interno
-            // ----------------------------------------------------
 
             const codigoCanje = this.generarCodigoCanje(usuarioId, cuponId);
 
@@ -659,7 +624,6 @@ export const cuponService = {
         } catch (error: any) {
             console.error('❌ Error asignando cupón:', error);
 
-            // ✅ Manejo de errores mejorado con mensajes amigables
             let mensajeError = '❌ No se pudo asignar el cupón';
 
             if (error?.message) {
@@ -687,7 +651,6 @@ export const cuponService = {
     // ============================================================
     // 🔄 CANJEAR / RESERVAR CUPÓN
     // ============================================================
-
     async canjearCupon(datos: CanjearCuponDTO): Promise<ResultadoCanje> {
         try {
             console.log('🎟️ Iniciando canje/reserva:', {
@@ -697,94 +660,62 @@ export const cuponService = {
             });
 
             if (!datos.usuarioId) {
-                return {
-                    success: false,
-                    mensaje: 'Usuario no identificado',
-                };
+                return { success: false, mensaje: 'Usuario no identificado' };
             }
 
             const codigo = datos.codigo?.trim().toUpperCase();
 
             if (!codigo) {
-                return {
-                    success: false,
-                    mensaje: 'Ingresá un código de cupón',
-                };
+                return { success: false, mensaje: 'Ingresá un código de cupón' };
             }
 
+            // ✅ DETECTAR SI ES CUPÓN FÍSICO (formato PREFIJO-CODIGO)
+            const esCuponFisico = /^[A-Z0-9]{2,10}-[A-Z0-9]{4,12}$/.test(codigo);
+
+            if (esCuponFisico) {
+                console.log('🎫 Código detectado como cupón físico:', codigo);
+                return await this.canjearCuponFisico(codigo, datos.usuarioId);
+            }
+
+            // ============================================================
+            // FLUJO ORIGINAL PARA CUPONES NORMALES (KBXXXXXXXX)
+            // ============================================================
             const cupon = await this.obtenerCuponPorCodigo(codigo);
 
             if (!cupon) {
-                return {
-                    success: false,
-                    mensaje: 'Cupón no encontrado',
-                };
+                return { success: false, mensaje: 'Cupón no encontrado' };
             }
 
             const validacion = this.validarDatosBasicosCupon(cupon);
-
             if (!validacion.valido) {
-                return {
-                    success: false,
-                    mensaje: validacion.mensaje || 'Cupón no válido',
-                };
+                return { success: false, mensaje: validacion.mensaje || 'Cupón no válido' };
             }
 
-            if (
-                cupon.usos_maximos !== null &&
-                cupon.usos_totales >= cupon.usos_maximos
-            ) {
-                return {
-                    success: false,
-                    mensaje: 'Este cupón ya alcanzó su límite de usos',
-                };
+            if (cupon.usos_maximos !== null && cupon.usos_totales >= cupon.usos_maximos) {
+                return { success: false, mensaje: 'Este cupón ya alcanzó su límite de usos' };
             }
 
-            const {
-                data: cuponUsuario,
-                error: cuponUsuarioError,
-            } = await supabase
+            const { data: cuponUsuario, error: cuponUsuarioError } = await supabase
                 .from('cupones_usuarios')
-                .select(`
-                    id,
-                    cantidad_usos,
-                    usado_en_pedido,
-                    pedido_id
-                `)
+                .select('id, cantidad_usos, usado_en_pedido, pedido_id')
                 .eq('cupon_id', cupon.id)
                 .eq('usuario_id', datos.usuarioId)
                 .maybeSingle();
 
-            if (cuponUsuarioError) {
-                throw cuponUsuarioError;
-            }
+            if (cuponUsuarioError) throw cuponUsuarioError;
 
             if (cuponUsuario?.usado_en_pedido) {
-                return {
-                    success: false,
-                    mensaje: 'Este cupón ya fue utilizado',
-                };
+                return { success: false, mensaje: 'Este cupón ya fue utilizado' };
             }
 
             if (cuponUsuario) {
-                if (
-                    cupon.cantidad_maxima > 0 &&
-                    cuponUsuario.cantidad_usos >= cupon.cantidad_maxima
-                ) {
-                    return {
-                        success: false,
-                        mensaje: 'Ya alcanzaste el límite de usos de este cupón',
-                    };
+                if (cupon.cantidad_maxima > 0 && cuponUsuario.cantidad_usos >= cupon.cantidad_maxima) {
+                    return { success: false, mensaje: 'Ya alcanzaste el límite de usos de este cupón' };
                 }
-
                 console.log('ℹ️ El usuario ya tenía el cupón asignado');
-
             } else {
                 const codigoCanje = this.generarCodigoCanje(datos.usuarioId, cupon.id);
-
-                const {
-                    error: insertError,
-                } = await supabase
+                const { error: insertError } = await supabase
                     .from('cupones_usuarios')
                     .insert({
                         cupon_id: cupon.id,
@@ -796,21 +727,12 @@ export const cuponService = {
                         pedido_id: null,
                     });
 
-                if (insertError) {
-                    throw insertError;
-                }
+                if (insertError) throw insertError;
             }
 
             let productoGratis: { id: number; nombre: string } | null = null;
-
-            if (
-                cupon.tipo === 'producto_gratis' &&
-                cupon.producto_id
-            ) {
-                const {
-                    data: producto,
-                    error: productoError,
-                } = await supabase
+            if (cupon.tipo === 'producto_gratis' && cupon.producto_id) {
+                const { data: producto, error: productoError } = await supabase
                     .from('productos')
                     .select('id, nombre')
                     .eq('id', cupon.producto_id)
@@ -819,19 +741,11 @@ export const cuponService = {
                 if (productoError) {
                     console.error('⚠️ Error obteniendo producto gratis:', productoError);
                 }
-
-                if (producto) {
-                    productoGratis = producto;
-                }
+                if (producto) productoGratis = producto;
             }
 
             let descuentoAplicado: number | null = null;
-
-            if (
-                cupon.tipo === 'descuento' &&
-                cupon.valor_descuento !== null &&
-                cupon.valor_descuento !== undefined
-            ) {
+            if (cupon.tipo === 'descuento' && cupon.valor_descuento !== null && cupon.valor_descuento !== undefined) {
                 descuentoAplicado = Number(cupon.valor_descuento);
             }
 
@@ -861,9 +775,197 @@ export const cuponService = {
     },
 
     // ============================================================
+    // 🎫 CANJEAR CUPÓN FÍSICO
+    // ============================================================
+    async canjearCuponFisico(codigo: string, usuarioId: string): Promise<ResultadoCanje> {
+        try {
+            console.log('🎫 Procesando cupón físico:', codigo);
+
+            // 1. Buscar el cupón físico
+            const { data: fisico, error: fisicoError } = await supabase
+                .from('cupones_fisicos')
+                .select('*')
+                .eq('codigo', codigo)
+                .maybeSingle();
+
+            if (fisicoError) throw fisicoError;
+
+            if (!fisico) {
+                return { success: false, mensaje: 'Cupón no encontrado' };
+            }
+
+            if (fisico.estado === 'usado') {
+                return { success: false, mensaje: 'Este cupón ya fue usado' };
+            }
+
+            if (fisico.estado === 'anulado') {
+                return { success: false, mensaje: 'Este cupón fue anulado' };
+            }
+
+            // 2. Obtener el cupón base
+            const cupon = await this.obtenerCuponPorId(fisico.cupon_id);
+
+            if (!cupon) {
+                return { success: false, mensaje: 'Cupón base no encontrado' };
+            }
+
+            const validacion = this.validarDatosBasicosCupon(cupon);
+            if (!validacion.valido) {
+                return { success: false, mensaje: validacion.mensaje || 'Cupón no válido' };
+            }
+
+            // 3. Marcar el cupón físico como usado
+            const { error: updFisicoError } = await supabase
+                .from('cupones_fisicos')
+                .update({
+                    estado: 'usado',
+                    usado_en: new Date().toISOString(),
+                    asignado_a: usuarioId,
+                    asignado_en: new Date().toISOString(),
+                })
+                .eq('id', fisico.id);
+
+            if (updFisicoError) throw updFisicoError;
+
+            // ============================================================
+            // 4. Gestionar cupones_usuarios (SIN ERRORES DE UNIQUE)
+            // ============================================================
+            await this.upsertCuponUsuario(usuarioId, cupon);
+
+            // ============================================================
+            // 5. Obtener producto gratis si aplica
+            // ============================================================
+            let productoGratis: { id: number; nombre: string } | null = null;
+            if (cupon.tipo === 'producto_gratis' && cupon.producto_id) {
+                const { data: producto } = await supabase
+                    .from('productos')
+                    .select('id, nombre')
+                    .eq('id', cupon.producto_id)
+                    .maybeSingle();
+                if (producto) productoGratis = producto;
+            }
+
+            // 6. Calcular descuento
+            let descuentoAplicado: number | null = null;
+            if (cupon.tipo === 'descuento' && cupon.valor_descuento != null) {
+                descuentoAplicado = Number(cupon.valor_descuento);
+            }
+
+            console.log('✅ Cupón físico canjeado:', {
+                codigoFisico: codigo,
+                cuponId: cupon.id,
+                tipo: cupon.tipo,
+            });
+
+            return {
+                success: true,
+                mensaje: '¡Cupón canjeado exitosamente!',
+                cupon,
+                descuento_aplicado: descuentoAplicado ?? undefined,
+                producto_gratis: productoGratis ?? undefined,
+            };
+
+        } catch (error: any) {
+            console.error('❌ Error canjeando cupón físico:', error);
+            return {
+                success: false,
+                mensaje: error?.message || 'Error al canjear el cupón',
+            };
+        }
+    },
+
+    // ============================================================
+    // 🔧 UPSERT CUPON_USUARIO (SIN ERRORES DE UNIQUE)
+    // ============================================================
+    /**
+     * Inserta o incrementa la fila en `cupones_usuarios` sin lanzar
+     * errores de unique constraint.
+     *
+     * - Si NO existe: inserta con cantidad_usos = 0.
+     * - Si existe y NO está usado: incrementa cantidad_usos +1.
+     * - Si existe y ya está usado: no hace nada (el usuario ya lo consumió).
+     */
+    async upsertCuponUsuario(usuarioId: string, cupon: Cupon): Promise<{
+        success: boolean;
+        accion: 'insertado' | 'incrementado' | 'ya_usado' | 'error';
+    }> {
+        try {
+            const { data: existente, error: existenteError } = await supabase
+                .from('cupones_usuarios')
+                .select('id, cantidad_usos, usado_en_pedido')
+                .eq('cupon_id', cupon.id)
+                .eq('usuario_id', usuarioId)
+                .maybeSingle();
+
+            if (existenteError) {
+                console.warn('⚠️ Error consultando cupon_usuario existente:', existenteError);
+                return { success: false, accion: 'error' };
+            }
+
+            // Caso 1: ya existe y está usado → no hacer nada
+            if (existente?.usado_en_pedido) {
+                console.log('ℹ️ El usuario ya usó este cupón base, no se modifica');
+                return { success: true, accion: 'ya_usado' };
+            }
+
+            // Caso 2: ya existe pero no usado → incrementar cantidad_usos
+            if (existente) {
+                const nuevosUsos = (existente.cantidad_usos || 0) + 1;
+
+                const { error: updError } = await supabase
+                    .from('cupones_usuarios')
+                    .update({
+                        cantidad_usos: nuevosUsos,
+                    })
+                    .eq('id', existente.id);
+
+                if (updError) {
+                    console.warn('⚠️ No se pudo incrementar cantidad_usos:', updError);
+                    return { success: false, accion: 'error' };
+                }
+
+                console.log(`ℹ️ Cantidad de usos incrementada a ${nuevosUsos}`);
+                return { success: true, accion: 'incrementado' };
+            }
+
+            // Caso 3: no existe → insertar
+            const codigoCanje = this.generarCodigoCanje(usuarioId, cupon.id);
+
+            const { error: insertError } = await supabase
+                .from('cupones_usuarios')
+                .insert({
+                    cupon_id: cupon.id,
+                    usuario_id: usuarioId,
+                    codigo_canje: codigoCanje,
+                    cantidad_usos: 0,
+                    fecha_canje: null,
+                    usado_en_pedido: false,
+                    pedido_id: null,
+                });
+
+            if (insertError) {
+                // ✅ Si es un duplicado por race condition, no es grave
+                if (insertError.code === '23505') {
+                    console.log('ℹ️ Cupón ya existía (race condition), ignorando');
+                    return { success: true, accion: 'incrementado' };
+                }
+
+                console.warn('⚠️ No se pudo insertar cupon_usuario:', insertError);
+                return { success: false, accion: 'error' };
+            }
+
+            console.log('✅ Cupon_usuario insertado por primera vez');
+            return { success: true, accion: 'insertado' };
+
+        } catch (error) {
+            console.warn('⚠️ Error en upsertCuponUsuario:', error);
+            return { success: false, accion: 'error' };
+        }
+    },
+
+    // ============================================================
     // 🛒 FINALIZAR CUPÓN CON PEDIDO
     // ============================================================
-
     async finalizarCuponPedido(
         cuponId: number,
         usuarioId: string,
@@ -966,7 +1068,6 @@ export const cuponService = {
     // ============================================================
     // ❌ LIBERAR CUPÓN RESERVADO
     // ============================================================
-
     async liberarCuponReservado(
         cuponId: number,
         usuarioId: string
@@ -1051,7 +1152,6 @@ export const cuponService = {
     // ============================================================
     // ✅ VALIDAR CUPÓN
     // ============================================================
-
     async validarCupon(cupon: Cupon, usuarioId: string): Promise<ValidacionCupon> {
         try {
             if (!usuarioId) {
@@ -1131,9 +1231,8 @@ export const cuponService = {
     },
 
     // ============================================================
-    // 🔒 VALIDACIONES INTERNAS (MEJORADAS CON MENSAJES CLAROS)
+    // 🔒 VALIDACIONES INTERNAS
     // ============================================================
-
     validarDatosBasicosCupon(cupon: Cupon): ValidacionCupon {
         if (!cupon.activo) {
             return {
@@ -1192,7 +1291,6 @@ export const cuponService = {
     // ============================================================
     // 🔧 GENERAR CÓDIGO ÚNICO
     // ============================================================
-
     async generarCodigoUnico(): Promise<string> {
         const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         const MAX_INTENTOS = 50;
@@ -1228,7 +1326,6 @@ export const cuponService = {
     // ============================================================
     // 🔐 CÓDIGO INTERNO DE CANJE
     // ============================================================
-
     generarCodigoCanje(usuarioId: string, cuponId: number): string {
         const timestamp = Date.now().toString(36).toUpperCase();
         const random = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -1239,7 +1336,6 @@ export const cuponService = {
     // ============================================================
     // 💰 FORMATEAR DESCUENTO
     // ============================================================
-
     formatearDescuento(cupon: Cupon): string {
         if (cupon.tipo === 'envio_gratis') {
             return 'Envío gratis';

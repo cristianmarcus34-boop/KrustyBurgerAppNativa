@@ -292,6 +292,19 @@ export const notificacionService = {
                     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
                     sound: 'saxolisa.wav',
                 });
+
+                // ✅ NUEVO: canal para imágenes con sonido default (permite BigPicture)
+                await Notifications.setNotificationChannelAsync('imagenes_v2', {
+                    name: '🖼️ Promociones con imagen',
+                    importance: Notifications.AndroidImportance.MAX,
+                    vibrationPattern: [0, 250, 250, 250],
+                    lightColor: '#F5C518',
+                    enableVibrate: true,
+                    enableLights: true,
+                    bypassDnd: true,
+                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                    sound: null,
+                });
             }
             console.log('✅ Permisos concedidos y canales configurados');
             return true;
@@ -336,16 +349,6 @@ export const notificacionService = {
     // 📤 ENVÍO
     // ============================================================
 
-    /**
-     * Envía a múltiples tokens (con imagen y sonido)
-     *
-     * ✅ CAMBIOS IMPORTANTES:
-     * - Quitado `sticky: true` (interfería con la imagen)
-     * - Si hay imagen → fuerza `sound: 'default'` (sonidos custom rompen BigPicture)
-     * - Si hay imagen → usa canal 'imagenes' con importance MAX
-     * - ✅ NUEVO: usa `richContent.image` (formato correcto de Expo Push API para renderizar imagen)
-     * - Log del payload final para debug
-     */
     async enviarNotificacionesMasivas(tokens: string[], titulo: string, mensaje: string, data?: any) {
         try {
             const tokensValidos = tokens.filter(t => t && t.length > 10);
@@ -374,7 +377,7 @@ export const notificacionService = {
                 // ✅ Elegir canal
                 let channelId = 'default';
                 if (tieneImagen) {
-                    channelId = 'imagenes';
+                    channelId = 'imagenes_v2';
                 } else if (data?.tipo === 'promocion') {
                     channelId = 'promociones';
                 } else if (data?.tipo === 'oferta') {

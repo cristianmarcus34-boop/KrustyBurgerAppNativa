@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
+  Image, // ✅ se queda el de react-native
   Animated,
   RefreshControl,
   FlatList,
@@ -36,6 +36,9 @@ const ofertasImg = require('../../assets/imagenes/categorias/ofertas.jpg');
 // ✅ LOGO Y BIENVENIDA
 const logoKrusty = require('../../assets/icon.png');
 const bienvenidaImg = require('../../assets/imagenes/bienvenidos.png');
+
+// ✅ FONDO SIMPSONS (el que ocupa toda la pantalla)
+const springfieldFondo = require('../../assets/imagenes/simpsons/springfieldbannerinicio.jpg');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -106,7 +109,6 @@ const unificarFavoritos = (
   const yaIncluidos = new Set<number>();
   const resultado: FavoritoConOrigen[] = [];
 
-  // 1. Primero los favoritos manuales (❤️)
   for (const producto of favoritosManuales) {
     if (!producto?.id || yaIncluidos.has(producto.id)) continue;
     yaIncluidos.add(producto.id);
@@ -114,7 +116,6 @@ const unificarFavoritos = (
     if (resultado.length >= maxItems) return resultado;
   }
 
-  // 2. Después el ranking (🔥), sin duplicar
   for (const producto of topRanking) {
     if (!producto?.id || yaIncluidos.has(producto.id)) continue;
     yaIncluidos.add(producto.id);
@@ -132,7 +133,6 @@ export default function PantallaInicio(props: any) {
   const { perfil, esAdministrador, sesion } = tiendaAutenticacion();
   const { agregarProducto } = tiendaCarrito();
 
-  // ✅ NUEVO: usamos las dos listas
   const {
     favoritosManuales,
     topRanking,
@@ -149,15 +149,11 @@ export default function PantallaInicio(props: any) {
   const [refrescando, setRefrescando] = useState(false);
   const [cantidadProductos, setCantidadProductos] = useState<Record<string, number>>({});
 
-  // Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(25)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
 
-  // ============================================================
-  // 🎬 CARGAR FAVORITOS AL ENFOCAR
-  // ============================================================
   useFocusEffect(
     useCallback(() => {
       if (perfil?.id) {
@@ -171,9 +167,6 @@ export default function PantallaInicio(props: any) {
     }, [perfil?.id, cargarFavoritos, limpiarFavoritos])
   );
 
-  // ============================================================
-  // 📐 TAMAÑOS
-  // ============================================================
   const tamanos = useMemo(
     () => ({
       padding: responsive.getEspaciado('LG'),
@@ -189,13 +182,14 @@ export default function PantallaInicio(props: any) {
           : SCREEN_WIDTH * 0.42,
       logoSize: responsive.getValor({ tablet: 320, normal: 400, small: 115 }),
       bienvenidaSize: responsive.getValor({ tablet: 240, normal: 300, small: 180 }),
+      // ✅ cuánto subir la imagen de fondo para mostrar la parte de abajo
+      fondoOffset: responsive.getValor({ tablet: -220, normal: -300, small: -150 }),
+      // ✅ cuánto bajar el contenido para que no tape la parte linda de la imagen
+      contenidoOffset: responsive.getValor({ tablet: 60, normal: 60, small: 30 }),
     }),
     [responsive]
   );
 
-  // ============================================================
-  // 🔄 CARGA DE DATOS
-  // ============================================================
   const cargarOfertas = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -213,28 +207,43 @@ export default function PantallaInicio(props: any) {
     }
   }, []);
 
-  const cargarCantidadProductos = useCallback(async () => {
+  const cargarCantidadProductos = useCallback(async (intento: number = 1) => {
     try {
       const { data, error } = await supabase
         .from('productos')
-        .select('categoria', { count: 'exact', head: true })
+        .select('categoria')
         .eq('disponible', true);
 
-      if (error) throw error;
+      if (error) {
+        // ✅ Si es un error de JWT (token futuro), reintentamos 1 vez
+        if (error.code === 'PGRST303' && intento < 2) {
+          console.log('🔄 Token con fecha futura, reintentando en 1s...');
+          await new Promise((r) => setTimeout(r, 1000));
+          return cargarCantidadProductos(intento + 1);
+        }
+
+        // ✅ Si es PGRST303 después del reintento, lo silenciamos (no es error real)
+        if (error.code === 'PGRST303') {
+          console.log('ℹ️ JWT desfasado, ignorando (se resolverá solo)');
+          return;
+        }
+
+        throw error;
+      }
 
       const conteo: Record<string, number> = {};
       data?.forEach((item: any) => {
         conteo[item.categoria] = (conteo[item.categoria] || 0) + 1;
       });
       setCantidadProductos(conteo);
-    } catch (error) {
-      console.error('❌ Error contando productos:', error);
+    } catch (error: any) {
+      // Solo logueamos errores reales (no PGRST303)
+      if (error?.code !== 'PGRST303') {
+        console.error('❌ Error contando productos:', error);
+      }
     }
   }, []);
 
-  // ============================================================
-  // 🎬 EFECTOS
-  // ============================================================
   useEffect(() => {
     cargarOfertas();
     cargarCantidadProductos();
@@ -251,13 +260,10 @@ export default function PantallaInicio(props: any) {
     setRefrescando(true);
     const promesas: Promise<any>[] = [cargarOfertas(), cargarCantidadProductos()];
     if (perfil?.id) promesas.push(cargarFavoritos(perfil.id));
-    await Promise.all(promesas);
+    await Promise.allSettled(promesas);
     setRefrescando(false);
   }, [cargarOfertas, cargarCantidadProductos, cargarFavoritos, perfil?.id]);
 
-  // ============================================================
-  // 📊 UNIFICAR FAVORITOS
-  // ============================================================
   const favoritosUnificados = useMemo(
     () => unificarFavoritos(favoritosManuales, topRanking, 10),
     [favoritosManuales, topRanking]
@@ -266,14 +272,14 @@ export default function PantallaInicio(props: any) {
   const tieneFavoritos = favoritosUnificados.length > 0;
   const todosSonManuales = favoritosUnificados.every((f) => f.origen === 'manual');
 
-  // ============================================================
-  // 🖼️ RENDER CATEGORÍA
-  // ============================================================
+  // ✅ Ancho para 2 columnas (se usa dentro de renderCategoria)
+  const padding = tamanos.padding;
+  const categoriaGridWidth = (SCREEN_WIDTH - padding * 2 - 12) / 2;
+
   const renderCategoria = useCallback(
     ({ item }: { item: CategoriaData }) => {
-      const width = tamanos.categoriaWidth;
+      const width = categoriaGridWidth;
       const count = cantidadProductos[item.id] || 0;
-      const cantidadMostrar = item.esOferta ? ofertas.length : count;
 
       return (
         <TouchableOpacity
@@ -303,7 +309,7 @@ export default function PantallaInicio(props: any) {
             <Text
               style={[
                 styles.categoriaNombre,
-                { fontSize: responsive.getValor({ tablet: 16, normal: 12, small: 12 }) },
+                { fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }) },
               ]}
               numberOfLines={1}
             >
@@ -312,7 +318,7 @@ export default function PantallaInicio(props: any) {
             <Text
               style={[
                 styles.categoriaDesc,
-                { fontSize: responsive.getValor({ tablet: 11, normal: 8, small: 8 }) },
+                { fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }) },
               ]}
               numberOfLines={1}
             >
@@ -322,12 +328,9 @@ export default function PantallaInicio(props: any) {
         </TouchableOpacity>
       );
     },
-    [tamanos.categoriaWidth, cantidadProductos, ofertas.length, responsive, props.navigation]
+    [categoriaGridWidth, cantidadProductos, responsive, props.navigation]
   );
 
-  // ============================================================
-  // ⭐ RENDER FAVORITO (con badge de origen)
-  // ============================================================
   const renderFavorito = useCallback(
     ({ item }: { item: FavoritoConOrigen }) => {
       const producto = item.producto;
@@ -354,7 +357,6 @@ export default function PantallaInicio(props: any) {
               style={styles.favoritoImagen}
               resizeMode="cover"
             />
-            {/* ✅ BADGE de origen: ❤️ si es manual, 🔥 si es ranking */}
             <View style={styles.favoritoBadge}>
               <Text style={{ fontSize: 14 }}>{esManual ? '❤️' : '🔥'}</Text>
             </View>
@@ -380,27 +382,38 @@ export default function PantallaInicio(props: any) {
     [tamanos.favoritoWidth, props.navigation, agregarProducto]
   );
 
-  // ============================================================
-  // 🏗️ RENDER
-  // ============================================================
-  const padding = tamanos.padding;
   const nombreMostrar = perfil?.nombre_cliente || (sesion ? 'Cliente' : 'Invitado');
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
-        style={styles.backgroundGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      {/* ✅ FONDO SIMPSONS A PANTALLA COMPLETA + GRADIENTE SEMITRANSPARENTE */}
+      <View style={styles.backgroundGradient}>
+        <Image
+          source={springfieldFondo}
+          style={[
+            StyleSheet.absoluteFill,
+            { top: tamanos.fondoOffset },
+          ]}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={[
+            'rgba(245,242,237,0.90)',
+            'rgba(255,255,255,0.82)',
+            'rgba(245,242,237,0.90)',
+          ]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      </View>
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + responsive.spacing(16),
+            paddingTop: insets.top + responsive.spacing(16) + tamanos.contenidoOffset,
             paddingBottom: insets.bottom + responsive.spacing(48) * 2,
           },
         ]}
@@ -445,14 +458,7 @@ export default function PantallaInicio(props: any) {
             </Animated.View>
 
             <View style={styles.saludoContainer}>
-              <Text
-                style={[
-                  styles.headerGreeting,
-                  { fontSize: responsive.getValor({ tablet: 15, normal: 12, small: 11 }) },
-                ]}
-              >
-                Hola
-              </Text>
+
               <Text
                 style={[
                   styles.headerName,
@@ -463,7 +469,6 @@ export default function PantallaInicio(props: any) {
               </Text>
             </View>
 
-            {/* ✅ CTA login para invitados */}
             {!sesion && (
               <TouchableOpacity
                 style={styles.loginCTA}
@@ -538,27 +543,16 @@ export default function PantallaInicio(props: any) {
           </View>
         )}
 
-        {/* CATEGORÍAS */}
+        {/* CATEGORÍAS EN 2 COLUMNAS */}
         <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 17 }) },
-            ]}
-          >
-            Categorías
-          </Text>
-
           <FlatList
-            horizontal
             data={CATEGORIAS}
             keyExtractor={(item) => item.id}
             renderItem={renderCategoria}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-            snapToInterval={tamanos.categoriaWidth + 12}
-            decelerationRate="fast"
-            snapToAlignment="start"
+            numColumns={2}
+            scrollEnabled={false}
+            columnWrapperStyle={styles.categoriasRow}
+            contentContainerStyle={styles.categoriasGrid}
           />
         </View>
 
@@ -608,17 +602,17 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bienvenidaImagen: {
-    borderRadius: 999,
+    borderRadius: 7000,
     backgroundColor: 'transparent',
     marginTop: -50,
-    marginBottom: -60,
+    marginBottom: -70,
     marginLeft: 0,
   },
   logoBienvenida: {
     backgroundColor: 'transparent',
-    marginBottom: -30,
+    marginBottom: 80,
     marginLeft: 0,
-    marginTop: -30,
+    marginTop: -40,
   },
   saludoContainer: {
     marginTop: 2,
@@ -683,7 +677,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 12,
   },
-  // ✅ Loading de favoritos
+  // ✅ Grid de categorías (2 columnas)
+  categoriasRow: {
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  categoriasGrid: {
+    paddingVertical: 4,
+  },
   favoritosLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -699,7 +700,6 @@ const styles = StyleSheet.create({
     borderRadius: DISENO.radius.md,
     overflow: 'hidden',
     borderWidth: 1,
-    marginRight: 12,
   },
   categoriaImageContainer: {
     width: '100%',
@@ -780,6 +780,6 @@ const styles = StyleSheet.create({
     borderRadius: DISENO.radius.full,
   },
   footerSpacing: {
-    height: 20,
+    height: 150,
   },
 });

@@ -20,7 +20,6 @@ import { captureRef } from 'react-native-view-shot';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Cupon } from '../../lib/cupones/cuponTypes';
-import { generarDatosQR, generarUrlCupon } from '../../lib/cupones/generadorQR';
 import { formatearDescuento, colorPorTipo, iconoPorTipo } from '../../lib/cupones/cuponUtils';
 import { Colores } from '../../lib/colores';
 import { useToast, Toast } from '../../components/Toast';
@@ -38,41 +37,11 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
 
     if (!cupon) return null;
 
-    const datosQR = generarDatosQR({
-        codigo: cupon.codigo,
-        titulo: cupon.titulo,
-        tipo: cupon.tipo,
-        valor_descuento: cupon.valor_descuento,
-    });
+    // ✅ QR ahora contiene SOLO el código (sin pasar por la web)
+    const datosQR = cupon.codigo;
 
-    // ✅ ENLACE WEB (clickeable en WhatsApp)
-    const urlWeb = `https://krustyburger.com.ar/canjear?codigo=${cupon.codigo}`;
-
-    // ✅ Deep link (para cuando la app ya está abierta)
-    const urlDeepLink = `krustyburger://cupon/${cupon.codigo}`;
-
-    // ✅ Abrir enlace (intenta deep link primero, fallback a web)
-    const abrirEnlace = async () => {
-        try {
-            // Primero intentar con deep link
-            const supported = await Linking.canOpenURL(urlDeepLink);
-            if (supported) {
-                await Linking.openURL(urlDeepLink);
-                toast.exito('✅ Abriendo en la app');
-            } else {
-                // Si no, abrir la web
-                await Linking.openURL(urlWeb);
-                toast.exito('✅ Abriendo en el navegador');
-            }
-        } catch (error) {
-            console.error('Error abriendo enlace:', error);
-            try {
-                await Linking.openURL(urlWeb);
-            } catch (e) {
-                toast.error('No se pudo abrir el enlace');
-            }
-        }
-    };
+    // ✅ Deep link (por si algún día se quiere usar)
+    const urlDeepLink = `krustyburger://canjear?codigo=${cupon.codigo}`;
 
     // ✅ Guardar QR en galería
     const guardarQR = async () => {
@@ -96,15 +65,13 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
         }
     };
 
-    // ✅ Compartir QR - CON ENLACE WEB (clickeable en WhatsApp)
+    // ✅ Compartir QR
     const compartirQR = async () => {
         try {
             setGuardando(true);
 
-            // Capturar QR como imagen
             const uri = await captureRef(qrRef.current, { format: 'png', quality: 1 });
 
-            // ✅ Mensaje con ENLACE WEB (clickeable en WhatsApp)
             const mensaje =
                 `🎫 *CUPÓN KRUSTY BURGER*
 
@@ -117,12 +84,10 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
                     year: 'numeric'
                 })}
 
-🔗 Para canjear, hacé clic aquí:
-${urlWeb}
+🔗 Para canjear, abrí la app Krusty y escaneá el QR o ingresá el código.
 
 🍔 Krusty Burger`;
 
-            // ✅ Compartir con imagen
             await Share.share({
                 message: mensaje,
                 url: uri,
@@ -134,7 +99,6 @@ ${urlWeb}
         } catch (error) {
             console.error('Error compartiendo QR:', error);
 
-            // ✅ Fallback: compartir solo texto con enlace web
             try {
                 const mensajeTexto =
                     `🎫 CUPÓN KRUSTY BURGER
@@ -143,15 +107,12 @@ ${urlWeb}
 💰 ${formatearDescuento(cupon)}
 🔑 Código: ${cupon.codigo}
 
-🔗 Para canjear, hacé clic aquí:
-${urlWeb}
-
 🍔 Krusty Burger`;
 
                 await Share.share({
                     message: mensajeTexto,
                 });
-                toast.exito('✅ Enlace compartido');
+                toast.exito('✅ Código compartido');
             } catch (e) {
                 toast.error('No se pudo compartir');
             }
@@ -160,7 +121,7 @@ ${urlWeb}
         }
     };
 
-    // ✅ Compartir SOLO el enlace web (opción rápida)
+    // ✅ Compartir solo el código
     const compartirEnlace = async () => {
         try {
             const mensaje =
@@ -170,15 +131,12 @@ ${urlWeb}
 💰 ${formatearDescuento(cupon)}
 🔑 ${cupon.codigo}
 
-🔗 Para canjear, hacé clic aquí:
-${urlWeb}
-
 🍔 Krusty Burger`;
 
             await Share.share({
                 message: mensaje,
             });
-            toast.exito('✅ Enlace compartido');
+            toast.exito('✅ Código compartido');
         } catch (error) {
             toast.error('No se pudo compartir');
         }
@@ -228,11 +186,11 @@ ${urlWeb}
                                 </View>
                             </View>
 
-                            {/* Enlace web - clickeable */}
-                            <TouchableOpacity style={styles.urlContainer} onPress={abrirEnlace}>
-                                <Text style={styles.urlTexto} numberOfLines={1}>{urlWeb}</Text>
-                                <Text style={styles.urlSubtexto}>🌐 Toca para abrir</Text>
-                            </TouchableOpacity>
+                            {/* Instrucción */}
+                            <View style={styles.urlContainer}>
+                                <Text style={styles.urlTexto}>📱 Escaneá desde la app Krusty</Text>
+                                <Text style={styles.urlSubtexto}>O ingresá el código manualmente</Text>
+                            </View>
 
                             {/* Detalles - Grid 2x2 */}
                             <View style={styles.detallesGrid}>
@@ -291,13 +249,13 @@ ${urlWeb}
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Botón extra: compartir solo enlace web */}
+                            {/* Botón extra: compartir solo código */}
                             <TouchableOpacity
                                 style={styles.enlaceBoton}
                                 onPress={compartirEnlace}
                             >
-                                <Ionicons name="link-outline" size={16} color={Colores.secundario} />
-                                <Text style={styles.enlaceBotonText}>Compartir solo enlace</Text>
+                                <Ionicons name="key-outline" size={16} color={Colores.secundario} />
+                                <Text style={styles.enlaceBotonText}>Compartir solo código</Text>
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
@@ -394,21 +352,20 @@ const styles = StyleSheet.create({
     urlContainer: {
         backgroundColor: Colores.primarioOscuro,
         paddingHorizontal: 10,
-        paddingVertical: 6,
+        paddingVertical: 8,
         borderRadius: 8,
         marginBottom: 10,
         alignItems: 'center',
     },
     urlTexto: {
-        fontSize: 11,
+        fontSize: 12,
         color: Colores.primario,
-        fontWeight: '500',
-        textDecorationLine: 'underline',
+        fontWeight: '600',
     },
     urlSubtexto: {
-        fontSize: 9,
+        fontSize: 10,
         color: Colores.textoGris,
-        marginTop: 1,
+        marginTop: 2,
     },
     detallesGrid: {
         flexDirection: 'row',

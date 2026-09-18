@@ -1,4 +1,4 @@
-
+// components/cupones/CuponQR.tsx
 import React, { useState } from 'react';
 import {
     View,
@@ -93,6 +93,49 @@ export default function CuponQR({
     }
 
     // ============================================================
+    // 🔎 Normalizador de códigos escaneados
+    // ============================================================
+    // Acepta 4 formatos distintos y extrae el código en todos:
+    //   1. Código plano:           KRU-A2TV32
+    //   2. URL web:                https://krustyburger.com.ar/canjear?codigo=KRU-A2TV32
+    //   3. Deep link:              krustyburger://canjear?codigo=KRU-A2TV32
+    //   4. JSON viejo:             {"tipo":"CUPON_KRUSTY","codigo":"KRU-A2TV32",...}
+    // ============================================================
+    const normalizarCodigoEscaneado = (data: string): string => {
+        const limpio = data.trim();
+
+        // Caso 1: URL web → extraer ?codigo=
+        try {
+            const url = new URL(limpio);
+            const codigo = url.searchParams.get('codigo');
+            if (codigo) {
+                return codigo.trim().toUpperCase();
+            }
+        } catch {
+            // no es URL válida, seguimos
+        }
+
+        // Caso 2: deep link → extraer ?codigo= (por si URL falla)
+        const matchDeepLink = limpio.match(/[?&]codigo=([A-Z0-9-]+)/i);
+        if (matchDeepLink) {
+            return matchDeepLink[1].trim().toUpperCase();
+        }
+
+        // Caso 3: JSON viejo → extraer .codigo
+        try {
+            const json = JSON.parse(limpio);
+            if (json?.codigo) {
+                return String(json.codigo).trim().toUpperCase();
+            }
+        } catch {
+            // no es JSON, seguimos
+        }
+
+        // Caso 4: código plano
+        return limpio.toUpperCase();
+    };
+
+    // ============================================================
     // 🔎 QR detectado
     // ============================================================
 
@@ -113,13 +156,16 @@ export default function CuponQR({
 
         setProcesando(true);
 
+        const codigoNormalizado = normalizarCodigoEscaneado(data);
+
         console.log('📷 QR detectado:', {
             type,
-            data,
+            dataOriginal: data,
+            codigoNormalizado,
         });
 
-        // Enviamos el contenido del QR al componente padre.
-        onCodigoDetectado(data.trim());
+        // Enviamos el código normalizado al componente padre.
+        onCodigoDetectado(codigoNormalizado);
     };
 
     // ============================================================
@@ -403,4 +449,3 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
 });
-
