@@ -187,7 +187,7 @@ export default function PantallaInicio(props: any) {
         : responsive.isTablet
           ? SCREEN_WIDTH * 0.3
           : SCREEN_WIDTH * 0.42,
-      logoSize: responsive.getValor({ tablet: 180, normal: 160, small: 115 }),
+      logoSize: responsive.getValor({ tablet: 320, normal: 400, small: 115 }),
       bienvenidaSize: responsive.getValor({ tablet: 240, normal: 300, small: 180 }),
     }),
     [responsive]
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
   bienvenidaImagen: {
     borderRadius: 999,
     backgroundColor: 'transparent',
-    marginTop: -40,
+    marginTop: -50,
     marginBottom: -60,
     marginLeft: 0,
   },
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     marginBottom: -30,
     marginLeft: 0,
-    marginTop: 0,
+    marginTop: -30,
   },
   saludoContainer: {
     marginTop: 2,
