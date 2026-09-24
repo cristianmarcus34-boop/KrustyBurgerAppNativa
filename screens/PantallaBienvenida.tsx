@@ -571,6 +571,7 @@ const estilos = StyleSheet.create({
         color: Colores.textoGris,
         textDecorationLine: 'underline',
         fontWeight: '400',
+
     },
 
     // ============================================================

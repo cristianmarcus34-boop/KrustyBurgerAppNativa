@@ -1,7 +1,18 @@
 // lib/cupones/cuponFisicoTypes.ts
 
 export type EstadoCuponFisico = 'disponible' | 'asignado' | 'usado' | 'anulado';
-export type EstiloPDF = 'retro' | 'clean' | 'mixto';
+
+export type EstiloPDF =
+    | 'retro'
+    | 'clean'
+    | 'mixto'
+    | 'arena'
+    | 'oliva'
+    | 'noir'
+    | 'kraft'
+    | 'durazno'
+    | 'menta'
+    | 'vino';
 
 export interface LoteCuponesFisicos {
     id: number;

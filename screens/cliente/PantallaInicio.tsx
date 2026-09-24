@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image, // ✅ se queda el de react-native
+  Image,
   Animated,
   RefreshControl,
   FlatList,
@@ -37,7 +37,7 @@ const ofertasImg = require('../../assets/imagenes/categorias/ofertas.jpg');
 const logoKrusty = require('../../assets/icon.png');
 const bienvenidaImg = require('../../assets/imagenes/bienvenidos.png');
 
-// ✅ FONDO SIMPSONS (el que ocupa toda la pantalla)
+// ✅ FONDO SIMPSONS
 const springfieldFondo = require('../../assets/imagenes/simpsons/springfieldbannerinicio.jpg');
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -167,8 +167,11 @@ export default function PantallaInicio(props: any) {
     }, [perfil?.id, cargarFavoritos, limpiarFavoritos])
   );
 
-  const tamanos = useMemo(
-    () => ({
+  const tamanos = useMemo(() => {
+    const logoFactor = responsive.isTablet ? 0.85 : responsive.isSmallPhone ? 1.5 : 1.15;
+    const bienvenidaFactor = responsive.isTablet ? 0.55 : responsive.isSmallPhone ? 0.95 : 0.78;
+
+    return {
       padding: responsive.getEspaciado('LG'),
       categoriaWidth: responsive.isDesktop
         ? SCREEN_WIDTH * 0.18
@@ -180,15 +183,12 @@ export default function PantallaInicio(props: any) {
         : responsive.isTablet
           ? SCREEN_WIDTH * 0.3
           : SCREEN_WIDTH * 0.42,
-      logoSize: responsive.getValor({ tablet: 320, normal: 400, small: 115 }),
-      bienvenidaSize: responsive.getValor({ tablet: 240, normal: 300, small: 180 }),
-      // ✅ cuánto subir la imagen de fondo para mostrar la parte de abajo
+      logoSize: SCREEN_WIDTH * logoFactor,
+      bienvenidaSize: SCREEN_WIDTH * bienvenidaFactor,
       fondoOffset: responsive.getValor({ tablet: -220, normal: -300, small: -150 }),
-      // ✅ cuánto bajar el contenido para que no tape la parte linda de la imagen
       contenidoOffset: responsive.getValor({ tablet: 60, normal: 60, small: 30 }),
-    }),
-    [responsive]
-  );
+    };
+  }, [responsive]);
 
   const cargarOfertas = useCallback(async () => {
     try {
@@ -215,14 +215,12 @@ export default function PantallaInicio(props: any) {
         .eq('disponible', true);
 
       if (error) {
-        // ✅ Si es un error de JWT (token futuro), reintentamos 1 vez
         if (error.code === 'PGRST303' && intento < 2) {
           console.log('🔄 Token con fecha futura, reintentando en 1s...');
           await new Promise((r) => setTimeout(r, 1000));
           return cargarCantidadProductos(intento + 1);
         }
 
-        // ✅ Si es PGRST303 después del reintento, lo silenciamos (no es error real)
         if (error.code === 'PGRST303') {
           console.log('ℹ️ JWT desfasado, ignorando (se resolverá solo)');
           return;
@@ -237,7 +235,6 @@ export default function PantallaInicio(props: any) {
       });
       setCantidadProductos(conteo);
     } catch (error: any) {
-      // Solo logueamos errores reales (no PGRST303)
       if (error?.code !== 'PGRST303') {
         console.error('❌ Error contando productos:', error);
       }
@@ -272,7 +269,6 @@ export default function PantallaInicio(props: any) {
   const tieneFavoritos = favoritosUnificados.length > 0;
   const todosSonManuales = favoritosUnificados.every((f) => f.origen === 'manual');
 
-  // ✅ Ancho para 2 columnas (se usa dentro de renderCategoria)
   const padding = tamanos.padding;
   const categoriaGridWidth = (SCREEN_WIDTH - padding * 2 - 12) / 2;
 
@@ -440,14 +436,6 @@ export default function PantallaInicio(props: any) {
               ]}
             >
               <Image
-                source={bienvenidaImg}
-                style={[
-                  styles.bienvenidaImagen,
-                  { width: tamanos.bienvenidaSize, height: tamanos.bienvenidaSize },
-                ]}
-                resizeMode="contain"
-              />
-              <Image
                 source={logoKrusty}
                 style={[
                   styles.logoBienvenida,
@@ -455,10 +443,41 @@ export default function PantallaInicio(props: any) {
                 ]}
                 resizeMode="contain"
               />
+
+              {/* ✅ SUBTÍTULO EN DOS LÍNEAS: frase gris arriba, "Krusty" rojo abajo */}
+              <View style={styles.subtituloContainer}>
+                <Text
+                  style={[
+                    styles.subtituloLinea1,
+                    {
+                      fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 11 }),
+                      lineHeight: responsive.getValor({ tablet: 19, normal: 17, small: 15 }),
+                    },
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  Si no te atragantás, no es una
+                </Text>
+                <Text
+                  style={[
+                    styles.subtituloKrusty,
+                    {
+                      fontSize: responsive.getValor({ tablet: 30, normal: 26, small: 22 }),
+                      lineHeight: responsive.getValor({ tablet: 36, normal: 32, small: 26 }),
+                    },
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  Krusty
+                </Text>
+              </View>
             </Animated.View>
 
             <View style={styles.saludoContainer}>
-
               <Text
                 style={[
                   styles.headerName,
@@ -601,21 +620,38 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     width: '100%',
   },
-  bienvenidaImagen: {
-    borderRadius: 7000,
-    backgroundColor: 'transparent',
-    marginTop: -50,
-    marginBottom: -70,
-    marginLeft: 0,
-  },
   logoBienvenida: {
     backgroundColor: 'transparent',
-    marginBottom: 80,
+    marginBottom: 0,
     marginLeft: 0,
     marginTop: -40,
   },
+  // ✅ Contenedor de las dos líneas (frase + Krusty)
+  subtituloContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -65,
+    marginBottom: 70,
+    paddingHorizontal: 20,
+  },
+  subtituloLinea1: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.text,      // 👈 negro en vez de textSecondary
+    textAlign: 'center',
+    letterSpacing: 0,
+    opacity: 1,                     // 👈 quitamos la opacidad 0.85
+  },
+  subtituloKrusty: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: '#a80e0e',       // 👈 bordo oscuro
+    textAlign: 'center',
+    letterSpacing: 0,
+    marginTop: 1,
+  },
   saludoContainer: {
-    marginTop: 2,
+    marginTop: 200,
   },
   headerGreeting: {
     fontFamily: FUENTES.regular,
@@ -677,7 +713,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 12,
   },
-  // ✅ Grid de categorías (2 columnas)
   categoriasRow: {
     justifyContent: 'space-between',
     marginBottom: 12,

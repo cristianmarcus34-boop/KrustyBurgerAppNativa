@@ -1,4 +1,4 @@
-﻿// screens/auth/PantallaLogin.tsx - CON SIMPSONFONT Y TIPOS CENTRALIZADOS
+﻿// screens/auth/PantallaLogin.tsx - CON SIMPSONFONT, TIPOS CENTRALIZADOS Y GOOGLE SIGN-IN
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -23,12 +23,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { notificacionService } from '../../services/notificacionService';
 import { supabase } from '../../lib/supabase';
 import { DISENO, useResponsive } from '../../lib/colores';
 import { FUENTES, TAMANOS_DISPLAY } from '../../lib/fuentes';
 import { RootStackParamList } from '../../lib/tipos';
+
+// Es necesario para cerrar la sesión de WebBrowser correctamente en Android/iOS
+WebBrowser.maybeCompleteAuthSession();
 
 const logoImage = require('../../assets/logo-krusty.png');
 
@@ -63,6 +68,7 @@ export default function PantallaLogin(props: any) {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [cargandoGoogle, setCargandoGoogle] = useState(false);
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [recordarUsuario, setRecordarUsuario] = useState(false);
   const [cargandoRecordatorio, setCargandoRecordatorio] = useState(true);
@@ -100,7 +106,6 @@ export default function PantallaLogin(props: any) {
     };
   }, []);
 
-  // ✅ CARGAR ESTADO DE BLOQUEO
   const cargarEstadoBloqueo = async () => {
     try {
       const [attemptsStr, blockedUntilStr] = await Promise.all([
@@ -402,6 +407,64 @@ export default function PantallaLogin(props: any) {
     }
   };
 
+  // ============================================================
+  // ✅ MANEJADOR DE GOOGLE SIGN-IN
+  // ============================================================
+  const manejarGoogleLogin = async () => {
+    try {
+      setCargandoGoogle(true);
+      setMensajeErrorGeneral(null);
+
+      const redirectTo = makeRedirectUri({
+        scheme: 'krustyburger',
+        path: 'auth/callback',
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+        if (res.type === 'success' && res.url) {
+          const urlParams = new URLSearchParams(res.url.split('#')[1] || res.url.split('?')[1]);
+          const access_token = urlParams.get('access_token');
+          const refresh_token = urlParams.get('refresh_token');
+
+          if (access_token && refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            if (sessionError) throw sessionError;
+
+            // Registrar token de notificaciones si hay sesión activa
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+              try {
+                await notificacionService.registrarToken(session.user.id);
+              } catch (e) {
+                console.log('⚠️ Error registrando notificaciones post-Google:', e);
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error en Google Login:', error);
+      Alert.alert('⚠️ Error con Google', error?.message || 'No se pudo iniciar sesión con Google.');
+    } finally {
+      setCargandoGoogle(false);
+    }
+  };
+
   const manejarInvitado = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -430,9 +493,6 @@ export default function PantallaLogin(props: any) {
   // ✅ RESPONSIVE
   // ============================================================
   const isTablet = responsive.isTablet;
-  const isSmallPhone = responsive.isSmallPhone;
-
-  // ✅ LOGO MÁS GRANDE
   const logoSize = responsive.getValor({ tablet: 220, normal: 180, small: 150 });
   const inputSize = responsive.getValor({ tablet: 14, normal: 13, small: 12 });
   const buttonTextSize = responsive.getValor({ tablet: 22, normal: 20, small: 18 });
@@ -652,6 +712,33 @@ export default function PantallaLogin(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
+
+
+            <View style={estilos.separadorContainer}>
+              <View style={estilos.separador} />
+              <Text style={estilos.separadorTexto}>o</Text>
+              <View style={estilos.separador} />
+            </View>
+
+            {/* ✅ BOTÓN DE GOOGLE SIGN-IN */}
+            <TouchableOpacity
+              style={[estilos.botonGoogle, cargandoGoogle && { opacity: 0.6 }]}
+              onPress={manejarGoogleLogin}
+              disabled={cargandoGoogle || cargando}
+              activeOpacity={0.8}
+            >
+              {cargandoGoogle ? (
+                <ActivityIndicator color={DISENO.colors.text} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#DB4437" style={estilos.googleIcon} />
+                  <Text style={[estilos.botonGoogleTexto, { fontSize: inputSize }]}>
+                    Continuar con Google
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <View style={estilos.enlacesContainer}>
               <TouchableOpacity onPress={() => navigation.navigate('Registro')} activeOpacity={0.6}>
                 <Text style={[estilos.enlace, { fontSize: inputSize }]}>
@@ -660,23 +747,13 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
             </View>
 
-            <View style={estilos.separadorContainer}>
-              <View style={estilos.separador} />
-              <Text style={estilos.separadorTexto}>o</Text>
-              <View style={estilos.separador} />
-            </View>
-
-            <TouchableOpacity
-              style={estilos.bannerLogin}
-              onPress={() => navigation.navigate('Registro')}
-              activeOpacity={0.7}
-            >
+            <View style={estilos.bannerLogin}>
               <Ionicons name="gift-outline" size={18} color={DISENO.colors.accentSecondary} />
               <Text style={[estilos.bannerLoginTexto, { fontSize: inputSize - 1 }]}>
                 🎁 ¿Nuevo? Gana <Text style={estilos.bannerLoginDestacado}>500 puntos</Text> al registrarte
               </Text>
               <Ionicons name="chevron-forward" size={16} color={DISENO.colors.textTertiary} />
-            </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={estilos.botonInvitado}
@@ -710,7 +787,7 @@ export default function PantallaLogin(props: any) {
               </TouchableOpacity>
             </View>
 
-            <Text style={estilos.versionTexto}>v1.0.0</Text>
+            <Text style={estilos.versionTexto}>v1.0.2</Text>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -916,13 +993,38 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 24,
   },
   textoBoton: {
-    fontFamily: FUENTES.display,  // ✅ Simpsonfont
+    fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.surface,
     letterSpacing: 1,
   },
+  // ✅ ESTILOS PARA EL BOTÓN DE GOOGLE
+  botonGoogle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: DISENO.colors.surfaceHover,
+    borderWidth: 1.5,
+    borderColor: DISENO.colors.border,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 14,
+    gap: 10,
+    ...DISENO.shadow.sm,
+  },
+  googleIcon: {
+    marginRight: 4,
+  },
+  botonGoogleTexto: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   enlacesContainer: {
-    marginTop: 18,
+    marginTop: 6,
     alignItems: 'center',
   },
   enlace: {
@@ -938,8 +1040,8 @@ const estilos = StyleSheet.create({
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 22,
-    marginBottom: 14,
+    marginTop: 16,
+    marginBottom: 10,
   },
   separador: {
     flex: 1,
@@ -960,6 +1062,7 @@ const estilos = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
+    marginTop: 10,
     marginBottom: 10,
     borderRadius: 12,
     backgroundColor: DISENO.colors.accentSecondary + '10',
@@ -988,6 +1091,7 @@ const estilos = StyleSheet.create({
     borderWidth: 1,
     borderColor: DISENO.colors.border,
     backgroundColor: DISENO.colors.surfaceHover,
+    marginTop: 4,
   },
   botonInvitadoTexto: {
     fontFamily: FUENTES.regular,

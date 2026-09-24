@@ -2,7 +2,7 @@
   "expo": {
     "name": "KrustyBurger",
     "slug": "KrustyBurger",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -140,7 +140,9 @@
       "./plugins/withAndroidManifest.js",
       "expo-web-browser",
       "@react-native-community/datetimepicker",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-image",
+      "@sentry/react-native"
     ],
     "updates": {
       "enabled": true,
