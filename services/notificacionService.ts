@@ -101,10 +101,19 @@ export const notificacionService = {
     // 📱 REGISTRO Y PERMISOS
     // ============================================================
 
-    async registrarToken(usuarioId: string) {
+    async tienePermisos(): Promise<boolean> {
         try {
             const { status } = await Notifications.getPermissionsAsync();
-            if (status !== 'granted') {
+            return status === 'granted';
+        } catch (error) {
+            console.error('❌ Error consultando permisos de notificaciones:', error);
+            return false;
+        }
+    },
+
+    async registrarToken(usuarioId: string) {
+        try {
+            if (!(await this.tienePermisos())) {
                 console.log('🔕 No se registra el token: permisos no concedidos');
                 return false;
             }
@@ -484,6 +493,19 @@ export const notificacionService = {
         sonido?: string
     ) {
         try {
+            if (tipo === 'promocion' || tipo === 'oferta') {
+                const { data: perfil, error: errorPerfil } = await supabase
+                    .from('perfiles')
+                    .select('acepta_promociones')
+                    .eq('id', usuarioId)
+                    .single();
+
+                if (errorPerfil) throw errorPerfil;
+                if (!perfil?.acepta_promociones) {
+                    return { success: false, error: 'El usuario no aceptó recibir promociones.' };
+                }
+            }
+
             const { error: insertError } = await supabase
                 .from('notificaciones_usuarios')
                 .insert({
@@ -529,12 +551,29 @@ export const notificacionService = {
         try {
             const hace60dias = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-            const { data: dispositivos, error } = await supabase
+            let queryDispositivos = supabase
                 .from('dispositivos_push')
-                .select('expo_push_token')
+                .select('usuario_actual_id, expo_push_token')
                 .eq('activo', true)
                 .gte('ultima_actividad', hace60dias);
 
+            if (tipo === 'promocion' || tipo === 'oferta') {
+                const { data: perfilesConConsentimiento, error: errorPerfiles } = await supabase
+                    .from('perfiles')
+                    .select('id')
+                    .eq('acepta_promociones', true);
+
+                if (errorPerfiles) throw errorPerfiles;
+
+                const idsConConsentimiento = perfilesConConsentimiento?.map((perfil) => perfil.id) || [];
+                if (idsConConsentimiento.length === 0) {
+                    return { success: true, enviados: 0 };
+                }
+
+                queryDispositivos = queryDispositivos.in('usuario_actual_id', idsConConsentimiento);
+            }
+
+            const { data: dispositivos, error } = await queryDispositivos;
             if (error) throw error;
             if (!dispositivos || dispositivos.length === 0) {
                 return { success: true, enviados: 0 };

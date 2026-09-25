@@ -1,6 +1,7 @@
 // screens/cliente/PantallaPerfil.tsx - CON SIMPSONFONT Y TEMA CLARO + NOTIFICACIONES + HISTORIAL DE PUNTOS
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -13,6 +14,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Linking,
+  Switch,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,6 +70,9 @@ export default function PantallaPerfil(props: any) {
   // ✅ ESTADOS
   const [totalPedidos, setTotalPedidos] = useState(0);
   const [mostrarModal, setMostrarModal] = useState(false);
+  const [mostrarPreferenciasNotificaciones, setMostrarPreferenciasNotificaciones] = useState(false);
+  const [notificacionesPermitidas, setNotificacionesPermitidas] = useState(false);
+  const [guardandoPreferenciasNotificaciones, setGuardandoPreferenciasNotificaciones] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [cargandoActualizacion, setCargandoActualizacion] = useState(false);
@@ -144,8 +150,19 @@ export default function PantallaPerfil(props: any) {
         cargarNotificacionesNoLeidas();
         cargarHistorialPuntos();
       }
+      notificacionService.tienePermisos().then(setNotificacionesPermitidas);
     }, [perfil?.id])
   );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        notificacionService.tienePermisos().then(setNotificacionesPermitidas);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   // ============================================================
   // 🔔 CARGAR CONTADOR DE NOTIFICACIONES
@@ -158,6 +175,54 @@ export default function PantallaPerfil(props: any) {
     } catch (error) {
       console.warn('⚠️ Error cargando notificaciones no leídas:', error);
       setNotificacionesNoLeidas(0);
+    }
+  };
+
+  const cambiarConsentimientoPromociones = async (acepta: boolean) => {
+    if (!perfil?.id || guardandoPreferenciasNotificaciones) return;
+
+    setGuardandoPreferenciasNotificaciones(true);
+    const resultado = await actualizarPerfil({ acepta_promociones: acepta });
+    setGuardandoPreferenciasNotificaciones(false);
+
+    if (!resultado.success) {
+      Alert.alert('No se pudo guardar', resultado.error || 'Intentalo de nuevo más tarde.');
+      return;
+    }
+  };
+
+  const activarNotificaciones = async () => {
+    let concedido = await notificacionService.tienePermisos();
+    if (!concedido) {
+      concedido = await notificacionService.solicitarPermisos();
+    }
+
+    setNotificacionesPermitidas(concedido);
+    if (!concedido) {
+      Alert.alert(
+        'Permiso de notificaciones',
+        'Para recibir avisos de pedidos, habilitá las notificaciones de Krusty Burger en los ajustes del dispositivo.',
+        [
+          { text: 'Ahora no', style: 'cancel' },
+          {
+            text: 'Abrir ajustes',
+            onPress: () => {
+              Linking.openSettings().catch((error) => {
+                console.error('No se pudieron abrir los ajustes:', error);
+                Alert.alert('Error', 'No se pudieron abrir los ajustes del dispositivo.');
+              });
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    if (perfil?.id) {
+      const registrado = await notificacionService.registrarToken(perfil.id);
+      if (!registrado) {
+        Alert.alert('Error', 'Se habilitaron los permisos, pero no se pudo registrar este dispositivo.');
+      }
     }
   };
 
@@ -586,6 +651,16 @@ export default function PantallaPerfil(props: any) {
       requiereSesion: true,
     },
     {
+      id: 'preferencias-notificaciones',
+      label: 'Preferencias de notificaciones',
+      icono: 'options-outline',
+      color: DISENO.colors.accent,
+      subtitle: 'Pedidos y promociones',
+      navigate: '',
+      show: true,
+      requiereSesion: true,
+    },
+    {
       id: 'pedidos',
       label: 'Mis Pedidos',
       icono: 'receipt-outline',
@@ -654,6 +729,12 @@ export default function PantallaPerfil(props: any) {
           },
         ]
       );
+      return;
+    }
+
+    if (item.id === 'preferencias-notificaciones') {
+      setMostrarPreferenciasNotificaciones(true);
+      notificacionService.tienePermisos().then(setNotificacionesPermitidas);
       return;
     }
 
@@ -1364,6 +1445,75 @@ export default function PantallaPerfil(props: any) {
         </View>
       </Modal>
 
+      <Modal
+        visible={mostrarPreferenciasNotificaciones}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMostrarPreferenciasNotificaciones(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, {
+            width: isTablet ? 460 : screenWidth - 40,
+            padding: isTablet ? 28 : 22,
+            borderRadius: DISENO.radius.xl,
+          }]}>
+            <View style={styles.modalIcon}>
+              <Ionicons name="notifications-outline" size={42} color={DISENO.colors.accent} />
+            </View>
+            <Text style={[styles.modalTitle, { fontSize: isTablet ? 20 : 18 }]}>
+              Preferencias de notificaciones
+            </Text>
+            <Text style={[styles.modalText, { fontSize: isTablet ? 14 : 13 }]}>
+              Elegí qué comunicaciones querés recibir. Podés cambiar estas preferencias cuando quieras.
+            </Text>
+
+            <View style={styles.notificationPreferenceRow}>
+              <View style={styles.notificationPreferenceInfo}>
+                <Text style={styles.notificationPreferenceTitle}>Avisos de pedidos</Text>
+                <Text style={styles.notificationPreferenceDescription}>
+                  Actualizaciones sobre confirmación, preparación y entrega. Se controlan desde los permisos del dispositivo.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.notificationPermissionButton}
+                onPress={activarNotificaciones}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.notificationPermissionButtonText}>
+                  {notificacionesPermitidas ? 'Administrar' : 'Activar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.notificationPreferenceRow}>
+              <View style={styles.notificationPreferenceInfo}>
+                <Text style={styles.notificationPreferenceTitle}>Promociones y ofertas</Text>
+                <Text style={styles.notificationPreferenceDescription}>
+                  Acepto recibir novedades comerciales. Esta opción es independiente del permiso del dispositivo.
+                </Text>
+              </View>
+              <Switch
+                value={perfil?.acepta_promociones === true}
+                onValueChange={cambiarConsentimientoPromociones}
+                disabled={guardandoPreferenciasNotificaciones}
+                trackColor={{ false: DISENO.colors.border, true: DISENO.colors.success }}
+                thumbColor="#FFFFFF"
+                accessibilityLabel="Aceptar promociones y ofertas"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonConfirm, { marginTop: 20, alignSelf: 'stretch' }]}
+              onPress={() => setMostrarPreferenciasNotificaciones(false)}
+            >
+              <Text style={[styles.modalButtonText, styles.modalButtonConfirmText]}>
+                Listo
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ✅ NUEVO: MODAL PARA VER LA FOTO EN TAMAÑO COMPLETO */}
       <Modal
         visible={mostrarFotoCompleta}
@@ -1929,6 +2079,41 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 22,
+  },
+  notificationPreferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: DISENO.colors.border,
+  },
+  notificationPreferenceInfo: {
+    flex: 1,
+  },
+  notificationPreferenceTitle: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.text,
+    fontSize: 14,
+  },
+  notificationPreferenceDescription: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  notificationPermissionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: DISENO.colors.accent,
+    borderRadius: DISENO.radius.sm,
+  },
+  notificationPermissionButtonText: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.surface,
+    fontSize: 12,
   },
   modalButtons: {
     flexDirection: 'row',

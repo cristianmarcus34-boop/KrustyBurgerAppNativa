@@ -424,35 +424,14 @@ export default function App() {
   }, []);
 
   // ============================================================
-  // 🔔 REGISTRO DE TOKEN (SOLO CON SESIÓN)
+  // 🔔 REGISTRO DEL TOKEN SI LOS PERMISOS YA ESTÁN CONCEDIDOS
   // ============================================================
   useEffect(() => {
-    const configurarNotificaciones = async () => {
-      try {
-        // ✅ Solo si hay sesión activa
-        if (!sesion || !perfil?.id) {
-          console.log('🔕 [Notif] Sin sesión, no se piden permisos');
-          return;
-        }
-
-        console.log('🔔 [Notif] Configurando para:', perfil.id);
-
-        // 1. Pedir permisos
-        const permisosConcedidos = await notificacionService.solicitarPermisos();
-        if (!permisosConcedidos) {
-          console.log('🔕 [Notif] Permisos rechazados');
-          return;
-        }
-
-        // 2. Registrar token (upsert en dispositivos_push)
-        await notificacionService.registrarToken(perfil.id);
-        console.log('✅ [Notif] Token registrado');
-      } catch (error) {
-        console.warn('⚠️ [Notif] Error:', error);
-      }
-    };
-
-    configurarNotificaciones();
+    if (sesion && perfil?.id) {
+      notificacionService.registrarToken(perfil.id).catch((error) => {
+        console.warn('⚠️ [Notif] Error registrando token existente:', error);
+      });
+    }
   }, [sesion, perfil?.id]);
 
   useEffect(() => {

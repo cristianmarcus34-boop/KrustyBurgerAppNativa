@@ -179,6 +179,7 @@ export interface Perfil {
     metodo_pago?: string | null;
     avatar_url?: string | null;
     fcm_token?: string | null;
+    acepta_promociones?: boolean;
     lat_cliente?: number | null;
     lng_cliente?: number | null;
     direccion_manual?: string | null;

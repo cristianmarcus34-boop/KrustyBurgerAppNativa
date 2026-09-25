@@ -38,6 +38,7 @@ interface Usuario {
     email: string;
     fcm_token: string | null;
     rol: string;
+    acepta_promociones?: boolean;
     tokens?: string[];        // ✅ NUEVO: array de tokens (multi-dispositivo)
     tiene_token?: boolean;    // ✅ NUEVO: flag para el badge
 }
@@ -240,7 +241,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
             // 1. Traer perfiles
             const { data: perfiles, error } = await supabase
                 .from('perfiles')
-                .select('id, nombre_cliente, email, rol, fcm_token')
+                .select('id, nombre_cliente, email, rol, fcm_token, acepta_promociones')
                 .in('rol', ['admin', 'cliente', 'repartidor'])
                 .order('nombre_cliente');
 
@@ -479,16 +480,36 @@ export default function PantallaNotificacionesAdmin(props: any) {
      * - perfiles.fcm_token (retrocompatibilidad)
      */
     const obtenerDestinatarios = async () => {
+        const esPromocion = tipo === 'promocion' || tipo === 'oferta';
+
         // Si hay seleccionados manualmente, usarlos
         if (seleccionados.length > 0) {
-            return { count: seleccionados.length, data: seleccionados };
+            if (!esPromocion) {
+                return { count: seleccionados.length, data: seleccionados };
+            }
+
+            const { data: perfilesConConsentimiento, error } = await supabase
+                .from('perfiles')
+                .select('id')
+                .in('id', seleccionados.map((usuario) => usuario.id))
+                .eq('acepta_promociones', true);
+
+            if (error) throw error;
+
+            const idsConConsentimiento = new Set(perfilesConConsentimiento?.map((perfil) => perfil.id) || []);
+            const destinatarios = seleccionados.filter((usuario) => idsConConsentimiento.has(usuario.id));
+            return { count: destinatarios.length, data: destinatarios };
         }
 
         // 1. Traer usuarios del segmento
         let query = supabase
             .from('perfiles')
-            .select('id, nombre_cliente, email, rol, fcm_token')
+            .select('id, nombre_cliente, email, rol, fcm_token, acepta_promociones')
             .in('rol', ['admin', 'cliente', 'repartidor']);
+
+        if (esPromocion) {
+            query = query.eq('acepta_promociones', true);
+        }
 
         if (segmento === 'clientes_frecuentes') {
             const { data: pedidos } = await supabase
