@@ -39,6 +39,7 @@ export const supabase = createClient(URL_SUPABASE, CLAVE_ANONIMA, {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        flowType: 'pkce',           // 👈 NUEVO: flujo seguro para apps móviles
     },
 });
 

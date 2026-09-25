@@ -187,6 +187,7 @@ export default function PantallaInicio(props: any) {
       bienvenidaSize: SCREEN_WIDTH * bienvenidaFactor,
       fondoOffset: responsive.getValor({ tablet: -220, normal: -300, small: -150 }),
       contenidoOffset: responsive.getValor({ tablet: 60, normal: 60, small: 30 }),
+      avatarSize: responsive.getValor({ tablet: 56, normal: 48, small: 42 }),
     };
   }, [responsive]);
 
@@ -379,6 +380,16 @@ export default function PantallaInicio(props: any) {
   );
 
   const nombreMostrar = perfil?.nombre_cliente || (sesion ? 'Cliente' : 'Invitado');
+  const avatarUrl = perfil?.avatar_url;
+
+  // ✅ Ir al perfil (solo si está logueado) y abrir el selector de foto
+  const handlePressAvatar = () => {
+    if (!sesion || !perfil?.id) return;
+
+    // Si el perfil ya tiene avatar, va a Perfil normal (el usuario ve su foto y la cambia ahí)
+    // Si NO tiene avatar, igual va a Perfil — el avatar ? invita a tocarlo para subir uno
+    props.navigation.navigate('Principal', { screen: 'Perfil' });
+  };
 
   return (
     <View style={styles.container}>
@@ -444,7 +455,7 @@ export default function PantallaInicio(props: any) {
                 resizeMode="contain"
               />
 
-              {/* ✅ SUBTÍTULO EN DOS LÍNEAS: frase gris arriba, "Krusty" rojo abajo */}
+              {/* ✅ SUBTÍTULO EN DOS LÍNEAS */}
               <View style={styles.subtituloContainer}>
                 <Text
                   style={[
@@ -477,12 +488,60 @@ export default function PantallaInicio(props: any) {
               </View>
             </Animated.View>
 
-            <View style={styles.saludoContainer}>
+            {/* ✅ SALUDO: avatar + nombre en fila horizontal */}
+            <View style={styles.saludoRow}>
+              {/* Avatar circular (tocable si está logueado) */}
+              <TouchableOpacity
+                onPress={handlePressAvatar}
+                activeOpacity={sesion ? 0.7 : 1}
+                disabled={!sesion || !perfil?.id}
+              >
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={[
+                      styles.avatar,
+                      {
+                        width: tamanos.avatarSize,
+                        height: tamanos.avatarSize,
+                        borderRadius: tamanos.avatarSize / 2,
+                      },
+                    ]}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.avatarFallback,
+                      {
+                        width: tamanos.avatarSize,
+                        height: tamanos.avatarSize,
+                        borderRadius: tamanos.avatarSize / 2,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.avatarInicial,
+                        { fontSize: tamanos.avatarSize * 0.5 },
+                      ]}
+                    >
+                      ?
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
               <Text
                 style={[
                   styles.headerName,
-                  { fontSize: responsive.getValor({ tablet: 30, normal: 24, small: 22 }) },
+                  {
+                    fontSize: responsive.getValor({ tablet: 20, normal: 18, small: 16 }),
+                    lineHeight: responsive.getValor({ tablet: 24, normal: 22, small: 20 }),
+                    marginLeft: 12,
+                  },
                 ]}
+                numberOfLines={2}
               >
                 {nombreMostrar}
               </Text>
@@ -626,7 +685,6 @@ const styles = StyleSheet.create({
     marginLeft: 0,
     marginTop: -40,
   },
-  // ✅ Contenedor de las dos líneas (frase + Krusty)
   subtituloContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -637,18 +695,46 @@ const styles = StyleSheet.create({
   subtituloLinea1: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
-    color: DISENO.colors.text,      // 👈 negro en vez de textSecondary
+    color: DISENO.colors.text,
     textAlign: 'center',
     letterSpacing: 0,
-    opacity: 1,                     // 👈 quitamos la opacidad 0.85
+    opacity: 1,
   },
   subtituloKrusty: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
-    color: '#a80e0e',       // 👈 bordo oscuro
+    color: '#a80e0e',
     textAlign: 'center',
     letterSpacing: 0,
     marginTop: 1,
+  },
+  // ✅ Fila avatar + nombre
+  saludoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 0,
+    marginLeft: 4,
+  },
+  avatar: {
+    backgroundColor: DISENO.colors.surfaceHover,
+    borderWidth: 2,
+    borderColor: DISENO.colors.accent + '30',
+    ...DISENO.shadow.sm,
+  },
+  avatarFallback: {
+    backgroundColor: DISENO.colors.surfaceHover,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: DISENO.colors.accent + '50',
+    borderStyle: 'dashed',
+    ...DISENO.shadow.sm,
+  },
+  avatarInicial: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.accent,
+    textAlign: 'center',
   },
   saludoContainer: {
     marginTop: 200,
@@ -664,8 +750,9 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     marginTop: 0,
+    flexShrink: 1,
   },
   loginCTA: {
     marginTop: 12,

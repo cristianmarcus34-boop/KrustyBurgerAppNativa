@@ -532,3 +532,114 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
 
   limpiarError: () => set({ error: null }),
 }));
+
+// ============================================================
+// 🔔 LISTENER GLOBAL DE CAMBIOS DE AUTENTICACIÓN  👈 NUEVO
+// ============================================================
+// Este listener detecta cuando Supabase cambia el estado de auth
+// (Google Sign-In, magic links, refresh de token, etc.) y actualiza
+// el store automáticamente para que la UI reaccione.
+// ============================================================
+supabase.auth.onAuthStateChange(async (event, session) => {
+  console.log('🔔 [Auth] Evento:', event, '| sesión:', !!session);
+
+  const { perfil } = tiendaAutenticacion.getState();
+
+  // ✅ SIGNED_IN: el usuario acaba de autenticarse (Google, magic link, etc.)
+  if (event === 'SIGNED_IN' && session?.user) {
+    // Si ya teníamos el perfil cargado para este mismo usuario, no recargar
+    if (perfil?.id === session.user.id) {
+      console.log('🔔 [Auth] Perfil ya cargado, actualizando solo la sesión');
+      tiendaAutenticacion.setState({
+        sesion: session,
+        cargando: false,
+        error: null,
+      });
+      return;
+    }
+
+    console.log('🔔 [Auth] Cargando perfil para:', session.user.id);
+
+    try {
+      const { data: perfilData, error: perfilError } = await supabase
+        .from('perfiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (perfilError) {
+        console.error('❌ [Auth] Error cargando perfil:', perfilError);
+        // Aún así seteamos la sesión (el perfil se puede cargar después)
+        tiendaAutenticacion.setState({
+          sesion: session,
+          cargando: false,
+          error: null,
+        });
+        return;
+      }
+
+      // Detectar cambio de usuario para vaciar carrito
+      const ultimoUsuarioId = await AsyncStorage.getItem(STORAGE_ULTIMO_USUARIO);
+      if (ultimoUsuarioId && ultimoUsuarioId !== session.user.id) {
+        console.log('🔄 [Auth] Cambio de usuario → vaciando carrito');
+        await tiendaCarrito.getState().vaciarCarrito();
+      }
+      await AsyncStorage.setItem(STORAGE_ULTIMO_USUARIO, session.user.id);
+
+      // Actualizar store
+      tiendaAutenticacion.setState({
+        sesion: session,
+        perfil: perfilData as Perfil,
+        esAdministrador: perfilData?.rol === 'admin',
+        esRepartidor: perfilData?.rol === 'repartidor',
+        cargando: false,
+        error: null,
+      });
+
+      console.log('✅ [Auth] Store actualizado con perfil:', perfilData?.nombre_cliente);
+
+      // Registrar token de notificaciones
+      try {
+        const service = await getNotificacionService();
+        await service.registrarToken(session.user.id);
+        console.log('✅ [Auth] Token FCM registrado');
+      } catch (error) {
+        console.warn('⚠️ [Auth] No se pudo registrar token FCM:', error);
+      }
+
+      // Actualizar último acceso
+      await supabase
+        .from('perfiles')
+        .update({ ultimo_acceso: new Date().toISOString() })
+        .eq('id', session.user.id);
+
+    } catch (error) {
+      console.error('❌ [Auth] Error en listener SIGNED_IN:', error);
+    }
+  }
+
+  // ✅ SIGNED_OUT: el usuario cerró sesión
+  if (event === 'SIGNED_OUT') {
+    console.log('🔔 [Auth] Usuario cerró sesión');
+    tiendaAutenticacion.setState({
+      sesion: null,
+      perfil: null,
+      esAdministrador: false,
+      esRepartidor: false,
+      cargando: false,
+      error: null,
+    });
+  }
+
+  // ✅ TOKEN_REFRESHED: Supabase renovó el token automáticamente
+  if (event === 'TOKEN_REFRESHED' && session) {
+    console.log('🔔 [Auth] Token renovado');
+    tiendaAutenticacion.setState({ sesion: session });
+  }
+
+  // ✅ USER_UPDATED: el usuario cambió sus datos
+  if (event === 'USER_UPDATED' && session) {
+    console.log('🔔 [Auth] Usuario actualizado');
+    tiendaAutenticacion.setState({ sesion: session });
+  }
+});

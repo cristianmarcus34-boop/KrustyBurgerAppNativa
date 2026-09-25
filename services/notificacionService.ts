@@ -1,9 +1,10 @@
-// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES
+// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES + NOTIFICAR ADMINS + CLIENTES
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { formatearPrecio } from '../lib/formateador';
 
 // ✅ NAVIGATION REF
 let navigationRef: any = null;
@@ -51,6 +52,10 @@ const procesarNotificacion = (data: any) => {
 
     switch (tipo) {
         case 'pedido':
+            if (data?.esParaAdmin) {
+                navigationRef.navigate('GestionPedidos');
+                break;
+            }
             if (data?.pedidoId) {
                 navigationRef.navigate('Seguimiento', { pedidoId: data.pedidoId });
             } else {
@@ -260,6 +265,18 @@ export const notificacionService = {
                     sound: 'saxolisa.wav',
                 });
 
+                await Notifications.setNotificationChannelAsync('pedidos_admin', {
+                    name: '🔔 Nuevos pedidos (admin)',
+                    importance: Notifications.AndroidImportance.MAX,
+                    vibrationPattern: [0, 500, 200, 500],
+                    lightColor: '#E53935',
+                    enableVibrate: true,
+                    enableLights: true,
+                    bypassDnd: true,
+                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                    sound: 'saxolisa.wav',
+                });
+
                 await Notifications.setNotificationChannelAsync('sistema', {
                     name: '⚙️ Sistema',
                     importance: Notifications.AndroidImportance.MAX,
@@ -280,7 +297,6 @@ export const notificacionService = {
                     sound: 'saxolisa.wav',
                 });
 
-                // ✅ Canal dedicado para notificaciones con imagen
                 await Notifications.setNotificationChannelAsync('imagenes', {
                     name: '🖼️ Promociones con imagen',
                     importance: Notifications.AndroidImportance.MAX,
@@ -293,7 +309,6 @@ export const notificacionService = {
                     sound: 'saxolisa.wav',
                 });
 
-                // ✅ NUEVO: canal para imágenes con sonido default (permite BigPicture)
                 await Notifications.setNotificationChannelAsync('imagenes_v2', {
                     name: '🖼️ Promociones con imagen',
                     importance: Notifications.AndroidImportance.MAX,
@@ -358,23 +373,19 @@ export const notificacionService = {
 
             console.log('📷 ========== ENVIANDO ==========');
             console.log('📷 Tokens:', tokensValidos.length, '| Título:', titulo);
-            console.log('📷 Imagen:', data?.imagen ? 'SÍ' : 'NO');
 
             const messages = tokensValidos.map(token => {
                 const sonidoSeleccionado = data?.sonido;
                 const imagenUrl = data?.imagen;
 
-                // ✅ ¿Tiene imagen válida?
                 const tieneImagen = !!(imagenUrl
                     && typeof imagenUrl === 'string'
                     && imagenUrl.startsWith('https://'));
 
-                // ✅ Si hay imagen, NO usar sonido custom (rompe el BigPicture)
                 const hasCustomSound = !!sonidoSeleccionado
                     && sonidoSeleccionado !== 'default'
                     && !tieneImagen;
 
-                // ✅ Elegir canal
                 let channelId = 'default';
                 if (tieneImagen) {
                     channelId = 'imagenes_v2';
@@ -385,7 +396,7 @@ export const notificacionService = {
                 } else if (data?.tipo === 'recompensa') {
                     channelId = 'recompensa';
                 } else if (data?.tipo === 'pedido') {
-                    channelId = 'pedidos';
+                    channelId = data?.esParaAdmin ? 'pedidos_admin' : 'pedidos';
                 } else if (data?.tipo === 'sistema') {
                     channelId = 'sistema';
                 }
@@ -396,14 +407,13 @@ export const notificacionService = {
                     body: mensaje,
                     data: {
                         ...data,
-                        screen: 'NotificacionesUsuario',
+                        screen: data?.screen || 'NotificacionesUsuario',
                         timestamp: Date.now(),
                     },
                     priority: 'high',
                     channelId,
                 };
 
-                // ✅ Sonido
                 if (hasCustomSound) {
                     const soundFile = sonidoSeleccionado.endsWith('.wav')
                         ? sonidoSeleccionado
@@ -413,26 +423,10 @@ export const notificacionService = {
                     message.sound = 'default';
                 }
 
-                // ✅ Imagen (formato correcto Expo Push API)
                 if (tieneImagen) {
-                    message.richContent = {
-                        image: imagenUrl,
-                    };
-                    // Compatibilidad con algunos clientes que siguen leyendo "image"
+                    message.richContent = { image: imagenUrl };
                     message.image = imagenUrl;
                 }
-
-                // Log del payload final
-                console.log('📦 [Notif] Payload final:', JSON.stringify({
-                    to: '...' + token.slice(-10),
-                    title: message.title,
-                    body: message.body,
-                    sound: message.sound,
-                    channelId: message.channelId,
-                    image: message.image,
-                    richContent: message.richContent,
-                    hasSticky: 'sticky' in message,
-                }, null, 2));
 
                 return message;
             });
@@ -562,6 +556,185 @@ export const notificacionService = {
         } catch (error) {
             console.error('❌ Error masiva:', error);
             return { success: false, error };
+        }
+    },
+
+    // ============================================================
+    // 🔔 NOTIFICAR A ADMINS SOBRE NUEVO PEDIDO
+    // ============================================================
+    async notificarAdminsNuevoPedido(pedido: {
+        id: number;
+        cliente_nombre?: string;
+        total?: number;
+        cantidad_items?: number;
+        tipo_entrega?: string;
+        usuarioId?: string;
+    }) {
+        try {
+            console.log('🔔 [Notif] Notificando a admins sobre pedido #', pedido.id);
+
+            const { data: admins, error } = await supabase
+                .from('perfiles')
+                .select('id, nombre_cliente, fcm_token')
+                .eq('rol', 'admin')
+                .not('fcm_token', 'is', null);
+
+            if (error) {
+                console.error('❌ [Notif] Error buscando admins:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (!admins || admins.length === 0) {
+                console.log('ℹ️ [Notif] No hay admins con token registrado');
+                return { success: true, enviados: 0 };
+            }
+
+            // ✅ Excluir al admin que hizo el pedido (si aplica)
+            const adminsANotificar = pedido.usuarioId
+                ? admins.filter(a => a.id !== pedido.usuarioId)
+                : admins;
+
+            if (adminsANotificar.length === 0) {
+                console.log('ℹ️ [Notif] No hay admins a notificar');
+                return { success: true, enviados: 0 };
+            }
+
+            const tokensValidos = adminsANotificar
+                .map(a => a.fcm_token)
+                .filter((t): t is string => !!t && t.startsWith('ExponentPushToken['));
+
+            if (tokensValidos.length === 0) {
+                console.log('ℹ️ [Notif] No hay tokens Expo válidos');
+                return { success: true, enviados: 0 };
+            }
+
+            const nombre = pedido.cliente_nombre || 'Cliente';
+            const total = pedido.total ? formatearPrecio(pedido.total) : '';
+            const cantidad = pedido.cantidad_items
+                ? `${pedido.cantidad_items} producto${pedido.cantidad_items !== 1 ? 's' : ''}`
+                : '';
+            const tipo = pedido.tipo_entrega === 'retiro' ? '🏪 Retiro' : '🛵 Delivery';
+
+            const titulo = `🔔 Nuevo pedido #${pedido.id}`;
+            const cuerpo = [nombre, total, cantidad, tipo]
+                .filter(Boolean)
+                .join(' · ');
+
+            const resultado = await this.enviarNotificacionesMasivas(
+                tokensValidos,
+                titulo,
+                cuerpo,
+                {
+                    tipo: 'pedido',
+                    pedidoId: pedido.id,
+                    esParaAdmin: true,
+                    screen: 'GestionPedidos',
+                }
+            );
+
+            console.log('✅ [Notif] Admins notificados:', resultado.resultados);
+            return resultado;
+
+        } catch (error: any) {
+            console.error('❌ [Notif] Error notificando admins:', error);
+            return { success: false, error: error?.message };
+        }
+    },
+
+    // ============================================================
+    // 🎪 NOTIFICAR AL CLIENTE CAMBIO DE ESTADO  ✅ NUEVO
+    // ============================================================
+    async notificarClienteCambioEstado(
+        clienteId: string,
+        pedidoId: number,
+        nuevoEstado: string
+    ) {
+        try {
+            if (!clienteId) return { success: false, error: 'Sin cliente' };
+
+            console.log(`🎪 [Notif] Notificando a cliente ${clienteId} cambio a "${nuevoEstado}"`);
+
+            // ✅ Textos con personalidad Krusty
+            const textos: Record<string, { titulo: string; cuerpo: string }> = {
+                confirmado: {
+                    titulo: '🎪 ¡Hey hey!',
+                    cuerpo: `Tu pedido #${pedidoId} ya fue confirmado, ¿eh?`,
+                },
+                preparando: {
+                    titulo: '🍔 ¡Manos a la obra!',
+                    cuerpo: `Estamos cocinando tu pedido #${pedidoId} como un Krusty de verdad`,
+                },
+                listo: {
+                    titulo: '🎉 ¡Listo, muchacho!',
+                    cuerpo: `Tu pedido #${pedidoId} está listo. ¡A comer!`,
+                },
+                en_camino: {
+                    titulo: '🛵 ¡Salió volando!',
+                    cuerpo: `Tu pedido #${pedidoId} está en camino. Llega en un toque`,
+                },
+                entregado: {
+                    titulo: '🎊 ¡Buen provecho!',
+                    cuerpo: `Disfrutá tu pedido #${pedidoId}. No te atragantes, ¿eh?`,
+                },
+                cancelado: {
+                    titulo: '😢 ¡Ay, no!',
+                    cuerpo: `Tu pedido #${pedidoId} fue cancelado. ¡No llores, volvé a pedir!`,
+                },
+            };
+
+            const texto = textos[nuevoEstado];
+            if (!texto) {
+                console.log('ℹ️ [Notif] Estado sin texto definido, no se notifica:', nuevoEstado);
+                return { success: true, enviados: 0 };
+            }
+
+            // ✅ Guardar en el historial de notificaciones del cliente
+            try {
+                await supabase
+                    .from('notificaciones_usuarios')
+                    .insert({
+                        usuario_id: clienteId,
+                        titulo: texto.titulo,
+                        mensaje: texto.cuerpo,
+                        tipo: 'pedido',
+                        leida: false,
+                        created_at: new Date().toISOString(),
+                    });
+            } catch (e) {
+                console.warn('⚠️ No se pudo guardar en historial:', e);
+            }
+
+            // ✅ Buscar tokens del cliente
+            const { data: dispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .eq('usuario_actual_id', clienteId)
+                .eq('activo', true);
+
+            if (!dispositivos || dispositivos.length === 0) {
+                console.log('ℹ️ [Notif] Cliente sin dispositivos activos');
+                return { success: true, enviados: 0 };
+            }
+
+            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+
+            const resultado = await this.enviarNotificacionesMasivas(
+                tokens,
+                texto.titulo,
+                texto.cuerpo,
+                {
+                    tipo: 'pedido',
+                    pedidoId,
+                    screen: 'Seguimiento',
+                }
+            );
+
+            console.log('✅ [Notif] Cliente notificado:', resultado.resultados);
+            return resultado;
+
+        } catch (error: any) {
+            console.error('❌ [Notif] Error notificando al cliente:', error);
+            return { success: false, error: error?.message };
         }
     },
 

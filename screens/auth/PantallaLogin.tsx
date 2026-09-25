@@ -408,7 +408,7 @@ export default function PantallaLogin(props: any) {
   };
 
   // ============================================================
-  // ✅ MANEJADOR DE GOOGLE SIGN-IN
+  // ✅ MANEJADOR DE GOOGLE SIGN-IN  👈 ACTUALIZADO
   // ============================================================
   const manejarGoogleLogin = async () => {
     try {
@@ -420,6 +420,8 @@ export default function PantallaLogin(props: any) {
         path: 'auth/callback',
       });
 
+      console.log('🔵 [Google] redirectTo:', redirectTo);
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -429,34 +431,54 @@ export default function PantallaLogin(props: any) {
       });
 
       if (error) throw error;
+      if (!data?.url) throw new Error('No OAuth URL');
 
-      if (data?.url) {
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      console.log('🔵 [Google] Abriendo navegador...');
 
-        if (res.type === 'success' && res.url) {
-          const urlParams = new URLSearchParams(res.url.split('#')[1] || res.url.split('?')[1]);
-          const access_token = urlParams.get('access_token');
-          const refresh_token = urlParams.get('refresh_token');
+      const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
-          if (access_token && refresh_token) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token,
-              refresh_token,
-            });
-            if (sessionError) throw sessionError;
 
-            // Registrar token de notificaciones si hay sesión activa
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user?.id) {
-              try {
-                await notificacionService.registrarToken(session.user.id);
-              } catch (e) {
-                console.log('⚠️ Error registrando notificaciones post-Google:', e);
-              }
-            }
-          }
+
+      if (res.type !== 'success' || !res.url) {
+        console.log('🔵 [Google] Usuario canceló o cerró el navegador');
+        return;
+      }
+
+      const url = res.url;
+
+      // ✅ Caso A: PKCE → ?code=xxx
+      const queryParams = new URLSearchParams(url.split('?')[1] || '');
+      const code = queryParams.get('code');
+
+      if (code) {
+        console.log('🔵 [Google] Intercambiando code por sesión...');
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
+        console.log('✅ [Google] Sesión creada con PKCE');
+      } else {
+        // ✅ Caso B: tokens directos → #access_token=xxx&refresh_token=yyy
+        const fragmentParams = new URLSearchParams(url.split('#')[1] || '');
+        const access_token = fragmentParams.get('access_token');
+        const refresh_token = fragmentParams.get('refresh_token');
+
+        if (access_token && refresh_token) {
+          console.log('🔵 [Google] Seteando sesión con tokens directos...');
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          if (sessionError) throw sessionError;
+          console.log('✅ [Google] Sesión creada con tokens');
+        } else {
+          console.warn('⚠️ [Google] No hay code ni tokens en la URL:', url);
+          throw new Error('No se recibieron credenciales de Google');
         }
       }
+
+      // 🔔 El listener global de onAuthStateChange (en tiendaAutenticacion.ts)
+      // va a detectar el SIGNED_IN y actualizar el store automáticamente.
+      // No hace falta hacer nada más acá.
+
     } catch (error: any) {
       console.error('❌ Error en Google Login:', error);
       Alert.alert('⚠️ Error con Google', error?.message || 'No se pudo iniciar sesión con Google.');
@@ -711,8 +733,6 @@ export default function PantallaLogin(props: any) {
                 )}
               </LinearGradient>
             </TouchableOpacity>
-
-
 
             <View style={estilos.separadorContainer}>
               <View style={estilos.separador} />
@@ -998,7 +1018,6 @@ const estilos = StyleSheet.create({
     color: DISENO.colors.surface,
     letterSpacing: 1,
   },
-  // ✅ ESTILOS PARA EL BOTÓN DE GOOGLE
   botonGoogle: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -45,6 +45,7 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Platform, StyleSheet, Alert } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // ============================================================
 // 📦 IMPORTACIONES DE EXPO Y LIBRERÍAS NATIVAS
@@ -53,6 +54,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as Linking from 'expo-linking';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
+
 
 // ============================================================
 // 📦 COMPONENTES PROPIOS
@@ -558,139 +560,130 @@ export default function App() {
   // 🚀 RENDER: app + splash superpuesto
   // ============================================================
   return (
-    <View style={styles.root}>
-      {/* ================================================== */}
-      {/* 1️⃣ LA APP DE FONDO (siempre montada) */}
-      {/* ================================================== */}
-      <NavigationContainer
-        ref={navigationRef}
-        linking={linking}
-        theme={themeAppKrusty}
-        fallback={<View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />}
-      >
-        <Stack.Navigator
-          screenOptions={{ headerShown: false }}
-          initialRouteName={
-            !sesion ? 'Bienvenida'
-              : esAdministrador ? 'PanelAdmin'
-                : esRepartidor ? 'Transmision'
-                  : 'Principal'
-          }
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={styles.root}>
+        {/* ================================================== */}
+        {/* 1️⃣ LA APP DE FONDO (siempre montada) */}
+        {/* ================================================== */}
+        <NavigationContainer
+          ref={navigationRef}
+          linking={linking}
+          theme={themeAppKrusty}
+          fallback={<View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />}
         >
+          <Stack.Navigator
+            screenOptions={{ headerShown: false }}
+            initialRouteName={
+              !sesion ? 'Bienvenida'
+                : esAdministrador ? 'PanelAdmin'
+                  : esRepartidor ? 'Transmision'
+                    : 'Principal'
+            }
+          >
 
-          {/* 👤 USUARIO NO AUTENTICADO (INVITADO) */}
-          {!sesion ? (
-            <Stack.Group>
-              {/* --- Auth --- */}
-              <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
-              <Stack.Screen name="Login" component={PantallaLogin} />
-              <Stack.Screen name="Registro" component={PantallaRegistro} />
-              <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
-              <Stack.Screen
-                name="NuevaContrasena"
-                component={PantallaNuevaContrasena}
-                initialParams={{ token: null }}
-              />
+            {/* 👤 USUARIO NO AUTENTICADO (INVITADO) */}
+            {!sesion ? (
+              <Stack.Group>
+                <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
+                <Stack.Screen name="Login" component={PantallaLogin} />
+                <Stack.Screen name="Registro" component={PantallaRegistro} />
+                <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
+                <Stack.Screen
+                  name="NuevaContrasena"
+                  component={PantallaNuevaContrasena}
+                  initialParams={{ token: null }}
+                />
 
-              {/* --- Exploración permitida sin sesión --- */}
-              <Stack.Screen name="Principal" component={PestanasCliente} />
-              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+                <Stack.Screen name="Principal" component={PestanasCliente} />
+                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+              </Stack.Group>
 
-              {/* ❌ NO incluidas a propósito (requieren sesión):
-                  - Seguimiento
-                  - Recompensas
-                  - Checkout
-                  - NotificacionesUsuario
-                  - MisCupones
-                  - CanjearCupon
-              */}
-            </Stack.Group>
+            ) : esAdministrador ? (
 
-          ) : esAdministrador ? (
+              // 👑 ADMINISTRADOR
+              <Stack.Group>
+                <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
+                <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
+                <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
+                <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
+                <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
+                <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
+                <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
+                <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
+                <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
+                <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
+                <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+                <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
 
-            // 👑 ADMINISTRADOR
-            <Stack.Group>
-              <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
-              <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
-              <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
-              <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
-              <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
-              <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
-              <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
-              <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
-              <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
-              <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
-              <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
-              <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+                <Stack.Screen name="Principal" component={PestanasCliente} />
+                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+                <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+                <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+                <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+                <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+              </Stack.Group>
 
-              <Stack.Screen name="Principal" component={PestanasCliente} />
-              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
-              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
-              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
-              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
-              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
-              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-            </Stack.Group>
+            ) : esRepartidor ? (
 
-          ) : esRepartidor ? (
+              // 🛵 REPARTIDOR
+              <Stack.Group>
+                <Stack.Screen name="Transmision" component={PantallaTransmision} />
+                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+              </Stack.Group>
 
-            // 🛵 REPARTIDOR
-            <Stack.Group>
-              <Stack.Screen name="Transmision" component={PantallaTransmision} />
-              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-            </Stack.Group>
+            ) : (
 
-          ) : (
+              // 👤 CLIENTE AUTENTICADO
+              <Stack.Group>
+                <Stack.Screen name="Principal" component={PestanasCliente} />
+                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+                <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+                <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+                <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+                <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+              </Stack.Group>
+            )}
 
-            // 👤 CLIENTE AUTENTICADO
-            <Stack.Group>
-              <Stack.Screen name="Principal" component={PestanasCliente} />
-              <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-              <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-              <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
-              <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-              <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-              <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
-              <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-              <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
-              <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
-              <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
-              <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-              <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-            </Stack.Group>
-          )}
+          </Stack.Navigator>
+        </NavigationContainer>
 
-        </Stack.Navigator>
-      </NavigationContainer>
-
-      {/* ================================================== */}
-      {/* 2️⃣ SPLASH SUPERPUESTO (encima de la app) */}
-      {/* ================================================== */}
-      {debeMostrarSplash && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-          <SplashScreen
-            onFinish={() => {
-              if (tiempoMinimoCumplido && appLista) {
-                setSplashTerminado(true);
-              }
-            }}
-            duration={SPLASH_MAX_DURATION}
-          />
-        </View>
-      )}
-    </View>
+        {/* ================================================== */}
+        {/* 2️⃣ SPLASH SUPERPUESTO (encima de la app) */}
+        {/* ================================================== */}
+        {debeMostrarSplash && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+            <SplashScreen
+              onFinish={() => {
+                if (tiempoMinimoCumplido && appLista) {
+                  setSplashTerminado(true);
+                }
+              }}
+              duration={SPLASH_MAX_DURATION}
+            />
+          </View>
+        )}
+      </View>
+    </GestureHandlerRootView>
   );
 }
 

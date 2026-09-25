@@ -57,7 +57,7 @@ export default function PantallaPerfil(props: any) {
   const { perfil, sesion, cerrarSesion, actualizarPerfil, cargarPerfil } = tiendaAutenticacion();
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const { nivel, beneficios } = useBeneficios(
     perfil?.puntos_acumulados || 0,
@@ -73,16 +73,16 @@ export default function PantallaPerfil(props: any) {
   const [imagenPerfil, setImagenPerfil] = useState<string | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
 
+  // ✅ NUEVO: modal para ver foto en tamaño completo
+  const [mostrarFotoCompleta, setMostrarFotoCompleta] = useState(false);
+
   const [totalGastado, setTotalGastado] = useState(0);
   const [totalCanjes, setTotalCanjes] = useState(0);
   const [actividadesRecientes, setActividadesRecientes] = useState<ActividadReciente[]>([]);
   const [ultimosCanjes, setUltimosCanjes] = useState<any[]>([]);
   const [cargandoEstadisticas, setCargandoEstadisticas] = useState(true);
 
-  // ✅ NUEVO: contador de notificaciones no leídas
   const [notificacionesNoLeidas, setNotificacionesNoLeidas] = useState(0);
-
-  // ✅ NUEVO: historial de puntos
   const [historialPuntos, setHistorialPuntos] = useState<any[]>([]);
 
   const [telefono, setTelefono] = useState('');
@@ -106,7 +106,7 @@ export default function PantallaPerfil(props: any) {
   const isSmallPhone = responsive.isSmallPhone;
   const padding = responsive.getEspaciado('LG');
 
-  const avatarSize = responsive.getValor({ tablet: 120, normal: 90, small: 80 });
+  const avatarSize = responsive.getValor({ tablet: 180, normal: 140, small: 120 });
   const nombreSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
   const correoSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
   const statValorSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
@@ -500,7 +500,7 @@ export default function PantallaPerfil(props: any) {
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('perfiles').getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;   // ✅
+      const publicUrl = urlData.publicUrl;
 
       const { error: updateError } = await supabase
         .from('perfiles')
@@ -529,6 +529,17 @@ export default function PantallaPerfil(props: any) {
         { text: 'Cancelar', style: 'cancel' },
       ]
     );
+  };
+
+  // ✅ NUEVO: al tocar el avatar, abrir la foto en grande (solo si tiene foto)
+  const handlePressAvatar = () => {
+    if (!perfil?.id) return;
+    if (imagenPerfil) {
+      setMostrarFotoCompleta(true);
+    } else {
+      // Si no tiene foto, directo al selector para que ponga una
+      mostrarOpcionesFoto();
+    }
   };
 
   const confirmarCerrarSesion = async () => {
@@ -684,33 +695,52 @@ export default function PantallaPerfil(props: any) {
             },
           ]}
         >
-          <TouchableOpacity
-            onPress={perfil?.id ? mostrarOpcionesFoto : undefined}
-            activeOpacity={0.8}
-            disabled={!perfil?.id}
-          >
-            <View style={[
-              styles.avatarContainer,
-              { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }
-            ]}>
-              {imagenPerfil ? (
-                <Image
-                  source={{ uri: imagenPerfil }}
-                  style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
-                />
-              ) : (
-                <Text style={[styles.avatarEmoji, { fontSize: isTablet ? 50 : isSmallPhone ? 32 : 40 }]}>
-                  {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
-                </Text>
-              )}
+          {/* ✅ AVATAR: onPress abre foto grande; cámara abre selector */}
+          <View style={[
+            styles.avatarWrapper,
+            { width: avatarSize, height: avatarSize },
+          ]}>
+            <TouchableOpacity
+              onPress={handlePressAvatar}
+              activeOpacity={0.85}
+              disabled={!perfil?.id}
+              style={{ width: avatarSize, height: avatarSize }}
+            >
+              <View style={[
+                styles.avatarContainer,
+                { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }
+              ]}>
+                {imagenPerfil ? (
+                  <Image
+                    source={{ uri: imagenPerfil }}
+                    style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }}
+                  />
+                ) : (
+                  <Text style={[styles.avatarEmoji, { fontSize: isTablet ? 80 : isSmallPhone ? 50 : 64 }]}>
+                    {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
 
-              {perfil?.id && (
-                <View style={styles.cameraIcon}>
-                  <Ionicons name="camera" size={isTablet ? 18 : 14} color={DISENO.colors.surface} />
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
+            {/* ✅ Ícono de cámara: SOLO este abre el selector de foto */}
+            {perfil?.id && (
+              <TouchableOpacity
+                style={[
+                  styles.cameraIcon,
+                  {
+                    width: isTablet ? 46 : 38,
+                    height: isTablet ? 46 : 38,
+                    borderRadius: isTablet ? 23 : 19,
+                  }
+                ]}
+                onPress={mostrarOpcionesFoto}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="camera" size={isTablet ? 24 : 20} color={DISENO.colors.surface} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {subiendoImagen && (
             <View style={styles.uploadingContainer}>
@@ -1333,6 +1363,54 @@ export default function PantallaPerfil(props: any) {
           </View>
         </View>
       </Modal>
+
+      {/* ✅ NUEVO: MODAL PARA VER LA FOTO EN TAMAÑO COMPLETO */}
+      <Modal
+        visible={mostrarFotoCompleta}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMostrarFotoCompleta(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.fotoCompletaOverlay}>
+          {/* Botón cerrar */}
+          <TouchableOpacity
+            style={[styles.fotoCompletaCerrar, { top: insets.top + 16 }]}
+            onPress={() => setMostrarFotoCompleta(false)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* Toca afuera para cerrar */}
+          <TouchableOpacity
+            style={styles.fotoCompletaTouchable}
+            activeOpacity={1}
+            onPress={() => setMostrarFotoCompleta(false)}
+          >
+            {imagenPerfil && (
+              <Image
+                source={{ uri: imagenPerfil }}
+                style={styles.fotoCompletaImagen}
+                resizeMode="contain"
+              />
+            )}
+          </TouchableOpacity>
+
+          {/* Botón para cambiar foto desde acá */}
+          <TouchableOpacity
+            style={[styles.fotoCompletaCambiar, { bottom: insets.bottom + 24 }]}
+            onPress={() => {
+              setMostrarFotoCompleta(false);
+              setTimeout(() => mostrarOpcionesFoto(), 300);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.fotoCompletaCambiarTexto}>Cambiar foto</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1362,13 +1440,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
+  // ✅ NUEVO: wrapper del avatar para posicionar el ícono de cámara
+  avatarWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarContainer: {
     backgroundColor: DISENO.colors.surface,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: DISENO.colors.border,
     ...DISENO.shadow.md,
     overflow: 'visible',
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarEmoji: {
     textAlign: 'center',
@@ -1376,16 +1462,14 @@ const styles = StyleSheet.create({
   },
   cameraIcon: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 4,
+    right: 4,
     backgroundColor: DISENO.colors.accent,
-    borderRadius: 20,
-    width: 32,
-    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: DISENO.colors.surface,
+    ...DISENO.shadow.sm,
   },
   uploadingContainer: {
     marginTop: 8,
@@ -1559,7 +1643,6 @@ const styles = StyleSheet.create({
     color: DISENO.colors.textTertiary,
     marginTop: 1,
   },
-  // ✅ NUEVOS ESTILOS: HISTORIAL DE PUNTOS
   historialPuntosContainer: {
     backgroundColor: DISENO.colors.surface,
     borderRadius: DISENO.radius.lg,
@@ -1891,5 +1974,51 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.display,
     fontWeight: '400',
     color: DISENO.colors.surface,
+  },
+
+  // ✅ NUEVOS ESTILOS: FOTO COMPLETA
+  fotoCompletaOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoCompletaTouchable: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoCompletaImagen: {
+    width: '100%',
+    height: '100%',
+  },
+  fotoCompletaCerrar: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoCompletaCambiar: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 24,
+    zIndex: 10,
+  },
+  fotoCompletaCambiarTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#FFFFFF',
   },
 });

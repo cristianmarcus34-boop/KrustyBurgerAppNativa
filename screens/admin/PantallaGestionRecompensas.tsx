@@ -1,30 +1,30 @@
-// screens/admin/PantallaGestionRecompensas.tsx - CON VALIDACIÓN DE CANJES
-import React, { useEffect, useState, useRef } from 'react';
+// screens/admin/PantallaGestionRecompensas.tsx - REDISEÑO KRUSTY MODERNO
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     FlatList,
     TouchableOpacity,
-    Alert,
     Modal,
     TextInput,
     ScrollView,
-    Dimensions,
     Animated,
     RefreshControl,
     Switch,
     ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
+    Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
-
-const { width, height } = Dimensions.get('window');
+import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
+import { formatearPrecio } from '../../lib/formateador';
+import { useToast, Toast } from '../../components/Toast';
 
 // ============================================================
 // 📋 INTERFAZ
@@ -46,35 +46,10 @@ interface Recompensa {
 // 📋 CONFIGURACIÓN DE TIPOS
 // ============================================================
 const TIPOS_RECOMPENSA = [
-    { id: 'DESCUENTO', label: '💰 Descuento', icon: 'pricetag-outline', color: Colores.burnsDorado },
-    { id: 'PRODUCTO_GRATIS', label: '🍔 Producto Gratis', icon: 'restaurant-outline', color: Colores.burnsVerde },
-    { id: 'ENVIO_GRATIS', label: '🚚 Envío Gratis', icon: 'car-outline', color: Colores.burnsBlanco },
+    { id: 'DESCUENTO', label: '💰 Descuento', icon: 'pricetag-outline', color: DISENO.colors.accentSecondary },
+    { id: 'PRODUCTO_GRATIS', label: '🍔 Producto Gratis', icon: 'restaurant-outline', color: DISENO.colors.success },
+    { id: 'ENVIO_GRATIS', label: '🚚 Envío Gratis', icon: 'car-outline', color: DISENO.colors.info },
 ];
-
-// ============================================================
-// 🎯 HOOK RESPONSIVE
-// ============================================================
-const useResponsive = () => {
-    const { width, height } = Dimensions.get('window');
-    const isTablet = width >= 768;
-    const isDesktop = width >= 1024;
-    const isSmallPhone = width < 375;
-
-    return {
-        isTablet,
-        isDesktop,
-        isSmallPhone,
-        width,
-        height,
-        paddingHorizontal: isTablet ? 40 : isSmallPhone ? 12 : 16,
-        tituloSize: isTablet ? 28 : isSmallPhone ? 20 : 22,
-        tarjetaPadding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-        modalWidth: isTablet ? width * 0.7 : width * 0.92,
-        labelSize: isTablet ? 15 : isSmallPhone ? 12 : 13,
-        inputSize: isTablet ? 16 : isSmallPhone ? 13 : 14,
-        modalMaxHeight: isTablet ? height * 0.8 : height * 0.85,
-    };
-};
 
 // ============================================================
 // 🏠 COMPONENTE PRINCIPAL
@@ -82,6 +57,7 @@ const useResponsive = () => {
 export default function PantallaGestionRecompensas(props: any) {
     const insets = useSafeAreaInsets();
     const responsive = useResponsive();
+    const toast = useToast();
 
     // ✅ ESTADOS
     const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
@@ -116,6 +92,16 @@ export default function PantallaGestionRecompensas(props: any) {
     }, []);
 
     // ============================================================
+    // 📊 MÉTRICAS
+    // ============================================================
+    const metricas = useMemo(() => {
+        const total = recompensas.length;
+        const activas = recompensas.filter(r => r.activa).length;
+        const inactivas = total - activas;
+        return { total, activas, inactivas };
+    }, [recompensas]);
+
+    // ============================================================
     // 🔄 CRUD
     // ============================================================
     const cargarRecompensas = async () => {
@@ -127,14 +113,14 @@ export default function PantallaGestionRecompensas(props: any) {
 
             if (error) {
                 console.error('❌ Error cargando recompensas:', error);
-                Alert.alert('Error', 'No se pudieron cargar las recompensas');
+                toast.error('No se pudieron cargar las recompensas');
                 return;
             }
 
             setRecompensas(data || []);
         } catch (error) {
             console.error('❌ Error:', error);
-            Alert.alert('Error', 'Ocurrió un error inesperado');
+            toast.error('Ocurrió un error inesperado');
         } finally {
             setCargando(false);
             setRefrescando(false);
@@ -194,23 +180,23 @@ export default function PantallaGestionRecompensas(props: any) {
     // ============================================================
     const guardarRecompensa = async () => {
         if (!nombre.trim()) {
-            Alert.alert('Error', 'El nombre es obligatorio');
+            toast.advertencia('El nombre es obligatorio');
             return;
         }
 
         if (!puntosNecesarios) {
-            Alert.alert('Error', 'Los puntos necesarios son obligatorios');
+            toast.advertencia('Los puntos necesarios son obligatorios');
             return;
         }
 
         const puntos = parseInt(puntosNecesarios);
         if (isNaN(puntos) || puntos < 1) {
-            Alert.alert('Error', 'Los puntos deben ser un número válido mayor a 0');
+            toast.advertencia('Los puntos deben ser un número válido mayor a 0');
             return;
         }
 
         if (tipo === 'DESCUENTO' && !valorDescuento) {
-            Alert.alert('Error', 'El porcentaje de descuento es obligatorio para este tipo');
+            toast.advertencia('El porcentaje de descuento es obligatorio');
             return;
         }
 
@@ -250,17 +236,17 @@ export default function PantallaGestionRecompensas(props: any) {
 
             if (error) {
                 console.error('❌ Error guardando recompensa:', error);
-                Alert.alert('❌ Error', error.message || 'No se pudo guardar la recompensa');
+                toast.error(error.message || 'No se pudo guardar la recompensa');
                 return;
             }
 
-            Alert.alert('✅ Éxito', `Recompensa ${editando ? 'actualizada' : 'creada'} correctamente`);
+            toast.exito(`Recompensa ${editando ? 'actualizada' : 'creada'} correctamente`);
             cerrarModal();
             await cargarRecompensas();
 
         } catch (error) {
             console.error('❌ Error:', error);
-            Alert.alert('❌ Error', 'Ocurrió un error inesperado');
+            toast.error('Ocurrió un error inesperado');
         } finally {
             setGuardando(false);
         }
@@ -280,19 +266,20 @@ export default function PantallaGestionRecompensas(props: any) {
                 .eq('id', id);
 
             if (error) {
-                Alert.alert('❌ Error', error.message || 'No se pudo cambiar el estado');
+                toast.error(error.message || 'No se pudo cambiar el estado');
                 return;
             }
 
+            toast.exito(!estadoActual ? '✅ Recompensa activada' : '😴 Recompensa desactivada');
             await cargarRecompensas();
         } catch (error) {
             console.error('❌ Error:', error);
-            Alert.alert('❌ Error', 'Ocurrió un error inesperado');
+            toast.error('Ocurrió un error inesperado');
         }
     };
 
     // ============================================================
-    // 🗑️ ELIMINAR RECOMPENSA (CON VALIDACIÓN DE CANJES)
+    // 🗑️ ELIMINAR CON VALIDACIÓN DE CANJES
     // ============================================================
     const eliminarRecompensa = (id: number, nombre: string) => {
         Alert.alert(
@@ -305,7 +292,6 @@ export default function PantallaGestionRecompensas(props: any) {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            // ✅ PRIMERO: Verificar si tiene canjes asociados
                             const { count, error: countError } = await supabase
                                 .from('canjes')
                                 .select('*', { count: 'exact', head: true })
@@ -313,11 +299,10 @@ export default function PantallaGestionRecompensas(props: any) {
 
                             if (countError) {
                                 console.error('❌ Error verificando canjes:', countError);
-                                Alert.alert('❌ Error', 'No se pudo verificar los canjes asociados');
+                                toast.error('No se pudo verificar los canjes asociados');
                                 return;
                             }
 
-                            // ✅ Si tiene canjes, mostrar mensaje y ofrecer desactivar
                             if (count && count > 0) {
                                 Alert.alert(
                                     '⚠️ No se puede eliminar',
@@ -336,7 +321,6 @@ export default function PantallaGestionRecompensas(props: any) {
                                 return;
                             }
 
-                            // ✅ Si no tiene canjes, eliminar normalmente
                             const { error } = await supabase
                                 .from('recompensas')
                                 .delete()
@@ -344,15 +328,15 @@ export default function PantallaGestionRecompensas(props: any) {
 
                             if (error) {
                                 console.error('❌ Error eliminando recompensa:', error);
-                                Alert.alert('❌ Error', error.message || 'No se pudo eliminar');
+                                toast.error(error.message || 'No se pudo eliminar');
                                 return;
                             }
 
-                            Alert.alert('✅ Éxito', 'Recompensa eliminada correctamente');
+                            toast.exito('Recompensa eliminada correctamente');
                             await cargarRecompensas();
                         } catch (error) {
                             console.error('❌ Error:', error);
-                            Alert.alert('❌ Error', 'Ocurrió un error inesperado');
+                            toast.error('Ocurrió un error inesperado');
                         }
                     }
                 }
@@ -361,7 +345,7 @@ export default function PantallaGestionRecompensas(props: any) {
     };
 
     // ============================================================
-    // 😴 DESACTIVAR RECOMPENSA (solo cambia activa a false)
+    // 😴 DESACTIVAR RECOMPENSA
     // ============================================================
     const desactivarRecompensa = (id: number, nombre: string) => {
         Alert.alert(
@@ -384,15 +368,15 @@ export default function PantallaGestionRecompensas(props: any) {
 
                             if (error) {
                                 console.error('❌ Error desactivando recompensa:', error);
-                                Alert.alert('❌ Error', error.message || 'No se pudo desactivar');
+                                toast.error(error.message || 'No se pudo desactivar');
                                 return;
                             }
 
-                            Alert.alert('✅ Éxito', 'Recompensa desactivada correctamente');
+                            toast.exito('Recompensa desactivada');
                             await cargarRecompensas();
                         } catch (error) {
                             console.error('❌ Error:', error);
-                            Alert.alert('❌ Error', 'Ocurrió un error inesperado');
+                            toast.error('Ocurrió un error inesperado');
                         }
                     }
                 }
@@ -401,196 +385,162 @@ export default function PantallaGestionRecompensas(props: any) {
     };
 
     // ============================================================
-    // 📊 UTILIDADES
+    // 📊 HELPERS
     // ============================================================
-    const getTipoLabel = (tipo: string) => {
-        return TIPOS_RECOMPENSA.find(t => t.id === tipo)?.label || tipo;
-    };
-
-    const getTipoColor = (tipo: string) => {
-        switch (tipo) {
-            case 'DESCUENTO': return Colores.burnsDorado;
-            case 'PRODUCTO_GRATIS': return Colores.burnsVerde;
-            case 'ENVIO_GRATIS': return Colores.burnsBlanco;
-            default: return Colores.burnsBlanco + '60';
-        }
-    };
-
-    const getTipoIcon = (tipo: string) => {
-        switch (tipo) {
-            case 'DESCUENTO': return 'pricetag-outline';
-            case 'PRODUCTO_GRATIS': return 'restaurant-outline';
-            case 'ENVIO_GRATIS': return 'car-outline';
-            default: return 'gift-outline';
-        }
+    const getTipoInfo = (tipoRec: string) => {
+        const found = TIPOS_RECOMPENSA.find(t => t.id === tipoRec);
+        return found || { label: tipoRec, icon: 'gift-outline', color: DISENO.colors.accentSecondary };
     };
 
     // ============================================================
     // 🖼️ RENDER RECOMPENSA
     // ============================================================
-    const renderRecompensa = ({ item, index }: { item: Recompensa; index: number }) => {
-        const itemFade = fadeAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.2, 1],
-        });
-        const itemSlide = slideUpAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20 * (index + 1), 0],
-        });
-        const tipoColor = getTipoColor(item.tipo);
+    const renderRecompensa = ({ item }: { item: Recompensa }) => {
+        const tipoInfo = getTipoInfo(item.tipo);
         const estaActiva = item.activa;
 
+        // ✅ Responsive
+        const cardPadding = responsive.getValor({ tablet: 16, normal: 12, small: 10 });
+        const tituloSize = responsive.getValor({ tablet: 17, normal: 15, small: 14 });
+        const descSize = responsive.getValor({ tablet: 13, normal: 12, small: 11 });
+        const puntosSize = responsive.getValor({ tablet: 15, normal: 14, small: 12 });
+        const valorSize = responsive.getValor({ tablet: 14, normal: 13, small: 11 });
+        const badgeSize = responsive.getValor({ tablet: 11, normal: 10, small: 9 });
+        const iconoAccionSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
+
         return (
-            <Animated.View
-                style={{
-                    opacity: itemFade,
-                    transform: [{ translateY: itemSlide }],
-                }}
-            >
-                <View style={[
+            <View
+                style={[
                     estilos.tarjeta,
                     {
-                        padding: responsive.tarjetaPadding,
-                        borderRadius: responsive.isTablet ? 18 : responsive.isSmallPhone ? 12 : 16,
-                        borderColor: estaActiva ? Colores.burnsDorado + '40' : Colores.burnsBlanco + '20',
-                        backgroundColor: estaActiva ? Colores.burnsNegro + '60' : Colores.burnsNegro + '40',
-                        opacity: estaActiva ? 1 : 0.6,
-                    }
-                ]}>
-                    <View style={estilos.tarjetaHeader}>
-                        <View style={estilos.tarjetaInfo}>
-                            <View style={estilos.tarjetaTituloContainer}>
-                                <Text style={[estilos.tarjetaTitulo, {
-                                    fontSize: responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16,
-                                    color: estaActiva ? Colores.burnsBlanco : Colores.burnsBlanco + '50',
-                                }]}>
-                                    {item.nombre}
-                                </Text>
-                                <View style={[
-                                    estilos.tipoBadge,
-                                    {
-                                        backgroundColor: tipoColor + '20',
-                                        paddingHorizontal: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                        paddingVertical: responsive.isTablet ? 4 : responsive.isSmallPhone ? 2 : 3,
-                                        borderRadius: responsive.isTablet ? 12 : responsive.isSmallPhone ? 6 : 8,
-                                        borderColor: tipoColor + '30',
-                                    }
-                                ]}>
-                                    <Ionicons
-                                        name={getTipoIcon(item.tipo) as any}
-                                        size={responsive.isTablet ? 14 : responsive.isSmallPhone ? 10 : 12}
-                                        color={tipoColor}
-                                    />
-                                    <Text style={[
-                                        estilos.tipoBadgeTexto,
-                                        {
-                                            fontSize: responsive.isTablet ? 11 : responsive.isSmallPhone ? 8 : 9,
-                                            color: tipoColor,
-                                        }
-                                    ]}>
-                                        {getTipoLabel(item.tipo)}
-                                    </Text>
-                                </View>
-                            </View>
+                        padding: cardPadding,
+                        borderLeftColor: estaActiva ? tipoInfo.color : DISENO.colors.textTertiary,
+                        opacity: estaActiva ? 1 : 0.65,
+                    },
+                ]}
+            >
+                {/* HEADER: NOMBRE + TIPO */}
+                <View style={estilos.tarjetaHeader}>
+                    <View style={estilos.tarjetaInfo}>
+                        <Text
+                            style={[estilos.tarjetaTitulo, { fontSize: tituloSize }]}
+                            numberOfLines={2}
+                        >
+                            {item.nombre}
+                        </Text>
 
-                            <Text style={[estilos.tarjetaDesc, {
-                                fontSize: responsive.isTablet ? 14 : responsive.isSmallPhone ? 11 : 12,
-                                color: estaActiva ? Colores.burnsBlanco + '60' : Colores.burnsBlanco + '30',
-                            }]}>
-                                {item.descripcion || 'Sin descripción'}
-                            </Text>
-
-                            <View style={estilos.tarjetaPuntosContainer}>
-                                <Text style={[estilos.tarjetaPuntos, {
-                                    fontSize: responsive.isTablet ? 16 : responsive.isSmallPhone ? 13 : 14,
-                                    color: estaActiva ? Colores.burnsDorado : Colores.burnsDorado + '50',
-                                }]}>
-                                    ⭐ {item.puntos_necesarios} pts
-                                </Text>
-                                {item.valor_descuento > 0 && (
-                                    <Text style={[estilos.tarjetaValor, {
-                                        fontSize: responsive.isTablet ? 14 : responsive.isSmallPhone ? 11 : 12,
-                                        color: estaActiva ? Colores.burnsVerde : Colores.burnsVerde + '50',
-                                    }]}>
-                                        {item.tipo === 'DESCUENTO' ? `-${item.valor_descuento}%` : `$${item.valor_descuento}`}
-                                    </Text>
-                                )}
-                                {!estaActiva && (
-                                    <View style={[estilos.estadoInactivoBadge, {
-                                        backgroundColor: Colores.burnsRojo + '20',
-                                        paddingHorizontal: responsive.isTablet ? 8 : responsive.isSmallPhone ? 4 : 6,
-                                        paddingVertical: responsive.isTablet ? 3 : responsive.isSmallPhone ? 1 : 2,
-                                        borderRadius: responsive.isTablet ? 8 : responsive.isSmallPhone ? 4 : 6,
-                                        borderWidth: 1,
-                                        borderColor: Colores.burnsRojo + '30',
-                                    }]}>
-                                        <Text style={[estilos.estadoInactivoTexto, {
-                                            fontSize: responsive.isTablet ? 10 : responsive.isSmallPhone ? 7 : 8,
-                                            color: Colores.burnsRojo,
-                                        }]}>
-                                            ❌ Inactiva
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-
-                        <View style={estilos.tarjetaAcciones}>
-                            <Switch
-                                value={item.activa}
-                                onValueChange={() => manejarToggleActiva(item.id, item.activa)}
-                                trackColor={{ false: Colores.burnsBlanco + '30', true: Colores.burnsDorado }}
-                                thumbColor={item.activa ? Colores.burnsBlanco : Colores.burnsBlanco}
+                        <View
+                            style={[
+                                estilos.tipoBadge,
+                                {
+                                    backgroundColor: tipoInfo.color + '20',
+                                    borderColor: tipoInfo.color + '40',
+                                    paddingHorizontal: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                                    paddingVertical: responsive.getValor({ tablet: 4, normal: 3, small: 2 }),
+                                },
+                            ]}
+                        >
+                            <Ionicons
+                                name={tipoInfo.icon as any}
+                                size={badgeSize + 2}
+                                color={tipoInfo.color}
                             />
-
-                            {/* ✅ Botón Editar */}
-                            <TouchableOpacity
-                                style={[estilos.botonAccion, {
-                                    backgroundColor: Colores.burnsDorado + '20',
-                                    padding: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderRadius: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderWidth: 1,
-                                    borderColor: Colores.burnsDorado + '30',
-                                }]}
-                                onPress={() => abrirFormulario(item)}
-                                activeOpacity={0.7}
+                            <Text
+                                style={[
+                                    estilos.tipoBadgeText,
+                                    { fontSize: badgeSize, color: tipoInfo.color },
+                                ]}
                             >
-                                <Ionicons name="create" size={responsive.isTablet ? 22 : responsive.isSmallPhone ? 16 : 20} color={Colores.burnsDorado} />
-                            </TouchableOpacity>
-
-                            {/* ✅ Botón Desactivar */}
-                            <TouchableOpacity
-                                style={[estilos.botonAccion, {
-                                    backgroundColor: Colores.burnsDorado + '15',
-                                    padding: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderRadius: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderWidth: 1,
-                                    borderColor: Colores.burnsDorado + '20',
-                                }]}
-                                onPress={() => desactivarRecompensa(item.id, item.nombre)}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="eye-off-outline" size={responsive.isTablet ? 22 : responsive.isSmallPhone ? 16 : 20} color={Colores.burnsDorado} />
-                            </TouchableOpacity>
-
-                            {/* ✅ Botón Eliminar */}
-                            <TouchableOpacity
-                                style={[estilos.botonAccion, {
-                                    backgroundColor: Colores.burnsRojo + '20',
-                                    padding: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderRadius: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8,
-                                    borderWidth: 1,
-                                    borderColor: Colores.burnsRojo + '30',
-                                }]}
-                                onPress={() => eliminarRecompensa(item.id, item.nombre)}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="trash" size={responsive.isTablet ? 22 : responsive.isSmallPhone ? 16 : 20} color={Colores.burnsRojo} />
-                            </TouchableOpacity>
+                                {tipoInfo.label}
+                            </Text>
                         </View>
                     </View>
+
+                    <Switch
+                        value={item.activa}
+                        onValueChange={() => manejarToggleActiva(item.id, item.activa)}
+                        trackColor={{
+                            false: DISENO.colors.grisClaro,
+                            true: DISENO.colors.accentSecondary,
+                        }}
+                        thumbColor={DISENO.colors.surface}
+                    />
                 </View>
-            </Animated.View>
+
+                {/* DESCRIPCIÓN */}
+                {item.descripcion ? (
+                    <Text
+                        style={[estilos.tarjetaDesc, { fontSize: descSize }]}
+                        numberOfLines={2}
+                    >
+                        {item.descripcion}
+                    </Text>
+                ) : null}
+
+                {/* PUNTOS + VALOR */}
+                <View style={estilos.tarjetaPuntosRow}>
+                    <View style={estilos.puntosBadge}>
+                        <Ionicons name="star" size={badgeSize + 2} color={DISENO.colors.accentSecondary} />
+                        <Text style={[estilos.puntosTexto, { fontSize: puntosSize }]}>
+                            {item.puntos_necesarios} pts
+                        </Text>
+                    </View>
+
+                    {item.valor_descuento > 0 && (
+                        <View style={[estilos.valorBadge, { backgroundColor: DISENO.colors.success + '15' }]}>
+                            <Text style={[estilos.valorTexto, { fontSize: valorSize }]}>
+                                {item.tipo === 'DESCUENTO'
+                                    ? `-${item.valor_descuento}%`
+                                    : formatearPrecio(item.valor_descuento)}
+                            </Text>
+                        </View>
+                    )}
+
+                    {!estaActiva && (
+                        <View style={[estilos.inactivaBadge, { backgroundColor: DISENO.colors.danger + '15' }]}>
+                            <Text style={[estilos.inactivaTexto, { fontSize: badgeSize }]}>
+                                ❌ Inactiva
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* BOTONES DE ACCIÓN */}
+                <View style={estilos.tarjetaAcciones}>
+                    <TouchableOpacity
+                        style={[estilos.botonAccion, { backgroundColor: DISENO.colors.accentSecondary + '20' }]}
+                        onPress={() => abrirFormulario(item)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="create-outline" size={iconoAccionSize} color={DISENO.colors.accentSecondary} />
+                        <Text style={[estilos.botonAccionTexto, { fontSize: badgeSize, color: DISENO.colors.accentSecondary }]}>
+                            Editar
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[estilos.botonAccion, { backgroundColor: DISENO.colors.info + '15' }]}
+                        onPress={() => desactivarRecompensa(item.id, item.nombre)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="eye-off-outline" size={iconoAccionSize} color={DISENO.colors.info} />
+                        <Text style={[estilos.botonAccionTexto, { fontSize: badgeSize, color: DISENO.colors.info }]}>
+                            Desactivar
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[estilos.botonAccion, { backgroundColor: DISENO.colors.danger + '15' }]}
+                        onPress={() => eliminarRecompensa(item.id, item.nombre)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="trash-outline" size={iconoAccionSize} color={DISENO.colors.danger} />
+                        <Text style={[estilos.botonAccionTexto, { fontSize: badgeSize, color: DISENO.colors.danger }]}>
+                            Eliminar
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
         );
     };
 
@@ -600,13 +550,8 @@ export default function PantallaGestionRecompensas(props: any) {
     if (cargando && !refrescando) {
         return (
             <View style={estilos.loadingContainer}>
-                <ActivityIndicator size="large" color={Colores.burnsDorado} />
-                <Text style={[estilos.loadingTexto, {
-                    fontSize: responsive.isTablet ? 16 : responsive.isSmallPhone ? 13 : 14,
-                    color: Colores.burnsBlanco + '60',
-                }]}>
-                    Cargando recompensas...
-                </Text>
+                <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                <Text style={estilos.loadingTexto}>Cargando recompensas...</Text>
             </View>
         );
     }
@@ -615,339 +560,292 @@ export default function PantallaGestionRecompensas(props: any) {
     // 🏗️ RENDER PRINCIPAL
     // ============================================================
     return (
-        <View style={estilos.contenedor}>
-            <LinearGradient
-                colors={[Colores.burnsVerde, Colores.burnsNegro]}
-                style={estilos.fondoGradiente}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            />
+        <>
+            <View style={estilos.contenedor}>
+                <LinearGradient
+                    colors={[DISENO.colors.fondo, DISENO.colors.surface]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
 
-            <View style={[
-                estilos.header,
-                {
-                    paddingTop: insets.top + (responsive.isTablet ? 20 : 10),
-                    paddingHorizontal: responsive.paddingHorizontal,
-                    paddingBottom: responsive.isTablet ? 16 : 12,
-                }
-            ]}>
-                <TouchableOpacity
-                    style={estilos.botonVolver}
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.7}
+                {/* HEADER */}
+                <View
+                    style={[
+                        estilos.header,
+                        {
+                            paddingTop: insets.top + 12,
+                            paddingHorizontal: responsive.getEspaciado('LG'),
+                        },
+                    ]}
                 >
-                    <Ionicons name="arrow-back" size={responsive.isTablet ? 28 : 24} color={Colores.burnsBlanco} />
-                </TouchableOpacity>
+                    <TouchableOpacity
+                        style={estilos.botonHeader}
+                        onPress={() => props.navigation.goBack()}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="arrow-back" size={22} color={DISENO.colors.text} />
+                    </TouchableOpacity>
 
-                <Text style={[estilos.titulo, {
-                    fontSize: responsive.tituloSize,
-                    color: Colores.burnsDorado,
-                }]}>
-                    🎁 Gestionar Recompensas
-                </Text>
+                    <View style={estilos.headerCentro}>
+                        <Text style={estilos.titulo}>🎁 Recompensas</Text>
+                    </View>
 
-                <TouchableOpacity
-                    style={[estilos.botonAgregar, {
-                        paddingHorizontal: responsive.isTablet ? 18 : responsive.isSmallPhone ? 12 : 16,
-                        paddingVertical: responsive.isTablet ? 12 : responsive.isSmallPhone ? 8 : 10,
-                        backgroundColor: Colores.burnsDorado,
-                    }]}
-                    onPress={() => abrirFormulario()}
-                    activeOpacity={0.7}
+                    <TouchableOpacity
+                        style={[estilos.botonHeader, { backgroundColor: DISENO.colors.accentSecondary }]}
+                        onPress={() => abrirFormulario()}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="add" size={24} color={DISENO.colors.text} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* RESUMEN */}
+                <View
+                    style={[
+                        estilos.resumenHoy,
+                        { marginHorizontal: responsive.getEspaciado('LG') },
+                    ]}
                 >
-                    <Ionicons name="add" size={responsive.isTablet ? 26 : responsive.isSmallPhone ? 18 : 22} color={Colores.burnsNegro} />
-                </TouchableOpacity>
-            </View>
-
-            <View style={[estilos.contadorContainer, { paddingHorizontal: responsive.paddingHorizontal }]}>
-                <Text style={[estilos.contador, {
-                    fontSize: responsive.isTablet ? 14 : responsive.isSmallPhone ? 11 : 12,
-                    color: Colores.burnsBlanco + '50',
-                }]}>
-                    {recompensas.length} {recompensas.length === 1 ? 'recompensa' : 'recompensas'}
-                    {recompensas.filter(r => r.activa).length > 0 &&
-                        ` · ${recompensas.filter(r => r.activa).length} activas`
-                    }
-                </Text>
-            </View>
-
-            <FlatList
-                data={recompensas}
-                keyExtractor={item => item.id.toString()}
-                renderItem={renderRecompensa}
-                contentContainerStyle={[
-                    estilos.lista,
-                    {
-                        paddingHorizontal: responsive.paddingHorizontal,
-                        paddingBottom: insets.bottom + 150,
-                        paddingTop: responsive.isTablet ? 8 : 4,
-                    }
-                ]}
-                showsVerticalScrollIndicator={false}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refrescando}
-                        onRefresh={onRefresh}
-                        tintColor={Colores.burnsDorado}
-                        colors={[Colores.burnsDorado]}
-                    />
-                }
-                ListEmptyComponent={
-                    <View style={estilos.vacioContenedor}>
-                        <Ionicons name="gift-outline" size={responsive.isTablet ? 80 : 60} color={Colores.burnsBlanco + '20'} />
-                        <Text style={[estilos.vacio, {
-                            fontSize: responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16,
-                            color: Colores.burnsBlanco,
-                        }]}>
-                            No hay recompensas
-                        </Text>
-                        <Text style={[estilos.vacioSubtexto, {
-                            fontSize: responsive.isTablet ? 14 : responsive.isSmallPhone ? 11 : 12,
-                            color: Colores.burnsBlanco + '40',
-                        }]}>
-                            Crea tu primera recompensa presionando el botón +
+                    <View style={estilos.resumenItem}>
+                        <Text style={estilos.resumenLabel}>Activas</Text>
+                        <Text style={[estilos.resumenValor, { color: DISENO.colors.success }]}>
+                            {metricas.activas}
                         </Text>
                     </View>
-                }
-            />
+                    <View style={estilos.resumenDivider} />
+                    <View style={estilos.resumenItem}>
+                        <Text style={estilos.resumenLabel}>Inactivas</Text>
+                        <Text style={[estilos.resumenValor, { color: DISENO.colors.danger }]}>
+                            {metricas.inactivas}
+                        </Text>
+                    </View>
+                    <View style={estilos.resumenDivider} />
+                    <View style={estilos.resumenItem}>
+                        <Text style={estilos.resumenLabel}>Total</Text>
+                        <Text style={estilos.resumenValor}>{metricas.total}</Text>
+                    </View>
+                </View>
+
+                {/* LISTA */}
+                <FlatList
+                    data={recompensas}
+                    keyExtractor={item => item.id.toString()}
+                    renderItem={renderRecompensa}
+                    contentContainerStyle={[
+                        estilos.lista,
+                        {
+                            paddingHorizontal: responsive.getEspaciado('LG'),
+                            paddingBottom: insets.bottom + 120,
+                        },
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refrescando}
+                            onRefresh={onRefresh}
+                            tintColor={DISENO.colors.accent}
+                            colors={[DISENO.colors.accent]}
+                        />
+                    }
+                    ListEmptyComponent={
+                        <View style={estilos.vacioContenedor}>
+                            <Ionicons
+                                name="gift-outline"
+                                size={60}
+                                color={DISENO.colors.textTertiary}
+                            />
+                            <Text style={estilos.vacio}>No hay recompensas</Text>
+                            <Text style={estilos.vacioSubtexto}>
+                                Creá tu primera recompensa con el botón +
+                            </Text>
+                        </View>
+                    }
+                />
+            </View>
 
             {/* ============================================================
-            📝 MODAL
+                📝 MODAL FORMULARIO
             ============================================================ */}
             <Modal
                 key={modalKey}
                 visible={modalVisible}
                 transparent
                 animationType="slide"
+                statusBarTranslucent
                 onRequestClose={cerrarModal}
             >
                 <View style={estilos.modalFondo}>
-                    <LinearGradient
-                        colors={[Colores.burnsVerde, Colores.burnsNegro]}
-                        style={estilos.modalGradiente}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                    />
-
                     <KeyboardAvoidingView
                         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                         style={estilos.modalKeyboard}
                     >
-                        <View style={[
-                            estilos.modal,
-                            {
-                                padding: responsive.isTablet ? 32 : responsive.isSmallPhone ? 16 : 24,
-                                borderRadius: responsive.isTablet ? 28 : 24,
-                                width: responsive.modalWidth,
-                                maxHeight: responsive.modalMaxHeight,
-                                borderColor: Colores.burnsDorado + '30',
-                            }
-                        ]}>
-                            <View style={estilos.modalHeader}>
-                                <LinearGradient
-                                    colors={[Colores.burnsDorado, Colores.burnsRojo]}
-                                    style={estilos.modalHeaderGradiente}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
+                        <View style={estilos.modal}>
+                            {/* HEADER DEL MODAL */}
+                            <LinearGradient
+                                colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+                                style={estilos.modalHeaderGradiente}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                            >
+                                <Ionicons
+                                    name={editando ? 'create' : 'gift'}
+                                    size={22}
+                                    color={DISENO.colors.surface}
+                                />
+                                <Text style={estilos.modalTitulo}>
+                                    {editando ? 'Editar Recompensa' : 'Nueva Recompensa'}
+                                </Text>
+                                <TouchableOpacity
+                                    style={estilos.modalCerrarHeader}
+                                    onPress={cerrarModal}
+                                    activeOpacity={0.7}
                                 >
-                                    <Ionicons name="gift" size={responsive.isTablet ? 32 : responsive.isSmallPhone ? 24 : 28} color={Colores.burnsNegro} />
-                                    <Text style={[estilos.modalTitulo, {
-                                        fontSize: responsive.isTablet ? 26 : responsive.isSmallPhone ? 20 : 22,
-                                        color: Colores.burnsNegro,
-                                    }]}>
-                                        {editando ? '✏️ Editar Recompensa' : '➕ Nueva Recompensa'}
-                                    </Text>
-                                </LinearGradient>
-                            </View>
+                                    <Ionicons name="close" size={22} color={DISENO.colors.surface} />
+                                </TouchableOpacity>
+                            </LinearGradient>
 
                             <ScrollView
                                 style={estilos.modalScroll}
                                 showsVerticalScrollIndicator={false}
                                 contentContainerStyle={{ paddingBottom: 10 }}
                             >
-                                <Text style={[estilos.label, {
-                                    fontSize: responsive.labelSize,
-                                    color: Colores.burnsBlanco,
-                                }]}>
-                                    <Ionicons name="gift-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Nombre *
-                                </Text>
+                                {/* NOMBRE */}
+                                <Text style={estilos.label}>🎁 Nombre *</Text>
                                 <TextInput
-                                    style={[estilos.input, {
-                                        fontSize: responsive.inputSize,
-                                        color: Colores.burnsBlanco,
-                                    }]}
+                                    style={estilos.input}
                                     value={nombre}
                                     onChangeText={setNombre}
                                     placeholder="Ej: 20% de descuento"
-                                    placeholderTextColor={Colores.burnsBlanco + '40'}
-                                    selectionColor={Colores.burnsDorado}
+                                    placeholderTextColor={DISENO.colors.textTertiary}
+                                    selectionColor={DISENO.colors.accent}
                                 />
 
-                                <Text style={[estilos.label, {
-                                    fontSize: responsive.labelSize,
-                                    marginTop: 14,
-                                    color: Colores.burnsBlanco,
-                                }]}>
-                                    <Ionicons name="document-text-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Descripción
-                                </Text>
+                                {/* DESCRIPCIÓN */}
+                                <Text style={estilos.label}>📝 Descripción</Text>
                                 <TextInput
-                                    style={[estilos.input, estilos.textArea, {
-                                        fontSize: responsive.inputSize,
-                                        color: Colores.burnsBlanco,
-                                    }]}
+                                    style={[estilos.input, estilos.textArea]}
                                     value={descripcion}
                                     onChangeText={setDescripcion}
                                     placeholder="Descripción de la recompensa"
-                                    placeholderTextColor={Colores.burnsBlanco + '40'}
+                                    placeholderTextColor={DISENO.colors.textTertiary}
                                     multiline
                                     numberOfLines={3}
                                     textAlignVertical="top"
-                                    selectionColor={Colores.burnsDorado}
+                                    selectionColor={DISENO.colors.accent}
                                 />
 
-                                <Text style={[estilos.label, {
-                                    fontSize: responsive.labelSize,
-                                    marginTop: 14,
-                                    color: Colores.burnsBlanco,
-                                }]}>
-                                    <Ionicons name="star" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Puntos necesarios *
-                                </Text>
+                                {/* PUNTOS */}
+                                <Text style={estilos.label}>⭐ Puntos necesarios *</Text>
                                 <TextInput
-                                    style={[estilos.input, {
-                                        fontSize: responsive.inputSize,
-                                        color: Colores.burnsBlanco,
-                                    }]}
+                                    style={estilos.input}
                                     value={puntosNecesarios}
                                     onChangeText={setPuntosNecesarios}
                                     placeholder="Ej: 500"
-                                    placeholderTextColor={Colores.burnsBlanco + '40'}
+                                    placeholderTextColor={DISENO.colors.textTertiary}
                                     keyboardType="numeric"
-                                    selectionColor={Colores.burnsDorado}
+                                    selectionColor={DISENO.colors.accent}
                                 />
 
-                                <Text style={[estilos.label, {
-                                    fontSize: responsive.labelSize,
-                                    marginTop: 14,
-                                    color: Colores.burnsBlanco,
-                                }]}>
-                                    <Ionicons name="pricetag" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Tipo de recompensa *
-                                </Text>
-                                <View style={[estilos.tiposContainer, { gap: responsive.isTablet ? 8 : 6 }]}>
+                                {/* TIPO */}
+                                <Text style={estilos.label}>🏷️ Tipo de recompensa *</Text>
+                                <View style={estilos.tiposContainer}>
                                     {TIPOS_RECOMPENSA.map(t => (
                                         <TouchableOpacity
                                             key={t.id}
                                             style={[
                                                 estilos.tipoOpcion,
-                                                {
-                                                    paddingVertical: responsive.isTablet ? 12 : responsive.isSmallPhone ? 8 : 10,
-                                                    paddingHorizontal: responsive.isTablet ? 16 : responsive.isSmallPhone ? 10 : 12,
-                                                    borderRadius: responsive.isTablet ? 12 : responsive.isSmallPhone ? 8 : 10,
-                                                    backgroundColor: tipo === t.id ? Colores.burnsDorado : Colores.burnsNegro + '40',
-                                                    borderColor: tipo === t.id ? Colores.burnsDorado : Colores.burnsBlanco + '10',
-                                                }
+                                                tipo === t.id && {
+                                                    backgroundColor: t.color + '20',
+                                                    borderColor: t.color,
+                                                },
                                             ]}
                                             onPress={() => setTipo(t.id as any)}
                                             activeOpacity={0.7}
                                         >
-                                            <Ionicons name={t.icon as any} size={responsive.isTablet ? 20 : responsive.isSmallPhone ? 14 : 16} color={tipo === t.id ? Colores.burnsNegro : Colores.burnsBlanco + '50'} />
-                                            <Text style={[
-                                                estilos.tipoOpcionTexto,
-                                                {
-                                                    fontSize: responsive.isTablet ? 14 : responsive.isSmallPhone ? 11 : 12,
-                                                    color: tipo === t.id ? Colores.burnsNegro : Colores.burnsBlanco + '50',
-                                                    fontWeight: tipo === t.id ? '700' : '500',
-                                                }
-                                            ]}>
+                                            <Ionicons
+                                                name={t.icon as any}
+                                                size={16}
+                                                color={tipo === t.id ? t.color : DISENO.colors.textSecondary}
+                                            />
+                                            <Text
+                                                style={[
+                                                    estilos.tipoOpcionTexto,
+                                                    {
+                                                        color: tipo === t.id ? t.color : DISENO.colors.textSecondary,
+                                                        fontWeight: tipo === t.id ? '700' : '500',
+                                                    },
+                                                ]}
+                                                numberOfLines={1}
+                                            >
                                                 {t.label}
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
 
+                                {/* VALOR (solo descuento) */}
                                 {tipo === 'DESCUENTO' && (
                                     <>
-                                        <Text style={[estilos.label, {
-                                            fontSize: responsive.labelSize,
-                                            marginTop: 14,
-                                            color: Colores.burnsBlanco,
-                                        }]}>
-                                            <Ionicons name="pricetag" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Porcentaje de descuento *
-                                        </Text>
+                                        <Text style={estilos.label}>💰 Porcentaje de descuento *</Text>
                                         <TextInput
-                                            style={[estilos.input, {
-                                                fontSize: responsive.inputSize,
-                                                color: Colores.burnsBlanco,
-                                            }]}
+                                            style={estilos.input}
                                             value={valorDescuento}
                                             onChangeText={setValorDescuento}
                                             placeholder="Ej: 20"
-                                            placeholderTextColor={Colores.burnsBlanco + '40'}
+                                            placeholderTextColor={DISENO.colors.textTertiary}
                                             keyboardType="numeric"
-                                            selectionColor={Colores.burnsDorado}
+                                            selectionColor={DISENO.colors.accent}
                                         />
                                     </>
                                 )}
 
+                                {/* ACTIVA */}
                                 <View style={estilos.switchContainer}>
-                                    <Text style={[estilos.label, {
-                                        fontSize: responsive.labelSize,
-                                        marginBottom: 0,
-                                        color: Colores.burnsBlanco,
-                                    }]}>
-                                        <Ionicons name="checkmark-circle-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={Colores.burnsDorado} /> Activa
+                                    <Text style={[estilos.label, { marginTop: 0, marginBottom: 0 }]}>
+                                        ✅ Activa
                                     </Text>
                                     <Switch
                                         value={activa}
                                         onValueChange={setActiva}
-                                        trackColor={{ false: Colores.burnsBlanco + '30', true: Colores.burnsDorado }}
-                                        thumbColor={activa ? Colores.burnsBlanco : Colores.burnsBlanco}
+                                        trackColor={{
+                                            false: DISENO.colors.grisClaro,
+                                            true: DISENO.colors.accentSecondary,
+                                        }}
+                                        thumbColor={DISENO.colors.surface}
                                     />
                                 </View>
                             </ScrollView>
 
-                            <View style={[estilos.modalBotones, {
-                                gap: responsive.isTablet ? 14 : responsive.isSmallPhone ? 8 : 12,
-                                marginTop: 16,
-                            }]}>
+                            {/* BOTONES */}
+                            <View style={estilos.modalBotones}>
                                 <TouchableOpacity
-                                    style={[estilos.modalBoton, estilos.modalCancelar, {
-                                        paddingVertical: responsive.isTablet ? 16 : responsive.isSmallPhone ? 10 : 14,
-                                    }]}
+                                    style={[estilos.modalBoton, estilos.modalCancelar]}
                                     onPress={cerrarModal}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="close" size={responsive.isTablet ? 22 : responsive.isSmallPhone ? 16 : 20} color={Colores.burnsBlanco} />
-                                    <Text style={[estilos.modalCancelarTexto, {
-                                        fontSize: responsive.isTablet ? 16 : responsive.isSmallPhone ? 13 : 14,
-                                        color: Colores.burnsBlanco,
-                                    }]}>
-                                        Cancelar
-                                    </Text>
+                                    <Ionicons name="close" size={18} color={DISENO.colors.text} />
+                                    <Text style={estilos.modalCancelarTexto}>Cancelar</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[estilos.modalBoton, estilos.modalGuardar, {
-                                        paddingVertical: responsive.isTablet ? 16 : responsive.isSmallPhone ? 10 : 14,
-                                    }]}
+                                    style={[estilos.modalBoton, estilos.modalGuardar]}
                                     onPress={guardarRecompensa}
                                     disabled={guardando}
-                                    activeOpacity={0.7}
+                                    activeOpacity={0.8}
                                 >
                                     <LinearGradient
-                                        colors={[Colores.burnsDorado, Colores.burnsRojo]}
+                                        colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
                                         style={estilos.modalGuardarGradient}
                                         start={{ x: 0, y: 0 }}
                                         end={{ x: 1, y: 0 }}
                                     >
                                         {guardando ? (
-                                            <ActivityIndicator size="small" color={Colores.burnsNegro} />
+                                            <ActivityIndicator size="small" color={DISENO.colors.surface} />
                                         ) : (
                                             <>
-                                                <Ionicons name="save" size={responsive.isTablet ? 22 : responsive.isSmallPhone ? 16 : 20} color={Colores.burnsNegro} />
-                                                <Text style={[estilos.modalGuardarTexto, {
-                                                    fontSize: responsive.isTablet ? 16 : responsive.isSmallPhone ? 13 : 14,
-                                                    color: Colores.burnsNegro,
-                                                }]}>
+                                                <Ionicons name="save" size={18} color={DISENO.colors.surface} />
+                                                <Text style={estilos.modalGuardarTexto}>
                                                     {editando ? 'Actualizar' : 'Crear'}
                                                 </Text>
                                             </>
@@ -959,7 +857,14 @@ export default function PantallaGestionRecompensas(props: any) {
                     </KeyboardAvoidingView>
                 </View>
             </Modal>
-        </View>
+
+            <Toast
+                visible={toast.visible}
+                mensaje={toast.mensaje}
+                tipo={toast.tipo}
+                ocultar={toast.ocultar}
+            />
+        </>
     );
 }
 
@@ -969,127 +874,80 @@ export default function PantallaGestionRecompensas(props: any) {
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
-        backgroundColor: Colores.burnsNegro,
+        backgroundColor: DISENO.colors.fondo,
     },
-    fondoGradiente: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
+
+    // HEADER
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: Colores.burnsBlanco + '10',
+        paddingBottom: 12,
     },
-    botonVolver: {
-        padding: 4,
+    botonHeader: {
+        padding: 8,
+        borderRadius: 10,
+        backgroundColor: DISENO.colors.surface,
+        ...DISENO.shadow.sm,
+    },
+    headerCentro: {
+        flex: 1,
+        alignItems: 'center',
     },
     titulo: {
-        fontWeight: 'bold',
-        letterSpacing: 1,
-        flex: 1,
-        textAlign: 'center',
+        fontFamily: FUENTES.display,
+        fontSize: 20,
+        color: DISENO.colors.text,
     },
-    botonAgregar: {
-        borderRadius: 30,
-        justifyContent: 'center',
+
+    // RESUMEN
+    resumenHoy: {
+        flexDirection: 'row',
         alignItems: 'center',
-        elevation: 4,
-        shadowColor: Colores.burnsDorado,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.lg,
+        padding: 14,
+        marginBottom: 12,
+        ...DISENO.shadow.sm,
     },
-    contadorContainer: {
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: Colores.burnsBlanco + '5',
+    resumenItem: {
+        flex: 1,
+        alignItems: 'center',
     },
-    contador: {
-        fontWeight: '500',
-        opacity: 0.6,
+    resumenLabel: {
+        fontFamily: FUENTES.regular,
+        fontSize: 11,
+        color: DISENO.colors.textSecondary,
+        marginBottom: 2,
     },
-    lista: {
-        flexGrow: 1,
+    resumenValor: {
+        fontFamily: FUENTES.display,
+        fontSize: 18,
+        color: DISENO.colors.text,
     },
+    resumenDivider: {
+        width: 1,
+        height: 30,
+        backgroundColor: DISENO.colors.border,
+    },
+
+    // LOADING
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 16,
-        backgroundColor: Colores.burnsNegro,
+        backgroundColor: DISENO.colors.fondo,
     },
     loadingTexto: {
-        fontWeight: '400',
-        opacity: 0.7,
+        fontFamily: FUENTES.display,
+        fontSize: 14,
+        color: DISENO.colors.textSecondary,
     },
-    tarjeta: {
-        marginBottom: 10,
-        borderWidth: 1,
-    },
-    tarjetaHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-    },
-    tarjetaInfo: {
-        flex: 1,
-        marginRight: 8,
-    },
-    tarjetaTituloContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        flexWrap: 'wrap',
-        marginBottom: 4,
-    },
-    tarjetaTitulo: {
-        fontWeight: 'bold',
-    },
-    tipoBadge: {
-        borderWidth: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    tipoBadgeTexto: {
-        fontWeight: '600',
-    },
-    tarjetaDesc: {
-        opacity: 0.7,
-        marginBottom: 4,
-    },
-    tarjetaPuntosContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        flexWrap: 'wrap',
-    },
-    tarjetaPuntos: {
-        fontWeight: 'bold',
-    },
-    tarjetaValor: {
-        fontWeight: '600',
-    },
-    tarjetaAcciones: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    botonAccion: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    estadoInactivoBadge: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    estadoInactivoTexto: {
-        fontWeight: '600',
+
+    // LISTA
+    lista: {
+        flexGrow: 1,
     },
     vacioContenedor: {
         alignItems: 'center',
@@ -1097,70 +955,185 @@ const estilos = StyleSheet.create({
         paddingVertical: 80,
     },
     vacio: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontSize: 16,
+        color: DISENO.colors.text,
         marginTop: 16,
         textAlign: 'center',
     },
     vacioSubtexto: {
+        fontFamily: FUENTES.regular,
+        fontSize: 12,
+        color: DISENO.colors.textSecondary,
         textAlign: 'center',
         marginTop: 4,
-        opacity: 0.6,
     },
+
+    // TARJETA
+    tarjeta: {
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.lg,
+        marginBottom: 12,
+        borderLeftWidth: 4,
+        ...DISENO.shadow.sm,
+    },
+    tarjetaHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 8,
+        marginBottom: 8,
+    },
+    tarjetaInfo: {
+        flex: 1,
+        minWidth: 0,
+        gap: 6,
+    },
+    tarjetaTitulo: {
+        fontFamily: FUENTES.display,
+        color: DISENO.colors.text,
+    },
+    tipoBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        alignSelf: 'flex-start',
+    },
+    tipoBadgeText: {
+        fontFamily: FUENTES.regular,
+        fontWeight: '700',
+    },
+    tarjetaDesc: {
+        fontFamily: FUENTES.regular,
+        color: DISENO.colors.textSecondary,
+        marginBottom: 8,
+        lineHeight: 18,
+    },
+
+    // PUNTOS Y VALOR
+    tarjetaPuntosRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        marginBottom: 10,
+    },
+    puntosBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: DISENO.colors.accentSecondary + '20',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    puntosTexto: {
+        fontFamily: FUENTES.display,
+        color: DISENO.colors.text,
+    },
+    valorBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    valorTexto: {
+        fontFamily: FUENTES.regular,
+        fontWeight: '700',
+        color: DISENO.colors.success,
+    },
+    inactivaBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    inactivaTexto: {
+        fontFamily: FUENTES.regular,
+        fontWeight: '700',
+        color: DISENO.colors.danger,
+    },
+
+    // ACCIONES
+    tarjetaAcciones: {
+        flexDirection: 'row',
+        gap: 8,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: DISENO.colors.border,
+    },
+    botonAccion: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    botonAccionTexto: {
+        fontFamily: FUENTES.regular,
+        fontWeight: '600',
+    },
+
+    // MODAL
     modalFondo: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.85)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
-    },
-    modalGradiente: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        borderRadius: 28,
     },
     modalKeyboard: {
         width: '100%',
         alignItems: 'center',
     },
     modal: {
-        backgroundColor: 'transparent',
-        borderWidth: 2,
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.xl,
+        width: '100%',
+        maxWidth: 500,
+        maxHeight: '90%',
         overflow: 'hidden',
-    },
-    modalHeader: {
-        marginBottom: 16,
+        ...DISENO.shadow.lg,
     },
     modalHeaderGradiente: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
         gap: 10,
-        paddingVertical: 14,
+        paddingVertical: 16,
         paddingHorizontal: 20,
-        borderRadius: 12,
     },
     modalTitulo: {
-        fontWeight: 'bold',
+        flex: 1,
+        fontFamily: FUENTES.display,
+        fontSize: 18,
+        color: DISENO.colors.surface,
+    },
+    modalCerrarHeader: {
+        padding: 4,
     },
     modalScroll: {
-        maxHeight: '70%',
-        paddingHorizontal: 4,
+        paddingHorizontal: 20,
+        paddingTop: 16,
     },
     label: {
-        fontWeight: '600',
+        fontFamily: FUENTES.display,
+        fontSize: 13,
+        color: DISENO.colors.text,
         marginBottom: 6,
         marginTop: 14,
     },
     input: {
-        backgroundColor: Colores.burnsNegro + '40',
-        borderRadius: 12,
+        fontFamily: FUENTES.regular,
+        fontSize: 14,
+        color: DISENO.colors.text,
+        backgroundColor: DISENO.colors.surfaceHover,
+        borderRadius: DISENO.radius.md,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: Colores.burnsBlanco + '10',
+        borderColor: DISENO.colors.border,
     },
     textArea: {
         minHeight: 80,
@@ -1168,32 +1141,43 @@ const estilos = StyleSheet.create({
     },
     tiposContainer: {
         flexDirection: 'row',
+        gap: 8,
         flexWrap: 'wrap',
     },
     tipoOpcion: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        borderWidth: 1,
-        flex: 1,
         justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        borderWidth: 1.5,
+        borderColor: DISENO.colors.border,
+        backgroundColor: DISENO.colors.surfaceHover,
+        flex: 1,
         minWidth: '30%',
     },
     tipoOpcionTexto: {
-        fontWeight: '600',
+        fontFamily: FUENTES.regular,
+        fontSize: 12,
     },
     switchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 14,
+        marginTop: 20,
+        paddingVertical: 10,
     },
     modalBotones: {
         flexDirection: 'row',
-        marginTop: 8,
+        gap: 10,
+        padding: 20,
+        paddingTop: 10,
     },
     modalBoton: {
         flex: 1,
+        paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
@@ -1202,15 +1186,17 @@ const estilos = StyleSheet.create({
         overflow: 'hidden',
     },
     modalCancelar: {
-        backgroundColor: Colores.burnsNegro + '50',
-        borderWidth: 1,
-        borderColor: Colores.burnsBlanco + '10',
+        backgroundColor: DISENO.colors.surfaceHover,
     },
     modalCancelarTexto: {
+        fontFamily: FUENTES.regular,
+        fontSize: 14,
         fontWeight: '600',
+        color: DISENO.colors.text,
     },
     modalGuardar: {
         overflow: 'hidden',
+        paddingVertical: 0,
     },
     modalGuardarGradient: {
         flexDirection: 'row',
@@ -1218,11 +1204,11 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         gap: 6,
         paddingVertical: 14,
-        paddingHorizontal: 20,
         width: '100%',
-        height: '100%',
     },
     modalGuardarTexto: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontSize: 14,
+        color: DISENO.colors.surface,
     },
 });

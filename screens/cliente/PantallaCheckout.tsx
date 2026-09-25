@@ -10,7 +10,7 @@ import {
     Modal,
     Animated,
     ActivityIndicator,
-    Alert,                    // ✅ NUEVO: para el guard
+    Alert,
     KeyboardAvoidingView,
     Platform,
     Linking,
@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import * as Clipboard from 'expo-clipboard';   // ✅ NUEVO: en vez de react-native
+import * as Clipboard from 'expo-clipboard';
 
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
@@ -35,6 +35,7 @@ import { useBeneficios } from '../../hooks/useBeneficios';
 import { cuponService } from '../../lib/cupones/cuponService';
 import { calcularResumenPedido } from '../../services/servicioPreciosPedido';
 import { supabase } from '../../lib/supabase';
+import { notificacionService } from '../../services/notificacionService';
 
 import MapaSelector from '../../components/Mapa';
 
@@ -58,6 +59,11 @@ const useResponsive = () => {
 
 const ALIAS_TRANSFERENCIA = 'krustyburger2025';
 const CUENTA_TRANSFERENCIA = 'CBU: 0000003100088376133432';
+
+// ============================================================
+// 🎯 TIPO: MODO DE EDICIÓN DE DIRECCIÓN
+// ============================================================
+type ModoDireccion = 'vista' | 'texto' | 'formulario';
 
 // ============================================================
 // ✅ HELPERS FUERA DEL COMPONENTE
@@ -118,8 +124,8 @@ export default function PantallaCheckout(props: any) {
     const { crearPedido } = tiendaPedidos();
     const {
         perfil,
-        sesion,                       // ✅ NUEVO
-        cargando: cargandoAuth,       // ✅ NUEVO
+        sesion,
+        cargando: cargandoAuth,
         actualizarPerfil,
         ubicacionSeleccionada: ubicacionStore,
         guardarUbicacionTemporal,
@@ -187,6 +193,21 @@ export default function PantallaCheckout(props: any) {
     const [envioDisponible, setEnvioDisponible] = useState(true);
     const [mensajeEnvio, setMensajeEnvio] = useState('');
 
+    // ✅ NUEVO: estados para la edición de dirección
+    const [modoDireccion, setModoDireccion] = useState<ModoDireccion>('vista');
+    const [direccionInput, setDireccionInput] = useState('');
+    const [verificandoDireccion, setVerificandoDireccion] = useState(false);
+    const [camposManuales, setCamposManuales] = useState({
+        calle: '',
+        numero: '',
+        piso: '',
+        departamento: '',
+        barrio: '',
+        ciudad: '',
+        codigoPostal: '',
+    });
+    const [errorDireccion, setErrorDireccion] = useState<string | null>(null);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideUpAnim = useRef(new Animated.Value(30)).current;
     const dot1Anim = useRef(new Animated.Value(0)).current;
@@ -200,9 +221,6 @@ export default function PantallaCheckout(props: any) {
 
     // ============================================================
     // 🔒 GUARD DE SESIÓN
-    // ============================================================
-    // ✅ Si un invitado llega acá (deep link, navegación programática,
-    //    o algún bug del Carrito), lo mandamos a Login.
     // ============================================================
     useEffect(() => {
         if (!cargandoAuth && !sesion) {
@@ -258,7 +276,6 @@ export default function PantallaCheckout(props: any) {
     }, [pedidoIdTransferencia]);
 
     useEffect(() => {
-        // ✅ Solo cargamos datos si hay sesión
         if (!sesion) return;
 
         cargarDatosPerfil();
@@ -402,8 +419,19 @@ export default function PantallaCheckout(props: any) {
         try {
             const datosActualizados: any = {};
             if (telefono) datosActualizados.telefono = telefono;
-            if (direccion && direccionDelPerfil === false) datosActualizados.direccion_calle = direccion;
-            if (Object.keys(datosActualizados).length > 0) await actualizarPerfil(datosActualizados);
+
+            // ✅ NUEVO: si el usuario cargó datos manuales, los guardamos en el perfil
+            if (camposManuales.calle) datosActualizados.direccion_calle = camposManuales.calle;
+            if (camposManuales.numero) datosActualizados.direccion_numero = camposManuales.numero;
+            if (camposManuales.piso) datosActualizados.direccion_piso = camposManuales.piso;
+            if (camposManuales.departamento) datosActualizados.direccion_departamento = camposManuales.departamento;
+            if (camposManuales.barrio) datosActualizados.direccion_barrio = camposManuales.barrio;
+            if (camposManuales.ciudad) datosActualizados.direccion_ciudad = camposManuales.ciudad;
+            if (camposManuales.codigoPostal) datosActualizados.direccion_codigo_postal = camposManuales.codigoPostal;
+
+            if (Object.keys(datosActualizados).length > 0) {
+                await actualizarPerfil(datosActualizados);
+            }
         } catch (error) {
             console.error('❌ Error actualizando perfil:', error);
         } finally {
@@ -556,6 +584,195 @@ export default function PantallaCheckout(props: any) {
         }
     };
 
+    // ============================================================
+    // ✅ NUEVO: MANEJADORES DE EDICIÓN DE DIRECCIÓN
+    // ============================================================
+
+    /**
+     * Abre el modo edición con el texto actual de la dirección
+     */
+    const abrirEdicionDireccion = () => {
+        setDireccionInput(direccionCompleta || direccion || '');
+        setErrorDireccion(null);
+        setModoDireccion('texto');
+    };
+
+    /**
+     * Cancela la edición y vuelve al modo vista
+     */
+    const cancelarEdicionDireccion = () => {
+        setModoDireccion('vista');
+        setErrorDireccion(null);
+        setDireccionInput('');
+    };
+
+    /**
+     * Verifica la dirección escrita en texto libre
+     * - Si la encuentra → actualiza dirección + coordenadas + calcula envío
+     * - Si NO la encuentra → pasa al modo formulario
+     */
+    const verificarDireccionTexto = async () => {
+        const texto = direccionInput.trim();
+        if (texto.length < 5) {
+            setErrorDireccion('Ingresá una dirección más completa');
+            return;
+        }
+
+        setVerificandoDireccion(true);
+        setErrorDireccion(null);
+
+        try {
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                setErrorDireccion('Necesitamos permiso de ubicación para verificar');
+                setVerificandoDireccion(false);
+                return;
+            }
+
+            const resultados = await Location.geocodeAsync(texto);
+
+            if (resultados && resultados.length > 0) {
+                const { latitude, longitude } = resultados[0];
+
+                // Reverse geocode para obtener la dirección "formateada" por el sistema
+                const direccionFormateada = await obtenerDireccionDesdeCoordenadas(latitude, longitude);
+
+                setUbicacionSeleccionada({ latitude, longitude });
+                setDireccion(texto);
+                setDireccionCompleta(direccionFormateada || texto);
+                setDireccionDelPerfil(false);
+
+                await guardarUbicacionTemporal({
+                    latitude,
+                    longitude,
+                    direccion: direccionFormateada || texto,
+                    seleccionadaPorUsuario: true,
+                });
+
+                // ✅ Descomponer la dirección en campos para guardar en el perfil
+                // (opcional: si querés guardar los datos separados, hacerlo acá)
+                setCamposManuales({
+                    calle: '',
+                    numero: '',
+                    piso: '',
+                    departamento: '',
+                    barrio: '',
+                    ciudad: '',
+                    codigoPostal: '',
+                });
+
+                setModoDireccion('vista');
+                toast.exito('📍 Dirección verificada');
+            } else {
+                // ❌ No la encontró → pasamos al formulario manual
+                console.log('⚠️ [Checkout] Geocoder no encontró la dirección, pasando a formulario');
+                setErrorDireccion('No pudimos encontrar esa dirección. Completala manualmente:');
+                setModoDireccion('formulario');
+
+                // Pre-llenamos los campos por si el texto tenía algo útil
+                setCamposManuales({
+                    calle: texto,
+                    numero: '',
+                    piso: '',
+                    departamento: '',
+                    barrio: '',
+                    ciudad: '',
+                    codigoPostal: '',
+                });
+            }
+        } catch (error) {
+            console.error('❌ [Checkout] Error verificando dirección:', error);
+            setErrorDireccion('Hubo un error al verificar. Completala manualmente:');
+            setModoDireccion('formulario');
+        } finally {
+            setVerificandoDireccion(false);
+        }
+    };
+
+    /**
+     * Aplica la dirección cargada manualmente en el formulario.
+     * Intenta geocodificar la dirección completa construida con los campos.
+     * - Si la encuentra → calcula envío
+     * - Si NO la encuentra → abre el mapa como fallback
+     */
+    const aplicarDireccionManual = async () => {
+        if (!camposManuales.calle || !camposManuales.numero) {
+            setErrorDireccion('Completá al menos calle y número');
+            return;
+        }
+
+        setVerificandoDireccion(true);
+        setErrorDireccion(null);
+
+        // Construir dirección completa
+        const partes = [
+            `${camposManuales.calle} ${camposManuales.numero}`,
+            camposManuales.piso ? `Piso ${camposManuales.piso}` : '',
+            camposManuales.departamento ? `Depto ${camposManuales.departamento}` : '',
+            camposManuales.barrio,
+            camposManuales.ciudad,
+            camposManuales.codigoPostal ? `CP ${camposManuales.codigoPostal}` : '',
+        ].filter(Boolean);
+
+        const direccionConstruida = partes.join(', ');
+
+        try {
+            const tienePermiso = await asegurarPermisosUbicacion();
+            if (!tienePermiso) {
+                setErrorDireccion('Necesitamos permiso de ubicación para calcular el envío');
+                setVerificandoDireccion(false);
+                return;
+            }
+
+            const resultados = await Location.geocodeAsync(direccionConstruida);
+
+            if (resultados && resultados.length > 0) {
+                const { latitude, longitude } = resultados[0];
+
+                setUbicacionSeleccionada({ latitude, longitude });
+                setDireccion(direccionConstruida);
+                setDireccionCompleta(direccionConstruida);
+                setDireccionDelPerfil(false);
+
+                await guardarUbicacionTemporal({
+                    latitude,
+                    longitude,
+                    direccion: direccionConstruida,
+                    seleccionadaPorUsuario: true,
+                });
+
+                setModoDireccion('vista');
+                toast.exito('📍 Dirección guardada');
+            } else {
+                // ❌ No encontró la dirección ni con el formulario
+                Alert.alert(
+                    '📍 Necesitamos tu ubicación exacta',
+                    'No pudimos ubicar esa dirección en el mapa. Elegí tu ubicación exacta con el mapa para continuar.',
+                    [
+                        { text: 'Cancelar', style: 'cancel' },
+                        {
+                            text: 'Abrir mapa',
+                            onPress: () => setMostrarMapa(true),
+                        },
+                    ]
+                );
+            }
+        } catch (error) {
+            console.error('❌ [Checkout] Error aplicando dirección manual:', error);
+            setErrorDireccion('Hubo un error al verificar la dirección');
+        } finally {
+            setVerificandoDireccion(false);
+        }
+    };
+
+    /**
+     * Vuelve al modo texto desde el formulario
+     */
+    const volverAlModoTexto = () => {
+        setModoDireccion('texto');
+        setErrorDireccion(null);
+    };
+
     const handleVolverAlCarrito = async () => {
         if (ubicacionSeleccionada) await guardarDireccionEnStore(ubicacionSeleccionada);
         props.navigation.goBack();
@@ -572,6 +789,19 @@ export default function PantallaCheckout(props: any) {
         setDireccionCompleta(ubicacion.direccion);
         setDireccionDelPerfil(false);
 
+        // ✅ Al usar el mapa, descomponemos la dirección en campos manuales
+        // para guardarla en el perfil al confirmar (opcional)
+        // Por ahora, solo limpiamos los campos manuales
+        setCamposManuales({
+            calle: '',
+            numero: '',
+            piso: '',
+            departamento: '',
+            barrio: '',
+            ciudad: '',
+            codigoPostal: '',
+        });
+
         await guardarUbicacionTemporal({
             latitude: ubicacion.latitude,
             longitude: ubicacion.longitude,
@@ -580,10 +810,11 @@ export default function PantallaCheckout(props: any) {
         });
 
         setMostrarMapa(false);
+        setModoDireccion('vista');
+        setErrorDireccion(null);
         toast.exito('📍 Ubicación seleccionada correctamente');
     };
 
-    // ✅ FIX: Ahora usa expo-clipboard
     const copiarAlias = async () => {
         await Clipboard.setStringAsync(ALIAS_TRANSFERENCIA);
         toast.exito('¡Alias copiado!');
@@ -610,7 +841,6 @@ export default function PantallaCheckout(props: any) {
     };
 
     const confirmarPedido = async () => {
-        // ✅ Guard extra por si acaso
         if (!sesion || !perfil?.id) {
             Alert.alert('Iniciá sesión', 'Necesitás una cuenta para confirmar el pedido.');
             return;
@@ -709,6 +939,17 @@ export default function PantallaCheckout(props: any) {
             setCargando(false);
             return;
         }
+
+        // ✅ NUEVO: Notificar a los admins del nuevo pedido (no bloqueante)
+        notificacionService.notificarAdminsNuevoPedido({
+            id: pedidoId,
+            cliente_nombre: perfil?.nombre_cliente,
+            total: resumen.totalFinal,
+            cantidad_items: elementos.length,
+            tipo_entrega: tipoEntrega,
+        }).catch((err) => {
+            console.warn('⚠️ Error notificando admins (no crítico):', err);
+        });
 
         if (cuponAplicado?.id && perfil?.id) {
             const resultadoCupon = await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
@@ -1034,165 +1275,489 @@ export default function PantallaCheckout(props: any) {
                             📍 Dirección de entrega
                         </Text>
 
-                        <View style={[styles.direccionPerfilContainer, {
-                            padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                            borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                            backgroundColor: direccionDelPerfil ? DISENO.colors.success + '15' : DISENO.colors.surface,
-                            borderColor: direccionDelPerfil ? DISENO.colors.success + '30' : DISENO.colors.border,
-                        }]}>
-                            <View style={styles.direccionPerfilHeader}>
-                                <Ionicons
-                                    name={direccionDelPerfil ? "checkmark-circle" : "location-outline"}
-                                    size={isTablet ? 22 : 18}
-                                    color={direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent}
-                                />
-                                <Text style={[styles.direccionPerfilLabel, {
-                                    fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
-                                    color: direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent,
+                        {/* ============================================================ */}
+                        {/* ✅ MODO VISTA: solo muestra la dirección + botón editar       */}
+                        {/* ============================================================ */}
+                        {modoDireccion === 'vista' && (
+                            <>
+                                <View style={[styles.direccionPerfilContainer, {
+                                    padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
+                                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                    backgroundColor: direccionDelPerfil ? DISENO.colors.success + '15' : DISENO.colors.surface,
+                                    borderColor: direccionDelPerfil ? DISENO.colors.success + '30' : DISENO.colors.border,
                                 }]}>
-                                    {direccionDelPerfil ? 'Dirección de tu perfil' : 'Dirección personalizada'}
-                                </Text>
-                                {ubicacionSeleccionada && !direccionDelPerfil && (
-                                    <View style={[styles.ubicacionConfirmada, { backgroundColor: DISENO.colors.success + '15' }]}>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={DISENO.colors.success} />
-                                        <Text style={[styles.ubicacionConfirmadaText, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DISENO.colors.success }]}>
-                                            Confirmada
+                                    <View style={styles.direccionPerfilHeader}>
+                                        <Ionicons
+                                            name={direccionDelPerfil ? "checkmark-circle" : "location-outline"}
+                                            size={isTablet ? 22 : 18}
+                                            color={direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent}
+                                        />
+                                        <Text style={[styles.direccionPerfilLabel, {
+                                            fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                            color: direccionDelPerfil ? DISENO.colors.success : DISENO.colors.accent,
+                                        }]}>
+                                            {direccionDelPerfil ? 'Dirección de tu perfil' : 'Dirección personalizada'}
                                         </Text>
+                                        {ubicacionSeleccionada && !direccionDelPerfil && (
+                                            <View style={[styles.ubicacionConfirmada, { backgroundColor: DISENO.colors.success + '15' }]}>
+                                                <Ionicons name="checkmark-circle" size={isTablet ? 14 : 10} color={DISENO.colors.success} />
+                                                <Text style={[styles.ubicacionConfirmadaText, { fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9, color: DISENO.colors.success }]}>
+                                                    Confirmada
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={[styles.direccionPerfilTexto, {
+                                        fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14,
+                                        color: DISENO.colors.text,
+                                    }]}>
+                                        {direccion || 'No hay dirección cargada'}
+                                    </Text>
+
+                                    {/* Botones de acción en modo vista */}
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                                        <TouchableOpacity
+                                            onPress={abrirEdicionDireccion}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                paddingVertical: 8,
+                                                paddingHorizontal: 14,
+                                                borderRadius: 10,
+                                                backgroundColor: DISENO.colors.accent + '15',
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="pencil" size={14} color={DISENO.colors.accent} />
+                                            <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.accent }}>
+                                                Editar
+                                            </Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            onPress={async () => {
+                                                const tienePermiso = await asegurarPermisosUbicacion();
+                                                if (!tienePermiso) {
+                                                    toast.advertencia('Necesitamos permiso de ubicación para el mapa');
+                                                    return;
+                                                }
+                                                setMostrarMapa(true);
+                                            }}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                paddingVertical: 8,
+                                                paddingHorizontal: 14,
+                                                borderRadius: 10,
+                                                backgroundColor: DISENO.colors.info + '15',
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="map" size={14} color={DISENO.colors.info} />
+                                            <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.info }}>
+                                                Mapa
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Info del envío calculado */}
+                                {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
+                                    <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
+                                        <View style={styles.infoEnvioFila}>
+                                            <Ionicons name="navigate" size={18} color={DISENO.colors.accent} />
+                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>
+                                                📏 Distancia: {distanciaFormateada || 'Calculando...'}
+                                            </Text>
+                                        </View>
+                                        {envioDisponible ? (
+                                            <>
+                                                <View style={styles.infoEnvioFila}>
+                                                    <Ionicons name="cash" size={18} color={DISENO.colors.success} />
+                                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.success }]}>
+                                                        💰 Costo de envío: {envioGratisAplicado ? 'GRATIS' : formatearPrecio(costoEnvioCalculado)}
+                                                    </Text>
+                                                </View>
+                                                <View style={styles.infoEnvioFila}>
+                                                    <Ionicons name="time-outline" size={18} color={DISENO.colors.accent} />
+                                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
+                                                        ⏱️ Tiempo estimado: {tiempoEstimado} min
+                                                    </Text>
+                                                </View>
+                                            </>
+                                        ) : (
+                                            <View style={styles.infoEnvioFila}>
+                                                <Ionicons name="warning" size={18} color={DISENO.colors.accent} />
+                                                <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
+                                                    ⚠️ {mensajeEnvio}
+                                                </Text>
+                                            </View>
+                                        )}
                                     </View>
                                 )}
-                            </View>
-                            <Text style={[styles.direccionPerfilTexto, {
-                                fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14,
-                                color: DISENO.colors.text,
-                            }]}>
-                                {direccion || 'No hay dirección cargada'}
-                            </Text>
-                        </View>
 
-                        {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
-                                <View style={styles.infoEnvioFila}>
-                                    <Ionicons name="navigate" size={18} color={DISENO.colors.accent} />
-                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>
-                                        📏 Distancia: {distanciaFormateada || 'Calculando...'}
+                                {calculandoEnvio && tipoEntrega === 'domicilio' && (
+                                    <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
+                                        <View style={styles.infoEnvioFila}>
+                                            <ActivityIndicator size="small" color={DISENO.colors.accent} />
+                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>Calculando envío...</Text>
+                                        </View>
+                                    </View>
+                                )}
+                            </>
+                        )}
+
+                        {/* ============================================================ */}
+                        {/* ✅ MODO TEXTO: input libre + botón verificar                  */}
+                        {/* ============================================================ */}
+                        {modoDireccion === 'texto' && (
+                            <View style={[styles.direccionPerfilContainer, {
+                                padding: isTablet ? 16 : 12,
+                                borderRadius: isTablet ? 14 : 12,
+                                backgroundColor: DISENO.colors.surface,
+                                borderColor: DISENO.colors.accent + '40',
+                            }]}>
+                                <View style={styles.direccionPerfilHeader}>
+                                    <Ionicons name="pencil" size={isTablet ? 20 : 18} color={DISENO.colors.accent} />
+                                    <Text style={[styles.direccionPerfilLabel, {
+                                        fontSize: isTablet ? 14 : 13,
+                                        color: DISENO.colors.accent,
+                                    }]}>
+                                        Editar dirección
                                     </Text>
                                 </View>
-                                {envioDisponible ? (
-                                    <>
-                                        <View style={styles.infoEnvioFila}>
-                                            <Ionicons name="cash" size={18} color={DISENO.colors.success} />
-                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.success }]}>
-                                                💰 Costo de envío: {envioGratisAplicado ? 'GRATIS' : formatearPrecio(costoEnvioCalculado)}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.infoEnvioFila}>
-                                            <Ionicons name="time-outline" size={18} color={DISENO.colors.accent} />
-                                            <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
-                                                ⏱️ Tiempo estimado: {tiempoEstimado} min
-                                            </Text>
-                                        </View>
-                                    </>
-                                ) : (
-                                    <View style={styles.infoEnvioFila}>
-                                        <Ionicons name="warning" size={18} color={DISENO.colors.accent} />
-                                        <Text style={[styles.infoEnvioText, { color: DISENO.colors.accent }]}>
-                                            ⚠️ {mensajeEnvio}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        )}
 
-                        {calculandoEnvio && tipoEntrega === 'domicilio' && (
-                            <View style={[styles.infoEnvioContainer, { backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}>
-                                <View style={styles.infoEnvioFila}>
-                                    <ActivityIndicator size="small" color={DISENO.colors.accent} />
-                                    <Text style={[styles.infoEnvioText, { color: DISENO.colors.textSecondary }]}>Calculando envío...</Text>
-                                </View>
-                            </View>
-                        )}
-
-                        <View style={styles.buscadorManualContainer}>
-                            <Text style={[styles.buscadorManualLabel, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.textSecondary }]}>
-                                🔍 Buscar dirección en el mapa
-                            </Text>
-                            <View style={styles.buscadorManualFila}>
                                 <TextInput
-                                    style={[styles.buscadorManualInput, { fontSize: inputSize, color: DISENO.colors.text, backgroundColor: DISENO.colors.surface, borderColor: DISENO.colors.border }]}
-                                    value={busquedaManual}
-                                    onChangeText={setBusquedaManual}
+                                    style={[styles.buscadorManualInput, {
+                                        fontSize: inputSize,
+                                        color: DISENO.colors.text,
+                                        backgroundColor: DISENO.colors.surfaceHover,
+                                        borderColor: DISENO.colors.border,
+                                        marginTop: 8,
+                                    }]}
+                                    value={direccionInput}
+                                    onChangeText={setDireccionInput}
                                     placeholder="Ej: Av. Corrientes 1234, CABA"
                                     placeholderTextColor={DISENO.colors.textTertiary}
                                     selectionColor={DISENO.colors.accent}
+                                    autoFocus
+                                    multiline
                                 />
-                                <TouchableOpacity
-                                    style={[styles.botonBuscar, {
-                                        padding: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                        borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                        backgroundColor: DISENO.colors.accentSecondary,
-                                    }]}
-                                    onPress={buscarDireccionManual}
-                                    activeOpacity={0.7}
-                                    disabled={buscandoDireccion}
-                                >
-                                    {buscandoDireccion ? (
-                                        <ActivityIndicator size="small" color={DISENO.colors.text} />
-                                    ) : (
-                                        <Ionicons name="search" size={isTablet ? 22 : 18} color={DISENO.colors.text} />
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
 
-                        <TouchableOpacity
-                            style={[styles.botonMapa, {
-                                padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                                borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                marginTop: 8,
+                                {errorDireccion && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                        <Ionicons name="alert-circle" size={14} color={DISENO.colors.accent} />
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, color: DISENO.colors.accent, flex: 1 }}>
+                                            {errorDireccion}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                                    <TouchableOpacity
+                                        onPress={verificarDireccionTexto}
+                                        disabled={verificandoDireccion}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 16,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.accentSecondary,
+                                            opacity: verificandoDireccion ? 0.6 : 1,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        {verificandoDireccion ? (
+                                            <ActivityIndicator size="small" color={DISENO.colors.text} />
+                                        ) : (
+                                            <Ionicons name="search" size={16} color={DISENO.colors.text} />
+                                        )}
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 13, fontWeight: '600', color: DISENO.colors.text }}>
+                                            {verificandoDireccion ? 'Verificando...' : 'Verificar'}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            const tienePermiso = await asegurarPermisosUbicacion();
+                                            if (!tienePermiso) {
+                                                toast.advertencia('Necesitamos permiso de ubicación');
+                                                return;
+                                            }
+                                            setMostrarMapa(true);
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.info + '15',
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="map" size={14} color={DISENO.colors.info} />
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.info }}>
+                                            Mapa
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={cancelarEdicionDireccion}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.surfaceHover,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="close" size={14} color={DISENO.colors.textSecondary} />
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.textSecondary }}>
+                                            Cancelar
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* ============================================================ */}
+                        {/* ✅ MODO FORMULARIO: campos manuales (geocoder falló)          */}
+                        {/* ============================================================ */}
+                        {modoDireccion === 'formulario' && (
+                            <View style={[styles.direccionPerfilContainer, {
+                                padding: isTablet ? 16 : 12,
+                                borderRadius: isTablet ? 14 : 12,
                                 backgroundColor: DISENO.colors.surface,
                                 borderColor: DISENO.colors.accent + '40',
-                                borderWidth: 1,
-                            }]}
-                            onPress={async () => {
-                                const tienePermiso = await asegurarPermisosUbicacion();
-                                if (!tienePermiso) {
-                                    toast.advertencia('Necesitamos permiso de ubicación para el mapa');
-                                    return;
-                                }
-                                setMostrarMapa(true);
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="map-outline" size={isTablet ? 24 : isSmallPhone ? 18 : 20} color={DISENO.colors.accent} />
-                            <Text style={[styles.botonMapaText, { fontSize: isTablet ? 15 : isSmallPhone ? 13 : 14, color: DISENO.colors.accent }]}>
-                                📍 Seleccionar ubicación en el mapa
-                            </Text>
-                            <Ionicons name="chevron-forward" size={isTablet ? 20 : 16} color={DISENO.colors.textTertiary} />
-                        </TouchableOpacity>
+                            }]}>
+                                <View style={styles.direccionPerfilHeader}>
+                                    <Ionicons name="warning" size={isTablet ? 20 : 18} color={DISENO.colors.accent} />
+                                    <Text style={[styles.direccionPerfilLabel, {
+                                        fontSize: isTablet ? 14 : 13,
+                                        color: DISENO.colors.accent,
+                                        flex: 1,
+                                    }]}>
+                                        {errorDireccion || 'Completá la dirección manualmente'}
+                                    </Text>
+                                </View>
 
-                        {direccionSugerida !== '' && direccion !== direccionSugerida && (
-                            <TouchableOpacity
-                                style={[styles.sugerenciaContainer, {
-                                    padding: isTablet ? 14 : isSmallPhone ? 8 : 10,
-                                    borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                                    backgroundColor: DISENO.colors.success + '15',
-                                    borderColor: DISENO.colors.success + '20',
-                                    borderWidth: 1,
-                                }]}
-                                onPress={() => {
-                                    setDireccion(direccionSugerida);
-                                    setDireccionCompleta(direccionSugerida);
-                                    setDireccionSugerida('');
-                                    setBusquedaManual('');
-                                    setDireccionDelPerfil(false);
-                                }}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="location" size={isTablet ? 20 : 16} color={DISENO.colors.success} />
-                                <Text style={[styles.sugerenciaText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.success }]}>
-                                    {direccionSugerida}
-                                </Text>
-                            </TouchableOpacity>
+                                {/* Calle */}
+                                <View style={{ marginTop: 10 }}>
+                                    <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                        Calle *
+                                    </Text>
+                                    <TextInput
+                                        style={[styles.buscadorManualInput, {
+                                            fontSize: inputSize,
+                                            color: DISENO.colors.text,
+                                            backgroundColor: DISENO.colors.surfaceHover,
+                                            borderColor: DISENO.colors.border,
+                                        }]}
+                                        value={camposManuales.calle}
+                                        onChangeText={(t) => setCamposManuales(prev => ({ ...prev, calle: t }))}
+                                        placeholder="Ej: Av. Corrientes"
+                                        placeholderTextColor={DISENO.colors.textTertiary}
+                                        selectionColor={DISENO.colors.accent}
+                                    />
+                                </View>
+
+                                {/* Número */}
+                                <View style={{ marginTop: 8 }}>
+                                    <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                        Número *
+                                    </Text>
+                                    <TextInput
+                                        style={[styles.buscadorManualInput, {
+                                            fontSize: inputSize,
+                                            color: DISENO.colors.text,
+                                            backgroundColor: DISENO.colors.surfaceHover,
+                                            borderColor: DISENO.colors.border,
+                                        }]}
+                                        value={camposManuales.numero}
+                                        onChangeText={(t) => setCamposManuales(prev => ({ ...prev, numero: t }))}
+                                        placeholder="Ej: 1234"
+                                        placeholderTextColor={DISENO.colors.textTertiary}
+                                        keyboardType="number-pad"
+                                        selectionColor={DISENO.colors.accent}
+                                    />
+                                </View>
+
+                                {/* Piso + Depto en fila */}
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                            Piso
+                                        </Text>
+                                        <TextInput
+                                            style={[styles.buscadorManualInput, {
+                                                fontSize: inputSize,
+                                                color: DISENO.colors.text,
+                                                backgroundColor: DISENO.colors.surfaceHover,
+                                                borderColor: DISENO.colors.border,
+                                            }]}
+                                            value={camposManuales.piso}
+                                            onChangeText={(t) => setCamposManuales(prev => ({ ...prev, piso: t }))}
+                                            placeholder="3"
+                                            placeholderTextColor={DISENO.colors.textTertiary}
+                                            selectionColor={DISENO.colors.accent}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                            Depto
+                                        </Text>
+                                        <TextInput
+                                            style={[styles.buscadorManualInput, {
+                                                fontSize: inputSize,
+                                                color: DISENO.colors.text,
+                                                backgroundColor: DISENO.colors.surfaceHover,
+                                                borderColor: DISENO.colors.border,
+                                            }]}
+                                            value={camposManuales.departamento}
+                                            onChangeText={(t) => setCamposManuales(prev => ({ ...prev, departamento: t }))}
+                                            placeholder="A"
+                                            placeholderTextColor={DISENO.colors.textTertiary}
+                                            selectionColor={DISENO.colors.accent}
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* Barrio */}
+                                <View style={{ marginTop: 8 }}>
+                                    <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                        Barrio
+                                    </Text>
+                                    <TextInput
+                                        style={[styles.buscadorManualInput, {
+                                            fontSize: inputSize,
+                                            color: DISENO.colors.text,
+                                            backgroundColor: DISENO.colors.surfaceHover,
+                                            borderColor: DISENO.colors.border,
+                                        }]}
+                                        value={camposManuales.barrio}
+                                        onChangeText={(t) => setCamposManuales(prev => ({ ...prev, barrio: t }))}
+                                        placeholder="Ej: San Nicolás"
+                                        placeholderTextColor={DISENO.colors.textTertiary}
+                                        selectionColor={DISENO.colors.accent}
+                                    />
+                                </View>
+
+                                {/* Ciudad + CP en fila */}
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                    <View style={{ flex: 2 }}>
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                            Ciudad
+                                        </Text>
+                                        <TextInput
+                                            style={[styles.buscadorManualInput, {
+                                                fontSize: inputSize,
+                                                color: DISENO.colors.text,
+                                                backgroundColor: DISENO.colors.surfaceHover,
+                                                borderColor: DISENO.colors.border,
+                                            }]}
+                                            value={camposManuales.ciudad}
+                                            onChangeText={(t) => setCamposManuales(prev => ({ ...prev, ciudad: t }))}
+                                            placeholder="CABA"
+                                            placeholderTextColor={DISENO.colors.textTertiary}
+                                            selectionColor={DISENO.colors.accent}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 11, fontWeight: '500', color: DISENO.colors.textSecondary, marginBottom: 4 }}>
+                                            CP
+                                        </Text>
+                                        <TextInput
+                                            style={[styles.buscadorManualInput, {
+                                                fontSize: inputSize,
+                                                color: DISENO.colors.text,
+                                                backgroundColor: DISENO.colors.surfaceHover,
+                                                borderColor: DISENO.colors.border,
+                                            }]}
+                                            value={camposManuales.codigoPostal}
+                                            onChangeText={(t) => setCamposManuales(prev => ({ ...prev, codigoPostal: t }))}
+                                            placeholder="1043"
+                                            placeholderTextColor={DISENO.colors.textTertiary}
+                                            keyboardType="number-pad"
+                                            selectionColor={DISENO.colors.accent}
+                                        />
+                                    </View>
+                                </View>
+
+                                {/* Botones */}
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                                    <TouchableOpacity
+                                        onPress={aplicarDireccionManual}
+                                        disabled={verificandoDireccion}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 16,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.accentSecondary,
+                                            opacity: verificandoDireccion ? 0.6 : 1,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        {verificandoDireccion ? (
+                                            <ActivityIndicator size="small" color={DISENO.colors.text} />
+                                        ) : (
+                                            <Ionicons name="checkmark-circle" size={16} color={DISENO.colors.text} />
+                                        )}
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 13, fontWeight: '600', color: DISENO.colors.text }}>
+                                            {verificandoDireccion ? 'Verificando...' : 'Confirmar dirección'}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() => setMostrarMapa(true)}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.info + '15',
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="map" size={14} color={DISENO.colors.info} />
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.info }}>
+                                            Usar mapa
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={volverAlModoTexto}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 10,
+                                            backgroundColor: DISENO.colors.surfaceHover,
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="arrow-back" size={14} color={DISENO.colors.textSecondary} />
+                                        <Text style={{ fontFamily: FUENTES.regular, fontSize: 12, fontWeight: '600', color: DISENO.colors.textSecondary }}>
+                                            Volver
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
                         )}
                     </Animated.View>
                 )}
@@ -2019,7 +2584,6 @@ const styles = StyleSheet.create({
     },
     buscadorManualInput: {
         fontFamily: FUENTES.regular,
-        flex: 1,
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,

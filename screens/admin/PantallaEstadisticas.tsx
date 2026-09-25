@@ -1,5 +1,5 @@
-// screens/admin/PantallaEstadisticas.tsx
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+// screens/admin/PantallaEstadisticas.tsx - CON FILTRO DE FECHAS PROFESIONAL + CHIPS GRANDES
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
     View,
     Text,
@@ -7,42 +7,21 @@ import {
     ScrollView,
     TouchableOpacity,
     ActivityIndicator,
-    Dimensions,
     Animated,
     RefreshControl,
-    Platform
+    FlatList,
+    Modal,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../../lib/supabase';
-import { Colores } from '../../lib/colores';
-
-// ============================================================
-// 🎨 PALETA DE COLORES
-// ============================================================
-const COLORS = {
-    amarillo: '#F5C518',
-    amarilloClaro: '#FFE066',
-    amarilloOscuro: '#D4A800',
-    rojo: '#E53935',
-    rojoOscuro: '#B71C1C',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    blanco: '#FFFFFF',
-    negro: '#0A0A0A',
-    grisOscuro: '#1A1A1A',
-    gris: '#333333',
-    grisClaro: '#B0B0B0',
-    pendiente: '#FF9800',
-    naranja: '#FF6F00',
-    morado: '#AB47BC',
-    celeste: '#42A5F5',
-    cyan: '#00BCD4',
-    rosa: '#EC407A',
-};
-
-const { width, height } = Dimensions.get('window');
+import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
+import { formatearPrecio } from '../../lib/formateador';
+import { useToast, Toast } from '../../components/Toast';
 
 // ============================================================
 // 🏷️ TIPADO
@@ -53,7 +32,6 @@ interface TarjetaStats {
     valor: string | number;
     icono: keyof typeof Ionicons.glyphMap;
     color: string;
-    bgColor: string;
     subtexto?: string;
 }
 
@@ -64,7 +42,6 @@ interface StatsCompletos {
     pedidosHoy: number;
     ticketPromedio: number;
     clientesRegistrados: number;
-    // ✅ NUEVAS MÉTRICAS
     pedidosConfirmados: number;
     pedidosPreparando: number;
     pedidosEnCamino: number;
@@ -72,22 +49,117 @@ interface StatsCompletos {
     pedidosCancelados: number;
     recompensasCanjeadas: number;
     productosVendidos: number;
-    ingresosHoy: number;
-    ingresosSemana: number;
-    ingresosMes: number;
-    clientesNuevosHoy: number;
-    clientesNuevosSemana: number;
+    ingresosRango: number;
+    clientesNuevosRango: number;
     pedidosUltimaSemana: { dia: string; total: number; pedidos: number }[];
 }
+
+type PresetRango = 'hoy' | 'ayer' | '7d' | '30d' | 'mes' | 'año' | 'custom';
+
+interface RangoFecha {
+    desde: Date;
+    hasta: Date;
+    preset: PresetRango;
+}
+
+// ============================================================
+// 🔧 HELPERS DE FECHA
+// ============================================================
+const startOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+};
+
+const endOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(23, 59, 59, 999);
+    return x;
+};
+
+const getRangoPreset = (preset: PresetRango): { desde: Date; hasta: Date } => {
+    const hoy = new Date();
+
+    switch (preset) {
+        case 'hoy':
+            return { desde: startOfDay(hoy), hasta: endOfDay(hoy) };
+
+        case 'ayer': {
+            const ayer = new Date(hoy);
+            ayer.setDate(ayer.getDate() - 1);
+            return { desde: startOfDay(ayer), hasta: endOfDay(ayer) };
+        }
+
+        case '7d': {
+            const d = new Date(hoy);
+            d.setDate(d.getDate() - 6);
+            return { desde: startOfDay(d), hasta: endOfDay(hoy) };
+        }
+
+        case '30d': {
+            const d = new Date(hoy);
+            d.setDate(d.getDate() - 29);
+            return { desde: startOfDay(d), hasta: endOfDay(hoy) };
+        }
+
+        case 'mes': {
+            const d = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+            return { desde: startOfDay(d), hasta: endOfDay(hoy) };
+        }
+
+        case 'año': {
+            const d = new Date(hoy.getFullYear(), 0, 1);
+            return { desde: startOfDay(d), hasta: endOfDay(hoy) };
+        }
+
+        default:
+            return { desde: startOfDay(hoy), hasta: endOfDay(hoy) };
+    }
+};
+
+const formatearRango = (desde: Date, hasta: Date): string => {
+    const opciones: Intl.DateTimeFormatOptions = {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    };
+
+    const dStr = desde.toLocaleDateString('es-AR', opciones);
+    const hStr = hasta.toLocaleDateString('es-AR', opciones);
+
+    if (dStr === hStr) return dStr;
+    return `${dStr} - ${hStr}`;
+};
+
+const diasDelRango = (desde: Date, hasta: Date): number => {
+    const diff = hasta.getTime() - desde.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
 
 // ============================================================
 // 📱 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaEstadisticas(props: any) {
-    // ✅ Estados
+    const insets = useSafeAreaInsets();
+    const responsive = useResponsive();
+    const toast = useToast();
+
+    // ✅ Rango activo (default: últimos 30 días)
+    const [rango, setRango] = useState<RangoFecha>(() => {
+        const r = getRangoPreset('30d');
+        return { ...r, preset: '30d' };
+    });
+
+    // ✅ Estado del modal custom
+    const [modalRangoVisible, setModalRangoVisible] = useState(false);
+    const [tempDesde, setTempDesde] = useState<Date>(rango.desde);
+    const [tempHasta, setTempHasta] = useState<Date>(rango.hasta);
+    const [mostrarPicker, setMostrarPicker] = useState<'desde' | 'hasta' | null>(null);
+
     const [cargando, setCargando] = useState(true);
     const [refrescando, setRefrescando] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [ultimaActualizacion, setUltimaActualizacion] = useState<Date>(new Date());
     const [stats, setStats] = useState<StatsCompletos>({
         totalPedidos: 0,
         ingresosTotales: 0,
@@ -102,95 +174,96 @@ export default function PantallaEstadisticas(props: any) {
         pedidosCancelados: 0,
         recompensasCanjeadas: 0,
         productosVendidos: 0,
-        ingresosHoy: 0,
-        ingresosSemana: 0,
-        ingresosMes: 0,
-        clientesNuevosHoy: 0,
-        clientesNuevosSemana: 0,
+        ingresosRango: 0,
+        clientesNuevosRango: 0,
         pedidosUltimaSemana: [],
     });
 
-    const insets = useSafeAreaInsets();
-
-    // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideUpAnim = useRef(new Animated.Value(30)).current;
 
     // ============================================================
     // 🔄 EFECTOS
     // ============================================================
     useEffect(() => {
-        cargarEstadisticas();
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+        ]).start();
     }, []);
 
+    // Recargar cuando cambia el rango
+    useEffect(() => {
+        cargarEstadisticas();
+    }, [rango.desde.toISOString(), rango.hasta.toISOString()]);
+
     // ============================================================
-    // 📊 FUNCIONES DE CARGA MEJORADAS
+    // 📊 CARGA DE DATOS
     // ============================================================
     const cargarEstadisticas = async () => {
         try {
             setError(null);
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-            const hoyStr = hoy.toISOString();
+            setCargando(true);
 
-            const semanaAtras = new Date(hoy);
-            semanaAtras.setDate(semanaAtras.getDate() - 7);
-            const semanaStr = semanaAtras.toISOString();
+            const desdeStr = rango.desde.toISOString();
+            const hastaStr = rango.hasta.toISOString();
 
-            const mesAtras = new Date(hoy);
-            mesAtras.setMonth(mesAtras.getMonth() - 1);
-            const mesStr = mesAtras.toISOString();
-
-            // 1. Pedidos totales y por estado
             const [
-                { count: totalPedidos },
-                { count: pendientes },
-                { count: confirmados },
-                { count: preparando },
-                { count: enCamino },
-                { count: entregados },
-                { count: cancelados },
-                { count: pedidosHoy },
-                { data: todosPedidos },
-                { count: recompensasCanjeadas },
+                { data: pedidosRango },
+                { count: pendientesRango },
+                { count: confirmadosRango },
+                { count: preparandoRango },
+                { count: enCaminoRango },
+                { count: entregadosRango },
+                { count: canceladosRango },
+                { count: totalPedidosRango },
                 { count: clientesTotales },
-                { count: clientesNuevosHoy },
-                { count: clientesNuevosSemana },
+                { count: clientesNuevosRango },
+                { count: recompensasCanjeadasRango },
+                { data: pedidosUltimaSemanaData },
             ] = await Promise.all([
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'confirmado'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'preparando'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'en_camino'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'entregado'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).eq('estado', 'cancelado'),
-                supabase.from('pedidos').select('*', { count: 'exact', head: true }).gte('creado_en', hoyStr),
-                supabase.from('pedidos').select('total, items_json, creado_en, estado'),
-                supabase.from('canjes').select('*', { count: 'exact', head: true }).gte('fecha', mesStr),
+                supabase
+                    .from('pedidos')
+                    .select('total, items_json, estado, creado_en')
+                    .gte('creado_en', desdeStr)
+                    .lte('creado_en', hastaStr),
+
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'pendiente').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'confirmado').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'preparando').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'en_camino').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'entregado').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .eq('estado', 'cancelado').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                supabase.from('pedidos').select('*', { count: 'exact', head: true })
+                    .gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+
                 supabase.from('perfiles').select('*', { count: 'exact', head: true }).eq('rol', 'cliente'),
-                supabase.from('perfiles').select('*', { count: 'exact', head: true }).eq('rol', 'cliente').gte('ultimo_acceso', hoyStr),
-                supabase.from('perfiles').select('*', { count: 'exact', head: true }).eq('rol', 'cliente').gte('ultimo_acceso', semanaStr),
+
+                supabase.from('perfiles').select('*', { count: 'exact', head: true })
+                    .eq('rol', 'cliente').gte('ultimo_acceso', desdeStr).lte('ultimo_acceso', hastaStr),
+
+                supabase.from('canjes').select('*', { count: 'exact', head: true })
+                    .gte('fecha', desdeStr).lte('fecha', hastaStr),
+
+                supabase
+                    .from('pedidos')
+                    .select('total, creado_en, estado')
+                    .gte('creado_en', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+                    .eq('estado', 'entregado'),
             ]);
 
-            // 2. Calcular ingresos
-            const ingresosTotales = todosPedidos?.reduce((sum, p) => sum + (p.total || 0), 0) || 0;
-            const ingresosHoy = todosPedidos
-                ?.filter(p => p.creado_en >= hoyStr && p.estado === 'entregado')
-                ?.reduce((sum, p) => sum + (p.total || 0), 0) || 0;
-            const ingresosSemana = todosPedidos
-                ?.filter(p => p.creado_en >= semanaStr && p.estado === 'entregado')
-                ?.reduce((sum, p) => sum + (p.total || 0), 0) || 0;
-            const ingresosMes = todosPedidos
-                ?.filter(p => p.creado_en >= mesStr && p.estado === 'entregado')
+            const ingresosRango = pedidosRango
+                ?.filter(p => p.estado === 'entregado')
                 ?.reduce((sum, p) => sum + (p.total || 0), 0) || 0;
 
-            // 3. Productos vendidos
             let productosVendidos = 0;
-            todosPedidos?.forEach(p => {
+            pedidosRango?.forEach(p => {
                 if (p.items_json && Array.isArray(p.items_json)) {
                     p.items_json.forEach((item: any) => {
                         productosVendidos += item.cantidad || 0;
@@ -198,7 +271,11 @@ export default function PantallaEstadisticas(props: any) {
                 }
             });
 
-            // 4. Pedidos por día (última semana)
+            const pedidosEntregadosRango = pedidosRango?.filter(p => p.estado === 'entregado').length || 0;
+            const ticketPromedio = pedidosEntregadosRango > 0
+                ? ingresosRango / pedidosEntregadosRango
+                : 0;
+
             const pedidosUltimaSemana: { dia: string; total: number; pedidos: number }[] = [];
             const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             for (let i = 6; i >= 0; i--) {
@@ -208,10 +285,9 @@ export default function PantallaEstadisticas(props: any) {
                 const fechaStr = fecha.toISOString();
                 const diaNombre = diasSemana[fecha.getDay()];
 
-                const pedidosDia = todosPedidos?.filter(p =>
+                const pedidosDia = pedidosUltimaSemanaData?.filter(p =>
                     p.creado_en >= fechaStr &&
-                    p.creado_en < new Date(fecha.getTime() + 86400000).toISOString() &&
-                    p.estado === 'entregado'
+                    p.creado_en < new Date(fecha.getTime() + 86400000).toISOString()
                 ) || [];
 
                 pedidosUltimaSemana.push({
@@ -221,33 +297,32 @@ export default function PantallaEstadisticas(props: any) {
                 });
             }
 
-            // 5. Ticket promedio
-            const ticketPromedio = totalPedidos ? ingresosTotales / totalPedidos : 0;
+            const hoyStr = startOfDay(new Date()).toISOString();
 
             setStats({
-                totalPedidos: totalPedidos || 0,
-                ingresosTotales,
-                pedidosPendientes: pendientes || 0,
-                pedidosHoy: pedidosHoy || 0,
+                totalPedidos: totalPedidosRango || 0,
+                ingresosTotales: ingresosRango,
+                pedidosPendientes: pendientesRango || 0,
+                pedidosHoy: pedidosRango?.filter(p => p.creado_en >= hoyStr).length || 0,
                 ticketPromedio,
                 clientesRegistrados: clientesTotales || 0,
-                pedidosConfirmados: confirmados || 0,
-                pedidosPreparando: preparando || 0,
-                pedidosEnCamino: enCamino || 0,
-                pedidosEntregados: entregados || 0,
-                pedidosCancelados: cancelados || 0,
-                recompensasCanjeadas: recompensasCanjeadas || 0,
+                pedidosConfirmados: confirmadosRango || 0,
+                pedidosPreparando: preparandoRango || 0,
+                pedidosEnCamino: enCaminoRango || 0,
+                pedidosEntregados: entregadosRango || 0,
+                pedidosCancelados: canceladosRango || 0,
+                recompensasCanjeadas: recompensasCanjeadasRango || 0,
                 productosVendidos,
-                ingresosHoy,
-                ingresosSemana,
-                ingresosMes,
-                clientesNuevosHoy: clientesNuevosHoy || 0,
-                clientesNuevosSemana: clientesNuevosSemana || 0,
+                ingresosRango,
+                clientesNuevosRango: clientesNuevosRango || 0,
                 pedidosUltimaSemana,
             });
+
+            setUltimaActualizacion(new Date());
         } catch (error) {
             console.error('Error cargando estadísticas:', error);
             setError('Error al cargar las estadísticas');
+            toast.error('No se pudieron cargar las estadísticas');
         } finally {
             setCargando(false);
             setRefrescando(false);
@@ -257,166 +332,174 @@ export default function PantallaEstadisticas(props: any) {
     const manejarRefresh = useCallback(() => {
         setRefrescando(true);
         cargarEstadisticas();
-    }, []);
+    }, [rango]);
 
     // ============================================================
-    // 📱 RESPONSIVE
+    // 📅 CAMBIO DE RANGO
     // ============================================================
-    const isTablet = width >= 768;
-    const isSmallPhone = width < 375;
+    const aplicarPreset = (preset: PresetRango) => {
+        if (preset === 'custom') {
+            setTempDesde(rango.desde);
+            setTempHasta(rango.hasta);
+            setModalRangoVisible(true);
+            return;
+        }
 
-    const paddingHorizontal = isTablet ? 32 : isSmallPhone ? 12 : 16;
-    const tituloSize = isTablet ? 30 : isSmallPhone ? 22 : 26;
-    const tarjetaPadding = isTablet ? 16 : isSmallPhone ? 10 : 12;
-    const valorSize = isTablet ? 24 : isSmallPhone ? 16 : 18;
-    const tituloCardSize = isTablet ? 13 : isSmallPhone ? 10 : 11;
-    const iconSize = isTablet ? 30 : isSmallPhone ? 20 : 24;
-    const gap = isTablet ? 12 : isSmallPhone ? 8 : 10;
-    const minHeight = isTablet ? 110 : isSmallPhone ? 80 : 95;
-    const borderRadius = isTablet ? 16 : isSmallPhone ? 10 : 12;
+        const { desde, hasta } = getRangoPreset(preset);
+        setRango({ desde, hasta, preset });
+    };
 
-    const getTarjetaWidth = () => {
-        const totalGap = gap;
-        if (isTablet) {
-            return (width - (paddingHorizontal * 2) - (totalGap * 2)) / 3;
-        } else {
-            return (width - (paddingHorizontal * 2) - totalGap) / 2;
+    const aplicarRangoCustom = () => {
+        if (tempDesde > tempHasta) {
+            toast.advertencia('La fecha "desde" debe ser anterior a "hasta"');
+            return;
+        }
+
+        setRango({
+            desde: startOfDay(tempDesde),
+            hasta: endOfDay(tempHasta),
+            preset: 'custom',
+        });
+        setModalRangoVisible(false);
+        toast.exito('📅 Rango aplicado');
+    };
+
+    const onCambiarFecha = (event: any, fecha?: Date) => {
+        if (Platform.OS === 'android') {
+            setMostrarPicker(null);
+        }
+        if (event.type === 'dismissed' || !fecha) return;
+
+        if (mostrarPicker === 'desde') {
+            setTempDesde(fecha);
+        } else if (mostrarPicker === 'hasta') {
+            setTempHasta(fecha);
         }
     };
 
-    const tarjetaWidth = getTarjetaWidth();
-
     // ============================================================
-    // 📋 DATOS DE TARJETAS (ACTUALIZADO)
+    // 📋 TARJETAS
     // ============================================================
-    const tarjetas: TarjetaStats[] = [
+    const tarjetas: TarjetaStats[] = useMemo(() => [
         {
             id: 'total-pedidos',
-            titulo: 'Total Pedidos',
+            titulo: 'Pedidos',
             valor: stats.totalPedidos,
             icono: 'receipt-outline',
-            color: COLORS.amarillo,
-            bgColor: COLORS.amarillo + '15',
+            color: DISENO.colors.accentSecondary,
         },
         {
             id: 'ingresos-totales',
-            titulo: 'Ingresos Totales',
-            valor: `$${stats.ingresosTotales.toFixed(2)}`,
+            titulo: 'Ingresos',
+            valor: formatearPrecio(stats.ingresosTotales),
             icono: 'cash-outline',
-            color: COLORS.verdeClaro,
-            bgColor: COLORS.verdeClaro + '15',
-            subtexto: `Mes: $${stats.ingresosMes.toFixed(2)}`,
+            color: DISENO.colors.success,
         },
         {
             id: 'pendientes',
             titulo: 'Pendientes',
             valor: stats.pedidosPendientes,
             icono: 'time-outline',
-            color: COLORS.pendiente,
-            bgColor: COLORS.pendiente + '15',
+            color: DISENO.colors.naranja,
         },
         {
             id: 'pedidos-hoy',
-            titulo: 'Pedidos Hoy',
+            titulo: 'Hoy',
             valor: stats.pedidosHoy,
             icono: 'today-outline',
-            color: COLORS.celeste,
-            bgColor: COLORS.celeste + '15',
-            subtexto: `Ingresos: $${stats.ingresosHoy.toFixed(2)}`,
+            color: DISENO.colors.info,
         },
         {
             id: 'ticket-promedio',
-            titulo: 'Ticket Promedio',
-            valor: `$${stats.ticketPromedio.toFixed(2)}`,
+            titulo: 'Ticket Prom.',
+            valor: formatearPrecio(stats.ticketPromedio),
             icono: 'pricetag-outline',
-            color: COLORS.morado,
-            bgColor: COLORS.morado + '15',
+            color: DISENO.colors.morado,
         },
         {
             id: 'clientes',
             titulo: 'Clientes',
             valor: stats.clientesRegistrados,
             icono: 'people-outline',
-            color: '#FF7043',
-            bgColor: '#FF7043' + '15',
-            subtexto: `${stats.clientesNuevosHoy} nuevos hoy`,
+            color: DISENO.colors.naranja,
+            subtexto: `+${stats.clientesNuevosRango} nuevos`,
         },
-        // ✅ NUEVAS TARJETAS
         {
             id: 'entregados',
             titulo: 'Entregados',
             valor: stats.pedidosEntregados,
             icono: 'checkmark-circle-outline',
-            color: COLORS.verde,
-            bgColor: COLORS.verde + '15',
+            color: DISENO.colors.success,
         },
         {
             id: 'recompensas',
-            titulo: 'Recompensas Canjeadas',
+            titulo: 'Recompensas',
             valor: stats.recompensasCanjeadas,
             icono: 'gift-outline',
-            color: COLORS.rosa,
-            bgColor: COLORS.rosa + '15',
+            color: DISENO.colors.rosa,
         },
         {
             id: 'productos',
-            titulo: 'Productos Vendidos',
+            titulo: 'Productos',
             valor: stats.productosVendidos,
             icono: 'restaurant-outline',
-            color: COLORS.naranja,
-            bgColor: COLORS.naranja + '15',
+            color: DISENO.colors.naranja,
         },
-    ];
+    ], [stats]);
 
     // ============================================================
-    // 🎴 RENDER DE TARJETA
+    // 🎴 RENDER TARJETA
     // ============================================================
-    const renderTarjeta = ({ item, index }: { item: TarjetaStats; index: number }) => {
-        const itemFade = fadeAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.2, 1],
-        });
+    const renderTarjeta = ({ item }: { item: TarjetaStats }) => {
+        const valorSize = responsive.getValor({ tablet: 22, normal: 18, small: 15 });
+        const tituloSize = responsive.getValor({ tablet: 12, normal: 10, small: 9 });
+        const iconoSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
+        const padding = responsive.getValor({ tablet: 16, normal: 12, small: 10 });
 
         return (
             <Animated.View
-                key={item.id}
                 style={[
+                    estilos.tarjetaWrapper,
                     {
-                        opacity: itemFade,
-                        width: tarjetaWidth,
-                        marginBottom: gap,
-                    }
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                    },
                 ]}
             >
-                <View style={[
-                    estilos.tarjeta,
-                    {
-                        padding: tarjetaPadding,
-                        borderRadius: borderRadius,
-                        backgroundColor: item.bgColor,
-                        borderColor: item.color + '30',
-                        minHeight: minHeight,
-                    }
-                ]}>
-                    <View style={[
-                        estilos.tarjetaIcono,
+                <View
+                    style={[
+                        estilos.tarjeta,
                         {
-                            backgroundColor: item.color + '20',
-                            padding: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                            borderRadius: isTablet ? 12 : isSmallPhone ? 8 : 10,
-                            marginBottom: 6,
-                        }
-                    ]}>
-                        <Ionicons name={item.icono} size={iconSize} color={item.color} />
+                            borderLeftColor: item.color,
+                            padding,
+                        },
+                    ]}
+                >
+                    <View style={[estilos.tarjetaIcono, { backgroundColor: item.color + '15' }]}>
+                        <Ionicons name={item.icono} size={iconoSize} color={item.color} />
                     </View>
-                    <Text style={[estilos.tarjetaValor, { fontSize: valorSize, color: item.color }]}>
+
+                    <Text
+                        style={[estilos.tarjetaValor, { fontSize: valorSize, color: item.color }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                    >
                         {item.valor}
                     </Text>
-                    <Text style={[estilos.tarjetaTitulo, { fontSize: tituloCardSize }]}>
+
+                    <Text
+                        style={[estilos.tarjetaTitulo, { fontSize: tituloSize }]}
+                        numberOfLines={1}
+                    >
                         {item.titulo}
                     </Text>
+
                     {item.subtexto && (
-                        <Text style={[estilos.tarjetaSubtexto, { fontSize: tituloCardSize - 2 }]}>
+                        <Text
+                            style={[estilos.tarjetaSubtexto, { fontSize: tituloSize - 1 }]}
+                            numberOfLines={1}
+                        >
                             {item.subtexto}
                         </Text>
                     )}
@@ -426,56 +509,62 @@ export default function PantallaEstadisticas(props: any) {
     };
 
     // ============================================================
-    // 📈 RENDER DE GRÁFICO SEMANAL
+    // 📈 GRÁFICO SEMANAL
     // ============================================================
     const renderGraficoSemanal = () => {
         const maxValor = Math.max(...stats.pedidosUltimaSemana.map(d => d.total), 1);
+        const barraHeight = responsive.getValor({ tablet: 100, normal: 80, small: 60 });
+        const padding = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
+        const seccionTituloSize = responsive.getValor({ tablet: 17, normal: 15, small: 14 });
 
         return (
-            <Animated.View style={[estilos.seccion, { opacity: fadeAnim }]}>
-                <Text style={[estilos.seccionTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                    📈 Ventas Última Semana
+            <Animated.View
+                style={[
+                    estilos.seccion,
+                    { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] },
+                ]}
+            >
+                <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                    📈 Últimos 7 días
                 </Text>
-                <View style={[
-                    estilos.graficoContainer,
-                    {
-                        padding: tarjetaPadding,
-                        borderRadius: borderRadius,
-                        backgroundColor: COLORS.negro + '50',
-                        borderColor: COLORS.blanco + '10',
-                    }
-                ]}>
+
+                <View style={[estilos.graficoCard, { padding }]}>
                     <View style={estilos.graficoBarras}>
-                        {stats.pedidosUltimaSemana.map((item, index) => (
-                            <View key={index} style={estilos.barraItem}>
-                                <View style={[
-                                    estilos.barra,
-                                    {
-                                        height: isTablet ? 80 : 60,
-                                        backgroundColor: COLORS.amarillo + '20',
-                                        borderRadius: isTablet ? 8 : 6,
-                                    }
-                                ]}>
-                                    <View style={[
-                                        estilos.barraFill,
-                                        {
-                                            height: `${Math.min((item.total / maxValor) * 100, 100)}%`,
-                                            backgroundColor: COLORS.amarillo,
-                                            borderRadius: isTablet ? 8 : 6,
-                                        }
-                                    ]} />
+                        {stats.pedidosUltimaSemana.map((item, index) => {
+                            const alturaPorcentaje = Math.max(
+                                Math.min((item.total / maxValor) * 100, 100),
+                                item.total > 0 ? 8 : 0
+                            );
+
+                            return (
+                                <View key={index} style={estilos.barraItem}>
+                                    <Text style={estilos.barraTotal} numberOfLines={1}>
+                                        {item.total > 0 ? formatearPrecio(item.total) : '—'}
+                                    </Text>
+                                    <View
+                                        style={[
+                                            estilos.barra,
+                                            {
+                                                height: barraHeight,
+                                                backgroundColor: DISENO.colors.border,
+                                            },
+                                        ]}
+                                    >
+                                        <View
+                                            style={[
+                                                estilos.barraFill,
+                                                {
+                                                    height: `${alturaPorcentaje}%`,
+                                                    backgroundColor: DISENO.colors.accentSecondary,
+                                                },
+                                            ]}
+                                        />
+                                    </View>
+                                    <Text style={estilos.barraDia}>{item.dia}</Text>
+                                    <Text style={estilos.barraPedidos}>{item.pedidos}</Text>
                                 </View>
-                                <Text style={[estilos.barraDia, { fontSize: isTablet ? 12 : 10 }]}>
-                                    {item.dia}
-                                </Text>
-                                <Text style={[estilos.barraTotal, { fontSize: isTablet ? 11 : 9 }]}>
-                                    ${item.total}
-                                </Text>
-                                <Text style={[estilos.barraPedidos, { fontSize: isTablet ? 10 : 8 }]}>
-                                    {item.pedidos} ped
-                                </Text>
-                            </View>
-                        ))}
+                            );
+                        })}
                     </View>
                 </View>
             </Animated.View>
@@ -483,68 +572,139 @@ export default function PantallaEstadisticas(props: any) {
     };
 
     // ============================================================
-    // 📊 RENDER DE DISTRIBUCIÓN DE ESTADOS
+    // 📊 DISTRIBUCIÓN
     // ============================================================
     const renderDistribucionEstados = () => {
         const estados = [
-            { key: 'Pendientes', value: stats.pedidosPendientes, color: COLORS.pendiente },
-            { key: 'Confirmados', value: stats.pedidosConfirmados, color: COLORS.celeste },
-            { key: 'Preparando', value: stats.pedidosPreparando, color: COLORS.morado },
-            { key: 'En Camino', value: stats.pedidosEnCamino, color: COLORS.cyan },
-            { key: 'Entregados', value: stats.pedidosEntregados, color: COLORS.verde },
-            { key: 'Cancelados', value: stats.pedidosCancelados, color: COLORS.rojo },
+            { key: 'Pendientes', value: stats.pedidosPendientes, color: DISENO.colors.naranja, icono: 'time-outline' },
+            { key: 'Confirmados', value: stats.pedidosConfirmados, color: DISENO.colors.info, icono: 'checkmark-circle-outline' },
+            { key: 'Preparando', value: stats.pedidosPreparando, color: DISENO.colors.morado, icono: 'restaurant-outline' },
+            { key: 'En Camino', value: stats.pedidosEnCamino, color: DISENO.colors.morado, icono: 'bicycle-outline' },
+            { key: 'Entregados', value: stats.pedidosEntregados, color: DISENO.colors.success, icono: 'checkmark-done-circle-outline' },
+            { key: 'Cancelados', value: stats.pedidosCancelados, color: DISENO.colors.danger, icono: 'close-circle-outline' },
         ];
 
         const total = estados.reduce((sum, e) => sum + e.value, 0) || 1;
+        const padding = responsive.getValor({ tablet: 16, normal: 14, small: 12 });
+        const seccionTituloSize = responsive.getValor({ tablet: 17, normal: 15, small: 14 });
+        const itemNombreSize = responsive.getValor({ tablet: 14, normal: 13, small: 11 });
+        const itemCantidadSize = responsive.getValor({ tablet: 16, normal: 15, small: 13 });
+        const iconSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
 
         return (
-            <Animated.View style={[estilos.seccion, { opacity: fadeAnim }]}>
-                <Text style={[estilos.seccionTitulo, { fontSize: isTablet ? 18 : 16 }]}>
-                    📋 Distribución de Pedidos
+            <Animated.View
+                style={[
+                    estilos.seccion,
+                    { opacity: fadeAnim, transform: [{ translateY: slideUpAnim }] },
+                ]}
+            >
+                <Text style={[estilos.seccionTitulo, { fontSize: seccionTituloSize }]}>
+                    📋 Distribución
                 </Text>
-                <View style={[
-                    estilos.distribucionContainer,
-                    {
-                        padding: tarjetaPadding,
-                        borderRadius: borderRadius,
-                        backgroundColor: COLORS.negro + '50',
-                        borderColor: COLORS.blanco + '10',
-                    }
-                ]}>
-                    {estados.map((estado, index) => (
-                        <View key={index} style={estilos.distribucionItem}>
-                            <View style={estilos.distribucionInfo}>
-                                <Text style={[estilos.distribucionNombre, { fontSize: isTablet ? 14 : 12 }]}>
-                                    {estado.key}
+
+                <View style={[estilos.distribucionCard, { padding }]}>
+                    {estados.map((estado, index) => {
+                        const porcentaje = (estado.value / total) * 100;
+
+                        return (
+                            <View key={index} style={estilos.distribucionItem}>
+                                <View
+                                    style={[
+                                        estilos.distribucionIcono,
+                                        { backgroundColor: estado.color + '15' },
+                                    ]}
+                                >
+                                    <Ionicons
+                                        name={estado.icono as any}
+                                        size={iconSize}
+                                        color={estado.color}
+                                    />
+                                </View>
+
+                                <View style={estilos.distribucionInfo}>
+                                    <View style={estilos.distribucionHeader}>
+                                        <Text
+                                            style={[
+                                                estilos.distribucionNombre,
+                                                { fontSize: itemNombreSize },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {estado.key}
+                                        </Text>
+                                        <Text
+                                            style={[
+                                                estilos.distribucionPorcentaje,
+                                                { color: estado.color },
+                                            ]}
+                                        >
+                                            {Math.round(porcentaje)}%
+                                        </Text>
+                                    </View>
+
+                                    <View
+                                        style={[
+                                            estilos.distribucionBarraContainer,
+                                            { backgroundColor: DISENO.colors.border },
+                                        ]}
+                                    >
+                                        <View
+                                            style={[
+                                                estilos.distribucionBarra,
+                                                {
+                                                    width: `${porcentaje}%`,
+                                                    backgroundColor: estado.color,
+                                                },
+                                            ]}
+                                        />
+                                    </View>
+                                </View>
+
+                                <Text
+                                    style={[
+                                        estilos.distribucionCantidad,
+                                        {
+                                            fontSize: itemCantidadSize,
+                                            color: estado.color,
+                                        },
+                                    ]}
+                                >
+                                    {estado.value}
                                 </Text>
-                                <View style={[
-                                    estilos.distribucionBarra,
-                                    {
-                                        width: `${Math.min((estado.value / total) * 100, 100)}%`,
-                                        backgroundColor: estado.color,
-                                        height: isTablet ? 6 : 4,
-                                    }
-                                ]} />
                             </View>
-                            <Text style={[estilos.distribucionCantidad, { fontSize: isTablet ? 16 : 14, color: estado.color }]}>
-                                {estado.value}
-                            </Text>
-                        </View>
-                    ))}
+                        );
+                    })}
                 </View>
             </Animated.View>
         );
     };
 
     // ============================================================
-    // 🖥️ RENDER PRINCIPAL
+    // 📅 PRESETS
+    // ============================================================
+    const PRESETS: { id: PresetRango; label: string }[] = [
+        { id: 'hoy', label: 'Hoy' },
+        { id: 'ayer', label: 'Ayer' },
+        { id: '7d', label: '7d' },
+        { id: '30d', label: '30d' },
+        { id: 'mes', label: 'Mes' },
+        { id: 'año', label: 'Año' },
+    ];
+
+    // ============================================================
+    // 🖥️ RENDER
     // ============================================================
     if (error) {
         return (
             <View style={estilos.errorContainer}>
-                <Ionicons name="alert-circle-outline" size={60} color={COLORS.rojo} />
+                <Ionicons name="alert-circle-outline" size={60} color={DISENO.colors.danger} />
                 <Text style={estilos.errorText}>{error}</Text>
-                <TouchableOpacity style={estilos.errorButton} onPress={manejarRefresh}>
+                <TouchableOpacity
+                    style={estilos.errorButton}
+                    onPress={manejarRefresh}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="refresh" size={18} color={DISENO.colors.surface} />
                     <Text style={estilos.errorButtonText}>Reintentar</Text>
                 </TouchableOpacity>
             </View>
@@ -552,102 +712,280 @@ export default function PantallaEstadisticas(props: any) {
     }
 
     return (
-        <View style={estilos.contenedor}>
-            <LinearGradient
-                colors={[COLORS.verde, COLORS.negro]}
-                style={estilos.fondoGradiente}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            />
+        <>
+            <View style={estilos.contenedor}>
+                <LinearGradient
+                    colors={[DISENO.colors.fondo, DISENO.colors.surface]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
 
-            <View style={[
-                estilos.header,
-                {
-                    paddingTop: insets.top + (isTablet ? 16 : 8),
-                    paddingHorizontal: paddingHorizontal,
-                    paddingBottom: isTablet ? 14 : 10,
-                }
-            ]}>
-                <TouchableOpacity
-                    style={estilos.botonVolver}
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="arrow-back" size={isTablet ? 26 : 22} color={COLORS.blanco} />
-                </TouchableOpacity>
-
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]}>
-                    📊 Estadísticas
-                </Text>
-
-                <TouchableOpacity
-                    style={estilos.botonRefresh}
-                    onPress={manejarRefresh}
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name="refresh" size={isTablet ? 22 : 18} color={COLORS.blanco} />
-                </TouchableOpacity>
-            </View>
-
-            <View style={[estilos.contadorContainer, { paddingHorizontal: paddingHorizontal }]}>
-                <Text style={[estilos.contador, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}>
-                    {cargando
-                        ? '⏳ Cargando...'
-                        : `🔄 Actualizado: ${new Date().toLocaleTimeString('es-AR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                        })}`
-                    }
-                </Text>
-            </View>
-
-            {cargando ? (
-                <View style={estilos.loadingContainer}>
-                    <ActivityIndicator size="large" color={COLORS.amarillo} />
-                    <Text style={[estilos.loadingTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
-                        Cargando estadísticas...
-                    </Text>
-                </View>
-            ) : (
-                <ScrollView
-                    contentContainerStyle={[
-                        estilos.scrollContent,
+                {/* HEADER */}
+                <View
+                    style={[
+                        estilos.header,
                         {
-                            paddingHorizontal: paddingHorizontal,
-                            paddingBottom: insets.bottom + (isTablet ? 80 : 60),
-                            paddingTop: 6,
-                        }
+                            paddingTop: insets.top + 12,
+                            paddingHorizontal: responsive.getEspaciado('LG'),
+                        },
                     ]}
-                    showsVerticalScrollIndicator={false}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refrescando}
-                            onRefresh={manejarRefresh}
-                            tintColor={COLORS.amarillo}
-                            colors={[COLORS.amarillo]}
-                        />
-                    }
                 >
-                    <View style={[
-                        estilos.gridContainer,
-                        {
-                            gap: gap,
-                            justifyContent: 'flex-start',
-                            alignItems: 'flex-start',
-                        }
-                    ]}>
-                        {tarjetas.map((item, index) => renderTarjeta({ item, index }))}
+                    <TouchableOpacity
+                        style={estilos.botonHeader}
+                        onPress={() => props.navigation.goBack()}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="arrow-back" size={22} color={DISENO.colors.text} />
+                    </TouchableOpacity>
+
+                    <View style={estilos.headerCentro}>
+                        <Text style={estilos.titulo}>📊 Estadísticas</Text>
                     </View>
 
-                    {/* GRÁFICO SEMANAL */}
-                    {renderGraficoSemanal()}
+                    <TouchableOpacity
+                        style={estilos.botonHeader}
+                        onPress={() => aplicarPreset('custom')}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="calendar-outline" size={22} color={DISENO.colors.accent} />
+                    </TouchableOpacity>
+                </View>
 
-                    {/* DISTRIBUCIÓN DE ESTADOS */}
-                    {renderDistribucionEstados()}
-                </ScrollView>
+                <View style={estilos.presetsWrapper}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={estilos.presetsContent}
+                    >
+                        {PRESETS.map((preset, index) => {
+                            const activo = rango.preset === preset.id;
+                            return (
+                                <TouchableOpacity
+                                    key={preset.id}
+                                    style={[
+                                        estilos.presetChip,
+                                        activo && estilos.presetChipActivo,
+                                        { marginRight: 10 },
+                                    ]}
+                                    onPress={() => aplicarPreset(preset.id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text
+                                        style={[
+                                            estilos.presetChipText,
+                                            activo && estilos.presetChipTextActivo,
+                                        ]}
+                                    >
+                                        {preset.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+
+                        {rango.preset === 'custom' && (
+                            <View style={[estilos.presetChip, estilos.presetChipActivo]}>
+                                <Text style={[estilos.presetChipText, estilos.presetChipTextActivo]}>
+                                    Personalizado
+                                </Text>
+                            </View>
+                        )}
+                    </ScrollView>
+                </View>
+
+                {/* CHIP DEL RANGO ACTIVO */}
+                <TouchableOpacity
+                    style={[
+                        estilos.rangoActivo,
+                        { marginHorizontal: responsive.getEspaciado('LG') },
+                    ]}
+                    onPress={() => aplicarPreset('custom')}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="calendar" size={16} color={DISENO.colors.accent} />
+                    <Text style={estilos.rangoActivoTexto} numberOfLines={1}>
+                        {formatearRango(rango.desde, rango.hasta)} · {diasDelRango(rango.desde, rango.hasta)} días
+                    </Text>
+                    <Ionicons name="pencil" size={14} color={DISENO.colors.textSecondary} />
+                </TouchableOpacity>
+
+                {cargando ? (
+                    <View style={estilos.loadingContainer}>
+                        <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                        <Text style={estilos.loadingTexto}>Cargando...</Text>
+                    </View>
+                ) : (
+                    <ScrollView
+                        contentContainerStyle={[
+                            estilos.scrollContent,
+                            {
+                                paddingBottom: insets.bottom + 120,
+                                paddingTop: 6,
+                            },
+                        ]}
+                        showsVerticalScrollIndicator={false}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refrescando}
+                                onRefresh={manejarRefresh}
+                                tintColor={DISENO.colors.accent}
+                                colors={[DISENO.colors.accent]}
+                            />
+                        }
+                    >
+                        <FlatList
+                            data={tarjetas}
+                            keyExtractor={item => item.id}
+                            renderItem={renderTarjeta}
+                            numColumns={2}
+                            scrollEnabled={false}
+                            contentContainerStyle={{
+                                paddingHorizontal: responsive.getEspaciado('LG'),
+                            }}
+                            columnWrapperStyle={estilos.columnWrapper}
+                        />
+
+                        <View style={{ paddingHorizontal: responsive.getEspaciado('LG') }}>
+                            {renderGraficoSemanal()}
+                        </View>
+
+                        <View style={{ paddingHorizontal: responsive.getEspaciado('LG') }}>
+                            {renderDistribucionEstados()}
+                        </View>
+                    </ScrollView>
+                )}
+
+                {/* ÚLTIMA ACTUALIZACIÓN */}
+                <View
+                    style={[
+                        estilos.contadorContainer,
+                        { paddingHorizontal: responsive.getEspaciado('LG') },
+                    ]}
+                >
+                    <Text style={estilos.contador}>
+                        {cargando
+                            ? ''
+                            : `🔄 ${ultimaActualizacion.toLocaleTimeString('es-AR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            })}`}
+                    </Text>
+                </View>
+            </View>
+
+            {/* MODAL DE RANGO CUSTOM */}
+            <Modal
+                visible={modalRangoVisible}
+                transparent
+                animationType="slide"
+                statusBarTranslucent
+                onRequestClose={() => setModalRangoVisible(false)}
+            >
+                <View style={estilos.modalFondo}>
+                    <View style={estilos.modalContainer}>
+                        <LinearGradient
+                            colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+                            style={estilos.modalHeader}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Ionicons name="calendar" size={22} color={DISENO.colors.surface} />
+                            <Text style={estilos.modalTitulo}>Rango personalizado</Text>
+                            <TouchableOpacity onPress={() => setModalRangoVisible(false)}>
+                                <Ionicons name="close" size={22} color={DISENO.colors.surface} />
+                            </TouchableOpacity>
+                        </LinearGradient>
+
+                        <View style={estilos.modalBody}>
+                            <Text style={estilos.modalLabel}>Desde</Text>
+                            <TouchableOpacity
+                                style={estilos.fechaBtn}
+                                onPress={() => setMostrarPicker('desde')}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="calendar-outline" size={18} color={DISENO.colors.accent} />
+                                <Text style={estilos.fechaBtnTexto}>
+                                    {tempDesde.toLocaleDateString('es-AR', {
+                                        weekday: 'long',
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric',
+                                    })}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <Text style={[estilos.modalLabel, { marginTop: 16 }]}>Hasta</Text>
+                            <TouchableOpacity
+                                style={estilos.fechaBtn}
+                                onPress={() => setMostrarPicker('hasta')}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="calendar-outline" size={18} color={DISENO.colors.accent} />
+                                <Text style={estilos.fechaBtnTexto}>
+                                    {tempHasta.toLocaleDateString('es-AR', {
+                                        weekday: 'long',
+                                        day: '2-digit',
+                                        month: 'long',
+                                        year: 'numeric',
+                                    })}
+                                </Text>
+                            </TouchableOpacity>
+
+                            <View style={estilos.resumenRango}>
+                                <Ionicons name="information-circle-outline" size={16} color={DISENO.colors.info} />
+                                <Text style={estilos.resumenRangoTexto}>
+                                    {diasDelRango(tempDesde, tempHasta)} días seleccionados
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={estilos.modalBotones}>
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, estilos.modalCancelar]}
+                                onPress={() => setModalRangoVisible(false)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={estilos.modalCancelarTexto}>Cancelar</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[estilos.modalBoton, estilos.modalAplicar]}
+                                onPress={aplicarRangoCustom}
+                                activeOpacity={0.8}
+                            >
+                                <LinearGradient
+                                    colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+                                    style={estilos.modalAplicarGradient}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                >
+                                    <Ionicons name="checkmark" size={18} color={DISENO.colors.surface} />
+                                    <Text style={estilos.modalAplicarTexto}>Aplicar</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* DATE PICKER */}
+            {mostrarPicker && (
+                <DateTimePicker
+                    value={mostrarPicker === 'desde' ? tempDesde : tempHasta}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onCambiarFecha}
+                    maximumDate={new Date()}
+                />
             )}
-        </View>
+
+            <Toast
+                visible={toast.visible}
+                mensaje={toast.mensaje}
+                tipo={toast.tipo}
+                ocultar={toast.ocultar}
+            />
+        </>
     );
 }
 
@@ -657,218 +995,412 @@ export default function PantallaEstadisticas(props: any) {
 const estilos = StyleSheet.create({
     contenedor: {
         flex: 1,
-        backgroundColor: COLORS.negro,
+        backgroundColor: DISENO.colors.fondo,
     },
 
-    fondoGradiente: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-
+    // HEADER
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '10',
+        paddingBottom: 12,
     },
-
-    botonVolver: {
-        padding: 4,
-    },
-
-    botonRefresh: {
+    botonHeader: {
         padding: 8,
-        backgroundColor: COLORS.blanco + '10',
         borderRadius: 10,
-        borderWidth: 1,
-        borderColor: COLORS.blanco + '10',
+        backgroundColor: DISENO.colors.surface,
+        ...DISENO.shadow.sm,
     },
-
-    titulo: {
-        fontWeight: 'bold',
-        color: COLORS.blanco,
-        letterSpacing: 1,
+    headerCentro: {
         flex: 1,
-        textAlign: 'center',
+        alignItems: 'center',
+    },
+    titulo: {
+        fontFamily: FUENTES.display,
+        fontSize: 20,
+        color: DISENO.colors.text,
     },
 
-    contadorContainer: {
-        paddingVertical: 6,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.blanco + '5',
+    // ✅ PRESETS - CONTENEDOR CON ALTURA FIJA
+    presetsWrapper: {
+        height: 60,
+        marginBottom: 4,
+    },
+    presetsContent: {
+        paddingHorizontal: 20,
+        alignItems: 'center',
+    },
+    presetChip: {
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        borderRadius: 24,
+        backgroundColor: DISENO.colors.surface,
+        borderWidth: 1.5,
+        borderColor: DISENO.colors.border,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    presetChipActivo: {
+        backgroundColor: DISENO.colors.accent,
+        borderColor: DISENO.colors.accent,
+    },
+    presetChipText: {
+        fontFamily: FUENTES.regular,
+        fontSize: 13,
+        fontWeight: '700',
+        color: DISENO.colors.textSecondary,
+    },
+    presetChipTextActivo: {
+        color: '#FFF',
     },
 
-    contador: {
-        color: COLORS.grisClaro,
-        fontWeight: '500',
-        opacity: 0.6,
-        textAlign: 'center',
+    // ✅ RANGO ACTIVO - MÁS GRANDE
+    rangoActivo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: DISENO.colors.accent + '10',
+        borderWidth: 1,
+        borderColor: DISENO.colors.accent + '25',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginBottom: 12,
+        minHeight: 44,
+    },
+    rangoActivoTexto: {
+        flex: 1,
+        fontFamily: FUENTES.regular,
+        fontSize: 13,
+        fontWeight: '600',
+        color: DISENO.colors.text,
     },
 
+    // LOADING
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 14,
     },
-
     loadingTexto: {
-        color: COLORS.grisClaro,
-        fontWeight: '400',
-        opacity: 0.7,
+        fontFamily: FUENTES.display,
+        fontSize: 14,
+        color: DISENO.colors.textSecondary,
     },
 
+    // SCROLL
     scrollContent: {
         flexGrow: 1,
     },
 
-    gridContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'flex-start',
-        alignItems: 'flex-start',
+    // GRID
+    columnWrapper: {
+        gap: 10,
+        marginBottom: 10,
     },
-
+    tarjetaWrapper: {
+        flex: 1,
+        maxWidth: '50%',
+    },
     tarjeta: {
-        borderWidth: 1,
-        alignItems: 'flex-start',
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.lg,
+        borderLeftWidth: 4,
+        minHeight: 100,
+        ...DISENO.shadow.sm,
     },
-
     tarjetaIcono: {
+        padding: 6,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
         marginBottom: 6,
     },
-
     tarjetaValor: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
         marginBottom: 2,
     },
-
     tarjetaTitulo: {
-        color: COLORS.grisClaro,
-        fontWeight: '500',
-        opacity: 0.7,
+        fontFamily: FUENTES.regular,
+        fontWeight: '600',
+        color: DISENO.colors.textSecondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
     },
-
     tarjetaSubtexto: {
-        color: COLORS.grisClaro,
-        opacity: 0.5,
-        marginTop: 2,
+        fontFamily: FUENTES.regular,
+        color: DISENO.colors.textTertiary,
+        marginTop: 4,
     },
 
+    // SECCIÓN
     seccion: {
-        marginTop: 16,
+        marginTop: 20,
         width: '100%',
     },
-
     seccionTitulo: {
-        fontWeight: 'bold',
-        color: COLORS.blanco,
+        fontFamily: FUENTES.display,
+        color: DISENO.colors.text,
         marginBottom: 10,
     },
 
-    graficoContainer: {
-        borderWidth: 1,
+    // GRÁFICO
+    graficoCard: {
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.lg,
+        ...DISENO.shadow.sm,
     },
-
     graficoBarras: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
-        paddingVertical: 8,
         gap: 4,
     },
-
     barraItem: {
         alignItems: 'center',
         flex: 1,
+        gap: 4,
     },
-
     barra: {
         width: '80%',
+        borderRadius: 6,
         justifyContent: 'flex-end',
         overflow: 'hidden',
-        marginBottom: 4,
     },
-
     barraFill: {
         width: '100%',
+        borderRadius: 6,
     },
-
     barraDia: {
-        color: COLORS.grisClaro,
-        opacity: 0.6,
-        fontWeight: '500',
+        fontFamily: FUENTES.regular,
+        fontSize: 10,
+        fontWeight: '600',
+        color: DISENO.colors.textSecondary,
     },
-
     barraTotal: {
-        color: COLORS.amarillo,
-        fontWeight: 'bold',
+        fontFamily: FUENTES.regular,
+        fontSize: 9,
+        fontWeight: '700',
+        color: DISENO.colors.text,
     },
-
     barraPedidos: {
-        color: COLORS.grisClaro,
-        opacity: 0.4,
+        fontFamily: FUENTES.regular,
+        fontSize: 9,
+        color: DISENO.colors.textTertiary,
+        fontWeight: '600',
     },
 
-    distribucionContainer: {
-        borderWidth: 1,
-        gap: 8,
+    // DISTRIBUCIÓN
+    distribucionCard: {
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.lg,
+        gap: 14,
+        ...DISENO.shadow.sm,
     },
-
     distribucionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        gap: 10,
     },
-
+    distribucionIcono: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
     distribucionInfo: {
         flex: 1,
-        marginRight: 12,
+        minWidth: 0,
     },
-
-    distribucionNombre: {
-        color: COLORS.blanco,
-        fontWeight: '500',
+    distribucionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 4,
     },
-
+    distribucionNombre: {
+        fontFamily: FUENTES.regular,
+        fontWeight: '600',
+        color: DISENO.colors.text,
+        flex: 1,
+        marginRight: 4,
+    },
+    distribucionPorcentaje: {
+        fontFamily: FUENTES.display,
+        fontSize: 12,
+    },
+    distribucionBarraContainer: {
+        height: 6,
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
     distribucionBarra: {
-        borderRadius: 4,
+        height: 6,
+        borderRadius: 3,
     },
-
     distribucionCantidad: {
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        minWidth: 32,
+        textAlign: 'right',
     },
 
+    // CONTADOR
+    contadorContainer: {
+        paddingVertical: 8,
+        alignItems: 'center',
+    },
+    contador: {
+        fontFamily: FUENTES.regular,
+        fontSize: 10,
+        color: DISENO.colors.textTertiary,
+    },
+
+    // MODAL RANGO
+    modalFondo: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContainer: {
+        backgroundColor: DISENO.colors.surface,
+        borderRadius: DISENO.radius.xl,
+        width: '100%',
+        maxWidth: 420,
+        overflow: 'hidden',
+        ...DISENO.shadow.lg,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+    },
+    modalTitulo: {
+        flex: 1,
+        fontFamily: FUENTES.display,
+        fontSize: 17,
+        color: DISENO.colors.surface,
+    },
+    modalBody: {
+        padding: 20,
+    },
+    modalLabel: {
+        fontFamily: FUENTES.display,
+        fontSize: 13,
+        color: DISENO.colors.text,
+        marginBottom: 8,
+    },
+    fechaBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: DISENO.colors.surfaceHover,
+        borderRadius: DISENO.radius.md,
+        borderWidth: 1,
+        borderColor: DISENO.colors.border,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+    },
+    fechaBtnTexto: {
+        fontFamily: FUENTES.regular,
+        fontSize: 13,
+        fontWeight: '600',
+        color: DISENO.colors.text,
+        textTransform: 'capitalize',
+        flex: 1,
+    },
+    resumenRango: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: DISENO.colors.info + '10',
+        borderRadius: DISENO.radius.md,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        marginTop: 16,
+    },
+    resumenRangoTexto: {
+        fontFamily: FUENTES.regular,
+        fontSize: 12,
+        fontWeight: '600',
+        color: DISENO.colors.info,
+    },
+    modalBotones: {
+        flexDirection: 'row',
+        gap: 10,
+        padding: 20,
+        paddingTop: 0,
+    },
+    modalBoton: {
+        flex: 1,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    modalCancelar: {
+        backgroundColor: DISENO.colors.surfaceHover,
+    },
+    modalCancelarTexto: {
+        fontFamily: FUENTES.regular,
+        fontSize: 14,
+        fontWeight: '600',
+        color: DISENO.colors.text,
+    },
+    modalAplicar: {
+        paddingVertical: 0,
+    },
+    modalAplicarGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 14,
+        width: '100%',
+    },
+    modalAplicarTexto: {
+        fontFamily: FUENTES.display,
+        fontSize: 14,
+        color: DISENO.colors.surface,
+    },
+
+    // ERROR
     errorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: COLORS.negro,
+        backgroundColor: DISENO.colors.fondo,
         padding: 20,
     },
-
     errorText: {
-        color: COLORS.grisClaro,
+        fontFamily: FUENTES.regular,
+        color: DISENO.colors.textSecondary,
         marginTop: 12,
-        fontSize: 16,
+        fontSize: 15,
         textAlign: 'center',
     },
-
     errorButton: {
-        backgroundColor: COLORS.amarillo,
-        paddingHorizontal: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: DISENO.colors.accent,
+        paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 12,
-        marginTop: 16,
+        marginTop: 20,
+        ...DISENO.shadow.md,
     },
-
     errorButtonText: {
-        color: COLORS.negro,
-        fontWeight: 'bold',
+        fontFamily: FUENTES.display,
+        fontSize: 14,
+        color: DISENO.colors.surface,
     },
 });
