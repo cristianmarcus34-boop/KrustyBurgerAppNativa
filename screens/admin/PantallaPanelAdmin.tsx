@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { notificacionService } from '../../services/notificacionService';
 import { Colores } from '../../lib/colores';
 
 const { width, height } = Dimensions.get('window');
@@ -126,13 +125,13 @@ export default function PantallaPanelAdmin(props: any) {
   }, []);
 
   // ============================================================
-  // ✅ CONFIGURAR NOTIFICACIONES
+  // ✅ CONFIGURAR CANAL DE NOTIFICACIONES EN TIEMPO REAL
   // ============================================================
-  const notificacionesInicializadas = useRef(false);
+  const canalInicializado = useRef(false);
 
   useEffect(() => {
-    if (notificacionesInicializadas.current) {
-      console.log('⏭️ Notificaciones ya inicializadas, saltando...');
+    if (canalInicializado.current) {
+      console.log('⏭️ Canal de notificaciones ya inicializado, saltando...');
       return;
     }
 
@@ -145,19 +144,7 @@ export default function PantallaPanelAdmin(props: any) {
       return;
     }
 
-    notificacionesInicializadas.current = true;
-
-    const configurarNotificaciones = async () => {
-      try {
-        await notificacionService.registrarToken(perfil.id);
-        await notificacionService.solicitarPermisos();
-        console.log('✅ Admin notificaciones configuradas');
-      } catch (error) {
-        console.error('❌ Error configurando notificaciones:', error);
-      }
-    };
-
-    configurarNotificaciones();
+    canalInicializado.current = true;
 
     if (canalActivo) {
       console.log('🔄 Limpiando canal anterior...');
@@ -210,7 +197,7 @@ export default function PantallaPanelAdmin(props: any) {
 
     return () => {
       console.log('🧹 Limpiando canal...');
-      notificacionesInicializadas.current = false;
+      canalInicializado.current = false;
       if (canalActivo) {
         canalActivo.unsubscribe();
         canalActivo = null;

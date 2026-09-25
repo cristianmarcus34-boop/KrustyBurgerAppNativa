@@ -44,7 +44,7 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Platform, StyleSheet, Alert } from 'react-native';
+import { AppState, View, Platform, StyleSheet, Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // ============================================================
@@ -453,6 +453,18 @@ export default function App() {
     };
 
     configurarNotificaciones();
+  }, [sesion, perfil?.id]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !sesion || !perfil?.id) return;
+
+      notificacionService.registrarToken(perfil.id).catch((error) => {
+        console.warn('⚠️ [Notif] Error verificando permiso al reanudar:', error);
+      });
+    });
+
+    return () => subscription.remove();
   }, [sesion, perfil?.id]);
 
   // ============================================================

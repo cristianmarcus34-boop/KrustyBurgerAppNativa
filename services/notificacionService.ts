@@ -103,6 +103,12 @@ export const notificacionService = {
 
     async registrarToken(usuarioId: string) {
         try {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+                console.log('🔕 No se registra el token: permisos no concedidos');
+                return false;
+            }
+
             const projectId = getProjectId();
             const token = await Notifications.getExpoPushTokenAsync({ projectId });
             const plataforma = Platform.OS;
@@ -210,7 +216,16 @@ export const notificacionService = {
 
     async solicitarPermisos() {
         try {
-            const { status } = await Notifications.requestPermissionsAsync();
+            let { status } = await Notifications.getPermissionsAsync();
+            if (status === 'denied') {
+                console.log('❌ Permisos denegados previamente; no se vuelve a solicitar');
+                return false;
+            }
+
+            if (status !== 'granted') {
+                ({ status } = await Notifications.requestPermissionsAsync());
+            }
+
             if (status !== 'granted') {
                 console.log('❌ Permisos denegados');
                 return false;
