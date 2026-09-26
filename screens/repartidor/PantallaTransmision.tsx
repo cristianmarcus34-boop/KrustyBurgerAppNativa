@@ -1,6 +1,7 @@
 // screens/repartidor/PantallaTransmision.tsx - COMPLETO CON PREVISUALIZACIÓN DE RUTA
 import React, { useEffect, useState, useRef } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   RefreshControl,
   Animated,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +23,7 @@ import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
+import { notificacionService } from '../../services/notificacionService';
 import {
   obtenerRuta,
   guardarRutaPedido,
@@ -89,6 +92,7 @@ export default function PantallaTransmision(props: any) {
   const [mostrarModalCerrar, setMostrarModalCerrar] = useState(false);
   const [mostrarModalExito, setMostrarModalExito] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
+  const [procesandoEntrega, setProcesandoEntrega] = useState(false);
   const [pestana, setPestana] = useState<'activos' | 'historial'>('activos');
   const [rutaPuntos, setRutaPuntos] = useState<{ latitude: number; longitude: number }[]>([]);
   const [distanciaReal, setDistanciaReal] = useState<string>('');
@@ -153,6 +157,23 @@ export default function PantallaTransmision(props: any) {
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.timing(slideUpAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
+    return () => {
+      watchRef.current?.remove();
+      watchRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' || !watchRef.current) return;
+
+      watchRef.current.remove();
+      watchRef.current = null;
+      setTransmitiendo(false);
+      setPedidoSeleccionado(null);
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -168,54 +189,34 @@ export default function PantallaTransmision(props: any) {
     }
   }, [transmitiendo]);
 
-  // ✅ CARGAR RUTA CUANDO SE INICIA LA TRANSMISIÓN
+  // ✅ CALCULAR LA RUTA DESDE LA ÚLTIMA UBICACIÓN GPS AL INICIAR O REANUDAR
   useEffect(() => {
-    if (transmitiendo && pedidoSeleccionado && ubicacionActual) {
+    if (transmitiendo && pedidoSeleccionado) {
       const cargarRuta = async () => {
-        const origenLat = ubicacionActual.lat;
-        const origenLng = ubicacionActual.lng;
-        const destinoLat = pedidoSeleccionado?.lat_cliente || UBICACION_KRUSTY.latitude;
-        const destinoLng = pedidoSeleccionado?.lng_cliente || UBICACION_KRUSTY.longitude;
+        const origenLat = pedidoSeleccionado.lat_repartidor ?? UBICACION_KRUSTY.latitude;
+        const origenLng = pedidoSeleccionado.repartidor_de_lng ?? UBICACION_KRUSTY.longitude;
+        const destinoLat = pedidoSeleccionado.lat_cliente ?? UBICACION_KRUSTY.latitude;
+        const destinoLng = pedidoSeleccionado.lng_cliente ?? UBICACION_KRUSTY.longitude;
 
-        // ✅ INTENTAR CARGAR RUTA GUARDADA
-        const rutaGuardada = await obtenerRutaPedido(pedidoSeleccionado.id);
-        if (rutaGuardada && rutaGuardada.length > 1) {
-          console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
-          setRutaPuntos(rutaGuardada);
-          const infoRuta = await obtenerInfoRutaPedido(pedidoSeleccionado.id);
-          if (infoRuta) {
-            setDistanciaReal(infoRuta.distancia);
-            setTiempoReal(infoRuta.duracion);
+        try {
+          const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
+          if (ruta && ruta.points.length > 1) {
+            setRutaPuntos(ruta.points);
+            setDistanciaReal(ruta.distance);
+            setTiempoReal(ruta.duration);
+            await guardarRutaPedido(pedidoSeleccionado.id, ruta.points, ruta.distance, ruta.duration);
+            return;
           }
-          return;
+        } catch (error) {
+          console.warn('⚠️ No se pudo calcular la ruta:', error);
         }
 
-        // ✅ OBTENER NUEVA RUTA
-        console.log('🔄 Obteniendo nueva ruta de Google Maps...');
-        const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
-
-        if (ruta && ruta.points.length > 1) {
-          console.log('✅ Ruta obtenida:', ruta.points.length, 'puntos');
-          setRutaPuntos(ruta.points);
-          setDistanciaReal(ruta.distance);
-          setTiempoReal(ruta.duration);
-          await guardarRutaPedido(pedidoSeleccionado.id, ruta.points, ruta.distance, ruta.duration);
-          console.log('💾 Ruta guardada en la DB');
-        } else {
-          // ✅ FALLBACK: LÍNEA RECTA - ¡PERO LA GUARDAMOS!
-          console.warn('⚠️ Usando línea recta como fallback');
-          const puntosLineaRecta = [
-            { latitude: origenLat, longitude: origenLng },
-            { latitude: destinoLat, longitude: destinoLng },
-          ];
-          setRutaPuntos(puntosLineaRecta);
-          setDistanciaReal('0.0 km');
-          setTiempoReal('0 min');
-
-          // ✅ ¡GUARDAR LA LÍNEA RECTA EN LA DB!
-          await guardarRutaPedido(pedidoSeleccionado.id, puntosLineaRecta, '0.0 km', '0 min');
-          console.log('💾 Ruta de fallback guardada en la DB');
-        }
+        setRutaPuntos([
+          { latitude: origenLat, longitude: origenLng },
+          { latitude: destinoLat, longitude: destinoLng },
+        ]);
+        setDistanciaReal('');
+        setTiempoReal('');
       };
       cargarRuta();
     }
@@ -329,9 +330,8 @@ export default function PantallaTransmision(props: any) {
         .in('estado', ['listo', 'en_camino'])
         .order('creado_en', { ascending: false });
 
-      if (!errorActivos) {
-        setPedidosActivos(activos as Pedido[] || []);
-      }
+      if (errorActivos) throw errorActivos;
+      setPedidosActivos(activos as Pedido[] || []);
 
       const { data: entregados, error: errorEntregados } = await supabase
         .from('pedidos')
@@ -340,9 +340,8 @@ export default function PantallaTransmision(props: any) {
         .order('creado_en', { ascending: false })
         .limit(20);
 
-      if (!errorEntregados) {
-        setPedidosEntregados(entregados as Pedido[] || []);
-      }
+      if (errorEntregados) throw errorEntregados;
+      setPedidosEntregados(entregados as Pedido[] || []);
     } catch (error) {
       console.error('❌ Error cargando pedidos:', error);
     } finally {
@@ -375,94 +374,97 @@ export default function PantallaTransmision(props: any) {
   };
 
   const actualizarUbicacionEnSupabase = async (lat: number, lng: number, pedidoId: number) => {
-    try {
-      const { error } = await supabase
-        .from('pedidos')
-        .update({
-          lat_repartidor: lat,
-          repartidor_de_lng: lng,
-        })
-        .eq('id', pedidoId);
+    const { error } = await supabase
+      .from('pedidos')
+      .update({
+        lat_repartidor: lat,
+        repartidor_de_lng: lng,
+      })
+      .eq('id', pedidoId)
+      .eq('estado', 'en_camino');
 
-      if (error) {
-        console.error('❌ Error actualizando ubicación:', error);
-      }
-    } catch (error) {
-      console.error('❌ Error en actualización:', error);
-    }
+    if (error) throw error;
   };
 
-  // ✅ INICIAR TRANSMISIÓN - CORREGIDA
-  const iniciarTransmision = async (pedido: Pedido) => {
-    setPedidoSeleccionado(pedido);
-    setTransmitiendo(true);
-
-    const origenLat = ubicacionActual.lat;
-    const origenLng = ubicacionActual.lng;
-    const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
-    const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
-
-    // ✅ PRIMERO: Intentar cargar ruta guardada
-    const rutaGuardada = await obtenerRutaPedido(pedido.id);
-    if (rutaGuardada && rutaGuardada.length > 1) {
-      console.log('📦 Ruta cargada de la DB:', rutaGuardada.length, 'puntos');
-      setRutaPuntos(rutaGuardada);
-      const infoRuta = await obtenerInfoRutaPedido(pedido.id);
-      if (infoRuta) {
-        setDistanciaReal(infoRuta.distancia);
-        setTiempoReal(infoRuta.duracion);
-      }
-    } else {
-      // ✅ SEGUNDO: Obtener nueva ruta
-      console.log('🔄 Obteniendo nueva ruta de Google Maps...');
-      const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
-
-      if (ruta && ruta.points.length > 1) {
-        console.log('✅ Ruta obtenida:', ruta.points.length, 'puntos');
-        setRutaPuntos(ruta.points);
-        setDistanciaReal(ruta.distance);
-        setTiempoReal(ruta.duration);
-        await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
-        console.log('💾 Ruta guardada en la DB');
-      } else {
-        // ✅ FALLBACK: Línea recta Y LA GUARDAMOS
-        console.warn('⚠️ Usando línea recta como fallback');
-        const puntosLineaRecta = [
-          { latitude: origenLat, longitude: origenLng },
-          { latitude: destinoLat, longitude: destinoLng },
-        ];
-        setRutaPuntos(puntosLineaRecta);
-        setDistanciaReal('0.0 km');
-        setTiempoReal('0 min');
-
-        // ✅ ¡GUARDAR LA LÍNEA RECTA!
-        await guardarRutaPedido(pedido.id, puntosLineaRecta, '0.0 km', '0 min');
-        console.log('💾 Ruta de fallback guardada en la DB');
-      }
+  const iniciarTransmision = async (pedido: Pedido, reanudar = false) => {
+    if (procesandoEntrega || watchRef.current) return;
+    if (!perfil?.id) {
+      Alert.alert('Sesión requerida', 'Volvé a iniciar sesión para comenzar la entrega.');
+      return;
+    }
+    if (pedido.estado === 'en_camino' && pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
+      Alert.alert('Entrega asignada', 'Este pedido ya está asignado a otro repartidor.');
+      return;
     }
 
-    // ✅ Actualizar estado del pedido
+    setProcesandoEntrega(true);
     try {
-      const { error } = await supabase
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Ubicación necesaria',
+          'Para iniciar el seguimiento, habilitá el permiso de ubicación mientras usás la app. El pedido no cambiará de estado hasta poder obtener tu ubicación.'
+        );
+        return;
+      }
+
+      const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = ubicacion.coords;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        throw new Error('El dispositivo devolvió coordenadas inválidas.');
+      }
+
+      const estadoEsperado = reanudar ? 'en_camino' : 'listo';
+      let actualizarPedido = supabase
         .from('pedidos')
         .update({
           estado: 'en_camino',
-          repartidor_id: perfil?.id,
-          encabezado_repartidor: perfil?.nombre_cliente || 'Repartidor Krusty',
+          repartidor_id: perfil.id,
+          encabezado_repartidor: perfil.nombre_cliente || 'Repartidor Krusty',
+          lat_repartidor: latitude,
+          repartidor_de_lng: longitude,
         })
-        .eq('id', pedido.id);
+        .eq('id', pedido.id)
+        .eq('estado', estadoEsperado);
 
-      if (error) {
-        console.error('❌ Error actualizando estado:', error);
+      if (reanudar) {
+        actualizarPedido = pedido.repartidor_id
+          ? actualizarPedido.eq('repartidor_id', perfil.id)
+          : actualizarPedido.is('repartidor_id', null);
+      } else if (pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
+        throw new Error('Este pedido está asignado a otro repartidor.');
       }
-    } catch (error) {
-      console.error('❌ Error en actualización de estado:', error);
-    }
 
-    // ✅ Iniciar seguimiento de ubicación
-    const { status } = await Location.requestForegroundPermissionsAsync();
+      const { data: pedidoActualizado, error } = await actualizarPedido.select('id').maybeSingle();
 
-    if (status === 'granted') {
+      if (error) throw error;
+      if (!pedidoActualizado) {
+        throw new Error('El estado del pedido cambió o ya fue tomado por otro repartidor. Actualizá la lista e intentá nuevamente.');
+      }
+
+      const pedidoEnCamino: Pedido = {
+        ...pedido,
+        estado: 'en_camino',
+        repartidor_id: perfil.id,
+        encabezado_repartidor: perfil.nombre_cliente || 'Repartidor Krusty',
+        lat_repartidor: latitude,
+        repartidor_de_lng: longitude,
+      };
+      setPedidoSeleccionado(pedidoEnCamino);
+      setUbicacionActual({ lat: latitude, lng: longitude });
+      setTransmitiendo(true);
+      setPedidosActivos((actuales) => actuales.map((actual) =>
+        actual.id === pedido.id ? pedidoEnCamino : actual
+      ));
+      if (!reanudar && pedido.id_de_usuario) {
+        notificacionService.notificarClienteCambioEstado(
+          pedido.id_de_usuario,
+          pedido.id,
+          'en_camino'
+        ).catch((error) => console.warn('⚠️ No se pudo notificar la salida del pedido:', error));
+      }
+
       watchRef.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
@@ -470,60 +472,85 @@ export default function PantallaTransmision(props: any) {
           distanceInterval: 5,
         },
         async (loc) => {
-          const { latitude, longitude } = loc.coords;
-          setUbicacionActual({ lat: latitude, lng: longitude });
-          await actualizarUbicacionEnSupabase(latitude, longitude, pedido.id);
-
-          const distancia = calcularDistancia(
-            latitude,
-            longitude,
-            pedido.lat_cliente || UBICACION_KRUSTY.latitude,
-            pedido.lng_cliente || UBICACION_KRUSTY.longitude
-          );
-
-          if (distancia < 0.1) {
-            const { error } = await supabase
-              .from('pedidos')
-              .update({ estado: 'entregado' })
-              .eq('id', pedido.id);
-
-            if (!error) {
-              mostrarExito('🎉 Llegaste al destino! Entrega completada');
-              setTransmitiendo(false);
-              setPedidoSeleccionado(null);
-              if (watchRef.current) {
-                watchRef.current.remove();
-                watchRef.current = null;
-              }
-              cargarPedidos();
+          try {
+            const { latitude: nuevaLatitud, longitude: nuevaLongitud } = loc.coords;
+            if (!Number.isFinite(nuevaLatitud) || !Number.isFinite(nuevaLongitud)) {
+              console.warn('⚠️ Se ignoró una actualización GPS con coordenadas inválidas.');
+              return;
             }
+
+            setUbicacionActual({ lat: nuevaLatitud, lng: nuevaLongitud });
+            await actualizarUbicacionEnSupabase(nuevaLatitud, nuevaLongitud, pedido.id);
+          } catch (error) {
+            console.error('❌ No se pudo publicar la ubicación del repartidor:', error);
           }
         }
       );
-    } else {
-      simularMovimiento(pedido);
+
+    } catch (error) {
+      console.error('❌ No se pudo iniciar o reanudar el seguimiento:', error);
+      Alert.alert(
+        'No se pudo iniciar el seguimiento',
+        error instanceof Error ? error.message : 'Verificá la ubicación y tu conexión e intentá nuevamente.'
+      );
+      if (!watchRef.current) {
+        setTransmitiendo(false);
+        setPedidoSeleccionado(null);
+      }
+    } finally {
+      setProcesandoEntrega(false);
     }
   };
 
-  const simularMovimiento = (pedido: Pedido) => {
-    let paso = 0;
-    const intervalo = setInterval(async () => {
-      paso += 0.001;
-      const nuevaLat = (pedido.lat_cliente || UBICACION_KRUSTY.latitude) + paso;
-      const nuevaLng = (pedido.lng_cliente || UBICACION_KRUSTY.longitude) + paso;
+  const confirmarEntrega = (pedido: Pedido) => {
+    Alert.alert(
+      'Confirmar entrega',
+      `¿Confirmás que el pedido #${pedido.id} ya fue entregado al cliente?`,
+      [
+        { text: 'Todavía no', style: 'cancel' },
+        {
+          text: 'Sí, entregado',
+          onPress: async () => {
+            if (procesandoEntrega) return;
+            setProcesandoEntrega(true);
+            try {
+              const { data, error } = await supabase
+                .from('pedidos')
+                .update({ estado: 'entregado' })
+                .eq('id', pedido.id)
+                .eq('estado', 'en_camino')
+                .select('id')
+                .maybeSingle();
 
-      setUbicacionActual({ lat: nuevaLat, lng: nuevaLng });
-      await actualizarUbicacionEnSupabase(nuevaLat, nuevaLng, pedido.id);
+              if (error) throw error;
+              if (!data) throw new Error('El pedido ya no está en camino. Actualizá la lista.');
 
-      if (paso >= 0.01) {
-        clearInterval(intervalo);
-        await supabase.from('pedidos').update({ estado: 'entregado' }).eq('id', pedido.id);
-        mostrarExito('🎉 Entrega completada exitosamente!');
-        setTransmitiendo(false);
-        setPedidoSeleccionado(null);
-        cargarPedidos();
-      }
-    }, 2000);
+              watchRef.current?.remove();
+              watchRef.current = null;
+              setTransmitiendo(false);
+              setPedidoSeleccionado(null);
+              if (pedido.id_de_usuario) {
+                notificacionService.notificarClienteCambioEstado(
+                  pedido.id_de_usuario,
+                  pedido.id,
+                  'entregado'
+                ).catch((error) => console.warn('⚠️ No se pudo notificar la entrega:', error));
+              }
+              mostrarExito(`✅ Pedido #${pedido.id} marcado como entregado`);
+              await cargarPedidos();
+            } catch (error) {
+              console.error('❌ No se pudo confirmar la entrega:', error);
+              Alert.alert(
+                'No se pudo confirmar',
+                error instanceof Error ? error.message : 'Revisá tu conexión e intentá nuevamente.'
+              );
+            } finally {
+              setProcesandoEntrega(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const detenerTransmision = () => {
@@ -766,6 +793,35 @@ export default function PantallaTransmision(props: any) {
           </LinearGradient>
         </TouchableOpacity>
       )}
+
+      {item.estado === 'en_camino' &&
+        !transmitiendo &&
+        (!item.repartidor_id || item.repartidor_id === perfil?.id) && (
+          <TouchableOpacity
+            style={[
+              estilos.botonIniciar,
+              {
+                paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
+                borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
+              },
+            ]}
+            onPress={() => iniciarTransmision(item, true)}
+            activeOpacity={0.7}
+            disabled={procesandoEntrega}
+          >
+            <LinearGradient
+              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+              style={estilos.botonIniciarGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Ionicons name="refresh-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.negro} />
+              <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>
+                {procesandoEntrega ? 'Reanudando...' : 'Reanudar seguimiento'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
       {item.estado === 'en_camino' && (
         <View style={estilos.enCaminoBadge}>
@@ -1085,7 +1141,7 @@ export default function PantallaTransmision(props: any) {
                   end={{ x: 1, y: 0 }}
                 >
                   <Ionicons name="stop-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.blanco} />
-                  <Text style={[estilos.botonDetenerMapaTexto, { fontSize: botonTextSize }]}>Detener</Text>
+                  <Text style={[estilos.botonDetenerMapaTexto, { fontSize: botonTextSize }]}>Pausar GPS</Text>
                 </LinearGradient>
               </TouchableOpacity>
             )}
@@ -1180,6 +1236,30 @@ export default function PantallaTransmision(props: any) {
                 GPS: {ubicacionActual.lat.toFixed(6)}, {ubicacionActual.lng.toFixed(6)}
               </Text>
             </View>
+            <TouchableOpacity
+              style={[
+                estilos.botonIniciar,
+                {
+                  marginTop: isTablet ? 8 : 6,
+                  borderRadius: isTablet ? 10 : 8,
+                },
+              ]}
+              onPress={() => confirmarEntrega(pedidoSeleccionado)}
+              activeOpacity={0.8}
+              disabled={procesandoEntrega}
+            >
+              <LinearGradient
+                colors={[COLORS.verdeClaro, COLORS.verde]}
+                style={estilos.botonIniciarGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Ionicons name="checkmark-circle" size={isTablet ? 20 : 16} color={COLORS.blanco} />
+                <Text style={[estilos.botonIniciarTexto, { color: COLORS.blanco, fontSize: botonTextSize }]}>
+                  {procesandoEntrega ? 'Procesando...' : 'Confirmar entrega'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </Animated.View>
         )}
 

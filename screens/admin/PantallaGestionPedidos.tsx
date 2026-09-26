@@ -35,8 +35,8 @@ const ESTADOS_PEDIDO: Record<string, { label: string; color: string; icono: stri
   pendiente: { label: 'Pendiente', color: DISENO.colors.accentSecondary, icono: 'time-outline', siguiente: 'confirmado' },
   confirmado: { label: 'Confirmado', color: DISENO.colors.info, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
   preparando: { label: 'Preparando', color: DISENO.colors.naranja, icono: 'restaurant-outline', siguiente: 'listo' },
-  listo: { label: 'Listo', color: DISENO.colors.verde, icono: 'checkmark-done-outline', siguiente: 'en_camino' },
-  en_camino: { label: 'En camino', color: DISENO.colors.morado, icono: 'bicycle-outline', siguiente: 'entregado' },
+  listo: { label: 'Listo', color: DISENO.colors.verde, icono: 'checkmark-done-outline' },
+  en_camino: { label: 'En camino', color: DISENO.colors.morado, icono: 'bicycle-outline' },
   entregado: { label: 'Entregado', color: DISENO.colors.success, icono: 'checkmark-done-circle-outline' },
   cancelado: { label: 'Cancelado', color: DISENO.colors.danger, icono: 'close-circle-outline' },
 };

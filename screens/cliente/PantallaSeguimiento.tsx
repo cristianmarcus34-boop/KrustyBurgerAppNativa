@@ -359,7 +359,8 @@ export default function PantallaSeguimiento(props: any) {
   };
 
   const actualizarUbicacion = (p: Pedido) => {
-    if (p.lat_repartidor && p.repartidor_de_lng) {
+    if (p.lat_repartidor !== null && p.lat_repartidor !== undefined &&
+        p.repartidor_de_lng !== null && p.repartidor_de_lng !== undefined) {
       const posRepartidor = {
         latitude: Number(p.lat_repartidor),
         longitude: Number(p.repartidor_de_lng),
