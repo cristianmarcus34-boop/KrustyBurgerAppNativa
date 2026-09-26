@@ -36,6 +36,7 @@ import { RootStackParamList } from '../../lib/tipos';
 WebBrowser.maybeCompleteAuthSession();
 
 const logoImage = require('../../assets/logo-krusty.png');
+const googleLogoImage = require('../../assets/google-g-logo.png');
 
 // ✅ TIPADO DE NAVEGACIÓN
 type Navigation = {
@@ -740,22 +741,28 @@ export default function PantallaLogin(props: any) {
               <View style={estilos.separador} />
             </View>
 
-            {/* ✅ BOTÓN DE GOOGLE SIGN-IN */}
             <TouchableOpacity
               style={[estilos.botonGoogle, cargandoGoogle && { opacity: 0.6 }]}
               onPress={manejarGoogleLogin}
               disabled={cargandoGoogle || cargando}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Continuar con Google"
             >
               {cargandoGoogle ? (
-                <ActivityIndicator color={DISENO.colors.text} size="small" />
+                <ActivityIndicator color="#1F1F1F" size="small" />
               ) : (
-                <>
-                  <Ionicons name="logo-google" size={20} color="#DB4437" style={estilos.googleIcon} />
+                <View style={estilos.googleButtonContent}>
+                  <Image
+                    source={googleLogoImage}
+                    style={estilos.googleIcon}
+                    resizeMode="contain"
+                    accessible={false}
+                  />
                   <Text style={[estilos.botonGoogleTexto, { fontSize: inputSize }]}>
                     Continuar con Google
                   </Text>
-                </>
+                </View>
               )}
             </TouchableOpacity>
 
@@ -1019,28 +1026,32 @@ const estilos = StyleSheet.create({
     letterSpacing: 1,
   },
   botonGoogle: {
-    flexDirection: 'row',
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DISENO.colors.surfaceHover,
-    borderWidth: 1.5,
-    borderColor: DISENO.colors.border,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#747775',
+    borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 12,
     marginBottom: 14,
-    gap: 10,
-    ...DISENO.shadow.sm,
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
   googleIcon: {
-    marginRight: 4,
+    width: 20,
+    height: 20,
   },
   botonGoogleTexto: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    color: '#1F1F1F',
+    fontWeight: '500',
+    lineHeight: 20,
   },
   enlacesContainer: {
     marginTop: 6,
