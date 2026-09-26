@@ -481,6 +481,47 @@ export default function PantallaTransmision(props: any) {
 
             setUbicacionActual({ lat: nuevaLatitud, lng: nuevaLongitud });
             await actualizarUbicacionEnSupabase(nuevaLatitud, nuevaLongitud, pedido.id);
+
+            const tieneDestino =
+              pedido.tipo_entrega !== 'retiro' &&
+              pedido.lat_cliente !== null &&
+              pedido.lat_cliente !== undefined &&
+              pedido.lng_cliente !== null &&
+              pedido.lng_cliente !== undefined &&
+              Number.isFinite(Number(pedido.lat_cliente)) &&
+              Number.isFinite(Number(pedido.lng_cliente));
+
+            if (tieneDestino && pedido.id_de_usuario) {
+              const distanciaAlCliente = calcularDistancia(
+                nuevaLatitud,
+                nuevaLongitud,
+                Number(pedido.lat_cliente),
+                Number(pedido.lng_cliente)
+              );
+
+              if (distanciaAlCliente <= 0.2) {
+                const { data: avisoTomado, error: errorAviso } = await supabase
+                  .from('pedidos')
+                  .update({ aviso_cercania_enviado: true })
+                  .eq('id', pedido.id)
+                  .eq('estado', 'en_camino')
+                  .eq('aviso_cercania_enviado', false)
+                  .select('id')
+                  .maybeSingle();
+
+                if (errorAviso) throw errorAviso;
+
+                if (avisoTomado) {
+                  notificacionService.notificarClienteCerca(pedido.id_de_usuario, pedido.id)
+                    .then((resultado) => {
+                      if (!resultado.success) {
+                        console.warn('⚠️ No se pudo enviar el aviso de cercanía:', resultado);
+                      }
+                    })
+                    .catch((error) => console.warn('⚠️ Error en aviso de cercanía:', error));
+                }
+              }
+            }
           } catch (error) {
             console.error('❌ No se pudo publicar la ubicación del repartidor:', error);
           }

@@ -792,6 +792,55 @@ export const notificacionService = {
         }
     },
 
+    async notificarClienteCerca(clienteId: string, pedidoId: number) {
+        try {
+            if (!clienteId) return { success: false, error: 'Sin cliente' };
+
+            const titulo = '🤡 ¡Ya casi llega!';
+            const mensaje = `Tu pedido #${pedidoId} está a menos de 200 metros. ¡Prepará la mesa, que Krusty no espera ni a la pausa comercial!`;
+
+            const { error: errorHistorial } = await supabase
+                .from('notificaciones_usuarios')
+                .insert({
+                    usuario_id: clienteId,
+                    titulo,
+                    mensaje,
+                    tipo: 'pedido',
+                    leida: false,
+                    created_at: new Date().toISOString(),
+                });
+
+            if (errorHistorial) throw errorHistorial;
+
+            const { data: dispositivos, error: errorDispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .eq('usuario_actual_id', clienteId)
+                .eq('activo', true);
+
+            if (errorDispositivos) throw errorDispositivos;
+
+            if (!dispositivos || dispositivos.length === 0) {
+                console.log('ℹ️ [Notif] Cliente sin dispositivos activos para aviso de cercanía');
+                return { success: true, enviados: 0 };
+            }
+
+            return await this.enviarNotificacionesMasivas(
+                dispositivos.map((dispositivo: any) => dispositivo.expo_push_token),
+                titulo,
+                mensaje,
+                {
+                    tipo: 'pedido',
+                    pedidoId,
+                    screen: 'Seguimiento',
+                }
+            );
+        } catch (error: any) {
+            console.error('❌ [Notif] Error enviando aviso de cercanía:', error);
+            return { success: false, error: error?.message };
+        }
+    },
+
     // ============================================================
     // 📥 NOTIFICACIONES (con filtro de ocultas)
     // ============================================================

@@ -126,6 +126,7 @@ export interface Pedido {
     lat_repartidor: number | null;
     repartidor_de_lng: number | null;
     repartidor_id: string | null;
+    aviso_cercania_enviado?: boolean;
     token_fcm: string | null;
     id_de_usuario: string | null;
     lat_cliente: number | null;
