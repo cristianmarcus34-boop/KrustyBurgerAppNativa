@@ -7,9 +7,10 @@ import {
     useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase, supabaseAdmin } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { Perfil } from '../../lib/tipos';
 import { adminUsuariosService } from '../../lib/adminUsuariosService';
 
@@ -351,6 +352,8 @@ export default function PantallaGestionClientes(props: any) {
     // ✅ CREAR CLIENTE
     // ============================================================
     const crearCliente = async () => {
+        if (procesando) return;
+
         if (!nombre || !email || !password) {
             Alert.alert('Error', 'Completa nombre, email y contraseña');
             return;
@@ -360,52 +363,29 @@ export default function PantallaGestionClientes(props: any) {
             return;
         }
 
+        setProcesando(true);
         try {
-            const { data, error } = await supabaseAdmin.auth.admin.createUser({
-                email,
-                password,
-                email_confirm: true,
-                user_metadata: { nombre_cliente: nombre, telefono: telefono || '' },
+            const { data, error } = await supabase.functions.invoke('admin-crear-cliente', {
+                body: {
+                    nombre,
+                    email,
+                    telefono,
+                    password,
+                },
             });
 
             if (error) {
-                if (error.message?.includes('rate limit')) {
-                    Alert.alert('⏳ Límite', 'Has excedido el límite de envío de emails.');
-                    return;
+                console.error('No se pudo crear el cliente mediante la Edge Function:', error);
+                let mensaje = data?.error;
+                if (error instanceof FunctionsHttpError) {
+                    const respuesta = await error.context.json().catch(() => null);
+                    mensaje = respuesta?.error;
                 }
-                Alert.alert('Error', error.message);
-                return;
+                throw new Error(mensaje || 'No se pudo conectar con el servicio de altas.');
             }
 
-            if (data?.user) {
-                const { error: errorPerfil } = await supabase.from('perfiles').insert({
-                    id: data.user.id,
-                    nombre_cliente: nombre,
-                    email,
-                    telefono: telefono || null,
-                    rol: 'cliente',
-                    puntos_acumulados: 500,
-                    puntos_disponibles: 500,
-                    activo: true,
-                    ultimo_acceso: new Date().toISOString(),
-                });
-
-                if (errorPerfil) {
-                    Alert.alert('Error', 'Usuario creado pero con error en el perfil');
-                    return;
-                }
-
-                // ✅ NUEVO: registrar bonus en historial
-                try {
-                    await supabase.from('historial_puntos').insert({
-                        usuario_id: data.user.id,
-                        tipo: 'bonus_bienvenida',
-                        puntos: 500,
-                        descripcion: 'Bonus de bienvenida al registrarte 🎉',
-                    });
-                } catch (errorHistorial) {
-                    console.warn('⚠️ No se pudo registrar bonus en historial:', errorHistorial);
-                }
+            if (!data?.success) {
+                throw new Error(data?.error || 'El servicio no confirmó la creación del cliente.');
             }
 
             setModalVisible(false);
@@ -414,6 +394,8 @@ export default function PantallaGestionClientes(props: any) {
             Alert.alert('✅ Éxito', 'Cliente creado');
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Error al crear');
+        } finally {
+            setProcesando(false);
         }
     };
 
