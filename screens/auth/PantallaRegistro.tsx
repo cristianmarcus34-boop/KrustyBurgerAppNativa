@@ -12,6 +12,7 @@ import {
   ScrollView,
   Animated,
   Image,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,6 +106,24 @@ const esEmailValido = (email: string): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 };
 
+const validarCampoRegistro = (campo: Exclude<CampoRegistro, 'terminos'>, valor: string) => {
+  switch (campo) {
+    case 'nombre':
+      return valor.trim() ? undefined : 'Ingresá tu nombre completo.';
+    case 'correo':
+      if (!valor.trim()) return 'Ingresá tu correo electrónico.';
+      return esEmailValido(valor) ? undefined : 'Revisá el formato del correo electrónico.';
+    case 'telefono':
+      if (!valor.trim()) return 'Ingresá tu teléfono con código de área.';
+      return valor.replace(/\D/g, '').length >= 8
+        ? undefined
+        : 'Ingresá un teléfono válido con código de área.';
+    case 'contrasena':
+      if (!valor) return 'Creá una contraseña.';
+      return valor.length >= 6 ? undefined : 'Usá al menos 6 caracteres.';
+  }
+};
+
 // ============================================================
 // 🧩 COMPONENTE
 // ============================================================
@@ -118,6 +137,9 @@ export default function PantallaRegistro(props: any) {
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [terminosAceptados, setTerminosAceptados] = useState(false);
   const [erroresCampos, setErroresCampos] = useState<ErroresRegistro>({});
+  const [correoPendienteConfirmacion, setCorreoPendienteConfirmacion] = useState<string | null>(null);
+  const [reenviandoConfirmacion, setReenviandoConfirmacion] = useState(false);
+  const [esperaReenvio, setEsperaReenvio] = useState(0);
 
   const { registrarCliente } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
@@ -128,6 +150,7 @@ export default function PantallaRegistro(props: any) {
   const slideUpAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const enviandoRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
   const nombreInputRef = useRef<TextInput>(null);
   const correoInputRef = useRef<TextInput>(null);
   const telefonoInputRef = useRef<TextInput>(null);
@@ -140,6 +163,16 @@ export default function PantallaRegistro(props: any) {
       Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
     ]).start();
   }, []);
+
+  useEffect(() => {
+    if (esperaReenvio <= 0) return;
+
+    const temporizador = setTimeout(() => {
+      setEsperaReenvio((actual) => Math.max(0, actual - 1));
+    }, 1000);
+
+    return () => clearTimeout(temporizador);
+  }, [esperaReenvio]);
 
   const verificarEmailExistente = useCallback(async (email: string): Promise<boolean | null> => {
     try {
@@ -262,7 +295,10 @@ export default function PantallaRegistro(props: any) {
       }
 
       if (resultado.requiereConfirmacionCorreo) {
-        toast.info('Cuenta creada. Revisá tu correo y confirmá la dirección para poder ingresar.');
+        Keyboard.dismiss();
+        setCorreoPendienteConfirmacion(correoTrim);
+        setEsperaReenvio(60);
+        requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: true }));
         return;
       }
 
@@ -295,6 +331,32 @@ export default function PantallaRegistro(props: any) {
     props.navigation,
   ]);
 
+  const reenviarCorreoConfirmacion = async () => {
+    if (!correoPendienteConfirmacion || reenviandoConfirmacion || esperaReenvio > 0) return;
+
+    setReenviandoConfirmacion(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: correoPendienteConfirmacion,
+      });
+
+      if (error) {
+        console.error('No se pudo reenviar la confirmación de correo:', error);
+        toast.error(obtenerMensajeError(error));
+        return;
+      }
+
+      setEsperaReenvio(60);
+      toast.exito('Listo, enviamos otro correo de confirmación.');
+    } catch (error) {
+      console.error('Error reenviando la confirmación de correo:', error);
+      toast.error('No pudimos reenviar el correo. Revisá tu conexión e intentá de nuevo.');
+    } finally {
+      setReenviandoConfirmacion(false);
+    }
+  };
+
   const { height: screenHeight, width: screenWidth, isTablet, isSmallPhone } = responsive;
   const isCompactHeight = screenHeight < 820;
   const isVeryCompactHeight = screenHeight < 700;
@@ -314,7 +376,7 @@ export default function PantallaRegistro(props: any) {
     ? responsive.getValor({ tablet: 16, normal: 14, small: 12 })
     : responsive.getValor({ tablet: 24, normal: 20, small: 16 });
   const fieldSpacing = isCompactHeight ? 8 : 16;
-  const inputHeight = isCompactHeight ? 50 : 56;
+  const inputHeight = 56;
   const maxContentWidth = isTablet ? Math.min(screenWidth - paddingHorizontal * 2, 520) : 500;
   const textoBannerSize = Math.max(14, responsive.getValor({ tablet: 16, normal: 14, small: 13 }));
   const textoLegalSize = Math.max(14, responsive.getValor({ tablet: 15, normal: 14, small: 13 }));
@@ -337,6 +399,7 @@ export default function PantallaRegistro(props: any) {
           style={estilos.keyboardView}
         >
           <ScrollView
+            ref={scrollRef}
             contentContainerStyle={[
               estilos.scroll,
               {
@@ -351,6 +414,7 @@ export default function PantallaRegistro(props: any) {
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            scrollsChildToFocus={Platform.OS === 'android'}
             bounces={false}
           >
             <View style={[estilos.contenidoCentral, { maxWidth: maxContentWidth }]}>
@@ -378,15 +442,70 @@ export default function PantallaRegistro(props: any) {
                 </View>
 
                 <Text style={[estilos.titulo, { fontSize: tituloSize }]} accessibilityRole="header">
-                  Creá tu cuenta
+                  {correoPendienteConfirmacion ? 'Revisá tu correo' : 'Creá tu cuenta'}
                 </Text>
-                {!isCompactHeight && (
+                {!isCompactHeight && !correoPendienteConfirmacion && (
                   <Text style={estilos.subtitulo}>
                     Sumate a Krusty Burger y empezá a disfrutar.
                   </Text>
                 )}
               </Animated.View>
 
+              {correoPendienteConfirmacion ? (
+                <View style={estilos.confirmacionCard}>
+                  <View style={estilos.confirmacionIcono}>
+                    <Ionicons name="mail-open-outline" size={30} color={DISENO.colors.accent} />
+                  </View>
+                  <Text style={estilos.confirmacionTitulo}>Un último paso</Text>
+                  <Text style={estilos.confirmacionTexto}>
+                    Enviamos un enlace de confirmación a:
+                  </Text>
+                  <Text style={estilos.confirmacionCorreo} selectable>
+                    {correoPendienteConfirmacion}
+                  </Text>
+                  <Text style={estilos.confirmacionTexto}>
+                    Abrí el correo para confirmar tu dirección. Si no lo encontrás, revisá Spam o Correo no deseado.
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      estilos.confirmacionReenviar,
+                      (esperaReenvio > 0 || reenviandoConfirmacion) && estilos.confirmacionReenviarDeshabilitado,
+                    ]}
+                    onPress={reenviarCorreoConfirmacion}
+                    disabled={esperaReenvio > 0 || reenviandoConfirmacion}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: esperaReenvio > 0 || reenviandoConfirmacion,
+                      busy: reenviandoConfirmacion,
+                    }}
+                  >
+                    {reenviandoConfirmacion ? (
+                      <ActivityIndicator color={DISENO.colors.accent} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="refresh-outline" size={18} color={DISENO.colors.accent} />
+                        <Text style={estilos.confirmacionReenviarTexto}>
+                          {esperaReenvio > 0
+                            ? `Podés reenviar en ${esperaReenvio}s`
+                            : 'Reenviar correo'}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={estilos.confirmacionVolver}
+                    onPress={() => props.navigation.goBack()}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                  >
+                    <Text style={estilos.confirmacionVolverTexto}>Volver al inicio de sesión</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
               <View
                 style={[
                   estilos.bannerPuntosContainer,
@@ -452,6 +571,10 @@ export default function PantallaRegistro(props: any) {
                     selectionColor={DISENO.colors.accent}
                     editable={!cargando}
                     returnKeyType="next"
+                    onBlur={() => setErroresCampos((prev) => ({
+                      ...prev,
+                      nombre: validarCampoRegistro('nombre', nombre),
+                    }))}
                     onSubmitEditing={() => correoInputRef.current?.focus()}
                   />
                 </View>
@@ -483,7 +606,7 @@ export default function PantallaRegistro(props: any) {
                       setCorreo(valor);
                       setErroresCampos((prev) => ({ ...prev, correo: undefined }));
                     }}
-                    placeholder="nombre@correo.com"
+                    placeholder="tu@email.com"
                     placeholderTextColor={COLOR_TEXTO_DETALLE}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -494,6 +617,10 @@ export default function PantallaRegistro(props: any) {
                     selectionColor={DISENO.colors.accent}
                     editable={!cargando}
                     returnKeyType="next"
+                    onBlur={() => setErroresCampos((prev) => ({
+                      ...prev,
+                      correo: validarCampoRegistro('correo', correo),
+                    }))}
                     onSubmitEditing={() => telefonoInputRef.current?.focus()}
                   />
                   {erroresCampos.correo && (
@@ -510,7 +637,7 @@ export default function PantallaRegistro(props: any) {
                   </View>
                 )}
 
-                <Text style={[estilos.label, { fontSize: labelSize, marginTop: fieldSpacing, marginBottom: isCompactHeight ? 4 : 7 }]}>Teléfono (obligatorio)</Text>
+                <Text style={[estilos.label, { fontSize: labelSize, marginTop: fieldSpacing, marginBottom: isCompactHeight ? 4 : 7 }]}>Teléfono con código de área (obligatorio)</Text>
                 <View style={[estilos.inputContainer, { height: inputHeight }, erroresCampos.telefono && estilos.inputError]}>
                   <Ionicons name="call-outline" size={22} color={COLOR_TEXTO_DETALLE} style={estilos.inputIcon} />
                   <TextInput
@@ -527,9 +654,14 @@ export default function PantallaRegistro(props: any) {
                     autoComplete="tel"
                     importantForAutofill="yes"
                     accessibilityLabel="Teléfono obligatorio, incluí el código de área"
+                    accessibilityHint="Ingresá código de área y número, por ejemplo 11 1234 5678."
                     selectionColor={DISENO.colors.accent}
                     editable={!cargando}
                     returnKeyType="next"
+                    onBlur={() => setErroresCampos((prev) => ({
+                      ...prev,
+                      telefono: validarCampoRegistro('telefono', telefono),
+                    }))}
                     onSubmitEditing={() => contrasenaInputRef.current?.focus()}
                   />
                 </View>
@@ -557,6 +689,10 @@ export default function PantallaRegistro(props: any) {
                     selectionColor={DISENO.colors.accent}
                     editable={!cargando}
                     returnKeyType="done"
+                    onBlur={() => setErroresCampos((prev) => ({
+                      ...prev,
+                      contrasena: validarCampoRegistro('contrasena', contrasena),
+                    }))}
                     onSubmitEditing={manejarRegistro}
                   />
                   <TouchableOpacity
@@ -573,8 +709,26 @@ export default function PantallaRegistro(props: any) {
                     />
                   </TouchableOpacity>
                 </View>
-                {!isVeryCompactHeight && (
-                  <Text style={estilos.passwordHint}>Mínimo 6 caracteres</Text>
+                {(!isVeryCompactHeight || contrasena.length > 0) && (
+                  <View style={estilos.passwordHintContainer} accessibilityLiveRegion="polite">
+                    <Ionicons
+                      name={contrasena.length >= 6 ? 'checkmark-circle' : 'information-circle-outline'}
+                      size={16}
+                      color={contrasena.length >= 6 ? '#2E7D32' : COLOR_TEXTO_DETALLE}
+                    />
+                    <Text
+                      style={[
+                        estilos.passwordHint,
+                        contrasena.length >= 6 && estilos.passwordHintSuccess,
+                      ]}
+                    >
+                      {contrasena.length >= 6
+                        ? 'Requisito cumplido'
+                        : contrasena.length > 0
+                          ? `Te faltan ${6 - contrasena.length} caracteres`
+                          : 'Mínimo 6 caracteres'}
+                    </Text>
+                  </View>
                 )}
                 {erroresCampos.contrasena && (
                   <Text style={estilos.errorCampo} accessibilityLiveRegion="polite">{erroresCampos.contrasena}</Text>
@@ -720,6 +874,8 @@ export default function PantallaRegistro(props: any) {
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
+                </>
+              )}
 
             </View>
           </ScrollView>
@@ -843,6 +999,86 @@ const estilos = StyleSheet.create({
     color: COLOR_TEXTO_SECUNDARIO,
     marginTop: 3,
   },
+  confirmacionCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0D675',
+    ...DISENO.shadow.md,
+  },
+  confirmacionIcono: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1E8',
+    marginBottom: 16,
+  },
+  confirmacionTitulo: {
+    fontFamily: FUENTES.regular,
+    fontSize: 21,
+    fontWeight: '700',
+    color: DISENO.colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  confirmacionTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLOR_TEXTO_SECUNDARIO,
+    textAlign: 'center',
+  },
+  confirmacionCorreo: {
+    maxWidth: '100%',
+    fontFamily: FUENTES.regular,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLOR_PUNTOS,
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  confirmacionReenviar: {
+    minHeight: 48,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFF8DB',
+    borderWidth: 1,
+    borderColor: '#F0D675',
+  },
+  confirmacionReenviarDeshabilitado: {
+    opacity: 0.65,
+  },
+  confirmacionReenviarTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 15,
+    fontWeight: '700',
+    color: DISENO.colors.accent,
+    textAlign: 'center',
+  },
+  confirmacionVolver: {
+    minHeight: 44,
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
+  confirmacionVolverTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLOR_TEXTO_SECUNDARIO,
+    textDecorationLine: 'underline',
+  },
   formulario: {
     width: '100%',
     maxWidth: 500,
@@ -878,12 +1114,12 @@ const estilos = StyleSheet.create({
   input: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
-    height: '100%',
     paddingVertical: 0,
     paddingTop: 0,
-    paddingRight: 8,
+    paddingRight: 0,
     flex: 1,
-    includeFontPadding: false,
+    minWidth: 0,
+    includeFontPadding: true,
     textAlignVertical: 'center',
   },
   eyeButton: {
@@ -892,12 +1128,21 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  passwordHintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    marginLeft: 4,
+  },
   passwordHint: {
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_DETALLE,
     fontSize: 13,
-    marginTop: 6,
-    marginLeft: 4,
+  },
+  passwordHintSuccess: {
+    color: '#2E7D32',
+    fontWeight: '600',
   },
   errorCampo: {
     fontFamily: FUENTES.regular,
