@@ -30,7 +30,7 @@ interface EstadoAutenticacion {
 
   inicializarSesion: () => Promise<void>;
   iniciarSesion: (correo: string, contrasena: string) => Promise<{ success: boolean; error?: string }>;
-  registrarCliente: (datos: { correo: string; contrasena: string; nombre: string; telefono: string }) => Promise<{ success: boolean; error?: string }>;
+  registrarCliente: (datos: { correo: string; contrasena: string; nombre: string; telefono: string }) => Promise<{ success: boolean; error?: string; requiereConfirmacionCorreo?: boolean }>;
   cerrarSesion: () => Promise<void>;
   actualizarPerfil: (datos: Partial<Perfil>) => Promise<{ success: boolean; error?: string }>;
   cargarPerfil: (id: string) => Promise<void>;
@@ -275,7 +275,7 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
         console.warn('⚠️ No se pudo registrar token tras registro:', error);
       }
 
-      return { success: true };
+      return { success: true, requiereConfirmacionCorreo: !data.session };
     } catch (error: any) {
       console.error('❌ Error en registro:', error);
       set({ error: error.message });

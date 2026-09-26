@@ -37,6 +37,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 const logoImage = require('../../assets/logo-krusty.png');
 const googleLogoImage = require('../../assets/google-g-logo.png');
+const COLOR_TEXTO_SECUNDARIO_LOGIN = '#5F6368';
+const COLOR_DETALLE_LOGIN = '#687078';
+const COLOR_PUNTOS_LOGIN = '#705300';
 
 // ✅ TIPADO DE NAVEGACIÓN
 type Navigation = {
@@ -598,7 +601,7 @@ export default function PantallaLogin(props: any) {
           >
             <View style={estilos.formHeader}>
               <Text style={estilos.formTitle} accessibilityRole="header">
-                ¡Bienvenido a Krusty Burger!
+                ¡Bienvenidos!
               </Text>
               <Text style={estilos.formSubtitle}>
                 Iniciá sesión para continuar
@@ -621,7 +624,7 @@ export default function PantallaLogin(props: any) {
               <Ionicons
                 name={errores.correo ? "alert-circle" : "mail-outline"}
                 size={22}
-                color={errores.correo ? DISENO.colors.danger : DISENO.colors.textTertiary}
+                color={errores.correo ? DISENO.colors.danger : COLOR_DETALLE_LOGIN}
                 style={estilos.inputIcon}
               />
               <TextInput
@@ -630,7 +633,7 @@ export default function PantallaLogin(props: any) {
                 value={correo}
                 onChangeText={handleCorreoChange}
                 placeholder="tucorreo@ejemplo.com"
-                placeholderTextColor={DISENO.colors.textTertiary}
+                placeholderTextColor={COLOR_DETALLE_LOGIN}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -650,7 +653,7 @@ export default function PantallaLogin(props: any) {
                   accessibilityLabel="Borrar correo electrónico"
                   hitSlop={8}
                 >
-                  <Ionicons name="close-circle" size={18} color={DISENO.colors.textTertiary} />
+                  <Ionicons name="close-circle" size={18} color={COLOR_DETALLE_LOGIN} />
                 </TouchableOpacity>
               )}
             </View>
@@ -665,7 +668,7 @@ export default function PantallaLogin(props: any) {
               <Ionicons
                 name={errores.contrasena ? "alert-circle" : "lock-closed-outline"}
                 size={22}
-                color={errores.contrasena ? DISENO.colors.danger : DISENO.colors.textTertiary}
+                color={errores.contrasena ? DISENO.colors.danger : COLOR_DETALLE_LOGIN}
                 style={estilos.inputIcon}
               />
               <TextInput
@@ -674,7 +677,7 @@ export default function PantallaLogin(props: any) {
                 value={contrasena}
                 onChangeText={handleContrasenaChange}
                 placeholder="Tu contraseña"
-                placeholderTextColor={DISENO.colors.textTertiary}
+                placeholderTextColor={COLOR_DETALLE_LOGIN}
                 secureTextEntry={!mostrarContrasena}
                 autoComplete="current-password"
                 importantForAutofill="yes"
@@ -694,7 +697,7 @@ export default function PantallaLogin(props: any) {
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
                   size={22}
-                  color={DISENO.colors.textTertiary}
+                  color={COLOR_DETALLE_LOGIN}
                 />
               </TouchableOpacity>
             </View>
@@ -822,12 +825,12 @@ export default function PantallaLogin(props: any) {
               accessibilityRole="button"
               accessibilityLabel="Crear cuenta y recibir 500 puntos de bienvenida"
             >
-              <Ionicons name="gift-outline" size={18} color={DISENO.colors.accentSecondary} />
+              <Ionicons name="gift-outline" size={18} color={COLOR_PUNTOS_LOGIN} />
               <Text style={[estilos.registroCardTexto, { fontSize: formTextSize }]}>
                 ¿Nuevo por aquí? Creá tu cuenta y recibí{' '}
                 <Text style={estilos.registroCardDestacado}>500 puntos</Text>
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={DISENO.colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={16} color={COLOR_DETALLE_LOGIN} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -839,7 +842,7 @@ export default function PantallaLogin(props: any) {
               accessibilityLabel="Continuar como invitado"
               accessibilityState={{ disabled: cargando }}
             >
-              <Ionicons name="person-outline" size={20} color={DISENO.colors.textTertiary} />
+              <Ionicons name="person-outline" size={20} color={COLOR_DETALLE_LOGIN} />
               <Text style={[estilos.botonInvitadoTexto, { fontSize: formTextSize }]}>
                 Continuar como invitado
               </Text>
@@ -850,7 +853,7 @@ export default function PantallaLogin(props: any) {
                 onPress={() => navigation.navigate('Terminos')}
                 activeOpacity={0.6}
               >
-                <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                <Text style={estilos.legalTexto}>
                   📋 Términos
                 </Text>
               </TouchableOpacity>
@@ -859,7 +862,7 @@ export default function PantallaLogin(props: any) {
                 onPress={() => navigation.navigate('Privacidad')}
                 activeOpacity={0.6}
               >
-                <Text style={[estilos.legalTexto, { fontSize: isTablet ? 12 : 10 }]}>
+                <Text style={estilos.legalTexto}>
                   🔒 Privacidad
                 </Text>
               </TouchableOpacity>
@@ -946,7 +949,7 @@ const estilos = StyleSheet.create({
   },
   formSubtitle: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
+    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontSize: 14,
     marginTop: 4,
     textAlign: 'center',
@@ -1032,7 +1035,7 @@ const estilos = StyleSheet.create({
   },
   recordarTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
+    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '500',
   },
   olvidoContainer: {
@@ -1042,7 +1045,7 @@ const estilos = StyleSheet.create({
   },
   olvidoTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
+    color: COLOR_DETALLE_LOGIN,
     textDecorationLine: 'underline',
     fontWeight: '400',
   },
@@ -1139,7 +1142,7 @@ const estilos = StyleSheet.create({
   },
   separadorTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
+    color: COLOR_DETALLE_LOGIN,
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
@@ -1155,19 +1158,19 @@ const estilos = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     borderRadius: 12,
-    backgroundColor: DISENO.colors.accentSecondary + '10',
+    backgroundColor: '#FFF8DB',
     borderWidth: 1,
-    borderColor: DISENO.colors.accentSecondary + '20',
+    borderColor: '#F0D675',
   },
   registroCardTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
+    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '400',
     flex: 1,
   },
   registroCardDestacado: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.accentSecondary,
+    color: COLOR_PUNTOS_LOGIN,
     fontWeight: '700',
   },
   botonInvitado: {
@@ -1185,7 +1188,7 @@ const estilos = StyleSheet.create({
   },
   botonInvitadoTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
+    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
@@ -1198,22 +1201,21 @@ const estilos = StyleSheet.create({
   },
   legalTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
+    color: COLOR_DETALLE_LOGIN,
     fontSize: 12,
     fontWeight: '400',
     textDecorationLine: 'underline',
   },
   legalSeparador: {
-    color: DISENO.colors.textTertiary,
+    color: COLOR_DETALLE_LOGIN,
     fontSize: 10,
-    opacity: 0.5,
+    opacity: 0.8,
   },
   versionTexto: {
     fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
-    fontSize: 10,
+    color: COLOR_DETALLE_LOGIN,
+    fontSize: 11,
     textAlign: 'center',
     marginTop: 14,
-    opacity: 0.5,
   },
 });
