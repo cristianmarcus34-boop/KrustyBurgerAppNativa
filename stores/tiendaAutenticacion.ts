@@ -5,6 +5,7 @@ import { Perfil, UbicacionGuardada } from '../lib/tipos';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tiendaFavoritos } from './tiendaFavoritos';
 import { tiendaCarrito } from './tiendaCarrito';
+import { servicioEliminacionCuenta } from '../services/servicioEliminacionCuenta';
 
 const STORAGE_UBICACION_KEY = '@ubicacion_seleccionada';
 const STORAGE_ULTIMO_USUARIO = '@ultimo_usuario_id';
@@ -69,6 +70,17 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       }
 
       if (session) {
+        try {
+          const eliminada = await servicioEliminacionCuenta.verificarYEjecutarEliminaciones();
+          if (eliminada) {
+            await supabase.auth.signOut();
+            set({ cargando: false, sesion: null, perfil: null, esAdministrador: false, esRepartidor: false });
+            return;
+          }
+        } catch (error) {
+          console.error('❌ No se pudo verificar si la cuenta venció para eliminación:', error);
+        }
+
         const { data: perfil, error: perfilError } = await supabase
           .from('perfiles')
           .select('*')
@@ -141,6 +153,19 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       if (error) {
         console.log('🔑 [Login] Error:', error.message);
         return { success: false, error: error.message };
+      }
+
+      try {
+        const eliminada = await servicioEliminacionCuenta.verificarYEjecutarEliminaciones();
+        if (eliminada) {
+          await supabase.auth.signOut();
+          return {
+            success: false,
+            error: 'La fecha de eliminación de esta cuenta ya venció.',
+          };
+        }
+      } catch (error) {
+        console.error('❌ No se pudo verificar si la cuenta venció para eliminación:', error);
       }
 
       const { data: perfil, error: perfilError } = await supabase

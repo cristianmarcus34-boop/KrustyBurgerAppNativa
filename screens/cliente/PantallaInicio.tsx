@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   Animated,
@@ -33,9 +32,8 @@ const postresImg = require('../../assets/imagenes/categorias/postresCat.jpg');
 const acompanantesImg = require('../../assets/imagenes/categorias/acompanantes.jpg');
 const ofertasImg = require('../../assets/imagenes/categorias/ofertas.jpg');
 
-// ✅ LOGO Y BIENVENIDA
+// ✅ LOGO
 const logoKrusty = require('../../assets/icon.png');
-const bienvenidaImg = require('../../assets/imagenes/bienvenidos.png');
 
 // ✅ FONDO SIMPSONS
 const springfieldFondo = require('../../assets/imagenes/simpsons/springfieldbannerinicio.jpg');
@@ -52,6 +50,16 @@ interface CategoriaData {
   color: string;
   descripcion: string;
   esOferta?: boolean;
+}
+
+interface OfertaInicio {
+  id: number;
+  titulo: string;
+  descripcion?: string;
+  descuento?: string;
+  precio_original?: number | string | null;
+  precio_oferta?: number | string | null;
+  imagen?: string;
 }
 
 const CATEGORIAS: CategoriaData[] = [
@@ -144,8 +152,9 @@ export default function PantallaInicio(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
-  const [ofertas, setOfertas] = useState<any[]>([]);
+  const [ofertas, setOfertas] = useState<OfertaInicio[]>([]);
   const [cargandoOfertas, setCargandoOfertas] = useState(true);
+  const [errorOfertas, setErrorOfertas] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [cantidadProductos, setCantidadProductos] = useState<Record<string, number>>({});
 
@@ -168,30 +177,22 @@ export default function PantallaInicio(props: any) {
   );
 
   const tamanos = useMemo(() => {
-    const logoFactor = responsive.isTablet ? 0.85 : responsive.isSmallPhone ? 1.5 : 1.15;
-    const bienvenidaFactor = responsive.isTablet ? 0.55 : responsive.isSmallPhone ? 0.95 : 0.78;
-
     return {
       padding: responsive.getEspaciado('LG'),
-      categoriaWidth: responsive.isDesktop
-        ? SCREEN_WIDTH * 0.18
-        : responsive.isTablet
-          ? SCREEN_WIDTH * 0.25
-          : SCREEN_WIDTH * 0.35,
       favoritoWidth: responsive.isDesktop
         ? SCREEN_WIDTH * 0.22
         : responsive.isTablet
           ? SCREEN_WIDTH * 0.3
           : SCREEN_WIDTH * 0.42,
-      logoSize: SCREEN_WIDTH * logoFactor,
-      bienvenidaSize: SCREEN_WIDTH * bienvenidaFactor,
+      logoSize: responsive.getValor({ tablet: 180, normal: 160, small: 140 }),
       fondoOffset: responsive.getValor({ tablet: -220, normal: -300, small: -150 }),
-      contenidoOffset: responsive.getValor({ tablet: 60, normal: 60, small: 30 }),
       avatarSize: responsive.getValor({ tablet: 56, normal: 48, small: 42 }),
     };
   }, [responsive]);
 
   const cargarOfertas = useCallback(async () => {
+    setCargandoOfertas(true);
+    setErrorOfertas(false);
     try {
       const { data, error } = await supabase
         .from('ofertas')
@@ -199,10 +200,11 @@ export default function PantallaInicio(props: any) {
         .eq('activa', true)
         .limit(10);
       if (error) throw error;
-      setOfertas(data || []);
+      setOfertas((data || []) as OfertaInicio[]);
     } catch (error) {
       console.error('❌ Error cargando ofertas:', error);
       setOfertas([]);
+      setErrorOfertas(true);
     } finally {
       setCargandoOfertas(false);
     }
@@ -315,7 +317,7 @@ export default function PantallaInicio(props: any) {
             <Text
               style={[
                 styles.categoriaDesc,
-                { fontSize: responsive.getValor({ tablet: 12, normal: 10, small: 9 }) },
+                { fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 11 }) },
               ]}
               numberOfLines={1}
             >
@@ -379,6 +381,47 @@ export default function PantallaInicio(props: any) {
     [tamanos.favoritoWidth, props.navigation, agregarProducto]
   );
 
+  const renderOferta = useCallback(
+    ({ item }: { item: OfertaInicio }) => (
+      <TouchableOpacity
+        style={styles.ofertaCard}
+        onPress={() => props.navigation.navigate('DetalleOferta', { oferta: item })}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver oferta ${item.titulo}`}
+      >
+        {item.imagen ? (
+          <Image source={{ uri: item.imagen }} style={styles.ofertaImagen} resizeMode="cover" />
+        ) : (
+          <View style={styles.ofertaImagenFallback}>
+            <Ionicons name="fast-food-outline" size={30} color={DISENO.colors.accent} />
+          </View>
+        )}
+        <View style={styles.ofertaInfo}>
+          {!!item.descuento && (
+            <Text style={styles.ofertaDescuento} numberOfLines={1}>
+              {item.descuento}
+            </Text>
+          )}
+          <Text style={styles.ofertaTitulo} numberOfLines={2}>
+            {item.titulo}
+          </Text>
+          <View style={styles.ofertaPrecioRow}>
+            <Text style={styles.ofertaPrecio}>
+              {item.precio_oferta !== undefined &&
+              item.precio_oferta !== null &&
+              Number.isFinite(Number(item.precio_oferta))
+                ? formatearPrecio(Number(item.precio_oferta))
+                : 'Ver oferta'}
+            </Text>
+            <Ionicons name="arrow-forward-circle" size={23} color={DISENO.colors.accent} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    ),
+    [props.navigation]
+  );
+
   const nombreMostrar = perfil?.nombre_cliente || (sesion ? 'Cliente' : 'Invitado');
   const avatarUrl = perfil?.avatar_url;
 
@@ -420,7 +463,7 @@ export default function PantallaInicio(props: any) {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + responsive.spacing(16) + tamanos.contenidoOffset,
+            paddingTop: insets.top + responsive.spacing(12),
             paddingBottom: insets.bottom + responsive.spacing(48) * 2,
           },
         ]}
@@ -437,152 +480,150 @@ export default function PantallaInicio(props: any) {
           transform: [{ translateY: slideAnim }],
         }}
       >
-        {/* HEADER */}
         <View style={[styles.header, { paddingHorizontal: padding }]}>
-          <View style={styles.headerLeft}>
-            <Animated.View
+          <View style={styles.headerTop}>
+            <Animated.Image
+              source={logoKrusty}
               style={[
-                styles.bienvenidaContainer,
-                { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+                styles.logoBienvenida,
+                {
+                  width: tamanos.logoSize,
+                  height: tamanos.logoSize,
+                  opacity: logoOpacity,
+                  transform: [{ scale: logoScale }],
+                },
               ]}
-            >
-              <Image
-                source={logoKrusty}
-                style={[
-                  styles.logoBienvenida,
-                  { width: tamanos.logoSize, height: tamanos.logoSize },
-                ]}
-                resizeMode="contain"
-              />
+              resizeMode="contain"
+            />
 
-              {/* ✅ SUBTÍTULO EN DOS LÍNEAS */}
-              <View style={styles.subtituloContainer}>
-                <Text
-                  style={[
-                    styles.subtituloLinea1,
-                    {
-                      fontSize: responsive.getValor({ tablet: 15, normal: 13, small: 11 }),
-                      lineHeight: responsive.getValor({ tablet: 19, normal: 17, small: 15 }),
-                    },
-                  ]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.85}
+            <View style={styles.headerActions}>
+              {esAdministrador && (
+                <TouchableOpacity
+                  style={styles.headerButtonAdmin}
+                  onPress={() => props.navigation.navigate('PanelAdmin')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir panel de administración"
                 >
-                  Si no te atragantás, no es una
-                </Text>
-                <Text
-                  style={[
-                    styles.subtituloKrusty,
-                    {
-                      fontSize: responsive.getValor({ tablet: 30, normal: 26, small: 22 }),
-                      lineHeight: responsive.getValor({ tablet: 36, normal: 32, small: 26 }),
-                    },
-                  ]}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.85}
-                >
-                  Krusty
-                </Text>
-              </View>
-            </Animated.View>
-
-            {/* ✅ SALUDO: avatar + nombre en fila horizontal */}
-            <View style={styles.saludoRow}>
-              {/* Avatar circular (tocable si está logueado) */}
-              <TouchableOpacity
-                onPress={handlePressAvatar}
-                activeOpacity={sesion ? 0.7 : 1}
-                disabled={!sesion || !perfil?.id}
-              >
-                {avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
-                    style={[
-                      styles.avatar,
-                      {
-                        width: tamanos.avatarSize,
-                        height: tamanos.avatarSize,
-                        borderRadius: tamanos.avatarSize / 2,
-                      },
-                    ]}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.avatarFallback,
-                      {
-                        width: tamanos.avatarSize,
-                        height: tamanos.avatarSize,
-                        borderRadius: tamanos.avatarSize / 2,
-                      },
-                    ]}
+                  <LinearGradient
+                    colors={[DISENO.colors.success, DISENO.colors.accentSecondary]}
+                    style={styles.headerButtonAdminGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                   >
-                    <Text
+                    <Ionicons name="shield-checkmark" size={20} color={DISENO.colors.text} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+              {sesion ? (
+                <TouchableOpacity
+                  onPress={handlePressAvatar}
+                  activeOpacity={0.75}
+                  disabled={!perfil?.id}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir mi perfil"
+                >
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
                       style={[
-                        styles.avatarInicial,
-                        { fontSize: tamanos.avatarSize * 0.5 },
+                        styles.avatar,
+                        {
+                          width: tamanos.avatarSize,
+                          height: tamanos.avatarSize,
+                          borderRadius: tamanos.avatarSize / 2,
+                        },
+                      ]}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.avatarFallback,
+                        {
+                          width: tamanos.avatarSize,
+                          height: tamanos.avatarSize,
+                          borderRadius: tamanos.avatarSize / 2,
+                        },
                       ]}
                     >
-                      ?
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <Text
-                style={[
-                  styles.headerName,
-                  {
-                    fontSize: responsive.getValor({ tablet: 20, normal: 18, small: 16 }),
-                    lineHeight: responsive.getValor({ tablet: 24, normal: 22, small: 20 }),
-                    marginLeft: 12,
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                {nombreMostrar}
-              </Text>
+                      <Text
+                        style={[
+                          styles.avatarInicial,
+                          { fontSize: tamanos.avatarSize * 0.5 },
+                        ]}
+                      >
+                        {nombreMostrar.trim().charAt(0).toUpperCase() || '?'}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.loginButton}
+                  onPress={() => props.navigation.navigate('Login')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="person-outline" size={16} color={DISENO.colors.accent} />
+                  <Text style={styles.loginButtonText}>Entrar</Text>
+                </TouchableOpacity>
+              )}
             </View>
-
-            {!sesion && (
-              <TouchableOpacity
-                style={styles.loginCTA}
-                onPress={() => props.navigation.navigate('Login')}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                  style={styles.loginCTAGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Ionicons name="log-in-outline" size={16} color={DISENO.colors.surface} />
-                  <Text style={styles.loginCTATexto}>Iniciar sesión / Registrarse</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
           </View>
 
-          <View style={styles.headerRight}>
-            {esAdministrador && (
-              <TouchableOpacity
-                style={styles.headerButtonAdmin}
-                onPress={() => props.navigation.navigate('PanelAdmin')}
-              >
-                <LinearGradient
-                  colors={[DISENO.colors.success, DISENO.colors.accentSecondary]}
-                  style={styles.headerButtonAdminGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Ionicons name="shield-checkmark" size={20} color={DISENO.colors.text} />
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
+          <View style={styles.greetingBlock}>
+            <Text style={styles.headerGreeting}>Hola, {nombreMostrar}</Text>
+            <Text style={styles.headerPrompt}>¿Qué se te antoja hoy?</Text>
           </View>
+        </View>
+
+        <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
+          <View style={styles.sectionHeading}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }) },
+              ]}
+            >
+              Ofertas para vos
+            </Text>
+            <TouchableOpacity
+              style={styles.seeAllButton}
+              onPress={() => props.navigation.navigate('Ofertas')}
+              accessibilityRole="button"
+              accessibilityLabel="Ver todas las ofertas"
+            >
+              <Text style={styles.seeAllText}>Ver todas</Text>
+              <Ionicons name="chevron-forward" size={16} color={DISENO.colors.accent} />
+            </TouchableOpacity>
+          </View>
+
+          {cargandoOfertas ? (
+            <View style={styles.offerStatus}>
+              <ActivityIndicator size="small" color={DISENO.colors.accent} />
+              <Text style={styles.offerStatusText}>Buscando ofertas...</Text>
+            </View>
+          ) : errorOfertas ? (
+            <View style={styles.offerStatus}>
+              <Text style={styles.offerStatusText}>No pudimos cargar las ofertas.</Text>
+              <TouchableOpacity onPress={cargarOfertas} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : ofertas.length > 0 ? (
+            <FlatList
+              horizontal
+              data={ofertas.slice(0, 4)}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderOferta}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            />
+          ) : (
+            <View style={styles.emptyOffers}>
+              <Ionicons name="pricetag-outline" size={20} color={DISENO.colors.textSecondary} />
+              <Text style={styles.emptyOffersText}>Por ahora no hay ofertas activas.</Text>
+            </View>
+          )}
         </View>
 
         {/* ⭐ SECCIÓN DE FAVORITOS / MÁS PEDIDOS */}
@@ -623,6 +664,25 @@ export default function PantallaInicio(props: any) {
 
         {/* CATEGORÍAS EN 2 COLUMNAS */}
         <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
+          <View style={styles.sectionHeading}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { fontSize: responsive.getValor({ tablet: 22, normal: 20, small: 18 }) },
+              ]}
+            >
+              Explorá el menú
+            </Text>
+            <TouchableOpacity
+              style={styles.seeAllButton}
+              onPress={() => props.navigation.navigate('Menu')}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir menú completo"
+            >
+              <Text style={styles.seeAllText}>Ver menú</Text>
+              <Ionicons name="chevron-forward" size={16} color={DISENO.colors.accent} />
+            </TouchableOpacity>
+          </View>
           <FlatList
             data={CATEGORIAS}
             keyExtractor={(item) => item.id}
@@ -659,61 +719,22 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 0,
-    marginBottom: 16,
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-  },
-  bienvenidaContainer: {
-    alignItems: 'center',
     marginBottom: 12,
-    width: '100%',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 140,
   },
   logoBienvenida: {
     backgroundColor: 'transparent',
-    marginBottom: 0,
-    marginLeft: 0,
-    marginTop: -40,
   },
-  subtituloContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -65,
-    marginBottom: 70,
-    paddingHorizontal: 20,
-  },
-  subtituloLinea1: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    textAlign: 'center',
-    letterSpacing: 0,
-    opacity: 1,
-  },
-  subtituloKrusty: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: '#a80e0e',
-    textAlign: 'center',
-    letterSpacing: 0,
-    marginTop: 1,
-  },
-  // ✅ Fila avatar + nombre
-  saludoRow: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 0,
-    marginLeft: 4,
+    gap: 8,
+    marginLeft: 8,
   },
   avatar: {
     backgroundColor: DISENO.colors.surfaceHover,
@@ -736,42 +757,36 @@ const styles = StyleSheet.create({
     color: DISENO.colors.accent,
     textAlign: 'center',
   },
-  saludoContainer: {
-    marginTop: 200,
-  },
   headerGreeting: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
-    letterSpacing: 0.3,
-    fontWeight: '400',
-    marginBottom: 2,
+    fontSize: 14,
+    lineHeight: 19,
   },
-  headerName: {
+  greetingBlock: {
+    marginTop: 10,
+  },
+  headerPrompt: {
     fontFamily: FUENTES.display,
-    fontWeight: '400',
     color: DISENO.colors.text,
-    letterSpacing: -0.3,
-    marginTop: 0,
-    flexShrink: 1,
+    fontSize: 24,
+    lineHeight: 29,
   },
-  loginCTA: {
-    marginTop: 12,
-    borderRadius: DISENO.radius.md,
-    overflow: 'hidden',
-    alignSelf: 'flex-start',
-    ...DISENO.shadow.sm,
-  },
-  loginCTAGradient: {
+  loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: DISENO.radius.full,
+    backgroundColor: DISENO.colors.surface,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '35',
   },
-  loginCTATexto: {
+  loginButtonText: {
     fontFamily: FUENTES.display,
-    fontSize: 12,
-    color: DISENO.colors.surface,
+    fontSize: 13,
+    color: DISENO.colors.accent,
   },
   headerButtonAdmin: {
     borderRadius: DISENO.radius.full,
@@ -789,12 +804,129 @@ const styles = StyleSheet.create({
   seccionContainer: {
     marginVertical: 8,
   },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontFamily: FUENTES.display,
     fontWeight: '400',
-    color: DISENO.colors.verde,
+    color: DISENO.colors.text,
     letterSpacing: -0.3,
-    marginBottom: 14,
+    marginBottom: 0,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingLeft: 8,
+  },
+  seeAllText: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: DISENO.colors.accent,
+  },
+  offerStatus: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    borderRadius: DISENO.radius.md,
+    backgroundColor: DISENO.colors.surface,
+  },
+  offerStatusText: {
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    color: DISENO.colors.textSecondary,
+  },
+  retryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: DISENO.radius.full,
+    backgroundColor: DISENO.colors.accent + '12',
+  },
+  retryButtonText: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: DISENO.colors.accent,
+  },
+  emptyOffers: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: DISENO.radius.md,
+    backgroundColor: DISENO.colors.surface,
+  },
+  emptyOffersText: {
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    color: DISENO.colors.textSecondary,
+  },
+  ofertaCard: {
+    width: 264,
+    minHeight: 116,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: DISENO.radius.md,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '25',
+    backgroundColor: DISENO.colors.surface,
+    ...DISENO.shadow.sm,
+  },
+  ofertaImagen: {
+    width: 88,
+    height: 88,
+    borderRadius: DISENO.radius.sm,
+    backgroundColor: DISENO.colors.surfaceHover,
+  },
+  ofertaImagenFallback: {
+    width: 88,
+    height: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: DISENO.radius.sm,
+    backgroundColor: DISENO.colors.accent + '12',
+  },
+  ofertaInfo: {
+    flex: 1,
+    minWidth: 0,
+    paddingLeft: 10,
+  },
+  ofertaDescuento: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    overflow: 'hidden',
+    borderRadius: DISENO.radius.full,
+    backgroundColor: DISENO.colors.accent + '14',
+    color: DISENO.colors.accent,
+    fontFamily: FUENTES.display,
+    fontSize: 11,
+  },
+  ofertaTitulo: {
+    marginTop: 5,
+    fontFamily: FUENTES.display,
+    fontSize: 15,
+    lineHeight: 19,
+    color: DISENO.colors.text,
+  },
+  ofertaPrecioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  ofertaPrecio: {
+    fontFamily: FUENTES.display,
+    fontSize: 15,
+    color: DISENO.colors.accent,
   },
   horizontalList: {
     paddingVertical: 4,
@@ -825,7 +957,7 @@ const styles = StyleSheet.create({
   },
   categoriaImageContainer: {
     width: '100%',
-    aspectRatio: 1,
+    aspectRatio: 1.55,
     position: 'relative',
     backgroundColor: DISENO.colors.surfaceHover,
   },
@@ -834,7 +966,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   categoriaInfo: {
-    padding: 8,
+    padding: 10,
     alignItems: 'center',
   },
   categoriaNombre: {
@@ -847,7 +979,6 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     textAlign: 'center',
-    opacity: 0.6,
     marginTop: 1,
   },
   favoritoItem: {

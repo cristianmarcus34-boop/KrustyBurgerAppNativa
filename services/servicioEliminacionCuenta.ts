@@ -31,7 +31,7 @@ class ServicioEliminacionCuenta {
     ): Promise<{ success: boolean; error?: string; solicitud?: SolicitudEliminacion }> {
         try {
             // 1. Verificar contraseña
-            const { error: authError } = await supabase.auth.signInWithPassword({
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email: email,
                 password: password,
             });
@@ -40,6 +40,17 @@ class ServicioEliminacionCuenta {
                 return {
                     success: false,
                     error: 'Contraseña incorrecta. Por favor, verificá tus credenciales.'
+                };
+            }
+
+            if (
+                authData.user.id !== usuarioId ||
+                authData.user.email?.toLowerCase() !== email.toLowerCase()
+            ) {
+                await supabase.auth.signOut();
+                return {
+                    success: false,
+                    error: 'Las credenciales no corresponden a esta cuenta.',
                 };
             }
 
@@ -65,8 +76,8 @@ class ServicioEliminacionCuenta {
             const { data: solicitud, error: insertError } = await supabase
                 .from('solicitudes_eliminacion')
                 .insert({
-                    usuario_id: usuarioId,
-                    email: email,
+                    usuario_id: authData.user.id,
+                    email: authData.user.email,
                     motivo: motivo.trim(),
                     fecha_solicitud: new Date().toISOString(),
                     fecha_eliminacion: fechaEliminacion.toISOString(),
@@ -170,80 +181,14 @@ class ServicioEliminacionCuenta {
         }
     }
 
-    // ✅ VERIFICAR Y ELIMINAR CUENTAS VENCIDAS
-    async verificarYEjecutarEliminaciones(): Promise<void> {
-        try {
-            const ahora = new Date().toISOString();
-            const { data: solicitudes, error } = await supabase
-                .from('solicitudes_eliminacion')
-                .select('*')
-                .eq('estado', 'pendiente')
-                .lt('fecha_eliminacion', ahora);
+    async verificarYEjecutarEliminaciones(): Promise<boolean> {
+        const { data, error } = await supabase.functions.invoke('eliminar-cuenta-vencida');
 
-            if (error) {
-                console.error('Error verificando solicitudes:', error);
-                return;
-            }
-
-            if (!solicitudes || solicitudes.length === 0) {
-                return;
-            }
-
-            console.log(`🔍 Encontradas ${solicitudes.length} solicitudes vencidas`);
-
-            for (const solicitud of solicitudes) {
-                try {
-                    await this.eliminarDatosUsuario(solicitud.usuario_id);
-
-                    const { error: deleteError } = await supabase.auth.admin.deleteUser(
-                        solicitud.usuario_id
-                    );
-
-                    if (deleteError) {
-                        console.error('Error eliminando usuario auth:', deleteError);
-                    }
-
-                    await supabase
-                        .from('solicitudes_eliminacion')
-                        .update({
-                            estado: 'completada',
-                            actualizado_en: new Date().toISOString()
-                        })
-                        .eq('id', solicitud.id);
-
-                    console.log(`✅ Cuenta eliminada: ${solicitud.email}`);
-
-                } catch (error) {
-                    console.error('Error eliminando cuenta:', solicitud.email, error);
-                }
-            }
-
-        } catch (error) {
-            console.error('Error en verificación de eliminaciones:', error);
-        }
-    }
-
-    // ✅ ELIMINAR TODOS LOS DATOS DEL USUARIO
-    private async eliminarDatosUsuario(usuarioId: string): Promise<void> {
-        const tablas = [
-            'pedidos',
-            'carritos',
-            'notificaciones',
-            'puntos',
-            'canjes',
-            'favoritos',
-            'perfiles'
-        ];
-
-        for (const tabla of tablas) {
-            try {
-                await supabase.from(tabla).delete().eq('id', usuarioId);
-            } catch (error) {
-                console.error(`Error eliminando tabla ${tabla}:`, error);
-            }
+        if (error) {
+            throw error;
         }
 
-        console.log(`🗑️ Datos eliminados para usuario: ${usuarioId}`);
+        return data?.deleted === true;
     }
 }
 
