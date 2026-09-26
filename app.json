@@ -107,6 +107,9 @@
       [
         "expo-location",
         {
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
           "locationAlwaysAndWhenInUsePermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
           "locationAlwaysPermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos.",
           "locationWhenInUsePermission": "KrustyBurger necesita tu ubicación para el seguimiento de pedidos."

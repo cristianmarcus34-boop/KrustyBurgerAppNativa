@@ -25,6 +25,11 @@ import { Pedido } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
 import { notificacionService } from '../../services/notificacionService';
 import {
+  detenerSeguimientoUbicacionEnSegundoPlano,
+  iniciarSeguimientoUbicacionEnSegundoPlano,
+  marcarSeguimientoVisualActivo,
+} from '../../services/seguimientoUbicacionRepartidor';
+import {
   obtenerRuta,
   guardarRutaPedido,
   obtenerRutaPedido,
@@ -160,6 +165,7 @@ export default function PantallaTransmision(props: any) {
     return () => {
       watchRef.current?.remove();
       watchRef.current = null;
+      marcarSeguimientoVisualActivo(false);
     };
   }, []);
 
@@ -169,6 +175,7 @@ export default function PantallaTransmision(props: any) {
 
       watchRef.current.remove();
       watchRef.current = null;
+      marcarSeguimientoVisualActivo(false);
       setTransmitiendo(false);
       setPedidoSeleccionado(null);
     });
@@ -398,6 +405,8 @@ export default function PantallaTransmision(props: any) {
     }
 
     setProcesandoEntrega(true);
+    let seguimientoNuevo = false;
+    let pedidoYaActualizado = false;
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
@@ -406,6 +415,31 @@ export default function PantallaTransmision(props: any) {
           'Para iniciar el seguimiento, habilitá el permiso de ubicación mientras usás la app. El pedido no cambiará de estado hasta poder obtener tu ubicación.'
         );
         return;
+      }
+
+      const permisoSegundoPlano = await Location.getBackgroundPermissionsAsync();
+      if (permisoSegundoPlano.status !== 'granted') {
+        const continuar = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Seguimiento durante la entrega',
+            'KrustyBurger necesita mantener la ubicación mientras la app está minimizada o el celular bloqueado. Se compartirá únicamente durante este pedido activo.',
+            [
+              { text: 'Ahora no', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Continuar', onPress: () => resolve(true) },
+            ],
+            { cancelable: false }
+          );
+        });
+        if (!continuar) return;
+
+        const permisoSolicitado = await Location.requestBackgroundPermissionsAsync();
+        if (permisoSolicitado.status !== 'granted') {
+          Alert.alert(
+            'Permiso de ubicación necesario',
+            'No se inició el seguimiento. Habilitá la ubicación en segundo plano en los ajustes para que el cliente pueda ver el recorrido.'
+          );
+          return;
+        }
       }
 
       const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -436,12 +470,22 @@ export default function PantallaTransmision(props: any) {
         throw new Error('Este pedido está asignado a otro repartidor.');
       }
 
+      seguimientoNuevo = await iniciarSeguimientoUbicacionEnSegundoPlano({
+        pedidoId: pedido.id,
+        repartidorId: perfil.id,
+        clienteId: pedido.id_de_usuario,
+        latCliente: pedido.lat_cliente,
+        lngCliente: pedido.lng_cliente,
+        tipoEntrega: pedido.tipo_entrega,
+      });
+
       const { data: pedidoActualizado, error } = await actualizarPedido.select('id').maybeSingle();
 
       if (error) throw error;
       if (!pedidoActualizado) {
         throw new Error('El estado del pedido cambió o ya fue tomado por otro repartidor. Actualizá la lista e intentá nuevamente.');
       }
+      pedidoYaActualizado = true;
 
       const pedidoEnCamino: Pedido = {
         ...pedido,
@@ -527,9 +571,24 @@ export default function PantallaTransmision(props: any) {
           }
         }
       );
+      marcarSeguimientoVisualActivo(true);
 
     } catch (error) {
       console.error('❌ No se pudo iniciar o reanudar el seguimiento:', error);
+      if (seguimientoNuevo && !pedidoYaActualizado) {
+        try {
+          await detenerSeguimientoUbicacionEnSegundoPlano(pedido.id);
+        } catch (errorAlLimpiar) {
+          console.error('No se pudo limpiar la tarea de ubicación tras fallar el inicio:', errorAlLimpiar);
+        }
+      }
+      if (pedidoYaActualizado) {
+        Alert.alert(
+          'Entrega activa',
+          'El seguimiento en segundo plano quedó iniciado, pero no se pudo actualizar el mapa en esta pantalla. Podés reanudar la vista desde el pedido.'
+        );
+        return;
+      }
       Alert.alert(
         'No se pudo iniciar el seguimiento',
         error instanceof Error ? error.message : 'Verificá la ubicación y tu conexión e intentá nuevamente.'
@@ -568,6 +627,14 @@ export default function PantallaTransmision(props: any) {
 
               watchRef.current?.remove();
               watchRef.current = null;
+              marcarSeguimientoVisualActivo(false);
+              let errorAlDetenerSeguimiento: unknown = null;
+              try {
+                await detenerSeguimientoUbicacionEnSegundoPlano(pedido.id);
+              } catch (error) {
+                errorAlDetenerSeguimiento = error;
+                console.error('No se pudo detener el seguimiento en segundo plano:', error);
+              }
               setTransmitiendo(false);
               setPedidoSeleccionado(null);
               if (pedido.id_de_usuario) {
@@ -578,6 +645,12 @@ export default function PantallaTransmision(props: any) {
                 ).catch((error) => console.warn('⚠️ No se pudo notificar la entrega:', error));
               }
               mostrarExito(`✅ Pedido #${pedido.id} marcado como entregado`);
+              if (errorAlDetenerSeguimiento) {
+                Alert.alert(
+                  'Entrega confirmada',
+                  'El pedido se cerró correctamente, pero no se pudo detener el servicio de ubicación. Abrí la app y volvé a intentar para detenerlo.'
+                );
+              }
               await cargarPedidos();
             } catch (error) {
               console.error('❌ No se pudo confirmar la entrega:', error);
@@ -599,6 +672,7 @@ export default function PantallaTransmision(props: any) {
       watchRef.current.remove();
       watchRef.current = null;
     }
+    marcarSeguimientoVisualActivo(false);
     setTransmitiendo(false);
     setPedidoSeleccionado(null);
     // ✅ No limpiar la ruta para que se mantenga visible
