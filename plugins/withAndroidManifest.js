@@ -16,7 +16,10 @@ module.exports = function withAndroidManifestPlugin(config) {
             (item) => item.$['android:name'] === 'com.google.android.geo.API_KEY'
         );
 
-        const API_KEY = 'AIzaSyCiAUoNj0Pf_U9hZvctk2wCToe-AjJvC1I';
+        const API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
+        if (!API_KEY) {
+            throw new Error('Falta EXPO_PUBLIC_GOOGLE_MAPS_API_KEY para configurar Google Maps en Android.');
+        }
 
         if (existingMetaData) {
             // ✅ Si existe, actualizar el valor
@@ -33,9 +36,7 @@ module.exports = function withAndroidManifestPlugin(config) {
             console.log('✅ API Key de Google Maps agregada a AndroidManifest.xml');
         }
 
-        // ✅ Verificar que la clave esté en el lugar correcto
-        console.log('📱 AndroidManifest.xml actualizado correctamente');
-        console.log('🔑 API Key:', API_KEY);
+        console.log('📱 AndroidManifest.xml de Google Maps actualizado correctamente');
 
         return config;
     });

@@ -1,9 +1,6 @@
 // lib/directions.ts
 import { supabase } from './supabase';
 
-// ✅ Clave API para pruebas (reemplázala con tu clave real si las variables no funcionan)
-const API_KEY_FALLBACK = 'AIzaSyCiAUoNj0Pf_U9hZvctk2wCToe-AjJvC1I';
-
 // ✅ Tipos mejorados
 interface RutaResponse {
     points: { latitude: number; longitude: number }[];
@@ -30,19 +27,24 @@ export async function obtenerRuta(
     modo: 'driving' | 'walking' | 'bicycling' | 'transit' = 'driving'
 ): Promise<RutaResponse | null> {
     try {
-        let apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
         if (!apiKey) {
-            console.warn('⚠️ Google Maps API Key no configurada en variables de entorno, usando fallback');
-            apiKey = API_KEY_FALLBACK;
+            console.error('❌ Falta EXPO_PUBLIC_GOOGLE_MAPS_API_KEY. Configurala en el entorno antes de solicitar rutas.');
+            return null;
         }
 
-        if (!origenLat || !origenLng || !destinoLat || !destinoLng) {
+        const coordenadas = [origenLat, origenLng, destinoLat, destinoLng];
+        if (
+            !coordenadas.every(Number.isFinite) ||
+            Math.abs(origenLat) > 90 ||
+            Math.abs(destinoLat) > 90 ||
+            Math.abs(origenLng) > 180 ||
+            Math.abs(destinoLng) > 180
+        ) {
             console.error('❌ Coordenadas inválidas:', { origenLat, origenLng, destinoLat, destinoLng });
             return null;
         }
 
-        console.log('🔑 Clave API cargada:', apiKey ? '✅ Si' : '❌ No');
         console.log(`📍 Origen: ${origenLat}, ${origenLng}`);
         console.log(`📍 Destino: ${destinoLat}, ${destinoLng}`);
         console.log(`🚗 Modo de viaje: ${modo}`);
@@ -58,20 +60,21 @@ export async function obtenerRuta(
         url.searchParams.append('traffic_model', 'best_guess');
         url.searchParams.append('departure_time', 'now');
 
-        console.log('🌐 URL de la petición:', url.toString().replace(apiKey, 'API_KEY_OCULTA'));
-
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const response = await fetch(url.toString(), {
-            signal: controller.signal,
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
-        });
-
-        clearTimeout(timeoutId);
+        let response: Response;
+        try {
+            response = await fetch(url.toString(), {
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
             console.error(`❌ Error HTTP: ${response.status} ${response.statusText}`);

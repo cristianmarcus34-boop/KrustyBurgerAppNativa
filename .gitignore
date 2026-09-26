@@ -43,10 +43,6 @@ yarn-error.*
 /ios
 /android
 
-# ✅ Config files with sensitive data
-app.config.js
-app.config.ts
-
 # ✅ IDE and editor files
 .vscode/
 .idea/
