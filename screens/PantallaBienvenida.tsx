@@ -8,7 +8,6 @@ import {
     useWindowDimensions,
     ScrollView,
     Animated,
-    Dimensions,
     Image,
     Linking,
 } from 'react-native';
@@ -18,15 +17,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colores, Sizes, getTematica } from '../lib/colores';
 import { FUENTES, TAMANOS_DISPLAY } from '../lib/fuentes';
 
-const { width, height } = Dimensions.get('window');
 const logoImage = require('../assets/logo-krusty.png');
 
 export default function PantallaBienvenida({ navigation }: any) {
-    const { width: winWidth } = useWindowDimensions();
+    const { width: winWidth, height: winHeight } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const temaClaro = getTematica('claro');
 
     const [featureExpandido, setFeatureExpandido] = useState<number | null>(null);
+    const pantallaCompacta = winHeight - insets.top - insets.bottom < 650;
 
     // ✅ Animaciones
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -82,12 +81,12 @@ export default function PantallaBienvenida({ navigation }: any) {
     const isSmallPhone = winWidth < 375;
 
     // ✅ Tamaños más compactos
-    const logoSize = isTablet ? 150 : isSmallPhone ? 110 : 130;
+    const logoSize = isTablet ? 150 : pantallaCompacta ? 90 : isSmallPhone ? 110 : 130;
     const buttonTextSize = isTablet ? 16 : isSmallPhone ? 13 : 15;
-    const buttonPadding = isTablet ? 14 : isSmallPhone ? 10 : 12;
+    const buttonPadding = isTablet ? 14 : pantallaCompacta || isSmallPhone ? 9 : 12;
     const featureIconSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
     const paddingHorizontal = isTablet ? 48 : isSmallPhone ? 20 : 24;
-    const paddingTop = isTablet ? 40 : isSmallPhone ? 20 : 28;
+    const paddingTop = insets.top + (isTablet ? 24 : pantallaCompacta ? 8 : 18);
 
     const abrirWebAgencia = async () => {
         const url = 'https://www.agenciadigitalpowa.com.ar';
@@ -126,6 +125,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                         paddingHorizontal: paddingHorizontal,
                         paddingTop: paddingTop,
                         paddingBottom: insets.bottom + 24,
+                        justifyContent: pantallaCompacta ? 'flex-start' : 'center',
                     }
                 ]}
                 showsVerticalScrollIndicator={false}
@@ -136,7 +136,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                     style={[
                         estilos.logo,
                         {
-                            marginBottom: isTablet ? 24 : 20,
+                            marginBottom: isTablet ? 20 : pantallaCompacta ? 8 : 16,
                             opacity: fadeAnim,
                             transform: [{ scale: scaleAnim }, { translateY: translateY }],
                         }
@@ -156,7 +156,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                 </Animated.View>
 
                 {/* ✅ FEATURES EXPANDIBLES */}
-                <View style={[estilos.features, { marginBottom: isTablet ? 24 : 18 }]}>
+                <View style={[estilos.features, { marginBottom: isTablet ? 20 : pantallaCompacta ? 10 : 16 }]}>
                     {featuresData.map((item, index) => {
                         const expandido = featureExpandido === index;
 
@@ -251,7 +251,7 @@ export default function PantallaBienvenida({ navigation }: any) {
                             opacity: fadeAnim,
                             transform: [{ translateY: translateY }],
                             gap: isTablet ? 10 : 8,
-                            marginBottom: isTablet ? 24 : 18,
+                            marginBottom: isTablet ? 20 : pantallaCompacta ? 10 : 16,
                         }
                     ]}
                 >
@@ -516,6 +516,7 @@ const estilos = StyleSheet.create({
         gap: 8,
     },
     botonIngresar: {
+        minHeight: 48,
         overflow: 'hidden',
         borderRadius: Sizes.radius.md,
         shadowColor: Colores.secundario,
@@ -531,6 +532,7 @@ const estilos = StyleSheet.create({
         gap: 8,
         width: '100%',
         paddingHorizontal: 20,
+        minHeight: 48,
     },
     // ✅ BOTÓN "INICIAR SESIÓN" CON SIMPSONFONT
     botonIngresarTexto: {
@@ -538,9 +540,12 @@ const estilos = StyleSheet.create({
         fontWeight: '400',
         color: Colores.textoClaro,
         letterSpacing: 0.5,
+        flexShrink: 1,
+        textAlign: 'center',
     },
     botonRegistro: {
         flexDirection: 'row',
+        minHeight: 48,
         backgroundColor: Colores.fondoBlanco,
         borderRadius: Sizes.radius.md,
         alignItems: 'center',
@@ -560,6 +565,8 @@ const estilos = StyleSheet.create({
         fontWeight: '400',
         color: Colores.primario,
         letterSpacing: 0.5,
+        flexShrink: 1,
+        textAlign: 'center',
     },
     botonInvitado: {
         alignItems: 'center',
