@@ -1,19 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { AppState } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { notificacionService } from './notificacionService';
 
 export const TAREA_UBICACION_REPARTIDOR = 'krustyburger-delivery-location';
 
 const CLAVE_SEGUIMIENTO_ACTIVO = 'krustyburger:seguimiento-repartidor-activo';
-
-let seguimientoVisualActivo = false;
-
-export const marcarSeguimientoVisualActivo = (activo: boolean) => {
-  seguimientoVisualActivo = activo;
-};
+const CLAVE_ULTIMO_PUNTO_GUARDADO = 'krustyburger:ultimo-punto-seguimiento';
 
 export interface SeguimientoEntregaActivo {
   pedidoId: number;
@@ -70,6 +64,7 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     }
 
     await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
+    await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
 
     const opciones: Location.LocationTaskOptions = {
       accuracy: Location.Accuracy.High,
@@ -105,6 +100,7 @@ export const detenerSeguimientoUbicacionEnSegundoPlano = async (pedidoId?: numbe
   }
 
   await AsyncStorage.removeItem(CLAVE_SEGUIMIENTO_ACTIVO);
+  await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
 };
 
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
@@ -114,8 +110,6 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       console.error('Error en la tarea de ubicación del repartidor:', error.message);
       return;
     }
-    if (AppState.currentState === 'active' && seguimientoVisualActivo) return;
-
     const ubicaciones = data?.locations;
     if (!ubicaciones?.length) return;
 
@@ -154,6 +148,47 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       if (errorUbicacion) throw errorUbicacion;
       if (!pedidoActualizado) return;
 
+      const timestamp = ultimaUbicacion.timestamp;
+      const ultimoPuntoGuardado = await AsyncStorage.getItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
+      const ultimoPunto = ultimoPuntoGuardado
+        ? JSON.parse(ultimoPuntoGuardado) as {
+            pedidoId: number;
+            latitude: number;
+            longitude: number;
+            timestamp: number;
+          }
+        : null;
+      const puntoYaReciente =
+        ultimoPunto?.pedidoId === seguimiento.pedidoId &&
+        timestamp - ultimoPunto.timestamp < 30_000 &&
+        calcularDistanciaMetros(latitude, longitude, ultimoPunto.latitude, ultimoPunto.longitude) < 20;
+
+      if (!puntoYaReciente) {
+        const { data: puntoRegistrado, error: errorRecorrido } = await supabase.rpc(
+          'registrar_punto_seguimiento',
+          {
+            p_pedido_id: seguimiento.pedidoId,
+            p_latitud: latitude,
+            p_longitud: longitude,
+            p_registrado_en: new Date(timestamp).toISOString(),
+          }
+        );
+
+        if (errorRecorrido) {
+          console.error('No se pudo guardar el punto del recorrido:', errorRecorrido);
+        } else if (puntoRegistrado) {
+          await AsyncStorage.setItem(
+            CLAVE_ULTIMO_PUNTO_GUARDADO,
+            JSON.stringify({
+              pedidoId: seguimiento.pedidoId,
+              latitude,
+              longitude,
+              timestamp,
+            })
+          );
+        }
+      }
+
       const tieneDestino =
         seguimiento.tipoEntrega !== 'retiro' &&
         seguimiento.clienteId &&
@@ -168,14 +203,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         tieneDestino &&
         latCliente !== null &&
         lngCliente !== null &&
-        ubicacionesValidas.some(({ coords }) =>
-          calcularDistanciaMetros(
-            coords.latitude,
-            coords.longitude,
-            latCliente,
-            lngCliente
-          ) <= 200
-        )
+        calcularDistanciaMetros(latitude, longitude, latCliente, lngCliente) <= 200
       );
 
       if (!estaCerca || !seguimiento.clienteId) return;

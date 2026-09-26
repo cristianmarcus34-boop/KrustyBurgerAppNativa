@@ -39,6 +39,22 @@ const UBICACION_KRUSTY = {
   latitude: -34.776484410467525,
   longitude: -58.29220250409459,
 };
+const COLOR_RUTA_SUGERIDA = '#3978D4';
+
+interface PuntoRecorrido {
+  id: number;
+  latitude: number;
+  longitude: number;
+  registrado_en: string;
+}
+
+const combinarPuntosRecorrido = (actuales: PuntoRecorrido[], nuevos: PuntoRecorrido[]) => {
+  const puntosPorId = new Map(actuales.map((punto) => [punto.id, punto]));
+  nuevos.forEach((punto) => puntosPorId.set(punto.id, punto));
+  return Array.from(puntosPorId.values())
+    .sort((a, b) => Date.parse(a.registrado_en) - Date.parse(b.registrado_en))
+    .slice(-1000);
+};
 
 // ============================================================
 // 📋 FUNCIONES AUXILIARES
@@ -111,6 +127,7 @@ export default function PantallaSeguimiento(props: any) {
   const [tiempoEstimado, setTiempoEstimado] = useState('--');
   const [error, setError] = useState<string | null>(null);
   const [rutaPuntos, setRutaPuntos] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [rutaRecorrida, setRutaRecorrida] = useState<PuntoRecorrido[]>([]);
   const [costoEnvio, setCostoEnvio] = useState(0);
   const [distanciaBD, setDistanciaBD] = useState<number | null>(null);
   const [tiempoBD, setTiempoBD] = useState<number | null>(null);
@@ -133,6 +150,8 @@ export default function PantallaSeguimiento(props: any) {
 
   const mapRef = useRef<MapView>(null);
   const channelRef = useRef<any>(null);
+  const mapaListoRef = useRef(false);
+  const pedidoEncuadradoRef = useRef<number | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
@@ -204,38 +223,89 @@ export default function PantallaSeguimiento(props: any) {
 
   // ✅ CARGAR RUTA DESDE LA DB
   useEffect(() => {
-    if (pedido && pedido.id) {
-      const cargarRuta = async () => {
-        const ruta = await obtenerRutaPedido(pedido.id);
+    if (!pedido?.id) return;
+    let cancelado = false;
+    setRutaPuntos([]);
+    setRutaCargada(false);
 
-        if (ruta && ruta.length > 1) {
-          setRutaPuntos(ruta);
-          setRutaCargada(true);
+    const cargarRuta = async () => {
+      const ruta = Array.isArray(pedido.ruta_puntos) && pedido.ruta_puntos.length > 1
+        ? pedido.ruta_puntos
+        : await obtenerRutaPedido(pedido.id);
 
-          const infoRuta = await obtenerInfoRutaPedido(pedido.id);
-          if (infoRuta) {
-            setDistancia(parseFloat(infoRuta.distancia) || 0);
-            setTiempoEstimado(infoRuta.duracion);
-            setDistanciaBD(parseFloat(infoRuta.distancia) || 0);
-            setTiempoBD(parseInt(infoRuta.duracion) || 0);
-          }
-        } else {
-          const destinoCliente = {
-            latitude: pedido.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
-            longitude: pedido.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
-          };
+      if (cancelado) return;
 
-          const puntosLineaRecta = [
-            { latitude: UBICACION_KRUSTY.latitude, longitude: UBICACION_KRUSTY.longitude },
-            { latitude: destinoCliente.latitude, longitude: destinoCliente.longitude },
-          ];
-          setRutaPuntos(puntosLineaRecta);
-          setRutaCargada(true);
+      if (ruta && ruta.length > 1) {
+        setRutaPuntos(ruta);
+        setRutaCargada(true);
+
+        const infoRuta = await obtenerInfoRutaPedido(pedido.id);
+        if (!cancelado && infoRuta) {
+          setDistancia(parseFloat(infoRuta.distancia) || 0);
+          setTiempoEstimado(infoRuta.duracion);
+          setDistanciaBD(parseFloat(infoRuta.distancia) || 0);
+          setTiempoBD(parseInt(infoRuta.duracion) || 0);
         }
+        return;
+      }
+
+      const destino = {
+        latitude: pedido.lat_cliente ?? UBICACION_KRUSTY.latitude + 0.01,
+        longitude: pedido.lng_cliente ?? UBICACION_KRUSTY.longitude + 0.01,
       };
-      cargarRuta();
-    }
-  }, [pedido]);
+      setRutaPuntos([
+        ubicacionRepartidor || UBICACION_KRUSTY,
+        destino,
+      ]);
+      setRutaCargada(true);
+    };
+
+    cargarRuta().catch((errorRuta) => {
+      console.error('No se pudo cargar la ruta sugerida:', errorRuta);
+    });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [pedido?.id]);
+
+  useEffect(() => {
+    if (!pedido?.id) return;
+    let cancelado = false;
+    const pedidoId = pedido.id;
+    setRutaRecorrida([]);
+    pedidoEncuadradoRef.current = null;
+
+    const cargarRecorrido = async () => {
+      const { data, error: errorRecorrido } = await supabase
+        .from('seguimiento_pedidos')
+        .select('id, latitud, longitud, registrado_en')
+        .eq('pedido_id', pedidoId)
+        .order('registrado_en', { ascending: true })
+        .limit(1000);
+
+      if (errorRecorrido) throw errorRecorrido;
+      if (cancelado) return;
+
+      setRutaRecorrida((actuales) => combinarPuntosRecorrido(
+        actuales,
+        (data || []).map((punto) => ({
+          id: Number(punto.id),
+          latitude: Number(punto.latitud),
+          longitude: Number(punto.longitud),
+          registrado_en: punto.registrado_en,
+        }))
+      ));
+    };
+
+    cargarRecorrido().catch((errorRecorrido) => {
+      console.error('No se pudo cargar el recorrido del repartidor:', errorRecorrido);
+    });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [pedido?.id]);
 
   // ============================================================
   // 🔄 FUNCIONES
@@ -347,10 +417,38 @@ export default function PantallaSeguimiento(props: any) {
           actualizarInfoEnvio(nuevoPedido);
           actualizarPagoEfectivo(nuevoPedido);
           extraerDatosPrecios(nuevoPedido);
-          if (nuevoPedido.ruta_puntos) {
+          if (Array.isArray(nuevoPedido.ruta_puntos) && nuevoPedido.ruta_puntos.length > 1) {
             setRutaPuntos(nuevoPedido.ruta_puntos);
             setRutaCargada(true);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'seguimiento_pedidos',
+          filter: `pedido_id=eq.${id}`,
+        },
+        (payload) => {
+          const punto = payload.new as {
+            id: number;
+            latitud: number;
+            longitud: number;
+            registrado_en: string;
+          };
+          if (
+            !Number.isFinite(Number(punto.latitud)) ||
+            !Number.isFinite(Number(punto.longitud))
+          ) return;
+
+          setRutaRecorrida((actuales) => combinarPuntosRecorrido(actuales, [{
+            id: Number(punto.id),
+            latitude: Number(punto.latitud),
+            longitude: Number(punto.longitud),
+            registrado_en: punto.registrado_en,
+          }]));
         }
       )
       .subscribe();
@@ -367,7 +465,8 @@ export default function PantallaSeguimiento(props: any) {
       };
       setUbicacionRepartidor(posRepartidor);
 
-      if (!p.distancia_km && p.lat_cliente && p.lng_cliente) {
+      if (!p.distancia_km && p.lat_cliente !== null && p.lat_cliente !== undefined &&
+          p.lng_cliente !== null && p.lng_cliente !== undefined) {
         const dist = calcularDistancia(
           posRepartidor.latitude, posRepartidor.longitude,
           p.lat_cliente, p.lng_cliente
@@ -606,13 +705,56 @@ export default function PantallaSeguimiento(props: any) {
   const estadoColor = (estado: string) => ESTADO_COLORES[estado] || DISENO.colors.textSecondary;
 
   const destinoCliente = {
-    latitude: pedido?.lat_cliente || UBICACION_KRUSTY.latitude + 0.01,
-    longitude: pedido?.lng_cliente || UBICACION_KRUSTY.longitude + 0.01,
+    latitude: pedido?.lat_cliente ?? UBICACION_KRUSTY.latitude + 0.01,
+    longitude: pedido?.lng_cliente ?? UBICACION_KRUSTY.longitude + 0.01,
   };
 
   const posRepartidor = ubicacionRepartidor || UBICACION_KRUSTY;
   const coordenadasRuta = rutaPuntos.length > 1 ? rutaPuntos : [posRepartidor, destinoCliente];
   const puntosValidos = validarCoordenadas(coordenadasRuta);
+  const coordenadasRecorrido = rutaRecorrida.map(({ latitude, longitude }) => ({
+    latitude,
+    longitude,
+  }));
+
+  const centrarMapaEnSeguimiento = () => {
+    const puntos = [
+      UBICACION_KRUSTY,
+      ...coordenadasRuta,
+      ...coordenadasRecorrido,
+      posRepartidor,
+      destinoCliente,
+    ];
+    const unicos = Array.from(
+      new Map(puntos.map((punto) => [`${punto.latitude}:${punto.longitude}`, punto])).values()
+    );
+    if (unicos.length < 2) return;
+
+    mapRef.current?.fitToCoordinates(unicos, {
+      edgePadding: { top: 56, right: 48, bottom: 56, left: 48 },
+      animated: true,
+    });
+  };
+
+  const manejarMapaListo = () => {
+    mapaListoRef.current = true;
+    if (
+      pedido &&
+      pedidoEncuadradoRef.current !== pedido.id &&
+      (rutaCargada || ubicacionRepartidor)
+    ) {
+      pedidoEncuadradoRef.current = pedido.id;
+      requestAnimationFrame(centrarMapaEnSeguimiento);
+    }
+  };
+
+  useEffect(() => {
+    if (!pedido || !mapaListoRef.current || pedidoEncuadradoRef.current === pedido.id) return;
+    if (!rutaCargada && !ubicacionRepartidor) return;
+
+    pedidoEncuadradoRef.current = pedido.id;
+    requestAnimationFrame(centrarMapaEnSeguimiento);
+  }, [pedido?.id, rutaCargada, ubicacionRepartidor, rutaPuntos, rutaRecorrida.length]);
 
   // ============================================================
   // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
@@ -731,38 +873,77 @@ export default function PantallaSeguimiento(props: any) {
           transform: [{ translateY: slideUpAnim }],
           ...DISENO.shadow.sm,
         }]}>
-          <MapView
-            ref={mapRef}
-            style={[styles.map, { height: mapaHeight, borderRadius: isTablet ? 18 : 12 }]}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={{
-              latitude: posRepartidor.latitude,
-              longitude: posRepartidor.longitude,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            }}
-            showsUserLocation={false}
-          >
-            <Marker coordinate={UBICACION_KRUSTY}>
-              <MarcadorPersonalizado color={DISENO.colors.accent} size="small" showRing={false} />
-            </Marker>
-            <Marker coordinate={posRepartidor}>
-              <MarcadorMoto size="normal" animated={true} />
-            </Marker>
-            <Marker coordinate={destinoCliente}>
-              <MarcadorDestino size="normal" />
-            </Marker>
-            {puntosValidos && rutaCargada && (
-              <Polyline
-                coordinates={coordenadasRuta}
-                strokeColor={rutaPuntos.length > 2 ? DISENO.colors.accent : DISENO.colors.accent + '80'}
-                strokeWidth={rutaPuntos.length > 2 ? 5 : 3}
-                lineDashPattern={rutaPuntos.length > 2 ? [] : [8, 6]}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
-          </MapView>
+          <View style={[styles.mapFrame, { height: mapaHeight, borderRadius: isTablet ? 18 : 12 }]}>
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              initialRegion={{
+                latitude: posRepartidor.latitude,
+                longitude: posRepartidor.longitude,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              showsUserLocation={false}
+              onMapReady={manejarMapaListo}
+            >
+              <Marker coordinate={UBICACION_KRUSTY}>
+                <MarcadorPersonalizado color={DISENO.colors.accent} size="small" showRing={false} />
+              </Marker>
+              <Marker coordinate={posRepartidor}>
+                <MarcadorMoto size="normal" animated={true} />
+              </Marker>
+              <Marker coordinate={destinoCliente}>
+                <MarcadorDestino size="normal" />
+              </Marker>
+              {puntosValidos && rutaCargada && (
+                <Polyline
+                  coordinates={coordenadasRuta}
+                  strokeColor={COLOR_RUTA_SUGERIDA}
+                  strokeWidth={5}
+                  lineDashPattern={[12, 8]}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+              {coordenadasRecorrido.length > 1 && (
+                <Polyline
+                  coordinates={coordenadasRecorrido}
+                  strokeColor={DISENO.colors.accent}
+                  strokeWidth={6}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+            </MapView>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Encuadrar ruta y ubicación del repartidor"
+              onPress={centrarMapaEnSeguimiento}
+              style={styles.mapRecenterButton}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="locate" size={20} color={DISENO.colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.routeLegend}>
+            <View style={styles.routeLegendItem}>
+              <View style={[styles.routeLegendLine, styles.suggestedRouteLine]} />
+              <Text style={styles.routeLegendText}>
+                {rutaPuntos.length > 2 ? 'Ruta sugerida por Maps' : 'Referencia aproximada'}
+              </Text>
+            </View>
+            <View style={styles.routeLegendItem}>
+              <View style={[styles.routeLegendLine, styles.actualRouteLine]} />
+              <Text style={styles.routeLegendText}>Recorrido real</Text>
+            </View>
+          </View>
+          {rutaRecorrida.length < 2 && pedido?.estado === 'en_camino' && (
+            <Text style={styles.routeStatus}>
+              Actualizando el recorrido del repartidor…
+            </Text>
+          )}
 
           <View style={styles.mapInfo}>
             <View style={styles.mapInfoItem}>
@@ -1126,6 +1307,63 @@ const styles = StyleSheet.create({
   },
   map: {
     width: '100%',
+    height: '100%',
+  },
+  mapFrame: {
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  mapRecenterButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: DISENO.colors.surface,
+    ...DISENO.shadow.sm,
+  },
+  routeLegend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  routeLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  routeLegendLine: {
+    width: 26,
+    height: 4,
+    borderRadius: 2,
+  },
+  suggestedRouteLine: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 3,
+    borderColor: COLOR_RUTA_SUGERIDA,
+    borderStyle: 'dashed',
+  },
+  actualRouteLine: {
+    backgroundColor: DISENO.colors.accent,
+  },
+  routeLegendText: {
+    fontFamily: FUENTES.regular,
+    fontSize: 11,
+    color: DISENO.colors.textSecondary,
+  },
+  routeStatus: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: FUENTES.regular,
+    fontSize: 11,
+    color: DISENO.colors.textSecondary,
   },
   mapInfo: {
     flexDirection: 'row',

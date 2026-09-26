@@ -27,7 +27,6 @@ import { notificacionService } from '../../services/notificacionService';
 import {
   detenerSeguimientoUbicacionEnSegundoPlano,
   iniciarSeguimientoUbicacionEnSegundoPlano,
-  marcarSeguimientoVisualActivo,
 } from '../../services/seguimientoUbicacionRepartidor';
 import {
   obtenerRuta,
@@ -165,7 +164,6 @@ export default function PantallaTransmision(props: any) {
     return () => {
       watchRef.current?.remove();
       watchRef.current = null;
-      marcarSeguimientoVisualActivo(false);
     };
   }, []);
 
@@ -175,7 +173,6 @@ export default function PantallaTransmision(props: any) {
 
       watchRef.current.remove();
       watchRef.current = null;
-      marcarSeguimientoVisualActivo(false);
       setTransmitiendo(false);
       setPedidoSeleccionado(null);
     });
@@ -380,19 +377,6 @@ export default function PantallaTransmision(props: any) {
     }, 2500);
   };
 
-  const actualizarUbicacionEnSupabase = async (lat: number, lng: number, pedidoId: number) => {
-    const { error } = await supabase
-      .from('pedidos')
-      .update({
-        lat_repartidor: lat,
-        repartidor_de_lng: lng,
-      })
-      .eq('id', pedidoId)
-      .eq('estado', 'en_camino');
-
-    if (error) throw error;
-  };
-
   const iniciarTransmision = async (pedido: Pedido, reanudar = false) => {
     if (procesandoEntrega || watchRef.current) return;
     if (!perfil?.id) {
@@ -515,63 +499,15 @@ export default function PantallaTransmision(props: any) {
           timeInterval: 3000,
           distanceInterval: 5,
         },
-        async (loc) => {
-          try {
-            const { latitude: nuevaLatitud, longitude: nuevaLongitud } = loc.coords;
-            if (!Number.isFinite(nuevaLatitud) || !Number.isFinite(nuevaLongitud)) {
-              console.warn('⚠️ Se ignoró una actualización GPS con coordenadas inválidas.');
-              return;
-            }
-
-            setUbicacionActual({ lat: nuevaLatitud, lng: nuevaLongitud });
-            await actualizarUbicacionEnSupabase(nuevaLatitud, nuevaLongitud, pedido.id);
-
-            const tieneDestino =
-              pedido.tipo_entrega !== 'retiro' &&
-              pedido.lat_cliente !== null &&
-              pedido.lat_cliente !== undefined &&
-              pedido.lng_cliente !== null &&
-              pedido.lng_cliente !== undefined &&
-              Number.isFinite(Number(pedido.lat_cliente)) &&
-              Number.isFinite(Number(pedido.lng_cliente));
-
-            if (tieneDestino && pedido.id_de_usuario) {
-              const distanciaAlCliente = calcularDistancia(
-                nuevaLatitud,
-                nuevaLongitud,
-                Number(pedido.lat_cliente),
-                Number(pedido.lng_cliente)
-              );
-
-              if (distanciaAlCliente <= 0.2) {
-                const { data: avisoTomado, error: errorAviso } = await supabase
-                  .from('pedidos')
-                  .update({ aviso_cercania_enviado: true })
-                  .eq('id', pedido.id)
-                  .eq('estado', 'en_camino')
-                  .eq('aviso_cercania_enviado', false)
-                  .select('id')
-                  .maybeSingle();
-
-                if (errorAviso) throw errorAviso;
-
-                if (avisoTomado) {
-                  notificacionService.notificarClienteCerca(pedido.id_de_usuario, pedido.id)
-                    .then((resultado) => {
-                      if (!resultado.success) {
-                        console.warn('⚠️ No se pudo enviar el aviso de cercanía:', resultado);
-                      }
-                    })
-                    .catch((error) => console.warn('⚠️ Error en aviso de cercanía:', error));
-                }
-              }
-            }
-          } catch (error) {
-            console.error('❌ No se pudo publicar la ubicación del repartidor:', error);
+        (loc) => {
+          const { latitude, longitude } = loc.coords;
+          if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            console.warn('⚠️ Se ignoró una actualización GPS con coordenadas inválidas.');
+            return;
           }
+          setUbicacionActual({ lat: latitude, lng: longitude });
         }
       );
-      marcarSeguimientoVisualActivo(true);
 
     } catch (error) {
       console.error('❌ No se pudo iniciar o reanudar el seguimiento:', error);
@@ -627,7 +563,6 @@ export default function PantallaTransmision(props: any) {
 
               watchRef.current?.remove();
               watchRef.current = null;
-              marcarSeguimientoVisualActivo(false);
               let errorAlDetenerSeguimiento: unknown = null;
               try {
                 await detenerSeguimientoUbicacionEnSegundoPlano(pedido.id);
@@ -672,7 +607,6 @@ export default function PantallaTransmision(props: any) {
       watchRef.current.remove();
       watchRef.current = null;
     }
-    marcarSeguimientoVisualActivo(false);
     setTransmitiendo(false);
     setPedidoSeleccionado(null);
     // ✅ No limpiar la ruta para que se mantenga visible
