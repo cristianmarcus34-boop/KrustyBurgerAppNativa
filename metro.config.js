@@ -1,6 +1,8 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const {
+    getSentryExpoConfig
+} = require("@sentry/react-native/metro");
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // Desactivar verificación de expo-router
 process.env.EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK = 'true';
