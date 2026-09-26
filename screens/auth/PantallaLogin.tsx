@@ -521,6 +521,7 @@ export default function PantallaLogin(props: any) {
   const buttonTextSize = responsive.getValor({ tablet: 22, normal: 20, small: 18 });
   const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
   const paddingTop = insets.top + responsive.spacing(20);
+  const formTextSize = Math.max(14, inputSize);
 
   const isSmallScreen = screenWidth < 380;
 
@@ -562,7 +563,6 @@ export default function PantallaLogin(props: any) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ✅ LOGO GRANDE SOLO */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -572,7 +572,13 @@ export default function PantallaLogin(props: any) {
             <View style={estilos.logoWrapper}>
               <Image
                 source={logoImage}
-                style={[estilos.logoImage, { width: logoSize, height: logoSize }]}
+                style={[
+                  estilos.logoImage,
+                  {
+                    width: isSmallScreen ? Math.min(logoSize, 140) : logoSize,
+                    height: isSmallScreen ? Math.min(logoSize, 140) : logoSize,
+                  },
+                ]}
                 resizeMode="contain"
               />
             </View>
@@ -590,14 +596,27 @@ export default function PantallaLogin(props: any) {
               }
             ]}
           >
+            <View style={estilos.formHeader}>
+              <Text style={estilos.formTitle} accessibilityRole="header">
+                ¡Bienvenido a Krusty Burger!
+              </Text>
+              <Text style={estilos.formSubtitle}>
+                Iniciá sesión para continuar
+              </Text>
+            </View>
+
             {mensajeErrorGeneral && (
-              <View style={estilos.errorGeneralContainer}>
+              <View
+                style={estilos.errorGeneralContainer}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
                 <Ionicons name="alert-circle" size={20} color={DISENO.colors.danger} />
                 <Text style={estilos.errorGeneralTexto}>{mensajeErrorGeneral}</Text>
               </View>
             )}
 
-            <Text style={[estilos.label, { fontSize: inputSize }]}>Correo electrónico</Text>
+            <Text style={[estilos.label, { fontSize: formTextSize }]}>Correo electrónico</Text>
             <View style={[estilos.inputContainer, errores.correo && estilos.inputError]}>
               <Ionicons
                 name={errores.correo ? "alert-circle" : "mail-outline"}
@@ -607,7 +626,7 @@ export default function PantallaLogin(props: any) {
               />
               <TextInput
                 ref={correoInputRef}
-                style={[estilos.input, { fontSize: inputSize }]}
+                style={[estilos.input, { fontSize: formTextSize }]}
                 value={correo}
                 onChangeText={handleCorreoChange}
                 placeholder="tucorreo@ejemplo.com"
@@ -615,20 +634,33 @@ export default function PantallaLogin(props: any) {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
+                importantForAutofill="yes"
+                accessibilityLabel="Correo electrónico"
                 selectionColor={DISENO.colors.accent}
                 editable={!cargando && !bloqueado}
                 returnKeyType="next"
                 onSubmitEditing={() => contrasenaInputRef.current?.focus()}
               />
               {correo.length > 0 && !errores.correo && (
-                <TouchableOpacity onPress={() => setCorreo('')}>
+                <TouchableOpacity
+                  onPress={() => setCorreo('')}
+                  style={estilos.iconActionButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Borrar correo electrónico"
+                  hitSlop={8}
+                >
                   <Ionicons name="close-circle" size={18} color={DISENO.colors.textTertiary} />
                 </TouchableOpacity>
               )}
             </View>
-            {errores.correo && <Text style={estilos.textoError}>{errores.correo}</Text>}
+            {errores.correo && (
+              <Text style={estilos.textoError} accessibilityLiveRegion="polite">
+                {errores.correo}
+              </Text>
+            )}
 
-            <Text style={[estilos.label, { fontSize: inputSize, marginTop: 16 }]}>Contraseña</Text>
+            <Text style={[estilos.label, { fontSize: formTextSize, marginTop: 16 }]}>Contraseña</Text>
             <View style={[estilos.inputContainer, errores.contrasena && estilos.inputError]}>
               <Ionicons
                 name={errores.contrasena ? "alert-circle" : "lock-closed-outline"}
@@ -638,12 +670,15 @@ export default function PantallaLogin(props: any) {
               />
               <TextInput
                 ref={contrasenaInputRef}
-                style={[estilos.input, { fontSize: inputSize }]}
+                style={[estilos.input, { fontSize: formTextSize }]}
                 value={contrasena}
                 onChangeText={handleContrasenaChange}
                 placeholder="Tu contraseña"
                 placeholderTextColor={DISENO.colors.textTertiary}
                 secureTextEntry={!mostrarContrasena}
+                autoComplete="current-password"
+                importantForAutofill="yes"
+                accessibilityLabel="Contraseña"
                 selectionColor={DISENO.colors.accent}
                 editable={!cargando && !bloqueado}
                 returnKeyType="done"
@@ -651,7 +686,10 @@ export default function PantallaLogin(props: any) {
               />
               <TouchableOpacity
                 onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                style={estilos.eyeButton}
+                style={estilos.iconActionButton}
+                accessibilityRole="button"
+                accessibilityLabel={mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                hitSlop={8}
               >
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
@@ -660,17 +698,22 @@ export default function PantallaLogin(props: any) {
                 />
               </TouchableOpacity>
             </View>
-            {errores.contrasena && <Text style={estilos.textoError}>{errores.contrasena}</Text>}
+            {errores.contrasena && (
+              <Text style={estilos.textoError} accessibilityLiveRegion="polite">
+                {errores.contrasena}
+              </Text>
+            )}
 
             <View style={estilos.recordarContainer}>
               <View style={estilos.recordarLeft}>
                 <Switch
                   value={recordarUsuario}
                   onValueChange={setRecordarUsuario}
+                  accessibilityLabel="Recordar usuario"
                   trackColor={{ false: DISENO.colors.border, true: DISENO.colors.accent }}
                   thumbColor={recordarUsuario ? DISENO.colors.surface : DISENO.colors.surface}
                 />
-                <Text style={[estilos.recordarTexto, { fontSize: isSmallScreen ? 11 : inputSize - 1 }]}>
+                <Text style={[estilos.recordarTexto, { fontSize: Math.max(13, inputSize - 1) }]}>
                   Recordar usuario
                 </Text>
               </View>
@@ -678,8 +721,10 @@ export default function PantallaLogin(props: any) {
                 onPress={() => navigation.navigate('ResetPassword')}
                 activeOpacity={0.6}
                 style={estilos.olvidoContainer}
+                accessibilityRole="button"
+                accessibilityLabel="¿Olvidaste tu contraseña?"
               >
-                <Text style={[estilos.olvidoTexto, { fontSize: isSmallScreen ? 10 : inputSize - 2 }]}>
+                <Text style={[estilos.olvidoTexto, { fontSize: Math.max(13, inputSize - 1) }]}>
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
@@ -708,6 +753,9 @@ export default function PantallaLogin(props: any) {
               onPress={manejarLogin}
               disabled={cargando || bloqueado}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={cargando ? 'Iniciando sesión' : 'Iniciar sesión'}
+              accessibilityState={{ disabled: cargando || bloqueado, busy: cargando }}
             >
               <LinearGradient
                 colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
@@ -747,7 +795,8 @@ export default function PantallaLogin(props: any) {
               disabled={cargandoGoogle || cargando}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Continuar con Google"
+              accessibilityLabel={cargandoGoogle ? 'Conectando con Google' : 'Continuar con Google'}
+              accessibilityState={{ disabled: cargandoGoogle || cargando, busy: cargandoGoogle }}
             >
               {cargandoGoogle ? (
                 <ActivityIndicator color="#1F1F1F" size="small" />
@@ -759,37 +808,39 @@ export default function PantallaLogin(props: any) {
                     resizeMode="contain"
                     accessible={false}
                   />
-                  <Text style={[estilos.botonGoogleTexto, { fontSize: inputSize }]}>
+                  <Text style={[estilos.botonGoogleTexto, { fontSize: formTextSize }]}>
                     Continuar con Google
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            <View style={estilos.enlacesContainer}>
-              <TouchableOpacity onPress={() => navigation.navigate('Registro')} activeOpacity={0.6}>
-                <Text style={[estilos.enlace, { fontSize: inputSize }]}>
-                  ¿No tienes cuenta? <Text style={estilos.enlaceDestacado}>Regístrate</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={estilos.bannerLogin}>
+            <TouchableOpacity
+              style={estilos.registroCard}
+              onPress={() => navigation.navigate('Registro')}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Crear cuenta y recibir 500 puntos de bienvenida"
+            >
               <Ionicons name="gift-outline" size={18} color={DISENO.colors.accentSecondary} />
-              <Text style={[estilos.bannerLoginTexto, { fontSize: inputSize - 1 }]}>
-                🎁 ¿Nuevo? Gana <Text style={estilos.bannerLoginDestacado}>500 puntos</Text> al registrarte
+              <Text style={[estilos.registroCardTexto, { fontSize: formTextSize }]}>
+                ¿Nuevo por aquí? Creá tu cuenta y recibí{' '}
+                <Text style={estilos.registroCardDestacado}>500 puntos</Text>
               </Text>
               <Ionicons name="chevron-forward" size={16} color={DISENO.colors.textTertiary} />
-            </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={estilos.botonInvitado}
               onPress={manejarInvitado}
               activeOpacity={0.6}
               disabled={cargando}
+              accessibilityRole="button"
+              accessibilityLabel="Continuar como invitado"
+              accessibilityState={{ disabled: cargando }}
             >
               <Ionicons name="person-outline" size={20} color={DISENO.colors.textTertiary} />
-              <Text style={[estilos.botonInvitadoTexto, { fontSize: inputSize }]}>
+              <Text style={[estilos.botonInvitadoTexto, { fontSize: formTextSize }]}>
                 Continuar como invitado
               </Text>
             </TouchableOpacity>
@@ -860,7 +911,7 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 18,
   },
   logoWrapper: {
     ...DISENO.shadow.lg,
@@ -881,6 +932,24 @@ const estilos = StyleSheet.create({
     ...DISENO.shadow.lg,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
+  },
+  formHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  formTitle: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    fontSize: 23,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  formSubtitle: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
   },
   label: {
     fontFamily: FUENTES.regular,
@@ -914,14 +983,17 @@ const estilos = StyleSheet.create({
     paddingTop: 15,
     flex: 1,
   },
-  eyeButton: {
-    padding: 4,
+  iconActionButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
   textoError: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 12,
+    fontSize: 14,
     marginTop: 4,
     marginLeft: 4,
   },
@@ -939,7 +1011,7 @@ const estilos = StyleSheet.create({
   errorGeneralTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
     fontWeight: '500',
   },
@@ -964,8 +1036,9 @@ const estilos = StyleSheet.create({
     fontWeight: '500',
   },
   olvidoContainer: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   olvidoTexto: {
     fontFamily: FUENTES.regular,
@@ -1053,20 +1126,6 @@ const estilos = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-  enlacesContainer: {
-    marginTop: 6,
-    alignItems: 'center',
-  },
-  enlace: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    fontWeight: '500',
-  },
-  enlaceDestacado: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.accent,
-    fontWeight: '700',
-  },
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1085,13 +1144,14 @@ const estilos = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  bannerLogin: {
+  registroCard: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     marginTop: 10,
     marginBottom: 10,
     borderRadius: 12,
@@ -1099,19 +1159,19 @@ const estilos = StyleSheet.create({
     borderWidth: 1,
     borderColor: DISENO.colors.accentSecondary + '20',
   },
-  bannerLoginTexto: {
+  registroCardTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textSecondary,
     fontWeight: '400',
     flex: 1,
-    textAlign: 'center',
   },
-  bannerLoginDestacado: {
+  registroCardDestacado: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.accentSecondary,
     fontWeight: '700',
   },
   botonInvitado: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1139,6 +1199,7 @@ const estilos = StyleSheet.create({
   legalTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.textTertiary,
+    fontSize: 12,
     fontWeight: '400',
     textDecorationLine: 'underline',
   },
