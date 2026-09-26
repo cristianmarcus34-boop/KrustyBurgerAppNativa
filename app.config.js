@@ -1,8 +1,11 @@
 module.exports = ({ config }) => {
     const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
+
     if (!googleMapsApiKey) {
-        throw new Error(
-            'Falta EXPO_PUBLIC_GOOGLE_MAPS_API_KEY. Definila en .env.local o en el entorno de la build.'
+        // ⚠️ En builds sin la var, solo avisamos. No rompemos.
+        // Esto permite que `expo config`, `eas env:list`, etc. funcionen.
+        console.warn(
+            '⚠️ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY no está definida. Los mapas no van a funcionar en esta build.'
         );
     }
 
@@ -12,7 +15,7 @@ module.exports = ({ config }) => {
             ...config.ios,
             config: {
                 ...config.ios?.config,
-                googleMapsApiKey,
+                googleMapsApiKey: googleMapsApiKey || '',
             },
         },
         android: {
@@ -21,7 +24,7 @@ module.exports = ({ config }) => {
                 ...config.android?.config,
                 googleMaps: {
                     ...config.android?.config?.googleMaps,
-                    apiKey: googleMapsApiKey,
+                    apiKey: googleMapsApiKey || '',
                 },
             },
         },
