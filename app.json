@@ -2,7 +2,7 @@
   "expo": {
     "name": "KrustyBurger",
     "slug": "KrustyBurger",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +29,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "versionCode": 8,
+      "versionCode": 9,
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
       "package": "com.agenciapowa.KrustyBurger",
