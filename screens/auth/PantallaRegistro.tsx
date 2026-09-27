@@ -1,5 +1,5 @@
-﻿// screens/auth/PantallaRegistro.tsx - COMPLETO CON TIPOGRAFÍA SIMPSON
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+﻿// screens/auth/PantallaRegistro.tsx - V2 RESPONSIVE 100% (Galaxy A20 friendly)
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Animated,
   Image,
   Keyboard,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,9 +33,8 @@ type CampoRegistro = 'nombre' | 'correo' | 'telefono' | 'contrasena' | 'terminos
 type ErroresRegistro = Partial<Record<CampoRegistro, string>>;
 
 // ============================================================
-// 🛡️ HELPERS GLOBALES (a prueba de balas)
+// 🛡️ HELPERS (a prueba de balas)
 // ============================================================
-
 const stringSeguro = (valor: unknown): string => {
   if (valor === null || valor === undefined) return '';
   if (typeof valor === 'string') return valor;
@@ -78,17 +78,10 @@ const MENSAJES_ERROR: Array<{ match: string; mensaje: string }> = [
 
 const obtenerMensajeError = (error: unknown): string => {
   const mensaje = stringSeguro(error).toLowerCase().trim();
-
-  if (!mensaje) {
-    return '❌ No pudimos crear tu cuenta. Intentá de nuevo en unos segundos.';
-  }
-
+  if (!mensaje) return '❌ No pudimos crear tu cuenta. Intentá de nuevo en unos segundos.';
   for (const item of MENSAJES_ERROR) {
-    if (mensaje.includes(item.match)) {
-      return item.mensaje;
-    }
+    if (mensaje.includes(item.match)) return item.mensaje;
   }
-
   return '❌ No pudimos crear tu cuenta. Intentá de nuevo en unos segundos.';
 };
 
@@ -106,7 +99,10 @@ const esEmailValido = (email: string): boolean => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 };
 
-const validarCampoRegistro = (campo: Exclude<CampoRegistro, 'terminos'>, valor: string) => {
+const validarCampoRegistro = (
+  campo: Exclude<CampoRegistro, 'terminos'>,
+  valor: string,
+) => {
   switch (campo) {
     case 'nombre':
       return valor.trim() ? undefined : 'Ingresá tu nombre completo.';
@@ -125,9 +121,176 @@ const validarCampoRegistro = (campo: Exclude<CampoRegistro, 'terminos'>, valor: 
 };
 
 // ============================================================
+// 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
+// ============================================================
+interface TamanosRegistro {
+  paddingHorizontal: number;
+  maxContentWidth: number;
+  cardPadding: number;
+  // Logo y header
+  logoSize: number;
+  logoMarginBottom: number;
+  tituloSize: number;
+  subtituloSize: number;
+  // Inputs
+  inputHeight: number;
+  inputPaddingH: number;
+  inputRadius: number;
+  inputSize: number;
+  iconSize: number;
+  eyeButtonSize: number;
+  // Labels y textos
+  labelSize: number;
+  errorSize: number;
+  hintSize: number;
+  bannerTextSize: number;
+  bannerDescSize: number;
+  legalSize: number;
+  enlaceSize: number;
+  // Botones
+  buttonTextSize: number;
+  buttonPaddingV: number;
+  buttonRadius: number;
+  // Espaciados
+  fieldSpacing: number;
+  labelMarginBottom: number;
+  bannerPadding: number;
+  bannerIconSize: number;
+  bannerIconContainerSize: number;
+  checkboxSize: number;
+}
+
+const calcularTamanosRegistro = (
+  width: number,
+  height: number,
+  isTablet: boolean,
+  isDesktop: boolean,
+  isSmallPhone: boolean,
+): TamanosRegistro => {
+  const isCompactHeight = height < 820;
+  const isVeryCompactHeight = height < 700;
+
+  // Padding lateral
+  const paddingHorizontal = isDesktop
+    ? 40
+    : isTablet
+      ? 32
+      : isSmallPhone
+        ? 16
+        : 20;
+
+  // Ancho máximo del contenido
+  const maxContentWidth = isDesktop
+    ? Math.min(width - paddingHorizontal * 2, 520)
+    : isTablet
+      ? Math.min(width - paddingHorizontal * 2, 520)
+      : 500;
+
+  // Padding de la card
+  const cardPadding = isDesktop
+    ? 28
+    : isTablet
+      ? 24
+      : isCompactHeight
+        ? 14
+        : isSmallPhone
+          ? 16
+          : 20;
+
+  // Logo
+  const logoBase = isCompactHeight ? 0.35 : 0.42;
+  const anchoUtil = Math.min(width - paddingHorizontal * 2, maxContentWidth);
+  const logoSize = isDesktop
+    ? 150
+    : isTablet
+      ? 140
+      : isSmallPhone
+        ? Math.min(anchoUtil * logoBase, 100)
+        : Math.min(anchoUtil * logoBase, 125);
+
+  const logoMarginBottom = isCompactHeight ? 6 : 12;
+
+  // Títulos
+  const tituloSize = isDesktop ? 30 : isTablet ? 28 : isSmallPhone ? 22 : 26;
+  const subtituloSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13.5;
+
+  // Inputs
+  const inputHeight = isDesktop
+    ? 58
+    : isTablet
+      ? 56
+      : isCompactHeight || isSmallPhone
+        ? 50
+        : 54;
+
+  const inputPaddingH = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 12 : 14;
+  const inputRadius = isDesktop ? 16 : isSmallPhone ? 12 : 14;
+  const inputSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13.5 : 14.5;
+  const iconSize = isDesktop ? 22 : isTablet ? 22 : isSmallPhone ? 18 : 20;
+  const eyeButtonSize = isSmallPhone ? 40 : 44;
+
+  // Textos
+  const labelSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12.5 : 13.5;
+  const errorSize = isDesktop ? 14 : isTablet ? 13.5 : isSmallPhone ? 12 : 13;
+  const hintSize = isDesktop ? 13 : isTablet ? 13 : isSmallPhone ? 11.5 : 12.5;
+  const bannerTextSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 13 : 14;
+  const bannerDescSize = isDesktop ? 13 : isTablet ? 13 : isSmallPhone ? 11.5 : 12.5;
+  const legalSize = isDesktop ? 14 : isTablet ? 13.5 : isSmallPhone ? 12 : 13;
+  const enlaceSize = isDesktop ? 15 : isTablet ? 14.5 : isSmallPhone ? 13 : 14;
+
+  // Botones
+  const buttonTextSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 15 : 16;
+  const buttonPaddingV = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 14 : 16;
+  const buttonRadius = isSmallPhone ? 12 : 14;
+
+  // Espaciados
+  const fieldSpacing = isCompactHeight ? 8 : isSmallPhone ? 12 : 14;
+  const labelMarginBottom = isCompactHeight ? 4 : 6;
+
+  // Banner
+  const bannerPadding = isCompactHeight || isSmallPhone ? 8 : 12;
+  const bannerIconSize = isCompactHeight ? 18 : 22;
+  const bannerIconContainerSize = isCompactHeight ? 34 : 42;
+
+  // Checkbox
+  const checkboxSize = isDesktop ? 24 : isSmallPhone ? 20 : 22;
+
+  return {
+    paddingHorizontal,
+    maxContentWidth,
+    cardPadding,
+    logoSize,
+    logoMarginBottom,
+    tituloSize,
+    subtituloSize,
+    inputHeight,
+    inputPaddingH,
+    inputRadius,
+    inputSize,
+    iconSize,
+    eyeButtonSize,
+    labelSize,
+    errorSize,
+    hintSize,
+    bannerTextSize,
+    bannerDescSize,
+    legalSize,
+    enlaceSize,
+    buttonTextSize,
+    buttonPaddingV,
+    buttonRadius,
+    fieldSpacing,
+    labelMarginBottom,
+    bannerPadding,
+    bannerIconSize,
+    bannerIconContainerSize,
+    checkboxSize,
+  };
+};
+
+// ============================================================
 // 🧩 COMPONENTE
 // ============================================================
-
 export default function PantallaRegistro(props: any) {
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
@@ -145,6 +308,23 @@ export default function PantallaRegistro(props: any) {
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
   const toast = useToast();
+
+  // ✅ HOOK REACTIVO A ROTACIÓN
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  const tamanos = useMemo(
+    () =>
+      calcularTamanosRegistro(
+        screenWidth,
+        screenHeight,
+        responsive.isTablet,
+        responsive.isDesktop,
+        responsive.isSmallPhone,
+      ),
+    [screenWidth, screenHeight, responsive.isTablet, responsive.isDesktop, responsive.isSmallPhone],
+  );
+
+  const isCompactHeight = screenHeight < 820;
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(50)).current;
@@ -166,11 +346,9 @@ export default function PantallaRegistro(props: any) {
 
   useEffect(() => {
     if (esperaReenvio <= 0) return;
-
     const temporizador = setTimeout(() => {
       setEsperaReenvio((actual) => Math.max(0, actual - 1));
     }, 1000);
-
     return () => clearTimeout(temporizador);
   }, [esperaReenvio]);
 
@@ -186,7 +364,6 @@ export default function PantallaRegistro(props: any) {
         console.warn('⚠️ No se pudo verificar email:', error.message);
         return null;
       }
-
       return !!data;
     } catch (error) {
       console.warn('⚠️ Excepción verificando email:', error);
@@ -275,21 +452,18 @@ export default function PantallaRegistro(props: any) {
             correo: 'Este correo ya está registrado. Probá iniciar sesión.',
           }));
         }
-
         toast.error(mensaje);
         return;
       }
 
       if (!resultado.success) {
         const mensajeAmigable = obtenerMensajeError(resultado.error);
-
         if (esErrorEmailDuplicado(resultado.error)) {
           setErroresCampos((prev) => ({
             ...prev,
             correo: 'Este correo ya está registrado. Probá iniciar sesión.',
           }));
         }
-
         toast.error(mensajeAmigable);
         return;
       }
@@ -310,7 +484,6 @@ export default function PantallaRegistro(props: any) {
           // Silencioso
         }
       }, 1500);
-
     } catch (error) {
       console.error('❌ [Registro] Error inesperado:', error);
       toast.error('❌ Algo salió mal. Intentá de nuevo en unos segundos.');
@@ -333,53 +506,24 @@ export default function PantallaRegistro(props: any) {
 
   const reenviarCorreoConfirmacion = async () => {
     if (!correoPendienteConfirmacion || reenviandoConfirmacion || esperaReenvio > 0) return;
-
     setReenviandoConfirmacion(true);
     try {
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: correoPendienteConfirmacion,
       });
-
       if (error) {
-        console.error('No se pudo reenviar la confirmación de correo:', error);
         toast.error(obtenerMensajeError(error));
         return;
       }
-
       setEsperaReenvio(60);
       toast.exito('Listo, enviamos otro correo de confirmación.');
     } catch (error) {
-      console.error('Error reenviando la confirmación de correo:', error);
       toast.error('No pudimos reenviar el correo. Revisá tu conexión e intentá de nuevo.');
     } finally {
       setReenviandoConfirmacion(false);
     }
   };
-
-  const { height: screenHeight, width: screenWidth, isTablet, isSmallPhone } = responsive;
-  const isCompactHeight = screenHeight < 820;
-  const isVeryCompactHeight = screenHeight < 700;
-
-  const logoSize = isCompactHeight
-    ? responsive.getValor({ tablet: 88, normal: 78, small: 68 })
-    : responsive.getValor({ tablet: 150, normal: 125, small: 105 });
-  const tituloSize = responsive.getValor({ tablet: 30, normal: 27, small: 24 });
-
-  const labelSize = Math.max(14, responsive.getValor({ tablet: 16, normal: 14, small: 13 }));
-  const inputSize = Math.max(16, responsive.getValor({ tablet: 17, normal: 16, small: 15 }));
-  const buttonTextSize = Math.max(16, responsive.getValor({ tablet: 19, normal: 17, small: 15 }));
-  const paddingHorizontal = responsive.getValor({ tablet: 32, normal: 20, small: 16 });
-  const paddingTop = insets.top + (isCompactHeight ? 4 : responsive.spacing(12));
-  const paddingBottom = insets.bottom + (isCompactHeight ? 8 : 20);
-  const cardPadding = isCompactHeight
-    ? responsive.getValor({ tablet: 16, normal: 14, small: 12 })
-    : responsive.getValor({ tablet: 24, normal: 20, small: 16 });
-  const fieldSpacing = isCompactHeight ? 8 : 16;
-  const inputHeight = 56;
-  const maxContentWidth = isTablet ? Math.min(screenWidth - paddingHorizontal * 2, 520) : 500;
-  const textoBannerSize = Math.max(14, responsive.getValor({ tablet: 16, normal: 14, small: 13 }));
-  const textoLegalSize = Math.max(14, responsive.getValor({ tablet: 15, normal: 14, small: 13 }));
 
   return (
     <>
@@ -393,6 +537,7 @@ export default function PantallaRegistro(props: any) {
           <View style={[estilos.manchaFondo, estilos.manchaAmarilla]} />
           <View style={[estilos.manchaFondo, estilos.manchaCoral]} />
         </View>
+
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
@@ -403,13 +548,11 @@ export default function PantallaRegistro(props: any) {
             contentContainerStyle={[
               estilos.scroll,
               {
-                paddingHorizontal: paddingHorizontal,
-                paddingTop: paddingTop,
-                paddingBottom,
+                paddingHorizontal: tamanos.paddingHorizontal,
+                paddingTop: insets.top + (isCompactHeight ? 4 : 12),
+                paddingBottom: insets.bottom + (isCompactHeight ? 8 : 20),
                 flexGrow: 1,
                 justifyContent: isCompactHeight ? 'flex-start' : 'center',
-                alignItems: 'center',
-                minHeight: isCompactHeight ? undefined : '100%',
               },
             ]}
             showsVerticalScrollIndicator={false}
@@ -417,16 +560,15 @@ export default function PantallaRegistro(props: any) {
             scrollsChildToFocus={Platform.OS === 'android'}
             bounces={false}
           >
-            <View style={[estilos.contenidoCentral, { maxWidth: maxContentWidth }]}>
-
-              {/* LOGO */}
+            <View style={[estilos.contenidoCentral, { maxWidth: tamanos.maxContentWidth }]}>
+              {/* ============ LOGO + TÍTULOS ============ */}
               <Animated.View
                 style={[
                   estilos.logoContainer,
                   {
                     opacity: fadeAnim,
                     transform: [{ scale: scaleAnim }],
-                    marginBottom: isCompactHeight ? 8 : 14,
+                    marginBottom: tamanos.logoMarginBottom,
                   },
                 ]}
               >
@@ -435,35 +577,57 @@ export default function PantallaRegistro(props: any) {
                     source={logoImage}
                     style={[
                       estilos.logoImage,
-                      { width: logoSize, height: logoSize },
+                      { width: tamanos.logoSize, height: tamanos.logoSize },
                     ]}
                     resizeMode="contain"
                   />
                 </View>
 
-                <Text style={[estilos.titulo, { fontSize: tituloSize }]} accessibilityRole="header">
+                <Text
+                  style={[estilos.titulo, { fontSize: tamanos.tituloSize }]}
+                  accessibilityRole="header"
+                  allowFontScaling={false}
+                  numberOfLines={2}
+                >
                   {correoPendienteConfirmacion ? 'Revisá tu correo' : 'Creá tu cuenta'}
                 </Text>
                 {!isCompactHeight && !correoPendienteConfirmacion && (
-                  <Text style={estilos.subtitulo}>
+                  <Text style={[estilos.subtitulo, { fontSize: tamanos.subtituloSize }]} allowFontScaling={false}>
                     Sumate a Krusty Burger y empezá a disfrutar.
                   </Text>
                 )}
               </Animated.View>
 
               {correoPendienteConfirmacion ? (
-                <View style={estilos.confirmacionCard}>
+                /* ============ CONFIRMACIÓN DE CORREO ============ */
+                <View style={[estilos.confirmacionCard, { padding: tamanos.cardPadding }]}>
                   <View style={estilos.confirmacionIcono}>
                     <Ionicons name="mail-open-outline" size={30} color={DISENO.colors.accent} />
                   </View>
-                  <Text style={estilos.confirmacionTitulo}>Un último paso</Text>
-                  <Text style={estilos.confirmacionTexto}>
+                  <Text
+                    style={[estilos.confirmacionTitulo, { fontSize: tamanos.tituloSize - 4 }]}
+                    allowFontScaling={false}
+                  >
+                    Un último paso
+                  </Text>
+                  <Text
+                    style={[estilos.confirmacionTexto, { fontSize: tamanos.legalSize }]}
+                    allowFontScaling={false}
+                  >
                     Enviamos un enlace de confirmación a:
                   </Text>
-                  <Text style={estilos.confirmacionCorreo} selectable>
+                  <Text
+                    style={[estilos.confirmacionCorreo, { fontSize: tamanos.legalSize + 2 }]}
+                    selectable
+                    allowFontScaling={false}
+                    numberOfLines={2}
+                  >
                     {correoPendienteConfirmacion}
                   </Text>
-                  <Text style={estilos.confirmacionTexto}>
+                  <Text
+                    style={[estilos.confirmacionTexto, { fontSize: tamanos.legalSize }]}
+                    allowFontScaling={false}
+                  >
                     Abrí el correo para confirmar tu dirección. Si no lo encontrás, revisá Spam o Correo no deseado.
                   </Text>
 
@@ -486,10 +650,11 @@ export default function PantallaRegistro(props: any) {
                     ) : (
                       <>
                         <Ionicons name="refresh-outline" size={18} color={DISENO.colors.accent} />
-                        <Text style={estilos.confirmacionReenviarTexto}>
-                          {esperaReenvio > 0
-                            ? `Podés reenviar en ${esperaReenvio}s`
-                            : 'Reenviar correo'}
+                        <Text
+                          style={[estilos.confirmacionReenviarTexto, { fontSize: tamanos.legalSize }]}
+                          allowFontScaling={false}
+                        >
+                          {esperaReenvio > 0 ? `Podés reenviar en ${esperaReenvio}s` : 'Reenviar correo'}
                         </Text>
                       </>
                     )}
@@ -501,399 +666,605 @@ export default function PantallaRegistro(props: any) {
                     activeOpacity={0.7}
                     accessibilityRole="button"
                   >
-                    <Text style={estilos.confirmacionVolverTexto}>Volver al inicio de sesión</Text>
+                    <Text
+                      style={[estilos.confirmacionVolverTexto, { fontSize: tamanos.enlaceSize }]}
+                      allowFontScaling={false}
+                    >
+                      Volver al inicio de sesión
+                    </Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <>
-              <View
-                style={[
-                  estilos.bannerPuntosContainer,
-                  {
-                    padding: isCompactHeight || isSmallPhone ? 8 : 14,
-                    marginBottom: isCompactHeight ? 6 : 12,
-                  },
-                ]}
-                accessibilityLabel="Beneficio de bienvenida: 500 puntos"
-              >
-                <View
-                  style={[
-                    estilos.bannerPuntosIcono,
-                    isCompactHeight && { width: 34, height: 34, borderRadius: 17 },
-                  ]}
-                >
-                  <Ionicons name="gift-outline" size={isCompactHeight ? 18 : 22} color={COLOR_PUNTOS} />
-                </View>
-                <View style={estilos.bannerPuntosTextos}>
-                  <Text style={[estilos.bannerPuntosTitulo, { fontSize: textoBannerSize }]}>
-                    500 puntos de bienvenida
-                  </Text>
-                  {!isCompactHeight && (
-                    <Text style={estilos.bannerPuntosDesc}>
-                      Canjealos por descuentos y envíos gratis
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {/* FORMULARIO */}
-              <Animated.View
-                style={[
-                  estilos.formulario,
-                  {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideUpAnim }],
-                    padding: cardPadding,
-                    width: '100%',
-                    maxWidth: 500,
-                    alignSelf: 'center',
-                  },
-                ]}
-              >
-                <Text style={[estilos.label, { fontSize: labelSize, marginBottom: isCompactHeight ? 4 : 7 }]}>Nombre completo</Text>
-                <View style={[estilos.inputContainer, { height: inputHeight }, erroresCampos.nombre && estilos.inputError]}>
-                  <Ionicons name="person-outline" size={22} color={COLOR_TEXTO_DETALLE} style={estilos.inputIcon} />
-                  <TextInput
-                    ref={nombreInputRef}
-                    style={[estilos.input, { fontSize: inputSize }]}
-                    value={nombre}
-                    onChangeText={(valor) => {
-                      setNombre(valor);
-                      setErroresCampos((prev) => ({ ...prev, nombre: undefined }));
-                    }}
-                    placeholder="Tu nombre completo"
-                    placeholderTextColor={COLOR_TEXTO_DETALLE}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    autoComplete="name"
-                    importantForAutofill="yes"
-                    accessibilityLabel="Nombre completo"
-                    selectionColor={DISENO.colors.accent}
-                    editable={!cargando}
-                    returnKeyType="next"
-                    onBlur={() => setErroresCampos((prev) => ({
-                      ...prev,
-                      nombre: validarCampoRegistro('nombre', nombre),
-                    }))}
-                    onSubmitEditing={() => correoInputRef.current?.focus()}
-                  />
-                </View>
-                {erroresCampos.nombre && (
-                  <Text style={estilos.errorCampo} accessibilityLiveRegion="polite">{erroresCampos.nombre}</Text>
-                )}
-
-                <Text style={[estilos.label, { fontSize: labelSize, marginTop: fieldSpacing, marginBottom: isCompactHeight ? 4 : 7 }]}>
-                  Correo electrónico
-                </Text>
-                <View
-                  style={[
-                    estilos.inputContainer,
-                    { height: inputHeight },
-                    erroresCampos.correo && estilos.inputError,
-                  ]}
-                >
-                  <Ionicons
-                    name="mail-outline"
-                    size={22}
-                    color={erroresCampos.correo ? DISENO.colors.danger : COLOR_TEXTO_DETALLE}
-                    style={estilos.inputIcon}
-                  />
-                  <TextInput
-                    ref={correoInputRef}
-                    style={[estilos.input, { fontSize: inputSize }]}
-                    value={correo}
-                    onChangeText={(valor) => {
-                      setCorreo(valor);
-                      setErroresCampos((prev) => ({ ...prev, correo: undefined }));
-                    }}
-                    placeholder="tu@email.com"
-                    placeholderTextColor={COLOR_TEXTO_DETALLE}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="email"
-                    importantForAutofill="yes"
-                    accessibilityLabel="Correo electrónico"
-                    selectionColor={DISENO.colors.accent}
-                    editable={!cargando}
-                    returnKeyType="next"
-                    onBlur={() => setErroresCampos((prev) => ({
-                      ...prev,
-                      correo: validarCampoRegistro('correo', correo),
-                    }))}
-                    onSubmitEditing={() => telefonoInputRef.current?.focus()}
-                  />
-                  {erroresCampos.correo && (
-                    <Ionicons name="alert-circle" size={20} color={DISENO.colors.danger} />
-                  )}
-                </View>
-
-                {erroresCampos.correo && (
-                  <View style={estilos.errorCorreoContainer}>
-                    <Ionicons name="alert-circle-outline" size={16} color={DISENO.colors.danger} />
-                    <Text style={estilos.errorCorreoTexto} accessibilityLiveRegion="polite">
-                      {erroresCampos.correo}
-                    </Text>
-                  </View>
-                )}
-
-                <Text style={[estilos.label, { fontSize: labelSize, marginTop: fieldSpacing, marginBottom: isCompactHeight ? 4 : 7 }]}>Teléfono con código de área (obligatorio)</Text>
-                <View style={[estilos.inputContainer, { height: inputHeight }, erroresCampos.telefono && estilos.inputError]}>
-                  <Ionicons name="call-outline" size={22} color={COLOR_TEXTO_DETALLE} style={estilos.inputIcon} />
-                  <TextInput
-                    ref={telefonoInputRef}
-                    style={[estilos.input, { fontSize: inputSize }]}
-                    value={telefono}
-                    onChangeText={(valor) => {
-                      setTelefono(valor);
-                      setErroresCampos((prev) => ({ ...prev, telefono: undefined }));
-                    }}
-                    placeholder="Ej. 11 1234 5678"
-                    placeholderTextColor={COLOR_TEXTO_DETALLE}
-                    keyboardType="phone-pad"
-                    autoComplete="tel"
-                    importantForAutofill="yes"
-                    accessibilityLabel="Teléfono obligatorio, incluí el código de área"
-                    accessibilityHint="Ingresá código de área y número, por ejemplo 11 1234 5678."
-                    selectionColor={DISENO.colors.accent}
-                    editable={!cargando}
-                    returnKeyType="next"
-                    onBlur={() => setErroresCampos((prev) => ({
-                      ...prev,
-                      telefono: validarCampoRegistro('telefono', telefono),
-                    }))}
-                    onSubmitEditing={() => contrasenaInputRef.current?.focus()}
-                  />
-                </View>
-                {erroresCampos.telefono && (
-                  <Text style={estilos.errorCampo} accessibilityLiveRegion="polite">{erroresCampos.telefono}</Text>
-                )}
-
-                <Text style={[estilos.label, { fontSize: labelSize, marginTop: fieldSpacing, marginBottom: isCompactHeight ? 4 : 7 }]}>Contraseña</Text>
-                <View style={[estilos.inputContainer, { height: inputHeight }, erroresCampos.contrasena && estilos.inputError]}>
-                  <Ionicons name="lock-closed-outline" size={22} color={COLOR_TEXTO_DETALLE} style={estilos.inputIcon} />
-                  <TextInput
-                    ref={contrasenaInputRef}
-                    style={[estilos.input, { fontSize: inputSize, flex: 1 }]}
-                    value={contrasena}
-                    onChangeText={(valor) => {
-                      setContrasena(valor);
-                      setErroresCampos((prev) => ({ ...prev, contrasena: undefined }));
-                    }}
-                    placeholder="Mín. 6 caracteres"
-                    placeholderTextColor={COLOR_TEXTO_DETALLE}
-                    secureTextEntry={!mostrarContrasena}
-                    autoComplete="new-password"
-                    importantForAutofill="yes"
-                    accessibilityLabel="Contraseña"
-                    selectionColor={DISENO.colors.accent}
-                    editable={!cargando}
-                    returnKeyType="done"
-                    onBlur={() => setErroresCampos((prev) => ({
-                      ...prev,
-                      contrasena: validarCampoRegistro('contrasena', contrasena),
-                    }))}
-                    onSubmitEditing={manejarRegistro}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                    style={estilos.eyeButton}
-                    accessibilityRole="button"
-                    accessibilityLabel={mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    hitSlop={8}
+                  {/* ============ BANNER PUNTOS ============ */}
+                  <View
+                    style={[
+                      estilos.bannerPuntosContainer,
+                      {
+                        padding: tamanos.bannerPadding,
+                        marginBottom: isCompactHeight ? 6 : 12,
+                      },
+                    ]}
+                    accessibilityLabel="Beneficio de bienvenida: 500 puntos"
                   >
-                    <Ionicons
-                      name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
-                      size={22}
-                      color={COLOR_TEXTO_DETALLE}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {(!isVeryCompactHeight || contrasena.length > 0) && (
-                  <View style={estilos.passwordHintContainer} accessibilityLiveRegion="polite">
-                    <Ionicons
-                      name={contrasena.length >= 6 ? 'checkmark-circle' : 'information-circle-outline'}
-                      size={16}
-                      color={contrasena.length >= 6 ? '#2E7D32' : COLOR_TEXTO_DETALLE}
-                    />
-                    <Text
+                    <View
                       style={[
-                        estilos.passwordHint,
-                        contrasena.length >= 6 && estilos.passwordHintSuccess,
+                        estilos.bannerPuntosIcono,
+                        {
+                          width: tamanos.bannerIconContainerSize,
+                          height: tamanos.bannerIconContainerSize,
+                          borderRadius: tamanos.bannerIconContainerSize / 2,
+                        },
                       ]}
                     >
-                      {contrasena.length >= 6
-                        ? 'Requisito cumplido'
-                        : contrasena.length > 0
-                          ? `Te faltan ${6 - contrasena.length} caracteres`
-                          : 'Mínimo 6 caracteres'}
-                    </Text>
-                  </View>
-                )}
-                {erroresCampos.contrasena && (
-                  <Text style={estilos.errorCampo} accessibilityLiveRegion="polite">{erroresCampos.contrasena}</Text>
-                )}
-
-                {/* TÉRMINOS Y PRIVACIDAD */}
-                <View
-                  style={[
-                    estilos.legalContainer,
-                    isCompactHeight && { marginTop: 8, padding: 8 },
-                  ]}
-                >
-                  <View style={estilos.terminosCheckboxContainer}>
-                    <TouchableOpacity
-                      style={estilos.checkboxAction}
-                      onPress={() => {
-                        setTerminosAceptados(!terminosAceptados);
-                        setErroresCampos((prev) => ({ ...prev, terminos: undefined }));
-                      }}
-                      activeOpacity={0.7}
-                      disabled={cargando}
-                      accessibilityRole="checkbox"
-                      accessibilityLabel="Acepto los Términos y Condiciones"
-                      accessibilityState={{ checked: terminosAceptados, disabled: cargando }}
-                    >
-                      <View
-                        style={[
-                          estilos.checkbox,
-                          {
-                            borderColor: terminosAceptados ? DISENO.colors.accent : COLOR_TEXTO_DETALLE,
-                            backgroundColor: terminosAceptados ? DISENO.colors.accent : 'transparent',
-                          },
-                        ]}
+                      <Ionicons name="gift-outline" size={tamanos.bannerIconSize} color={COLOR_PUNTOS} />
+                    </View>
+                    <View style={estilos.bannerPuntosTextos}>
+                      <Text
+                        style={[estilos.bannerPuntosTitulo, { fontSize: tamanos.bannerTextSize }]}
+                        allowFontScaling={false}
+                        numberOfLines={1}
                       >
-                        {terminosAceptados && (
-                          <Ionicons name="checkmark" size={14} color={DISENO.colors.surface} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                    <View style={estilos.terminosTextos}>
-                      <Text style={[estilos.terminosCheckboxTexto, { fontSize: textoLegalSize }]}>
-                        Acepto los términos y condiciones.
+                        500 puntos de bienvenida
                       </Text>
-                      <TouchableOpacity
-                        style={estilos.legalLinkItem}
-                        onPress={() => props.navigation.navigate('Terminos')}
-                        activeOpacity={0.7}
-                        accessibilityRole="link"
+                      {!isCompactHeight && (
+                        <Text
+                          style={[estilos.bannerPuntosDesc, { fontSize: tamanos.bannerDescSize }]}
+                          allowFontScaling={false}
+                          numberOfLines={1}
+                        >
+                          Canjealos por descuentos y envíos gratis
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* ============ FORMULARIO ============ */}
+                  <Animated.View
+                    style={[
+                      estilos.formulario,
+                      {
+                        opacity: fadeAnim,
+                        transform: [{ translateY: slideUpAnim }],
+                        padding: tamanos.cardPadding,
+                        maxWidth: tamanos.maxContentWidth,
+                      },
+                    ]}
+                  >
+                    {/* Nombre */}
+                    <Text
+                      style={[
+                        estilos.label,
+                        {
+                          fontSize: tamanos.labelSize,
+                          marginBottom: tamanos.labelMarginBottom,
+                        },
+                      ]}
+                      allowFontScaling={false}
+                    >
+                      Nombre completo
+                    </Text>
+                    <View
+                      style={[
+                        estilos.inputContainer,
+                        {
+                          height: tamanos.inputHeight,
+                          paddingHorizontal: tamanos.inputPaddingH,
+                          borderRadius: tamanos.inputRadius,
+                        },
+                        erroresCampos.nombre && estilos.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="person-outline"
+                        size={tamanos.iconSize}
+                        color={COLOR_TEXTO_DETALLE}
+                        style={estilos.inputIcon}
+                      />
+                      <TextInput
+                        ref={nombreInputRef}
+                        style={[estilos.input, { fontSize: tamanos.inputSize }]}
+                        value={nombre}
+                        onChangeText={(valor) => {
+                          setNombre(valor);
+                          setErroresCampos((prev) => ({ ...prev, nombre: undefined }));
+                        }}
+                        placeholder="Tu nombre completo"
+                        placeholderTextColor={COLOR_TEXTO_DETALLE}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                        autoComplete="name"
+                        importantForAutofill="yes"
+                        accessibilityLabel="Nombre completo"
+                        selectionColor={DISENO.colors.accent}
+                        editable={!cargando}
+                        returnKeyType="next"
+                        allowFontScaling={false}
+                        onBlur={() =>
+                          setErroresCampos((prev) => ({
+                            ...prev,
+                            nombre: validarCampoRegistro('nombre', nombre),
+                          }))
+                        }
+                        onSubmitEditing={() => correoInputRef.current?.focus()}
+                      />
+                    </View>
+                    {erroresCampos.nombre && (
+                      <Text
+                        style={[estilos.errorCampo, { fontSize: tamanos.errorSize }]}
+                        accessibilityLiveRegion="polite"
+                        allowFontScaling={false}
                       >
-                        <Text style={[estilos.terminosLink, { fontSize: textoLegalSize }]}>
-                          Leer Términos y Condiciones
+                        {erroresCampos.nombre}
+                      </Text>
+                    )}
+
+                    {/* Correo */}
+                    <Text
+                      style={[
+                        estilos.label,
+                        {
+                          fontSize: tamanos.labelSize,
+                          marginTop: tamanos.fieldSpacing,
+                          marginBottom: tamanos.labelMarginBottom,
+                        },
+                      ]}
+                      allowFontScaling={false}
+                    >
+                      Correo electrónico
+                    </Text>
+                    <View
+                      style={[
+                        estilos.inputContainer,
+                        {
+                          height: tamanos.inputHeight,
+                          paddingHorizontal: tamanos.inputPaddingH,
+                          borderRadius: tamanos.inputRadius,
+                        },
+                        erroresCampos.correo && estilos.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="mail-outline"
+                        size={tamanos.iconSize}
+                        color={erroresCampos.correo ? DISENO.colors.danger : COLOR_TEXTO_DETALLE}
+                        style={estilos.inputIcon}
+                      />
+                      <TextInput
+                        ref={correoInputRef}
+                        style={[estilos.input, { fontSize: tamanos.inputSize }]}
+                        value={correo}
+                        onChangeText={(valor) => {
+                          setCorreo(valor);
+                          setErroresCampos((prev) => ({ ...prev, correo: undefined }));
+                        }}
+                        placeholder="tu@email.com"
+                        placeholderTextColor={COLOR_TEXTO_DETALLE}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="email"
+                        importantForAutofill="yes"
+                        accessibilityLabel="Correo electrónico"
+                        selectionColor={DISENO.colors.accent}
+                        editable={!cargando}
+                        returnKeyType="next"
+                        allowFontScaling={false}
+                        onBlur={() =>
+                          setErroresCampos((prev) => ({
+                            ...prev,
+                            correo: validarCampoRegistro('correo', correo),
+                          }))
+                        }
+                        onSubmitEditing={() => telefonoInputRef.current?.focus()}
+                      />
+                      {erroresCampos.correo && (
+                        <Ionicons name="alert-circle" size={tamanos.iconSize} color={DISENO.colors.danger} />
+                      )}
+                    </View>
+                    {erroresCampos.correo && (
+                      <View style={estilos.errorCorreoContainer}>
+                        <Ionicons
+                          name="alert-circle-outline"
+                          size={tamanos.errorSize + 2}
+                          color={DISENO.colors.danger}
+                        />
+                        <Text
+                          style={[estilos.errorCorreoTexto, { fontSize: tamanos.errorSize }]}
+                          accessibilityLiveRegion="polite"
+                          allowFontScaling={false}
+                        >
+                          {erroresCampos.correo}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Teléfono */}
+                    <Text
+                      style={[
+                        estilos.label,
+                        {
+                          fontSize: tamanos.labelSize,
+                          marginTop: tamanos.fieldSpacing,
+                          marginBottom: tamanos.labelMarginBottom,
+                        },
+                      ]}
+                      allowFontScaling={false}
+                    >
+                      Teléfono con código de área (obligatorio)
+                    </Text>
+                    <View
+                      style={[
+                        estilos.inputContainer,
+                        {
+                          height: tamanos.inputHeight,
+                          paddingHorizontal: tamanos.inputPaddingH,
+                          borderRadius: tamanos.inputRadius,
+                        },
+                        erroresCampos.telefono && estilos.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="call-outline"
+                        size={tamanos.iconSize}
+                        color={COLOR_TEXTO_DETALLE}
+                        style={estilos.inputIcon}
+                      />
+                      <TextInput
+                        ref={telefonoInputRef}
+                        style={[estilos.input, { fontSize: tamanos.inputSize }]}
+                        value={telefono}
+                        onChangeText={(valor) => {
+                          setTelefono(valor);
+                          setErroresCampos((prev) => ({ ...prev, telefono: undefined }));
+                        }}
+                        placeholder="Ej. 11 1234 5678"
+                        placeholderTextColor={COLOR_TEXTO_DETALLE}
+                        keyboardType="phone-pad"
+                        autoComplete="tel"
+                        importantForAutofill="yes"
+                        accessibilityLabel="Teléfono obligatorio, incluí el código de área"
+                        accessibilityHint="Ingresá código de área y número, por ejemplo 11 1234 5678."
+                        selectionColor={DISENO.colors.accent}
+                        editable={!cargando}
+                        returnKeyType="next"
+                        allowFontScaling={false}
+                        onBlur={() =>
+                          setErroresCampos((prev) => ({
+                            ...prev,
+                            telefono: validarCampoRegistro('telefono', telefono),
+                          }))
+                        }
+                        onSubmitEditing={() => contrasenaInputRef.current?.focus()}
+                      />
+                    </View>
+                    {erroresCampos.telefono && (
+                      <Text
+                        style={[estilos.errorCampo, { fontSize: tamanos.errorSize }]}
+                        accessibilityLiveRegion="polite"
+                        allowFontScaling={false}
+                      >
+                        {erroresCampos.telefono}
+                      </Text>
+                    )}
+
+                    {/* Contraseña */}
+                    <Text
+                      style={[
+                        estilos.label,
+                        {
+                          fontSize: tamanos.labelSize,
+                          marginTop: tamanos.fieldSpacing,
+                          marginBottom: tamanos.labelMarginBottom,
+                        },
+                      ]}
+                      allowFontScaling={false}
+                    >
+                      Contraseña
+                    </Text>
+                    <View
+                      style={[
+                        estilos.inputContainer,
+                        {
+                          height: tamanos.inputHeight,
+                          paddingHorizontal: tamanos.inputPaddingH,
+                          borderRadius: tamanos.inputRadius,
+                        },
+                        erroresCampos.contrasena && estilos.inputError,
+                      ]}
+                    >
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={tamanos.iconSize}
+                        color={COLOR_TEXTO_DETALLE}
+                        style={estilos.inputIcon}
+                      />
+                      <TextInput
+                        ref={contrasenaInputRef}
+                        style={[estilos.input, { fontSize: tamanos.inputSize }]}
+                        value={contrasena}
+                        onChangeText={(valor) => {
+                          setContrasena(valor);
+                          setErroresCampos((prev) => ({ ...prev, contrasena: undefined }));
+                        }}
+                        placeholder="Mín. 6 caracteres"
+                        placeholderTextColor={COLOR_TEXTO_DETALLE}
+                        secureTextEntry={!mostrarContrasena}
+                        autoComplete="new-password"
+                        importantForAutofill="yes"
+                        accessibilityLabel="Contraseña"
+                        selectionColor={DISENO.colors.accent}
+                        editable={!cargando}
+                        returnKeyType="done"
+                        allowFontScaling={false}
+                        onBlur={() =>
+                          setErroresCampos((prev) => ({
+                            ...prev,
+                            contrasena: validarCampoRegistro('contrasena', contrasena),
+                          }))
+                        }
+                        onSubmitEditing={manejarRegistro}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setMostrarContrasena(!mostrarContrasena)}
+                        style={[
+                          estilos.eyeButton,
+                          { width: tamanos.eyeButtonSize, height: tamanos.eyeButtonSize },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'
+                        }
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
+                          size={tamanos.iconSize}
+                          color={COLOR_TEXTO_DETALLE}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={estilos.passwordHintContainer} accessibilityLiveRegion="polite">
+                      <Ionicons
+                        name={contrasena.length >= 6 ? 'checkmark-circle' : 'information-circle-outline'}
+                        size={tamanos.hintSize + 3}
+                        color={contrasena.length >= 6 ? '#2E7D32' : COLOR_TEXTO_DETALLE}
+                      />
+                      <Text
+                        style={[
+                          estilos.passwordHint,
+                          { fontSize: tamanos.hintSize },
+                          contrasena.length >= 6 && estilos.passwordHintSuccess,
+                        ]}
+                        allowFontScaling={false}
+                      >
+                        {contrasena.length >= 6
+                          ? 'Requisito cumplido'
+                          : contrasena.length > 0
+                            ? `Te faltan ${6 - contrasena.length} caracteres`
+                            : 'Mínimo 6 caracteres'}
+                      </Text>
+                    </View>
+                    {erroresCampos.contrasena && (
+                      <Text
+                        style={[estilos.errorCampo, { fontSize: tamanos.errorSize }]}
+                        accessibilityLiveRegion="polite"
+                        allowFontScaling={false}
+                      >
+                        {erroresCampos.contrasena}
+                      </Text>
+                    )}
+
+                    {/* Términos y privacidad */}
+                    <View
+                      style={[
+                        estilos.legalContainer,
+                        isCompactHeight && { marginTop: 8, padding: 8 },
+                        { borderRadius: tamanos.inputRadius },
+                      ]}
+                    >
+                      <View style={estilos.terminosCheckboxContainer}>
+                        <TouchableOpacity
+                          style={estilos.checkboxAction}
+                          onPress={() => {
+                            setTerminosAceptados(!terminosAceptados);
+                            setErroresCampos((prev) => ({ ...prev, terminos: undefined }));
+                          }}
+                          activeOpacity={0.7}
+                          disabled={cargando}
+                          accessibilityRole="checkbox"
+                          accessibilityLabel="Acepto los Términos y Condiciones"
+                          accessibilityState={{ checked: terminosAceptados, disabled: cargando }}
+                        >
+                          <View
+                            style={[
+                              estilos.checkbox,
+                              {
+                                width: tamanos.checkboxSize,
+                                height: tamanos.checkboxSize,
+                                borderColor: terminosAceptados
+                                  ? DISENO.colors.accent
+                                  : COLOR_TEXTO_DETALLE,
+                                backgroundColor: terminosAceptados
+                                  ? DISENO.colors.accent
+                                  : 'transparent',
+                              },
+                            ]}
+                          >
+                            {terminosAceptados && (
+                              <Ionicons
+                                name="checkmark"
+                                size={tamanos.checkboxSize * 0.65}
+                                color={DISENO.colors.surface}
+                              />
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                        <View style={estilos.terminosTextos}>
+                          <Text
+                            style={[estilos.terminosCheckboxTexto, { fontSize: tamanos.legalSize }]}
+                            allowFontScaling={false}
+                          >
+                            Acepto los términos y condiciones.
+                          </Text>
+                          <TouchableOpacity
+                            style={estilos.legalLinkItem}
+                            onPress={() => props.navigation.navigate('Terminos')}
+                            activeOpacity={0.7}
+                            accessibilityRole="link"
+                          >
+                            <Text
+                              style={[estilos.terminosLink, { fontSize: tamanos.legalSize }]}
+                              allowFontScaling={false}
+                            >
+                              Leer Términos y Condiciones
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {erroresCampos.terminos && (
+                        <Text
+                          style={[estilos.errorCampo, { fontSize: tamanos.errorSize }]}
+                          accessibilityLiveRegion="polite"
+                          allowFontScaling={false}
+                        >
+                          {erroresCampos.terminos}
+                        </Text>
+                      )}
+
+                      <View style={[estilos.legalDivisor, isCompactHeight && { marginVertical: 4 }]} />
+
+                      <View style={estilos.legalLinksContainer}>
+                        <TouchableOpacity
+                          style={estilos.legalLinkItem}
+                          onPress={() => props.navigation.navigate('Privacidad')}
+                          activeOpacity={0.7}
+                          accessibilityRole="link"
+                        >
+                          <Ionicons
+                            name="shield-checkmark-outline"
+                            size={tamanos.hintSize + 3}
+                            color={DISENO.colors.accent}
+                          />
+                          <Text
+                            style={[estilos.legalLinkTexto, { fontSize: tamanos.legalSize }]}
+                            allowFontScaling={false}
+                          >
+                            Leer Política de Privacidad
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Botón principal */}
+                    <TouchableOpacity
+                      style={[
+                        estilos.boton,
+                        {
+                          marginTop: isCompactHeight ? 10 : tamanos.fieldSpacing + 4,
+                          borderRadius: tamanos.buttonRadius,
+                        },
+                        cargando && { opacity: 0.7 },
+                      ]}
+                      onPress={manejarRegistro}
+                      disabled={cargando}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={cargando ? 'Creando cuenta' : 'Crear cuenta'}
+                      accessibilityState={{ disabled: cargando, busy: cargando }}
+                    >
+                      <LinearGradient
+                        colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
+                        style={[
+                          estilos.botonGradient,
+                          { paddingVertical: tamanos.buttonPaddingV },
+                        ]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                      >
+                        {cargando ? (
+                          <ActivityIndicator color={DISENO.colors.surface} size="small" />
+                        ) : (
+                          <>
+                            <Ionicons
+                              name="person-add"
+                              size={tamanos.buttonTextSize + 4}
+                              color={DISENO.colors.surface}
+                            />
+                            <Text
+                              style={[estilos.textoBoton, { fontSize: tamanos.buttonTextSize }]}
+                              allowFontScaling={false}
+                            >
+                              Crear cuenta
+                            </Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* Enlace a login */}
+                    <View style={[estilos.enlacesContainer, isCompactHeight && { marginTop: 4 }]}>
+                      <TouchableOpacity
+                        onPress={() => props.navigation.goBack()}
+                        activeOpacity={0.6}
+                        style={estilos.enlaceAccion}
+                        accessibilityRole="button"
+                        accessibilityLabel="Volver e iniciar sesión"
+                      >
+                        <Text
+                          style={[estilos.enlace, { fontSize: tamanos.enlaceSize }]}
+                          allowFontScaling={false}
+                        >
+                          ¿Ya tenés cuenta?{' '}
+                          <Text style={estilos.enlaceDestacado}>Iniciá sesión</Text>
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
-                  {erroresCampos.terminos && (
-                    <Text style={estilos.errorCampo} accessibilityLiveRegion="polite">
-                      {erroresCampos.terminos}
-                    </Text>
-                  )}
 
-                  <View style={[estilos.legalDivisor, isCompactHeight && { marginVertical: 4 }]} />
+                    <View style={estilos.separadorContainer}>
+                      <View style={estilos.separador} />
+                      <Text
+                        style={[estilos.separadorTexto, { fontSize: tamanos.hintSize }]}
+                        allowFontScaling={false}
+                      >
+                        o
+                      </Text>
+                      <View style={estilos.separador} />
+                    </View>
 
-                  <View style={estilos.legalLinksContainer}>
                     <TouchableOpacity
-                      style={estilos.legalLinkItem}
-                      onPress={() => props.navigation.navigate('Privacidad')}
-                      activeOpacity={0.7}
-                      accessibilityRole="link"
+                      style={[
+                        estilos.botonInvitado,
+                        { minHeight: tamanos.inputHeight, borderRadius: tamanos.inputRadius },
+                      ]}
+                      onPress={() => props.navigation.navigate('Principal')}
+                      activeOpacity={0.6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Continuar como invitado"
                     >
-                      <Ionicons name="shield-checkmark-outline" size={16} color={DISENO.colors.accent} />
-                      <Text style={[estilos.legalLinkTexto, { fontSize: textoLegalSize }]}>Leer Política de Privacidad</Text>
+                      <Ionicons name="person-outline" size={20} color={COLOR_TEXTO_DETALLE} />
+                      <Text
+                        style={[estilos.botonInvitadoTexto, { fontSize: tamanos.enlaceSize }]}
+                        allowFontScaling={false}
+                      >
+                        Continuar como invitado
+                      </Text>
                     </TouchableOpacity>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[
-                    estilos.boton,
-                    isCompactHeight && { marginTop: 10 },
-                    cargando && { opacity: 0.7 },
-                  ]}
-                  onPress={manejarRegistro}
-                  disabled={cargando}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={cargando ? 'Creando cuenta' : 'Crear cuenta'}
-                  accessibilityState={{ disabled: cargando, busy: cargando }}
-                >
-                  <LinearGradient
-                    colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                    style={[
-                      estilos.botonGradient,
-                      isCompactHeight && { paddingVertical: 12 },
-                    ]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    {cargando ? (
-                      <ActivityIndicator color={DISENO.colors.surface} size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="person-add" size={buttonTextSize + 4} color={DISENO.colors.surface} />
-                        <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
-                          {cargando ? 'Creando cuenta…' : 'Crear cuenta'}
-                        </Text>
-                      </>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                <View style={[estilos.enlacesContainer, isCompactHeight && { marginTop: 4 }]}>
-                  <TouchableOpacity
-                    onPress={() => props.navigation.goBack()}
-                    activeOpacity={0.6}
-                    style={estilos.enlaceAccion}
-                    accessibilityRole="button"
-                    accessibilityLabel="Volver e iniciar sesión"
-                  >
-                    <Text style={[estilos.enlace, { fontSize: isTablet ? 16 : 14 }]}>
-                      ¿Ya tienes cuenta?{' '}
-                      <Text style={estilos.enlaceDestacado}>Inicia sesión</Text>
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={estilos.separadorContainer}>
-                  <View style={estilos.separador} />
-                  <Text style={estilos.separadorTexto}>o</Text>
-                  <View style={estilos.separador} />
-                </View>
-
-                <TouchableOpacity
-                  style={estilos.botonInvitado}
-                  onPress={() => props.navigation.navigate('Principal')}
-                  activeOpacity={0.6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continuar como invitado"
-                >
-                  <Ionicons name="person-outline" size={20} color={COLOR_TEXTO_DETALLE} />
-                  <Text style={[estilos.botonInvitadoTexto, { fontSize: isTablet ? 16 : 14 }]}>
-                    Continuar como invitado
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
+                  </Animated.View>
                 </>
               )}
-
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>
 
-      <Toast
-        visible={toast.visible}
-        mensaje={toast.mensaje}
-        tipo={toast.tipo}
-        ocultar={toast.ocultar}
-      />
+      <Toast visible={toast.visible} mensaje={toast.mensaje} tipo={toast.tipo} ocultar={toast.ocultar} />
     </>
   );
 }
 
 // ============================================================
-// 🎨 ESTILOS - CON TIPOGRAFÍA SIMPSON
+// 🎨 ESTILOS
 // ============================================================
 const estilos = StyleSheet.create({
   contenedor: { flex: 1, backgroundColor: '#FFF6EA' },
@@ -905,10 +1276,7 @@ const estilos = StyleSheet.create({
     left: 0,
     overflow: 'hidden',
   },
-  manchaFondo: {
-    position: 'absolute',
-    borderRadius: 999,
-  },
+  manchaFondo: { position: 'absolute', borderRadius: 999 },
   manchaAmarilla: {
     width: 250,
     height: 250,
@@ -926,25 +1294,14 @@ const estilos = StyleSheet.create({
     opacity: 0.08,
   },
   keyboardView: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100%',
-  },
+  scroll: { flexGrow: 1, alignItems: 'center' },
   contenidoCentral: {
     width: '100%',
-    maxWidth: 500,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
   },
-  logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginBottom: 14,
-  },
+  logoContainer: { alignItems: 'center', justifyContent: 'center', width: '100%' },
   logoWrapper: {
     marginBottom: 8,
     ...DISENO.shadow.lg,
@@ -957,53 +1314,54 @@ const estilos = StyleSheet.create({
     fontWeight: '700',
     color: DISENO.colors.text,
     textAlign: 'center',
+    lineHeight: 34,
+    includeFontPadding: false,
   },
   subtitulo: {
     fontFamily: FUENTES.regular,
-    fontSize: 14,
     color: COLOR_TEXTO_SECUNDARIO,
     textAlign: 'center',
     marginTop: 4,
+    lineHeight: 20,
+    includeFontPadding: false,
   },
+
+  // Banner puntos
   bannerPuntosContainer: {
     width: '100%',
-    maxWidth: 500,
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    marginBottom: 12,
     borderRadius: 16,
-    padding: 14,
     gap: 12,
     backgroundColor: '#FFF8DB',
     borderWidth: 1,
     borderColor: '#F0D675',
   },
   bannerPuntosIcono: {
-    width: 42,
-    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 21,
     backgroundColor: '#FCEAA5',
   },
-  bannerPuntosTextos: { flex: 1 },
+  bannerPuntosTextos: { flex: 1, minWidth: 0 },
   bannerPuntosTitulo: {
     fontFamily: FUENTES.regular,
     fontWeight: '700',
     color: COLOR_PUNTOS,
+    includeFontPadding: false,
   },
   bannerPuntosDesc: {
     fontFamily: FUENTES.regular,
-    fontSize: 13,
     color: COLOR_TEXTO_SECUNDARIO,
     marginTop: 3,
+    includeFontPadding: false,
   },
+
+  // Confirmación correo
   confirmacionCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
-    padding: 24,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#F0D675',
@@ -1020,27 +1378,27 @@ const estilos = StyleSheet.create({
   },
   confirmacionTitulo: {
     fontFamily: FUENTES.regular,
-    fontSize: 21,
     fontWeight: '700',
     color: DISENO.colors.text,
     textAlign: 'center',
     marginBottom: 8,
+    includeFontPadding: false,
   },
   confirmacionTexto: {
     fontFamily: FUENTES.regular,
-    fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 20,
     color: COLOR_TEXTO_SECUNDARIO,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   confirmacionCorreo: {
     maxWidth: '100%',
     fontFamily: FUENTES.regular,
-    fontSize: 16,
     fontWeight: '700',
     color: COLOR_PUNTOS,
     textAlign: 'center',
     marginVertical: 10,
+    includeFontPadding: false,
   },
   confirmacionReenviar: {
     minHeight: 48,
@@ -1056,15 +1414,13 @@ const estilos = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F0D675',
   },
-  confirmacionReenviarDeshabilitado: {
-    opacity: 0.65,
-  },
+  confirmacionReenviarDeshabilitado: { opacity: 0.65 },
   confirmacionReenviarTexto: {
     fontFamily: FUENTES.regular,
-    fontSize: 15,
     fontWeight: '700',
     color: DISENO.colors.accent,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   confirmacionVolver: {
     minHeight: 44,
@@ -1074,18 +1430,18 @@ const estilos = StyleSheet.create({
   },
   confirmacionVolverTexto: {
     fontFamily: FUENTES.regular,
-    fontSize: 14,
     fontWeight: '600',
     color: COLOR_TEXTO_SECUNDARIO,
     textDecorationLine: 'underline',
+    includeFontPadding: false,
   },
+
+  // Formulario
   formulario: {
     width: '100%',
-    maxWidth: 500,
     alignSelf: 'center',
     backgroundColor: DISENO.colors.surface,
     borderRadius: 24,
-    padding: 24,
     ...DISENO.shadow.md,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
@@ -1094,40 +1450,31 @@ const estilos = StyleSheet.create({
     fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.text,
-    marginBottom: 7,
+    includeFontPadding: false,
+    lineHeight: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
-    paddingHorizontal: 14,
-    height: 56,
   },
   inputError: {
     borderColor: DISENO.colors.danger,
     backgroundColor: '#FFF7F6',
   },
-  inputIcon: { marginRight: 12 },
+  inputIcon: { marginRight: 10, flexShrink: 0 },
   input: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
     paddingVertical: 0,
-    paddingTop: 0,
-    paddingRight: 0,
     flex: 1,
     minWidth: 0,
-    includeFontPadding: true,
+    includeFontPadding: false,
     textAlignVertical: 'center',
   },
-  eyeButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  eyeButton: { alignItems: 'center', justifyContent: 'center' },
   passwordHintContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1138,18 +1485,16 @@ const estilos = StyleSheet.create({
   passwordHint: {
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_DETALLE,
-    fontSize: 13,
+    includeFontPadding: false,
   },
-  passwordHintSuccess: {
-    color: '#2E7D32',
-    fontWeight: '600',
-  },
+  passwordHintSuccess: { color: '#2E7D32', fontWeight: '600' },
   errorCampo: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 14,
     marginTop: 5,
     marginLeft: 4,
+    includeFontPadding: false,
+    lineHeight: 18,
   },
   errorCorreoContainer: {
     flexDirection: 'row',
@@ -1161,14 +1506,16 @@ const estilos = StyleSheet.create({
   errorCorreoTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 14,
     flex: 1,
+    includeFontPadding: false,
+    lineHeight: 18,
   },
+
+  // Legal
   legalContainer: {
     marginTop: 16,
     width: '100%',
     backgroundColor: '#FFFDF7',
-    borderRadius: 14,
     padding: 12,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
@@ -1187,15 +1534,8 @@ const estilos = StyleSheet.create({
     flexShrink: 0,
     transform: [{ translateY: -10 }],
   },
-  terminosTextos: {
-    flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
-    gap: 2,
-  },
+  terminosTextos: { flex: 1, minWidth: 0, flexShrink: 1, gap: 2 },
   checkbox: {
-    width: 22,
-    height: 22,
     borderRadius: 6,
     borderWidth: 2,
     justifyContent: 'center',
@@ -1207,12 +1547,14 @@ const estilos = StyleSheet.create({
     color: COLOR_TEXTO_SECUNDARIO,
     fontWeight: '500',
     lineHeight: 20,
+    includeFontPadding: false,
   },
   terminosLink: {
     fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.accent,
     textDecorationLine: 'underline',
+    includeFontPadding: false,
   },
   legalDivisor: {
     height: 1,
@@ -1239,10 +1581,11 @@ const estilos = StyleSheet.create({
     fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.accent,
+    includeFontPadding: false,
   },
+
+  // Botón
   boton: {
-    marginTop: 16,
-    borderRadius: 14,
     overflow: 'hidden',
     ...DISENO.shadow.md,
     shadowColor: DISENO.colors.accent,
@@ -1253,7 +1596,6 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 16,
     paddingHorizontal: 24,
   },
   textoBoton: {
@@ -1261,23 +1603,26 @@ const estilos = StyleSheet.create({
     fontWeight: '400',
     color: DISENO.colors.surface,
     letterSpacing: 1.5,
+    includeFontPadding: false,
+    lineHeight: 24,
   },
+
+  // Enlaces
   enlacesContainer: { marginTop: 12, alignItems: 'center' },
-  enlaceAccion: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
+  enlaceAccion: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   enlace: {
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_SECUNDARIO,
     fontWeight: '500',
+    includeFontPadding: false,
   },
   enlaceDestacado: {
     fontFamily: FUENTES.regular,
     fontWeight: '700',
     color: DISENO.colors.accent,
   },
+
+  // Separador
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1290,16 +1635,16 @@ const estilos = StyleSheet.create({
     fontWeight: '600',
     color: COLOR_TEXTO_DETALLE,
     paddingHorizontal: 16,
-    fontSize: 12,
+    includeFontPadding: false,
   },
+
+  // Invitado
   botonInvitado: {
-    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
     backgroundColor: DISENO.colors.surfaceHover,
@@ -1309,5 +1654,6 @@ const estilos = StyleSheet.create({
     color: COLOR_TEXTO_SECUNDARIO,
     fontWeight: '500',
     letterSpacing: 0.5,
+    includeFontPadding: false,
   },
 });

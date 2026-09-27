@@ -1,4 +1,4 @@
-﻿// screens/auth/PantallaLogin.tsx - CON SIMPSONFONT, TIPOS CENTRALIZADOS Y GOOGLE SIGN-IN
+﻿// screens/auth/PantallaLogin.tsx - V2 100% RESPONSIVE (Galaxy A20 friendly)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -50,7 +50,7 @@ type Navigation = {
   goBack: () => void;
 };
 
-// ✅ CLAVES PARA SECURE STORE Y ASYNC STORAGE
+// ✅ CLAVES
 const STORAGE_KEYS = {
   REMEMBER_EMAIL: 'krusty_remember_email',
   REMEMBER_PASSWORD: 'krusty_remember_password',
@@ -63,11 +63,165 @@ const STORAGE_KEYS = {
 const MAX_INTENTOS = 5;
 const TIEMPO_BLOQUEO_SEGUNDOS = 60;
 
+// ============================================================
+// 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
+// ============================================================
+interface TamanosLogin {
+  // Layout general
+  paddingHorizontal: number;
+  paddingTop: number;
+  paddingBottom: number;
+  maxFormWidth: number;
+  formPadding: number;
+  formRadius: number;
+  // Logo
+  logoSize: number;
+  logoMarginBottom: number;
+  // Textos
+  formTitleSize: number;
+  formSubtitleSize: number;
+  labelSize: number;
+  inputTextSize: number;
+  buttonTextSize: number;
+  smallTextSize: number;
+  legalTextSize: number;
+  versionTextSize: number;
+  // Inputs
+  inputHeight: number;
+  inputPaddingH: number;
+  inputRadius: number;
+  iconSize: number;
+  iconActionSize: number;
+  // Botones
+  buttonPaddingV: number;
+  buttonRadius: number;
+  // Espaciados
+  sectionGap: number;
+  errorIconSize: number;
+  // Header
+  headerHeightPercent: number;
+}
+
+const calcularTamanosLogin = (
+  width: number,
+  height: number,
+  isTablet: boolean,
+  isDesktop: boolean,
+  isSmall: boolean,
+): TamanosLogin => {
+  // isSmall = ancho < 380 (Galaxy A20, iPhone SE, etc.)
+  const ancho = width;
+
+  // Padding lateral adaptativo
+  const paddingHorizontal = isDesktop
+    ? 60
+    : isTablet
+      ? 40
+      : isSmall
+        ? 16
+        : 20;
+
+  // Ancho máximo del formulario
+  const maxFormWidth = isDesktop ? 480 : isTablet ? 460 : ancho;
+
+  // Padding del formulario
+  const formPadding = isDesktop ? 32 : isTablet ? 28 : isSmall ? 18 : 22;
+  const formRadius = isDesktop ? 28 : 24;
+
+  // Logo: proporcional al ancho útil
+  const anchoUtil = Math.min(ancho - paddingHorizontal * 2, maxFormWidth);
+  const logoBase = anchoUtil * 0.45;
+  const logoSize = isDesktop
+    ? 200
+    : isTablet
+      ? 180
+      : isSmall
+        ? Math.min(logoBase, 130)
+        : Math.min(logoBase, 160);
+  const logoMarginBottom = isSmall ? 12 : 18;
+
+  // Textos
+  const formTitleSize = isDesktop ? 26 : isTablet ? 24 : isSmall ? 19 : 22;
+  const formSubtitleSize = isDesktop ? 15 : isTablet ? 15 : isSmall ? 12.5 : 14;
+  const labelSize = isDesktop ? 15 : isTablet ? 14 : isSmall ? 12.5 : 13.5;
+  const inputTextSize = isDesktop ? 15 : isTablet ? 14 : isSmall ? 13 : 14;
+  const buttonTextSize = isDesktop ? 20 : isTablet ? 19 : isSmall ? 16 : 18;
+  const smallTextSize = isDesktop ? 13 : isTablet ? 13 : isSmall ? 11.5 : 12.5;
+  const legalTextSize = isSmall ? 11 : 12;
+  const versionTextSize = isSmall ? 10 : 11;
+
+  // Inputs
+  const inputHeight = isDesktop ? 60 : isTablet ? 58 : isSmall ? 50 : 54;
+  const inputPaddingH = isDesktop ? 16 : isTablet ? 15 : isSmall ? 12 : 14;
+  const inputRadius = isDesktop ? 16 : isSmall ? 12 : 14;
+  const iconSize = isDesktop ? 22 : isTablet ? 22 : isSmall ? 20 : 21;
+  const iconActionSize = isDesktop ? 48 : isSmall ? 40 : 44;
+
+  // Botones
+  const buttonPaddingV = isDesktop ? 18 : isTablet ? 17 : isSmall ? 14 : 16;
+  const buttonRadius = isSmall ? 12 : 14;
+
+  // Espaciados
+  const sectionGap = isSmall ? 10 : 14;
+  const errorIconSize = isSmall ? 18 : 20;
+
+  // Altura del header gradient (0-100)
+  const headerHeightPercent = isSmall ? 38 : 42;
+
+  // PaddingTop y Bottom
+  const paddingTop = isSmall ? 8 : 12;
+  const paddingBottom = isSmall ? 20 : 30;
+
+  return {
+    paddingHorizontal,
+    paddingTop,
+    paddingBottom,
+    maxFormWidth,
+    formPadding,
+    formRadius,
+    logoSize,
+    logoMarginBottom,
+    formTitleSize,
+    formSubtitleSize,
+    labelSize,
+    inputTextSize,
+    buttonTextSize,
+    smallTextSize,
+    legalTextSize,
+    versionTextSize,
+    inputHeight,
+    inputPaddingH,
+    inputRadius,
+    iconSize,
+    iconActionSize,
+    buttonPaddingV,
+    buttonRadius,
+    sectionGap,
+    errorIconSize,
+    headerHeightPercent,
+  };
+};
+
+// ============================================================
+// 🏠 COMPONENTE
+// ============================================================
 export default function PantallaLogin(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const navigation = useNavigation<Navigation>();
+
+  const tamanos = React.useMemo(
+    () =>
+      calcularTamanosLogin(
+        screenWidth,
+        screenHeight,
+        responsive.isTablet,
+        responsive.isDesktop,
+        responsive.isSmallPhone,   // ✅
+      ),
+    [screenWidth, screenHeight, responsive.isTablet, responsive.isDesktop, responsive.isSmallPhone],  // ✅
+  );
 
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
@@ -93,7 +247,7 @@ export default function PantallaLogin(props: any) {
   const timerRef = useRef<number | null>(null);
 
   // ============================================================
-  // ✅ CARGAR CREDENCIALES Y ESTADO DE BLOQUEO
+  // CARGA INICIAL
   // ============================================================
   useEffect(() => {
     cargarCredencialesGuardadas();
@@ -290,42 +444,36 @@ export default function PantallaLogin(props: any) {
         mensaje: 'El correo o la contraseña son incorrectos.\n\n📌 Verifica que:\n• El correo esté escrito correctamente\n• La contraseña sea la correcta\n• No tengas mayúsculas accidentales'
       };
     }
-
     if (errorLower.includes('user not found')) {
       return {
         titulo: '👤 Usuario no encontrado',
         mensaje: 'No encontramos una cuenta con este correo.\n\n📌 ¿Quieres crear una cuenta nueva?'
       };
     }
-
     if (errorLower.includes('email not confirmed')) {
       return {
         titulo: '📧 Correo no confirmado',
         mensaje: 'Tu correo aún no ha sido confirmado.\n\n📌 Revisa tu bandeja de entrada y haz clic en el enlace de confirmación.'
       };
     }
-
     if (errorLower.includes('invalid email')) {
       return {
         titulo: '📧 Correo inválido',
         mensaje: 'El formato del correo electrónico no es válido.\n\n📌 Ejemplo: usuario@dominio.com'
       };
     }
-
     if (errorLower.includes('too many requests') || errorLower.includes('rate limit')) {
       return {
         titulo: '⏳ Demasiados intentos',
         mensaje: 'Has superado el límite de intentos.\n\n⏱️ Espera 1 minuto y vuelve a intentarlo.'
       };
     }
-
     if (errorLower.includes('network') || errorLower.includes('connection')) {
       return {
         titulo: '📡 Sin conexión',
         mensaje: 'No pudimos conectar con el servidor.\n\n📌 Verifica tu conexión a internet.'
       };
     }
-
     return {
       titulo: '⚠️ Error al iniciar sesión',
       mensaje: error || 'Ocurrió un error inesperado. Intenta nuevamente.'
@@ -411,9 +559,6 @@ export default function PantallaLogin(props: any) {
     }
   };
 
-  // ============================================================
-  // ✅ MANEJADOR DE GOOGLE SIGN-IN  👈 ACTUALIZADO
-  // ============================================================
   const manejarGoogleLogin = async () => {
     try {
       setCargandoGoogle(true);
@@ -441,8 +586,6 @@ export default function PantallaLogin(props: any) {
 
       const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
-
-
       if (res.type !== 'success' || !res.url) {
         console.log('🔵 [Google] Usuario canceló o cerró el navegador');
         return;
@@ -450,7 +593,6 @@ export default function PantallaLogin(props: any) {
 
       const url = res.url;
 
-      // ✅ Caso A: PKCE → ?code=xxx
       const queryParams = new URLSearchParams(url.split('?')[1] || '');
       const code = queryParams.get('code');
 
@@ -460,7 +602,6 @@ export default function PantallaLogin(props: any) {
         if (exchangeError) throw exchangeError;
         console.log('✅ [Google] Sesión creada con PKCE');
       } else {
-        // ✅ Caso B: tokens directos → #access_token=xxx&refresh_token=yyy
         const fragmentParams = new URLSearchParams(url.split('#')[1] || '');
         const access_token = fragmentParams.get('access_token');
         const refresh_token = fragmentParams.get('refresh_token');
@@ -478,11 +619,6 @@ export default function PantallaLogin(props: any) {
           throw new Error('No se recibieron credenciales de Google');
         }
       }
-
-      // 🔔 El listener global de onAuthStateChange (en tiendaAutenticacion.ts)
-      // va a detectar el SIGNED_IN y actualizar el store automáticamente.
-      // No hace falta hacer nada más acá.
-
     } catch (error: any) {
       console.error('❌ Error en Google Login:', error);
       Alert.alert('⚠️ Error con Google', error?.message || 'No se pudo iniciar sesión con Google.');
@@ -515,19 +651,6 @@ export default function PantallaLogin(props: any) {
     if (mensajeErrorGeneral) setMensajeErrorGeneral(null);
   };
 
-  // ============================================================
-  // ✅ RESPONSIVE
-  // ============================================================
-  const isTablet = responsive.isTablet;
-  const logoSize = responsive.getValor({ tablet: 220, normal: 180, small: 150 });
-  const inputSize = responsive.getValor({ tablet: 14, normal: 13, small: 12 });
-  const buttonTextSize = responsive.getValor({ tablet: 22, normal: 20, small: 18 });
-  const paddingHorizontal = responsive.getValor({ tablet: 40, normal: 24, small: 20 });
-  const paddingTop = insets.top + responsive.spacing(20);
-  const formTextSize = Math.max(14, inputSize);
-
-  const isSmallScreen = screenWidth < 380;
-
   if (cargandoRecordatorio) {
     return (
       <View style={[estilos.contenedor, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -542,7 +665,7 @@ export default function PantallaLogin(props: any) {
 
       <LinearGradient
         colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-        style={estilos.headerGradiente}
+        style={[estilos.headerGradiente, { height: `${tamanos.headerHeightPercent}%` }]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
@@ -555,38 +678,40 @@ export default function PantallaLogin(props: any) {
           contentContainerStyle={[
             estilos.scroll,
             {
-              paddingHorizontal: paddingHorizontal,
-              paddingTop: paddingTop,
-              paddingBottom: insets.bottom + 30,
-              flexGrow: 1,
-              justifyContent: 'center',
-              minHeight: '100%',
-            }
+              paddingHorizontal: tamanos.paddingHorizontal,
+              paddingTop: insets.top + tamanos.paddingTop,
+              paddingBottom: insets.bottom + tamanos.paddingBottom,
+            },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ============ LOGO ============ */}
           <Animated.View
             style={[
               estilos.logoContainer,
-              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+                marginBottom: tamanos.logoMarginBottom,
+              },
             ]}
           >
             <View style={estilos.logoWrapper}>
               <Image
                 source={logoImage}
-                style={[
-                  estilos.logoImage,
-                  {
-                    width: isSmallScreen ? Math.min(logoSize, 140) : logoSize,
-                    height: isSmallScreen ? Math.min(logoSize, 140) : logoSize,
-                  },
-                ]}
+                style={{
+                  width: tamanos.logoSize,
+                  height: tamanos.logoSize,
+                  backgroundColor: 'transparent',
+                  borderRadius: 999,
+                }}
                 resizeMode="contain"
               />
             </View>
           </Animated.View>
 
+          {/* ============ FORMULARIO ============ */}
           <Animated.View
             style={[
               estilos.formulario,
@@ -594,16 +719,25 @@ export default function PantallaLogin(props: any) {
                 opacity: fadeAnim,
                 transform: [{ translateY: slideUpAnim }, { translateX: shakeAnim }],
                 width: '100%',
-                maxWidth: 500,
+                maxWidth: tamanos.maxFormWidth,
                 alignSelf: 'center',
-              }
+                padding: tamanos.formPadding,
+                borderRadius: tamanos.formRadius,
+              },
             ]}
           >
-            <View style={estilos.formHeader}>
-              <Text style={estilos.formTitle} accessibilityRole="header">
+            <View style={[estilos.formHeader, { marginBottom: tamanos.sectionGap + 4 }]}>
+              <Text
+                style={[estilos.formTitle, { fontSize: tamanos.formTitleSize }]}
+                accessibilityRole="header"
+                allowFontScaling={false}
+              >
                 ¡Bienvenidos!
               </Text>
-              <Text style={estilos.formSubtitle}>
+              <Text
+                style={[estilos.formSubtitle, { fontSize: tamanos.formSubtitleSize }]}
+                allowFontScaling={false}
+              >
                 Iniciá sesión para continuar
               </Text>
             </View>
@@ -614,22 +748,44 @@ export default function PantallaLogin(props: any) {
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
               >
-                <Ionicons name="alert-circle" size={20} color={DISENO.colors.danger} />
-                <Text style={estilos.errorGeneralTexto}>{mensajeErrorGeneral}</Text>
+                <Ionicons
+                  name="alert-circle"
+                  size={tamanos.errorIconSize}
+                  color={DISENO.colors.danger}
+                />
+                <Text style={estilos.errorGeneralTexto} allowFontScaling={false}>
+                  {mensajeErrorGeneral}
+                </Text>
               </View>
             )}
 
-            <Text style={[estilos.label, { fontSize: formTextSize }]}>Correo electrónico</Text>
-            <View style={[estilos.inputContainer, errores.correo && estilos.inputError]}>
+            {/* Campo: Correo */}
+            <Text
+              style={[estilos.label, { fontSize: tamanos.labelSize }]}
+              allowFontScaling={false}
+            >
+              Correo electrónico
+            </Text>
+            <View
+              style={[
+                estilos.inputContainer,
+                {
+                  height: tamanos.inputHeight,
+                  paddingHorizontal: tamanos.inputPaddingH,
+                  borderRadius: tamanos.inputRadius,
+                },
+                errores.correo && estilos.inputError,
+              ]}
+            >
               <Ionicons
-                name={errores.correo ? "alert-circle" : "mail-outline"}
-                size={22}
+                name={errores.correo ? 'alert-circle' : 'mail-outline'}
+                size={tamanos.iconSize}
                 color={errores.correo ? DISENO.colors.danger : COLOR_DETALLE_LOGIN}
                 style={estilos.inputIcon}
               />
               <TextInput
                 ref={correoInputRef}
-                style={[estilos.input, { fontSize: formTextSize }]}
+                style={[estilos.input, { fontSize: tamanos.inputTextSize }]}
                 value={correo}
                 onChangeText={handleCorreoChange}
                 placeholder="tucorreo@ejemplo.com"
@@ -644,36 +800,63 @@ export default function PantallaLogin(props: any) {
                 editable={!cargando && !bloqueado}
                 returnKeyType="next"
                 onSubmitEditing={() => contrasenaInputRef.current?.focus()}
+                allowFontScaling={false}
               />
               {correo.length > 0 && !errores.correo && (
                 <TouchableOpacity
                   onPress={() => setCorreo('')}
-                  style={estilos.iconActionButton}
+                  style={[
+                    estilos.iconActionButton,
+                    { width: tamanos.iconActionSize, height: tamanos.iconActionSize },
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel="Borrar correo electrónico"
                   hitSlop={8}
                 >
-                  <Ionicons name="close-circle" size={18} color={COLOR_DETALLE_LOGIN} />
+                  <Ionicons name="close-circle" size={tamanos.iconSize - 2} color={COLOR_DETALLE_LOGIN} />
                 </TouchableOpacity>
               )}
             </View>
             {errores.correo && (
-              <Text style={estilos.textoError} accessibilityLiveRegion="polite">
+              <Text
+                style={[estilos.textoError, { fontSize: tamanos.smallTextSize }]}
+                accessibilityLiveRegion="polite"
+                allowFontScaling={false}
+              >
                 {errores.correo}
               </Text>
             )}
 
-            <Text style={[estilos.label, { fontSize: formTextSize, marginTop: 16 }]}>Contraseña</Text>
-            <View style={[estilos.inputContainer, errores.contrasena && estilos.inputError]}>
+            {/* Campo: Contraseña */}
+            <Text
+              style={[
+                estilos.label,
+                { fontSize: tamanos.labelSize, marginTop: tamanos.sectionGap },
+              ]}
+              allowFontScaling={false}
+            >
+              Contraseña
+            </Text>
+            <View
+              style={[
+                estilos.inputContainer,
+                {
+                  height: tamanos.inputHeight,
+                  paddingHorizontal: tamanos.inputPaddingH,
+                  borderRadius: tamanos.inputRadius,
+                },
+                errores.contrasena && estilos.inputError,
+              ]}
+            >
               <Ionicons
-                name={errores.contrasena ? "alert-circle" : "lock-closed-outline"}
-                size={22}
+                name={errores.contrasena ? 'alert-circle' : 'lock-closed-outline'}
+                size={tamanos.iconSize}
                 color={errores.contrasena ? DISENO.colors.danger : COLOR_DETALLE_LOGIN}
                 style={estilos.inputIcon}
               />
               <TextInput
                 ref={contrasenaInputRef}
-                style={[estilos.input, { fontSize: formTextSize }]}
+                style={[estilos.input, { fontSize: tamanos.inputTextSize }]}
                 value={contrasena}
                 onChangeText={handleContrasenaChange}
                 placeholder="Tu contraseña"
@@ -686,38 +869,52 @@ export default function PantallaLogin(props: any) {
                 editable={!cargando && !bloqueado}
                 returnKeyType="done"
                 onSubmitEditing={manejarLogin}
+                allowFontScaling={false}
               />
               <TouchableOpacity
                 onPress={() => setMostrarContrasena(!mostrarContrasena)}
-                style={estilos.iconActionButton}
+                style={[
+                  estilos.iconActionButton,
+                  { width: tamanos.iconActionSize, height: tamanos.iconActionSize },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={mostrarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 hitSlop={8}
               >
                 <Ionicons
                   name={mostrarContrasena ? 'eye-outline' : 'eye-off-outline'}
-                  size={22}
+                  size={tamanos.iconSize}
                   color={COLOR_DETALLE_LOGIN}
                 />
               </TouchableOpacity>
             </View>
             {errores.contrasena && (
-              <Text style={estilos.textoError} accessibilityLiveRegion="polite">
+              <Text
+                style={[estilos.textoError, { fontSize: tamanos.smallTextSize }]}
+                accessibilityLiveRegion="polite"
+                allowFontScaling={false}
+              >
                 {errores.contrasena}
               </Text>
             )}
 
-            <View style={estilos.recordarContainer}>
+            {/* Recordar + Olvidé */}
+            <View style={[estilos.recordarContainer, { marginTop: tamanos.sectionGap }]}>
               <View style={estilos.recordarLeft}>
                 <Switch
                   value={recordarUsuario}
                   onValueChange={setRecordarUsuario}
                   accessibilityLabel="Recordar usuario"
                   trackColor={{ false: DISENO.colors.border, true: DISENO.colors.accent }}
-                  thumbColor={recordarUsuario ? DISENO.colors.surface : DISENO.colors.surface}
+                  thumbColor={DISENO.colors.surface}
+                  style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }] }}
                 />
-                <Text style={[estilos.recordarTexto, { fontSize: Math.max(13, inputSize - 1) }]}>
-                  Recordar usuario
+                <Text
+                  style={[estilos.recordarTexto, { fontSize: tamanos.smallTextSize }]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  Recordarme
                 </Text>
               </View>
               <TouchableOpacity
@@ -727,7 +924,11 @@ export default function PantallaLogin(props: any) {
                 accessibilityRole="button"
                 accessibilityLabel="¿Olvidaste tu contraseña?"
               >
-                <Text style={[estilos.olvidoTexto, { fontSize: Math.max(13, inputSize - 1) }]}>
+                <Text
+                  style={[estilos.olvidoTexto, { fontSize: tamanos.smallTextSize }]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
                   ¿Olvidaste tu contraseña?
                 </Text>
               </TouchableOpacity>
@@ -736,7 +937,10 @@ export default function PantallaLogin(props: any) {
             {intentosFallidos > 0 && intentosFallidos < MAX_INTENTOS && (
               <View style={estilos.intentosContainer}>
                 <Ionicons name="warning-outline" size={14} color={DISENO.colors.danger + '80'} />
-                <Text style={estilos.intentosTexto}>
+                <Text
+                  style={[estilos.intentosTexto, { fontSize: tamanos.smallTextSize - 1 }]}
+                  allowFontScaling={false}
+                >
                   {intentosFallidos} de {MAX_INTENTOS} intentos disponibles
                 </Text>
               </View>
@@ -745,14 +949,25 @@ export default function PantallaLogin(props: any) {
             {bloqueado && (
               <View style={estilos.bloqueoContainer}>
                 <Ionicons name="time-outline" size={18} color={DISENO.colors.accent} />
-                <Text style={estilos.bloqueoTexto}>
+                <Text
+                  style={[estilos.bloqueoTexto, { fontSize: tamanos.smallTextSize + 1 }]}
+                  allowFontScaling={false}
+                >
                   ⏳ Bloqueado por {tiempoRestante} segundos
                 </Text>
               </View>
             )}
 
+            {/* Botón principal */}
             <TouchableOpacity
-              style={[estilos.boton, (cargando || bloqueado) && { opacity: 0.6 }]}
+              style={[
+                estilos.boton,
+                {
+                  marginTop: tamanos.sectionGap + 6,
+                  borderRadius: tamanos.buttonRadius,
+                },
+                (cargando || bloqueado) && { opacity: 0.6 },
+              ]}
               onPress={manejarLogin}
               disabled={cargando || bloqueado}
               activeOpacity={0.8}
@@ -762,7 +977,7 @@ export default function PantallaLogin(props: any) {
             >
               <LinearGradient
                 colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                style={estilos.botonGradient}
+                style={[estilos.botonGradient, { paddingVertical: tamanos.buttonPaddingV }]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
@@ -770,15 +985,29 @@ export default function PantallaLogin(props: any) {
                   <ActivityIndicator color={DISENO.colors.surface} size="small" />
                 ) : bloqueado ? (
                   <>
-                    <Ionicons name="time" size={buttonTextSize + 4} color={DISENO.colors.surface} />
-                    <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
+                    <Ionicons
+                      name="time"
+                      size={tamanos.buttonTextSize + 4}
+                      color={DISENO.colors.surface}
+                    />
+                    <Text
+                      style={[estilos.textoBoton, { fontSize: tamanos.buttonTextSize }]}
+                      allowFontScaling={false}
+                    >
                       Espera {tiempoRestante}s
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Ionicons name="log-in" size={buttonTextSize + 4} color={DISENO.colors.surface} />
-                    <Text style={[estilos.textoBoton, { fontSize: buttonTextSize }]}>
+                    <Ionicons
+                      name="log-in"
+                      size={tamanos.buttonTextSize + 4}
+                      color={DISENO.colors.surface}
+                    />
+                    <Text
+                      style={[estilos.textoBoton, { fontSize: tamanos.buttonTextSize }]}
+                      allowFontScaling={false}
+                    >
                       Iniciar Sesión
                     </Text>
                   </>
@@ -786,14 +1015,25 @@ export default function PantallaLogin(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
-            <View style={estilos.separadorContainer}>
+            {/* Separador */}
+            <View style={[estilos.separadorContainer, { marginTop: tamanos.sectionGap + 2 }]}>
               <View style={estilos.separador} />
-              <Text style={estilos.separadorTexto}>o</Text>
+              <Text
+                style={[estilos.separadorTexto, { fontSize: tamanos.smallTextSize }]}
+                allowFontScaling={false}
+              >
+                o
+              </Text>
               <View style={estilos.separador} />
             </View>
 
+            {/* Google */}
             <TouchableOpacity
-              style={[estilos.botonGoogle, cargandoGoogle && { opacity: 0.6 }]}
+              style={[
+                estilos.botonGoogle,
+                { minHeight: tamanos.inputHeight, borderRadius: tamanos.inputRadius },
+                cargandoGoogle && { opacity: 0.6 },
+              ]}
               onPress={manejarGoogleLogin}
               disabled={cargandoGoogle || cargando}
               activeOpacity={0.8}
@@ -807,34 +1047,49 @@ export default function PantallaLogin(props: any) {
                 <View style={estilos.googleButtonContent}>
                   <Image
                     source={googleLogoImage}
-                    style={estilos.googleIcon}
+                    style={{ width: 20, height: 20 }}
                     resizeMode="contain"
                     accessible={false}
                   />
-                  <Text style={[estilos.botonGoogleTexto, { fontSize: formTextSize }]}>
+                  <Text
+                    style={[estilos.botonGoogleTexto, { fontSize: tamanos.inputTextSize }]}
+                    allowFontScaling={false}
+                  >
                     Continuar con Google
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
 
+            {/* Card de registro */}
             <TouchableOpacity
-              style={estilos.registroCard}
+              style={[
+                estilos.registroCard,
+                { minHeight: tamanos.inputHeight, borderRadius: tamanos.inputRadius },
+              ]}
               onPress={() => navigation.navigate('Registro')}
               activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel="Crear cuenta y recibir 500 puntos de bienvenida"
             >
               <Ionicons name="gift-outline" size={18} color={COLOR_PUNTOS_LOGIN} />
-              <Text style={[estilos.registroCardTexto, { fontSize: formTextSize }]}>
+              <Text
+                style={[estilos.registroCardTexto, { fontSize: tamanos.smallTextSize }]}
+                numberOfLines={2}
+                allowFontScaling={false}
+              >
                 ¿Nuevo por aquí? Creá tu cuenta y recibí{' '}
                 <Text style={estilos.registroCardDestacado}>500 puntos</Text>
               </Text>
               <Ionicons name="chevron-forward" size={16} color={COLOR_DETALLE_LOGIN} />
             </TouchableOpacity>
 
+            {/* Invitado */}
             <TouchableOpacity
-              style={estilos.botonInvitado}
+              style={[
+                estilos.botonInvitado,
+                { minHeight: tamanos.inputHeight - 6, borderRadius: tamanos.inputRadius },
+              ]}
               onPress={manejarInvitado}
               activeOpacity={0.6}
               disabled={cargando}
@@ -842,33 +1097,42 @@ export default function PantallaLogin(props: any) {
               accessibilityLabel="Continuar como invitado"
               accessibilityState={{ disabled: cargando }}
             >
-              <Ionicons name="person-outline" size={20} color={COLOR_DETALLE_LOGIN} />
-              <Text style={[estilos.botonInvitadoTexto, { fontSize: formTextSize }]}>
+              <Ionicons name="person-outline" size={18} color={COLOR_DETALLE_LOGIN} />
+              <Text
+                style={[estilos.botonInvitadoTexto, { fontSize: tamanos.inputTextSize }]}
+                allowFontScaling={false}
+              >
                 Continuar como invitado
               </Text>
             </TouchableOpacity>
 
+            {/* Legal */}
             <View style={estilos.legalContainer}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Terminos')}
-                activeOpacity={0.6}
-              >
-                <Text style={estilos.legalTexto}>
+              <TouchableOpacity onPress={() => navigation.navigate('Terminos')} activeOpacity={0.6}>
+                <Text
+                  style={[estilos.legalTexto, { fontSize: tamanos.legalTextSize }]}
+                  allowFontScaling={false}
+                >
                   📋 Términos
                 </Text>
               </TouchableOpacity>
               <Text style={estilos.legalSeparador}>•</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Privacidad')}
-                activeOpacity={0.6}
-              >
-                <Text style={estilos.legalTexto}>
+              <TouchableOpacity onPress={() => navigation.navigate('Privacidad')} activeOpacity={0.6}>
+                <Text
+                  style={[estilos.legalTexto, { fontSize: tamanos.legalTextSize }]}
+                  allowFontScaling={false}
+                >
                   🔒 Privacidad
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={estilos.versionTexto}>v1.0.2</Text>
+            <Text
+              style={[estilos.versionTexto, { fontSize: tamanos.versionTextSize }]}
+              allowFontScaling={false}
+            >
+              v1.0.2
+            </Text>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -877,7 +1141,7 @@ export default function PantallaLogin(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS (solo lo estático; lo dinámico va inline)
 // ============================================================
 const estilos = StyleSheet.create({
   contenedor: {
@@ -897,7 +1161,6 @@ const estilos = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: '45%',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
   },
@@ -908,87 +1171,77 @@ const estilos = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: '100%',
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    marginBottom: 18,
   },
   logoWrapper: {
     ...DISENO.shadow.lg,
     shadowColor: DISENO.colors.accent,
     shadowOpacity: 0.25,
   },
-  logoImage: {
-    backgroundColor: 'transparent',
-    borderRadius: 999,
-  },
   formulario: {
     width: '100%',
-    maxWidth: 500,
     alignSelf: 'center',
     backgroundColor: DISENO.colors.surface,
-    borderRadius: 24,
-    padding: 24,
     ...DISENO.shadow.lg,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
   },
   formHeader: {
     alignItems: 'center',
-    marginBottom: 20,
   },
   formTitle: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
-    fontSize: 23,
     fontWeight: '700',
     textAlign: 'center',
+    lineHeight: 32,
+    includeFontPadding: false,
   },
   formSubtitle: {
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_SECUNDARIO_LOGIN,
-    fontSize: 14,
     marginTop: 4,
     textAlign: 'center',
+    lineHeight: 20,
+    includeFontPadding: false,
   },
   label: {
     fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.text,
     marginBottom: 4,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    lineHeight: 18,
+    includeFontPadding: false,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: DISENO.colors.surfaceHover,
-    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: DISENO.colors.border,
-    paddingHorizontal: 14,
-    height: 56,
   },
   inputError: {
     borderColor: DISENO.colors.danger,
     backgroundColor: DISENO.colors.danger + '10',
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 10,
     flexShrink: 0,
   },
   input: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.text,
-    paddingVertical: 12,
-    paddingTop: 15,
+    paddingVertical: 0,
     flex: 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   iconActionButton: {
-    width: 44,
-    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -996,9 +1249,10 @@ const estilos = StyleSheet.create({
   textoError: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 14,
     marginTop: 4,
     marginLeft: 4,
+    lineHeight: 18,
+    includeFontPadding: false,
   },
   errorGeneralContainer: {
     flexDirection: 'row',
@@ -1014,40 +1268,43 @@ const estilos = StyleSheet.create({
   errorGeneralTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger,
-    fontSize: 14,
+    fontSize: 13,
     flex: 1,
     fontWeight: '500',
+    lineHeight: 19,
+    includeFontPadding: false,
   },
   recordarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
-    paddingHorizontal: 4,
-    flexWrap: 'wrap',
+    paddingHorizontal: 2,
     gap: 6,
   },
   recordarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexShrink: 1,
   },
   recordarTexto: {
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '500',
+    includeFontPadding: false,
   },
   olvidoContainer: {
-    minHeight: 44,
+    minHeight: 40,
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
+    flexShrink: 0,
   },
   olvidoTexto: {
     fontFamily: FUENTES.regular,
     color: COLOR_DETALLE_LOGIN,
     textDecorationLine: 'underline',
     fontWeight: '400',
+    includeFontPadding: false,
   },
   intentosContainer: {
     flexDirection: 'row',
@@ -1059,8 +1316,8 @@ const estilos = StyleSheet.create({
   intentosTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.danger + '80',
-    fontSize: 12,
     fontWeight: '500',
+    includeFontPadding: false,
   },
   bloqueoContainer: {
     flexDirection: 'row',
@@ -1076,12 +1333,10 @@ const estilos = StyleSheet.create({
   bloqueoTexto: {
     fontFamily: FUENTES.regular,
     color: DISENO.colors.accent,
-    fontSize: 13,
     fontWeight: '600',
+    includeFontPadding: false,
   },
   boton: {
-    marginTop: 20,
-    borderRadius: 14,
     overflow: 'hidden',
     ...DISENO.shadow.md,
     shadowColor: DISENO.colors.accent,
@@ -1092,7 +1347,6 @@ const estilos = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 16,
     paddingHorizontal: 24,
   },
   textoBoton: {
@@ -1100,40 +1354,36 @@ const estilos = StyleSheet.create({
     fontWeight: '400',
     color: DISENO.colors.surface,
     letterSpacing: 1,
+    lineHeight: 24,
+    includeFontPadding: false,
   },
   botonGoogle: {
-    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#747775',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 10,
   },
   googleButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
+    gap: 10,
   },
   botonGoogleTexto: {
     color: '#1F1F1F',
     fontWeight: '500',
     lineHeight: 20,
+    includeFontPadding: false,
   },
   separadorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   separador: {
     flex: 1,
@@ -1144,20 +1394,18 @@ const estilos = StyleSheet.create({
     fontFamily: FUENTES.regular,
     color: COLOR_DETALLE_LOGIN,
     paddingHorizontal: 16,
-    fontSize: 12,
     fontWeight: '600',
+    includeFontPadding: false,
   },
   registroCard: {
-    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginTop: 10,
-    marginBottom: 10,
-    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    marginTop: 8,
+    marginBottom: 8,
     backgroundColor: '#FFF8DB',
     borderWidth: 1,
     borderColor: '#F0D675',
@@ -1167,6 +1415,8 @@ const estilos = StyleSheet.create({
     color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '400',
     flex: 1,
+    lineHeight: 18,
+    includeFontPadding: false,
   },
   registroCardDestacado: {
     fontFamily: FUENTES.regular,
@@ -1174,13 +1424,11 @@ const estilos = StyleSheet.create({
     fontWeight: '700',
   },
   botonInvitado: {
-    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: DISENO.colors.border,
     backgroundColor: DISENO.colors.surfaceHover,
@@ -1190,7 +1438,8 @@ const estilos = StyleSheet.create({
     fontFamily: FUENTES.regular,
     color: COLOR_TEXTO_SECUNDARIO_LOGIN,
     fontWeight: '500',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    includeFontPadding: false,
   },
   legalContainer: {
     flexDirection: 'row',
@@ -1198,13 +1447,14 @@ const estilos = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 12,
     gap: 8,
+    flexWrap: 'wrap',
   },
   legalTexto: {
     fontFamily: FUENTES.regular,
     color: COLOR_DETALLE_LOGIN,
-    fontSize: 12,
     fontWeight: '400',
     textDecorationLine: 'underline',
+    includeFontPadding: false,
   },
   legalSeparador: {
     color: COLOR_DETALLE_LOGIN,
@@ -1214,8 +1464,8 @@ const estilos = StyleSheet.create({
   versionTexto: {
     fontFamily: FUENTES.regular,
     color: COLOR_DETALLE_LOGIN,
-    fontSize: 11,
     textAlign: 'center',
-    marginTop: 14,
+    marginTop: 10,
+    includeFontPadding: false,
   },
 });

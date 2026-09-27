@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaMenu.tsx - CON BADGE "CON PAPAS"
+﻿// screens/cliente/PantallaMenu.tsx - V2 RESPONSIVE
 import React, { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react';
 import {
   View,
@@ -36,60 +36,167 @@ const DESIGN = {
     surfaceHover: '#F8F6F2',
     card: '#FFFFFF',
     cardShadow: 'rgba(0,0,0,0.06)',
-    cardShadowHeavy: 'rgba(0,0,0,0.08)',
     border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.04)',
     text: '#1A1A1A',
     textSecondary: 'rgba(0,0,0,0.55)',
     textTertiary: 'rgba(0,0,0,0.30)',
     accent: '#E53935',
-    accentLight: '#FF6B6B',
     accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
     gradientStart: '#E53935',
     gradientEnd: '#F5C518',
     verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    rosa: '#EC407A',
-    azul: '#1A237E',
-    azulClaro: '#3949AB',
-    platino: '#78909C',
-    oro: '#F9A825',
-    plata: '#BDBDBD',
-    bronce: '#A1887F',
   },
-  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, '2xl': 48 },
-  radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 999 },
 };
 
 // ============================================================
-// 🎯 HOOK RESPONSIVE
+// 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
 // ============================================================
-type ResponsiveType = {
-  isTablet: boolean;
-  isDesktop: boolean;
-  isSmallPhone: boolean;
-  width: number;
-  height: number;
-  getValor: (valores: { tablet: any; normal: any; small: any }) => any;
-};
+interface TamanosMenu {
+  padding: number;
+  gridColumns: number;
+  cardWidthGrid: number;
+  cardWidthList: number;
+  cardGap: number;
+  // Card
+  imageHeight: number;
+  cardRadius: number;
+  cardPadding: number;
+  productNameSize: number;
+  productDescSize: number;
+  productPriceSize: number;
+  addButtonSize: number;
+  addIconSize: number;
+  heartSize: number;
+  heartPadding: number;
+  badgeConPapasFontSize: number;
+  badgeConPapasPaddingH: number;
+  badgeConPapasPaddingV: number;
+  badgeConPapasRadius: number;
+  // Header
+  headerTopPadding: number;
+  headerBottomPadding: number;
+  tituloSize: number;
+  backIconSize: number;
+  gridIconSize: number;
+  // Search
+  searchPadding: number;
+  searchRadius: number;
+  searchPaddingH: number;
+  searchPaddingV: number;
+  searchIconSize: number;
+  searchTextSize: number;
+  // Categorías
+  catContainerPaddingV: number;
+  catHeight: number;
+  catWidth: number;
+  catMarginRight: number;
+  catRadius: number;
+  catTextSize: number;
+  // Empty / loading
+  loadingTextSize: number;
+  emptyTextSize: number;
+  emptySubtextSize: number;
+}
 
-const useResponsive = (): ResponsiveType => {
-  const { width, height } = useWindowDimensions();
-  const isTablet = width >= 768;
-  const isDesktop = width >= 1024;
-  const isSmallPhone = width < 375;
+const calcularTamanosMenu = (
+  width: number,
+  height: number,
+  isTablet: boolean,
+  isDesktop: boolean,
+  isSmallPhone: boolean,
+): TamanosMenu => {
+  const padding = isDesktop ? 40 : isTablet ? 32 : isSmallPhone ? 14 : 18;
+  const gridColumns = isDesktop ? 3 : isTablet ? 2 : 2;
+  const cardGap = isTablet ? 16 : isSmallPhone ? 10 : 12;
 
-  const getValor = useCallback(
-    (valores: { tablet: any; normal: any; small: any }) => {
-      if (isDesktop || isTablet) return valores.tablet;
-      if (isSmallPhone) return valores.small;
-      return valores.normal;
-    },
-    [isDesktop, isTablet, isSmallPhone]
-  );
+  const paddingTotal = padding * 2;
+  const espacioTotal = paddingTotal + cardGap * (gridColumns - 1);
+  const cardWidthGrid = (width - espacioTotal) / gridColumns;
+  const cardWidthList = width - padding * 2;
 
-  return { isTablet, isDesktop, isSmallPhone, width, height, getValor };
+  const imageHeight = isDesktop ? 200 : isTablet ? 180 : isSmallPhone ? 120 : 145;
+  const cardRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
+  const cardPadding = isDesktop ? 14 : isTablet ? 14 : isSmallPhone ? 10 : 12;
+
+  const productNameSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 11 : 13;
+  const productDescSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 10 : 11.5;
+  const productPriceSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 14 : 16;
+
+  const addButtonSize = isDesktop ? 36 : isTablet ? 34 : isSmallPhone ? 28 : 30;
+  const addIconSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 15 : 18;
+  const heartSize = isDesktop ? 20 : isTablet ? 20 : isSmallPhone ? 16 : 18;
+  const heartPadding = isSmallPhone ? 5 : 6;
+
+  const badgeConPapasFontSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 9 : 10;
+  const badgeConPapasPaddingH = isDesktop ? 10 : isTablet ? 9 : isSmallPhone ? 6 : 8;
+  const badgeConPapasPaddingV = isDesktop ? 5 : isTablet ? 5 : isSmallPhone ? 3 : 4;
+  const badgeConPapasRadius = isDesktop ? 10 : isSmallPhone ? 6 : 8;
+
+  const headerTopPadding = isDesktop ? 20 : isTablet ? 20 : isSmallPhone ? 8 : 12;
+  const headerBottomPadding = isDesktop ? 16 : isTablet ? 16 : isSmallPhone ? 8 : 12;
+  const tituloSize = isDesktop ? 26 : isTablet ? 24 : isSmallPhone ? 18 : 21;
+  const backIconSize = isDesktop ? 30 : isTablet ? 28 : isSmallPhone ? 22 : 24;
+  const gridIconSize = isDesktop ? 28 : isTablet ? 26 : isSmallPhone ? 20 : 22;
+
+  const searchPadding = isSmallPhone ? 8 : 12;
+  const searchRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
+  const searchPaddingH = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 12 : 14;
+  const searchPaddingV = isDesktop ? 6 : isTablet ? 5 : isSmallPhone ? 3 : 4;
+  const searchIconSize = isDesktop ? 20 : isTablet ? 20 : isSmallPhone ? 18 : 19;
+  const searchTextSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+
+  const catContainerPaddingV = isDesktop ? 12 : isTablet ? 12 : isSmallPhone ? 8 : 10;
+  const catHeight = isDesktop ? 44 : isTablet ? 42 : isSmallPhone ? 34 : 38;
+  const catWidth = isDesktop ? 130 : isTablet ? 120 : isSmallPhone ? 90 : 100;
+  const catMarginRight = isDesktop ? 10 : isTablet ? 10 : isSmallPhone ? 6 : 8;
+  const catRadius = isDesktop ? 12 : isSmallPhone ? 8 : 10;
+  const catTextSize = isDesktop ? 14 : isTablet ? 14 : isSmallPhone ? 11 : 12;
+
+  const loadingTextSize = isDesktop ? 16 : isTablet ? 16 : isSmallPhone ? 12 : 14;
+  const emptyTextSize = isDesktop ? 20 : isTablet ? 20 : isSmallPhone ? 15 : 17;
+  const emptySubtextSize = isDesktop ? 16 : isTablet ? 16 : isSmallPhone ? 12 : 14;
+
+  return {
+    padding,
+    gridColumns,
+    cardWidthGrid,
+    cardWidthList,
+    cardGap,
+    imageHeight,
+    cardRadius,
+    cardPadding,
+    productNameSize,
+    productDescSize,
+    productPriceSize,
+    addButtonSize,
+    addIconSize,
+    heartSize,
+    heartPadding,
+    badgeConPapasFontSize,
+    badgeConPapasPaddingH,
+    badgeConPapasPaddingV,
+    badgeConPapasRadius,
+    headerTopPadding,
+    headerBottomPadding,
+    tituloSize,
+    backIconSize,
+    gridIconSize,
+    searchPadding,
+    searchRadius,
+    searchPaddingH,
+    searchPaddingV,
+    searchIconSize,
+    searchTextSize,
+    catContainerPaddingV,
+    catHeight,
+    catWidth,
+    catMarginRight,
+    catRadius,
+    catTextSize,
+    loadingTextSize,
+    emptyTextSize,
+    emptySubtextSize,
+  };
 };
 
 // ============================================================
@@ -104,7 +211,7 @@ const CATEGORIAS = [
 ];
 
 // ============================================================
-// 🎴 PRODUCT CARD MEMOIZADO
+// 🎴 PRODUCT CARD
 // ============================================================
 interface ProductCardProps {
   item: Producto;
@@ -115,7 +222,7 @@ interface ProductCardProps {
   onPress: (item: Producto) => void;
   onAdd: (item: Producto) => void;
   onToggleFavorito: (item: Producto) => void;
-  responsive: ResponsiveType;
+  tamanos: TamanosMenu;
 }
 
 const ProductCard = memo(function ProductCard({
@@ -127,25 +234,15 @@ const ProductCard = memo(function ProductCard({
   onPress,
   onAdd,
   onToggleFavorito,
-  responsive,
+  tamanos,
 }: ProductCardProps) {
-  if (item.id < 0) {
-    return <View style={{ width: cardWidth }} />;
-  }
-
-  const priceSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
-  const buttonSize = responsive.getValor({ tablet: 34, normal: 30, small: 28 });
-  const iconSize = responsive.getValor({ tablet: 20, normal: 18, small: 15 });
-  const heartSize = responsive.getValor({ tablet: 20, normal: 18, small: 16 });
+  if (item.id < 0) return <View style={{ width: cardWidth }} />;
 
   return (
     <View
       style={[
         styles.productCardWrapper,
-        {
-          width: modoGrid ? cardWidth : '100%',
-          marginBottom: responsive.getValor({ tablet: 16, normal: 12, small: 10 }),
-        },
+        { width: modoGrid ? cardWidth : '100%', marginBottom: tamanos.cardGap },
       ]}
     >
       <TouchableOpacity
@@ -153,7 +250,7 @@ const ProductCard = memo(function ProductCard({
           styles.productCard,
           {
             backgroundColor: DESIGN.colors.surface,
-            borderRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+            borderRadius: tamanos.cardRadius,
             borderColor: DESIGN.colors.border,
             shadowColor: DESIGN.colors.cardShadow,
             shadowOffset: { width: 0, height: 4 },
@@ -169,9 +266,9 @@ const ProductCard = memo(function ProductCard({
           style={[
             styles.productImageContainer,
             {
-              height: responsive.getValor({ tablet: 180, normal: 150, small: 130 }),
-              borderTopLeftRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-              borderTopRightRadius: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+              height: tamanos.imageHeight,
+              borderTopLeftRadius: tamanos.cardRadius,
+              borderTopRightRadius: tamanos.cardRadius,
             },
           ]}
         >
@@ -195,32 +292,31 @@ const ProductCard = memo(function ProductCard({
             end={{ x: 0, y: 1 }}
           />
 
-          {/* ✅ Badge "Con papas" (arriba a la izquierda) */}
           {item.incluye_papas && (
             <View
               style={[
                 styles.badgeConPapas,
                 {
-                  paddingHorizontal: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
-                  paddingVertical: responsive.getValor({ tablet: 5, normal: 4, small: 3 }),
-                  borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                  paddingHorizontal: tamanos.badgeConPapasPaddingH,
+                  paddingVertical: tamanos.badgeConPapasPaddingV,
+                  borderRadius: tamanos.badgeConPapasRadius,
                 },
               ]}
             >
               <Text
                 style={[
                   styles.badgeConPapasTexto,
-                  { fontSize: responsive.getValor({ tablet: 11, normal: 9, small: 8 }) },
+                  { fontSize: tamanos.badgeConPapasFontSize },
                 ]}
+                allowFontScaling={false}
               >
                 🍟 Con papas
               </Text>
             </View>
           )}
 
-          {/* ❤️ Botón de favorito flotante */}
           <TouchableOpacity
-            style={styles.favoritoBadge}
+            style={[styles.favoritoBadge, { padding: tamanos.heartPadding }]}
             onPress={(e) => {
               e.stopPropagation();
               onToggleFavorito(item);
@@ -229,39 +325,30 @@ const ProductCard = memo(function ProductCard({
           >
             <Ionicons
               name={esFavorito ? 'heart' : 'heart-outline'}
-              size={heartSize}
+              size={tamanos.heartSize}
               color={esFavorito ? DESIGN.colors.accent : DESIGN.colors.text}
             />
           </TouchableOpacity>
         </View>
 
-        <View
-          style={[
-            styles.productInfo,
-            { padding: responsive.getValor({ tablet: 14, normal: 12, small: 10 }) },
-          ]}
-        >
+        <View style={[styles.productInfo, { padding: tamanos.cardPadding }]}>
           <Text
             style={[
               styles.productName,
-              {
-                fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
-                color: DESIGN.colors.text,
-              },
+              { fontSize: tamanos.productNameSize, color: DESIGN.colors.text },
             ]}
             numberOfLines={1}
+            allowFontScaling={false}
           >
             {item.nombre}
           </Text>
           <Text
             style={[
               styles.productDesc,
-              {
-                fontSize: responsive.getValor({ tablet: 13, normal: 12, small: 10 }),
-                color: DESIGN.colors.textSecondary,
-              },
+              { fontSize: tamanos.productDescSize, color: DESIGN.colors.textSecondary },
             ]}
             numberOfLines={2}
+            allowFontScaling={false}
           >
             {item.descripcion || 'Sin descripción'}
           </Text>
@@ -270,8 +357,9 @@ const ProductCard = memo(function ProductCard({
             <Text
               style={[
                 styles.productPrice,
-                { fontSize: priceSize, color: DESIGN.colors.accent },
+                { fontSize: tamanos.productPriceSize, color: DESIGN.colors.accent },
               ]}
+              allowFontScaling={false}
             >
               {formatearPrecio(item.precio)}
             </Text>
@@ -281,9 +369,9 @@ const ProductCard = memo(function ProductCard({
               style={[
                 styles.addButton,
                 {
-                  width: buttonSize,
-                  height: buttonSize,
-                  borderRadius: responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
+                  width: tamanos.addButtonSize,
+                  height: tamanos.addButtonSize,
+                  borderRadius: tamanos.cardRadius / 2,
                   backgroundColor: estaAgregado ? DESIGN.colors.verde : DESIGN.colors.accent,
                 },
               ]}
@@ -291,7 +379,7 @@ const ProductCard = memo(function ProductCard({
             >
               <Ionicons
                 name={estaAgregado ? 'checkmark' : 'add'}
-                size={iconSize}
+                size={tamanos.addIconSize}
                 color={DESIGN.colors.surface}
               />
             </TouchableOpacity>
@@ -315,11 +403,21 @@ const ProductCard = memo(function ProductCard({
 });
 
 // ============================================================
-// 🏠 PANTALLA MENU
+// 🏠 PANTALLA
 // ============================================================
 export default function PantallaMenu(props: any) {
-  const responsive = useResponsive();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // ✅ Responsive helpers (para grids)
+  const isTablet = screenWidth >= 768;
+  const isDesktop = screenWidth >= 1024;
+  const isSmallPhone = screenWidth < 375;
+
+  const tamanos = useMemo(
+    () => calcularTamanosMenu(screenWidth, screenHeight, isTablet, isDesktop, isSmallPhone),
+    [screenWidth, screenHeight, isTablet, isDesktop, isSmallPhone],
+  );
 
   const { agregarProducto } = tiendaCarrito();
   const { perfil, sesion } = tiendaAutenticacion();
@@ -330,7 +428,7 @@ export default function PantallaMenu(props: any) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productosFiltrados, setProductosFiltrados] = useState<Producto[]>([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>(
-    categoriaInicial || 'Todas'
+    categoriaInicial || 'Todas',
   );
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -339,7 +437,6 @@ export default function PantallaMenu(props: any) {
   const [agregados, setAgregados] = useState<Record<number, boolean>>({});
 
   const categoriasListRef = useRef<FlatList>(null);
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
@@ -351,46 +448,12 @@ export default function PantallaMenu(props: any) {
           props.navigation.setParams({ categoria: undefined });
         }
       };
-    }, [props.navigation, props.route?.params?.categoria])
+    }, [props.navigation, props.route?.params?.categoria]),
   );
 
-  const tamanos = useMemo(
-    () => ({
-      padding: responsive.getValor({ tablet: 40, normal: 20, small: 16 }),
-      gridColumns: responsive.isDesktop ? 3 : responsive.isTablet ? 2 : 2,
-    }),
-    [responsive]
-  );
-
-  const padding = tamanos.padding;
   const numColumns = modoGrid ? tamanos.gridColumns : 1;
-
-  const cardWidth = useMemo(() => {
-    if (modoGrid) {
-      const paddingHorizontal = padding * 2;
-      const gapEntreColumnas = responsive.isTablet ? 16 : 12;
-      const espacioTotal = paddingHorizontal + gapEntreColumnas * (numColumns - 1);
-      return (responsive.width - espacioTotal) / numColumns;
-    }
-    return responsive.width - 32;
-  }, [modoGrid, padding, numColumns, responsive]);
-
-  const categoriaItemHeight = useMemo(
-    () => responsive.getValor({ tablet: 42, normal: 36, small: 32 }),
-    [responsive]
-  );
-
-  const categoriaItemWidth = useMemo(
-    () => responsive.getValor({ tablet: 120, normal: 100, small: 90 }),
-    [responsive]
-  );
-
-  const categoriaItemMarginRight = useMemo(
-    () => responsive.getValor({ tablet: 10, normal: 8, small: 6 }),
-    [responsive]
-  );
-
-  const categoriaItemFullWidth = categoriaItemWidth + categoriaItemMarginRight;
+  const cardWidth = modoGrid ? tamanos.cardWidthGrid : tamanos.cardWidthList;
+  const categoriaItemFullWidth = tamanos.catWidth + tamanos.catMarginRight;
 
   const cargarProductos = useCallback(async () => {
     setCargando(true);
@@ -421,12 +484,12 @@ export default function PantallaMenu(props: any) {
         const filtrados = productos.filter(
           (p) =>
             p.nombre.toLowerCase().includes(texto.toLowerCase()) ||
-            p.descripcion?.toLowerCase().includes(texto.toLowerCase())
+            p.descripcion?.toLowerCase().includes(texto.toLowerCase()),
         );
         setProductosFiltrados(filtrados);
       }
     },
-    [productos]
+    [productos],
   );
 
   useEffect(() => {
@@ -460,7 +523,7 @@ export default function PantallaMenu(props: any) {
       requestAnimationFrame(() => {
         try {
           categoriasListRef.current?.scrollToIndex({ index, animated, viewPosition: 0.5 });
-        } catch (e) {
+        } catch {
           categoriasListRef.current?.scrollToOffset({
             offset: Math.max(0, categoriaItemFullWidth * index - 100),
             animated,
@@ -468,7 +531,7 @@ export default function PantallaMenu(props: any) {
         }
       });
     },
-    [categoriaItemFullWidth]
+    [categoriaItemFullWidth],
   );
 
   useEffect(() => {
@@ -483,11 +546,7 @@ export default function PantallaMenu(props: any) {
     (item: Producto) => {
       const id = item.id;
       setAgregados((prev) => ({ ...prev, [id]: true }));
-
-      requestAnimationFrame(() => {
-        agregarProducto(item);
-      });
-
+      requestAnimationFrame(() => agregarProducto(item));
       setTimeout(() => {
         setAgregados((prev) => {
           const next = { ...prev };
@@ -496,7 +555,7 @@ export default function PantallaMenu(props: any) {
         });
       }, 800);
     },
-    [agregarProducto]
+    [agregarProducto],
   );
 
   const handleToggleFavorito = useCallback(
@@ -507,15 +566,9 @@ export default function PantallaMenu(props: any) {
           'Necesitás una cuenta para guardar tus favoritos.',
           [
             { text: 'Cancelar', style: 'cancel' },
-            {
-              text: 'Iniciar sesión',
-              onPress: () => props.navigation.navigate('Login'),
-            },
-            {
-              text: 'Registrarme',
-              onPress: () => props.navigation.navigate('Registro'),
-            },
-          ]
+            { text: 'Iniciar sesión', onPress: () => props.navigation.navigate('Login') },
+            { text: 'Registrarme', onPress: () => props.navigation.navigate('Registro') },
+          ],
         );
         return;
       }
@@ -536,14 +589,14 @@ export default function PantallaMenu(props: any) {
         agregarFavoritoManual(usuarioId, item);
       }
     },
-    [sesion, perfil?.id, idsFavoritos, agregarFavoritoManual, eliminarFavoritoManual, props.navigation]
+    [sesion, perfil?.id, idsFavoritos, agregarFavoritoManual, eliminarFavoritoManual, props.navigation],
   );
 
   const handleDetalleProducto = useCallback(
     (item: Producto) => {
       props.navigation.navigate('DetalleProducto', { producto: item });
     },
-    [props.navigation]
+    [props.navigation],
   );
 
   const formatData = useCallback(
@@ -568,13 +621,12 @@ export default function PantallaMenu(props: any) {
       }
       return result;
     },
-    [modoGrid]
+    [modoGrid],
   );
 
   const renderProducto = useCallback(
     ({ item }: { item: Producto }) => {
       const esFavorito = idsFavoritos?.includes(Number(item.id));
-
       return (
         <ProductCard
           item={item}
@@ -585,7 +637,7 @@ export default function PantallaMenu(props: any) {
           onPress={handleDetalleProducto}
           onAdd={handleAgregarProducto}
           onToggleFavorito={handleToggleFavorito}
-          responsive={responsive}
+          tamanos={tamanos}
         />
       );
     },
@@ -597,16 +649,14 @@ export default function PantallaMenu(props: any) {
       handleDetalleProducto,
       handleAgregarProducto,
       handleToggleFavorito,
-      responsive,
-    ]
+      tamanos,
+    ],
   );
 
   const datosFormateados = useMemo(() => {
     if (!modoGrid) return productosFiltrados;
     return formatData([...productosFiltrados], numColumns);
   }, [productosFiltrados, modoGrid, numColumns, formatData]);
-
-  const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 17 });
 
   return (
     <View style={[styles.container, { backgroundColor: DESIGN.colors.fondo }]}>
@@ -619,13 +669,14 @@ export default function PantallaMenu(props: any) {
         end={{ x: 1, y: 1 }}
       />
 
+      {/* HEADER */}
       <Animated.View
         style={[
           styles.header,
           {
-            paddingTop: insets.top + responsive.getValor({ tablet: 20, normal: 12, small: 8 }),
-            paddingHorizontal: padding,
-            paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
+            paddingTop: insets.top + tamanos.headerTopPadding,
+            paddingHorizontal: tamanos.padding,
+            paddingBottom: tamanos.headerBottomPadding,
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
           },
@@ -635,15 +686,16 @@ export default function PantallaMenu(props: any) {
           onPress={() => props.navigation.goBack()}
           style={styles.backButton}
           activeOpacity={0.7}
+          hitSlop={12}
         >
-          <Ionicons
-            name="arrow-back"
-            size={responsive.getValor({ tablet: 30, normal: 26, small: 22 })}
-            color={DESIGN.colors.surface}
-          />
+          <Ionicons name="arrow-back" size={tamanos.backIconSize} color={DESIGN.colors.surface} />
         </TouchableOpacity>
 
-        <Text style={[styles.title, { fontSize: tituloSize, color: DESIGN.colors.surface }]}>
+        <Text
+          style={[styles.title, { fontSize: tamanos.tituloSize, color: DESIGN.colors.surface }]}
+          allowFontScaling={false}
+          numberOfLines={1}
+        >
           Menú Krusty
         </Text>
 
@@ -651,22 +703,24 @@ export default function PantallaMenu(props: any) {
           onPress={() => setModoGrid(!modoGrid)}
           style={styles.gridButton}
           activeOpacity={0.7}
+          hitSlop={12}
         >
           <Ionicons
             name={modoGrid ? 'grid-outline' : 'list-outline'}
-            size={responsive.getValor({ tablet: 28, normal: 24, small: 20 })}
+            size={tamanos.gridIconSize}
             color={DESIGN.colors.surface}
           />
         </TouchableOpacity>
       </Animated.View>
 
+      {/* BUSCADOR */}
       <Animated.View
         style={[
           styles.searchContainer,
           {
-            paddingHorizontal: padding,
-            paddingBottom: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
-            paddingTop: responsive.getValor({ tablet: 12, normal: 8, small: 6 }),
+            paddingHorizontal: tamanos.padding,
+            paddingBottom: tamanos.headerBottomPadding,
+            paddingTop: tamanos.searchPadding,
             opacity: fadeAnim,
           },
         ]}
@@ -676,10 +730,10 @@ export default function PantallaMenu(props: any) {
             styles.searchInput,
             {
               backgroundColor: DESIGN.colors.surface,
-              borderRadius: responsive.getValor({ tablet: 14, normal: 12, small: 10 }),
+              borderRadius: tamanos.searchRadius,
               borderColor: DESIGN.colors.border,
-              paddingHorizontal: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-              paddingVertical: responsive.getValor({ tablet: 6, normal: 4, small: 2 }),
+              paddingHorizontal: tamanos.searchPaddingH,
+              paddingVertical: tamanos.searchPaddingV,
               shadowColor: DESIGN.colors.cardShadow,
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 1,
@@ -688,12 +742,12 @@ export default function PantallaMenu(props: any) {
             },
           ]}
         >
-          <Ionicons name="search" size={20} color={DESIGN.colors.textTertiary} />
+          <Ionicons name="search" size={tamanos.searchIconSize} color={DESIGN.colors.textTertiary} />
           <TextInput
             style={[
               styles.searchInputText,
               {
-                fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
+                fontSize: tamanos.searchTextSize,
                 color: DESIGN.colors.text,
                 marginLeft: 10,
                 flex: 1,
@@ -703,21 +757,23 @@ export default function PantallaMenu(props: any) {
             placeholderTextColor={DESIGN.colors.textTertiary}
             value={busqueda}
             onChangeText={filtrarPorBusqueda}
+            allowFontScaling={false}
           />
           {busqueda.length > 0 && (
-            <TouchableOpacity onPress={() => filtrarPorBusqueda('')}>
+            <TouchableOpacity onPress={() => filtrarPorBusqueda('')} hitSlop={8}>
               <Ionicons name="close-circle" size={20} color={DESIGN.colors.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
       </Animated.View>
 
+      {/* CATEGORÍAS */}
       <Animated.View
         style={[
           styles.categoriesContainer,
           {
             opacity: fadeAnim,
-            paddingVertical: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+            paddingVertical: tamanos.catContainerPaddingV,
             backgroundColor: DESIGN.colors.surface + '90',
             borderBottomWidth: 1,
             borderBottomColor: DESIGN.colors.border,
@@ -729,7 +785,7 @@ export default function PantallaMenu(props: any) {
           horizontal
           data={CATEGORIAS}
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.categoriesList, { paddingHorizontal: padding }]}
+          contentContainerStyle={[styles.categoriesList, { paddingHorizontal: tamanos.padding }]}
           getItemLayout={(_, index) => ({
             length: categoriaItemFullWidth,
             offset: categoriaItemFullWidth * index,
@@ -753,12 +809,12 @@ export default function PantallaMenu(props: any) {
                 style={[
                   styles.category,
                   {
-                    width: categoriaItemWidth,
-                    height: categoriaItemHeight,
+                    width: tamanos.catWidth,
+                    height: tamanos.catHeight,
                     justifyContent: 'center',
                     alignItems: 'center',
-                    marginRight: categoriaItemMarginRight,
-                    borderRadius: responsive.getValor({ tablet: 12, normal: 10, small: 8 }),
+                    marginRight: tamanos.catMarginRight,
+                    borderRadius: tamanos.catRadius,
                     backgroundColor: seleccionada
                       ? DESIGN.colors.accentSecondary
                       : DESIGN.colors.surface,
@@ -780,13 +836,14 @@ export default function PantallaMenu(props: any) {
                   style={[
                     styles.categoryText,
                     {
-                      fontSize: responsive.getValor({ tablet: 14, normal: 12, small: 11 }),
+                      fontSize: tamanos.catTextSize,
                       color: seleccionada
                         ? DESIGN.colors.text
                         : DESIGN.colors.textSecondary,
-                      fontWeight: '400',
                     },
                   ]}
+                  allowFontScaling={false}
+                  numberOfLines={1}
                 >
                   {item.label}
                 </Text>
@@ -797,17 +854,16 @@ export default function PantallaMenu(props: any) {
         />
       </Animated.View>
 
+      {/* LISTA PRODUCTOS */}
       {cargando ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={DESIGN.colors.accentSecondary} />
           <Text
             style={[
               styles.loadingText,
-              {
-                fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-                color: DESIGN.colors.textSecondary,
-              },
+              { fontSize: tamanos.loadingTextSize, color: DESIGN.colors.textSecondary },
             ]}
+            allowFontScaling={false}
           >
             Cargando...
           </Text>
@@ -820,10 +876,9 @@ export default function PantallaMenu(props: any) {
           contentContainerStyle={[
             styles.productList,
             {
-              paddingHorizontal: padding,
-              paddingBottom:
-                insets.bottom + responsive.getValor({ tablet: 100, normal: 80, small: 60 }),
-              paddingTop: responsive.getValor({ tablet: 16, normal: 12, small: 8 }),
+              paddingHorizontal: tamanos.padding,
+              paddingBottom: insets.bottom + 80,
+              paddingTop: tamanos.cardGap,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -844,31 +899,24 @@ export default function PantallaMenu(props: any) {
             <View
               style={[
                 styles.emptyContainer,
-                {
-                  paddingTop: responsive.getValor({ tablet: 80, normal: 60, small: 40 }),
-                  paddingHorizontal: padding,
-                },
+                { paddingTop: 60, paddingHorizontal: tamanos.padding },
               ]}
             >
               <Text
                 style={[
                   styles.emptyText,
-                  {
-                    fontSize: responsive.getValor({ tablet: 20, normal: 17, small: 15 }),
-                    color: DESIGN.colors.text,
-                  },
+                  { fontSize: tamanos.emptyTextSize, color: DESIGN.colors.text },
                 ]}
+                allowFontScaling={false}
               >
                 Productos en esta categoría
               </Text>
               <Text
                 style={[
                   styles.emptySubtext,
-                  {
-                    fontSize: responsive.getValor({ tablet: 16, normal: 14, small: 12 }),
-                    color: DESIGN.colors.textSecondary,
-                  },
+                  { fontSize: tamanos.emptySubtextSize, color: DESIGN.colors.textSecondary },
                 ]}
+                allowFontScaling={false}
               >
                 Pronto tendremos más opciones para vos
               </Text>
@@ -889,38 +937,67 @@ export default function PantallaMenu(props: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DESIGN.colors.fondo },
   background: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: DESIGN.colors.fondo,
   },
   headerGradiente: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    borderBottomLeftRadius: 30, borderBottomRightRadius: 30,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     height: '19%',
     shadowColor: DESIGN.colors.cardShadow,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1, shadowRadius: 12, elevation: 4,
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   backButton: { padding: 4 },
-  title: { fontFamily: FUENTES.display, fontWeight: '400', letterSpacing: 0.5 },
+  title: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    letterSpacing: 0.5,
+    includeFontPadding: false,
+    flex: 1,
+    textAlign: 'center',
+    paddingTop: 20,
+  },
   gridButton: { padding: 4 },
   searchContainer: { backgroundColor: 'transparent' },
   searchInput: { flexDirection: 'row', alignItems: 'center', borderWidth: 1 },
-  searchInputText: { fontFamily: FUENTES.regular, padding: 0 },
+  searchInputText: {
+    fontFamily: FUENTES.regular,
+    padding: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
   categoriesContainer: { borderBottomWidth: 1 },
   categoriesList: { gap: 4 },
   category: { borderWidth: 1 },
-  categoryText: { fontFamily: FUENTES.display, letterSpacing: 0.3 },
+  categoryText: {
+    fontFamily: FUENTES.display,
+    letterSpacing: 0.3,
+    includeFontPadding: false,
+  },
   productList: { flexGrow: 1 },
   productCardWrapper: { flex: 1 },
   productCard: { borderWidth: 1, overflow: 'hidden' },
   productImageContainer: { width: '100%', overflow: 'hidden', position: 'relative' },
   productImage: { width: '100%', height: '100%' },
   productImagePlaceholder: {
-    width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   productImageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%' },
-  // ✅ NUEVO: badge "Con papas"
   badgeConPapas: {
     position: 'absolute',
     top: 8,
@@ -938,27 +1015,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DESIGN.colors.accent,
     letterSpacing: 0.3,
+    includeFontPadding: false,
   },
   favoritoBadge: {
-    position: 'absolute', top: 8, right: 8,
+    position: 'absolute',
+    top: 8,
+    right: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 6, borderRadius: 20, zIndex: 10,
+    borderRadius: 20,
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2, shadowRadius: 3, elevation: 3,
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   productInfo: { flex: 1 },
-  productName: { fontFamily: FUENTES.display, fontWeight: '400', marginBottom: 2 },
-  productDesc: { fontFamily: FUENTES.regular, marginBottom: 8, opacity: 0.7 },
-  productFooter: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+  productName: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    marginBottom: 2,
+    includeFontPadding: false,
+    lineHeight: 18,
   },
-  productPrice: { fontFamily: FUENTES.regular, fontWeight: '700', flexShrink: 0 },
+  productDesc: {
+    fontFamily: FUENTES.regular,
+    marginBottom: 8,
+    opacity: 0.7,
+    includeFontPadding: false,
+    lineHeight: 16,
+  },
+  productFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  productPrice: {
+    fontFamily: FUENTES.regular,
+    fontWeight: '700',
+    flexShrink: 0,
+    includeFontPadding: false,
+    lineHeight: 22,
+  },
   addButton: { justifyContent: 'center', alignItems: 'center', padding: 0 },
   columnWrapper: { justifyContent: 'space-between', gap: 12 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-  loadingText: { fontFamily: FUENTES.regular, fontWeight: '400', opacity: 0.7 },
+  loadingText: {
+    fontFamily: FUENTES.regular,
+    fontWeight: '400',
+    opacity: 0.7,
+    includeFontPadding: false,
+  },
   emptyContainer: { alignItems: 'center' },
-  emptyText: { fontFamily: FUENTES.display, fontWeight: '400', textAlign: 'center' },
-  emptySubtext: { fontFamily: FUENTES.regular, textAlign: 'center', marginTop: 6, opacity: 0.7 },
+  emptyText: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  emptySubtext: {
+    fontFamily: FUENTES.regular,
+    textAlign: 'center',
+    marginTop: 6,
+    opacity: 0.7,
+    includeFontPadding: false,
+  },
 });
