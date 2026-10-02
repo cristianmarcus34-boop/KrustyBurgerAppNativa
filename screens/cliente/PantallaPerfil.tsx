@@ -1,4 +1,4 @@
-// screens/cliente/PantallaPerfil.tsx - V2 RESPONSIVE + FIX IMAGEN
+// screens/cliente/PantallaPerfil.tsx - V4 RESPONSIVE + FIX IMAGEN + HOOK NOTIFICACIONES + USAR MI UBICACIÓN + FECHA NACIMIENTO
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
@@ -32,8 +32,17 @@ import BarraProgreso from '../../components/BarraProgreso';
 import { servicioEliminacionCuenta } from '../../services/servicioEliminacionCuenta';
 import { useBeneficios } from '../../hooks/useBeneficios';
 import { notificacionService } from '../../services/notificacionService';
+import { useNotificaciones } from '../../hooks/useNotificaciones';
 import { ActividadReciente, obtenerNivel, Perfil } from '../../lib/tipos';
 import { FUENTES } from '../../lib/fuentes';
+
+// ✅ Botón reutilizable de ubicación
+import BotonUsarMiUbicacion from '../../components/BotonUsarMiUbicacion';
+import { DireccionNormalizada } from '../../utils/ubicacionHelper';
+import {
+  formatearCumpleanosDDMM,
+  parsearCumpleanosDDMM,
+} from '../../utils/perfilOnboardingHelper';
 
 // ============================================================
 // 📋 TIPOS
@@ -353,10 +362,15 @@ export default function PantallaPerfil(props: any) {
 
   const { nivel, beneficios } = useBeneficios(perfil?.puntos_acumulados || 0, perfil?.id);
 
+  const {
+    notificacionesPermitidas,
+    verificarPermisosNotificaciones,
+    activarNotificaciones,
+  } = useNotificaciones();
+
   const [totalPedidos, setTotalPedidos] = useState(0);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [mostrarPreferenciasNotificaciones, setMostrarPreferenciasNotificaciones] = useState(false);
-  const [notificacionesPermitidas, setNotificacionesPermitidas] = useState(false);
   const [guardandoPreferenciasNotificaciones, setGuardandoPreferenciasNotificaciones] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -384,6 +398,7 @@ export default function PantallaPerfil(props: any) {
   const [direccionCodigoPostal, setDireccionCodigoPostal] = useState('');
   const [preferenciasComida, setPreferenciasComida] = useState('');
   const [metodoPago, setMetodoPago] = useState('');
+  const [cumpleanos, setCumpleanos] = useState('');
   const [geocodificando, setGeocodificando] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -414,14 +429,14 @@ export default function PantallaPerfil(props: any) {
         cargarNotificacionesNoLeidas();
         cargarHistorialPuntos();
       }
-      notificacionService.tienePermisos().then(setNotificacionesPermitidas);
+      verificarPermisosNotificaciones();
     }, [perfil?.id]),
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        notificacionService.tienePermisos().then(setNotificacionesPermitidas);
+        verificarPermisosNotificaciones();
       }
     });
     return () => subscription.remove();
@@ -450,31 +465,10 @@ export default function PantallaPerfil(props: any) {
     }
   };
 
-  const activarNotificaciones = async () => {
-    let concedido = await notificacionService.tienePermisos();
-    if (!concedido) concedido = await notificacionService.solicitarPermisos();
-    setNotificacionesPermitidas(concedido);
-    if (!concedido) {
-      Alert.alert(
-        'Permiso de notificaciones',
-        'Para recibir avisos de pedidos, habilitá las notificaciones de Krusty Burger en los ajustes del dispositivo.',
-        [
-          { text: 'Ahora no', style: 'cancel' },
-          {
-            text: 'Abrir ajustes',
-            onPress: () => Linking.openSettings().catch(() => {
-              Alert.alert('Error', 'No se pudieron abrir los ajustes del dispositivo.');
-            }),
-          },
-        ],
-      );
-      return;
-    }
-    if (perfil?.id) {
-      const registrado = await notificacionService.registrarToken(perfil.id);
-      if (!registrado) {
-        Alert.alert('Error', 'Se habilitaron los permisos, pero no se pudo registrar este dispositivo.');
-      }
+  const activarNotificacionesHandler = async () => {
+    const ok = await activarNotificaciones();
+    if (ok) {
+      await verificarPermisosNotificaciones();
     }
   };
 
@@ -506,6 +500,7 @@ export default function PantallaPerfil(props: any) {
       setDireccionCodigoPostal(perfil.direccion_codigo_postal || '');
       setPreferenciasComida(perfil.preferencias_comida || '');
       setMetodoPago(perfil.metodo_pago || '');
+      setCumpleanos(formatearCumpleanosDDMM((perfil as any)?.fecha_nacimiento));
     }
   };
 
@@ -654,6 +649,29 @@ export default function PantallaPerfil(props: any) {
   };
 
   // ============================================================
+  // ✅ Handler para "Usar mi ubicación actual" en Perfil
+  // ============================================================
+  const handleUbicacionPerfil = (direccion: DireccionNormalizada) => {
+    console.log('📍 [Perfil] Ubicación obtenida:', direccion);
+
+    setDireccionCalle(direccion.calle);
+    setDireccionNumero(direccion.numero);
+    setDireccionPiso(direccion.piso);
+    setDireccionDepartamento(direccion.departamento);
+    setDireccionBarrio(direccion.barrio);
+    setDireccionCiudad(direccion.ciudad);
+    setDireccionCodigoPostal(direccion.codigoPostal);
+
+    Alert.alert(
+      '📍 Dirección detectada',
+      direccion.tieneDireccionReal
+        ? `Detectamos:\n${direccion.direccionCompleta}\n\nRevisá los campos y presioná "Guardar cambios" para confirmar.`
+        : 'Obtuvimos tus coordenadas pero no pudimos detectar la dirección exacta. Completala manualmente.',
+      [{ text: 'Entendido' }],
+    );
+  };
+
+  // ============================================================
   // ACTUALIZAR PERFIL
   // ============================================================
   const actualizarDatosPerfil = async () => {
@@ -662,8 +680,18 @@ export default function PantallaPerfil(props: any) {
       return;
     }
     if ((direccionCalle || direccionNumero) && (!direccionCalle || !direccionNumero)) {
-      Alert.alert('⚠️ Dirección incompleta', 'Si querés guardar una dirección, completá tanto la calle como el número.');
+      Alert.alert('⚠️️ Dirección incompleta', 'Si querés guardar una dirección, completá tanto la calle como el número.');
       return;
+    }
+
+    // Validar cumpleaños si lo cargó
+    let fechaNacimientoISO: string | null = null;
+    if (cumpleanos && cumpleanos.trim().length > 0) {
+      fechaNacimientoISO = parsearCumpleanosDDMM(cumpleanos);
+      if (!fechaNacimientoISO) {
+        Alert.alert('⚠️ Fecha inválida', 'El cumpleaños debe tener el formato DD/MM. Por ejemplo: 14/05');
+        return;
+      }
     }
 
     setCargandoActualizacion(true);
@@ -690,6 +718,7 @@ export default function PantallaPerfil(props: any) {
         direccion_codigo_postal: direccionCodigoPostal || null,
         preferencias_comida: preferenciasComida || null,
         metodo_pago: metodoPago || null,
+        fecha_nacimiento: fechaNacimientoISO,
       };
 
       if (lat !== null && lng !== null) {
@@ -716,7 +745,7 @@ export default function PantallaPerfil(props: any) {
   };
 
   // ============================================================
-  // 📷 IMÁGENES — FIX DEFINITIVO
+  // 📷 IMÁGENES
   // ============================================================
   const seleccionarImagen = async () => {
     try {
@@ -727,7 +756,7 @@ export default function PantallaPerfil(props: any) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],   // ✅ FIX: nuevo formato (array de strings)
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -780,11 +809,9 @@ export default function PantallaPerfil(props: any) {
 
       console.log('📤 [Perfil] Subiendo imagen:', { uri, fileName, contentType });
 
-      // 1. Leer la imagen como blob
       const response = await fetch(uri);
       const blob = await response.blob();
 
-      // 2. Convertir blob a ArrayBuffer (lo que Supabase entiende en RN)
       const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as ArrayBuffer);
@@ -792,9 +819,6 @@ export default function PantallaPerfil(props: any) {
         reader.readAsArrayBuffer(blob);
       });
 
-      console.log('📦 [Perfil] ArrayBuffer size:', arrayBuffer.byteLength);
-
-      // 3. Subir el ArrayBuffer
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('perfiles')
         .upload(fileName, arrayBuffer, {
@@ -809,15 +833,9 @@ export default function PantallaPerfil(props: any) {
         return;
       }
 
-      console.log('✅ [Perfil] Imagen subida:', uploadData);
-
-      // 4. URL pública con cache-buster
       const { data: urlData } = supabase.storage.from('perfiles').getPublicUrl(fileName);
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-      console.log('🔗 [Perfil] URL pública:', publicUrl);
-
-      // 5. Actualizar perfil
       const { error: updateError } = await supabase
         .from('perfiles')
         .update({ avatar_url: publicUrl })
@@ -966,7 +984,7 @@ export default function PantallaPerfil(props: any) {
     }
     if (item.id === 'preferencias-notificaciones') {
       setMostrarPreferenciasNotificaciones(true);
-      notificacionService.tienePermisos().then(setNotificacionesPermitidas);
+      verificarPermisosNotificaciones();
       return;
     }
     if (item.id === 'pedidos') {
@@ -1540,6 +1558,7 @@ export default function PantallaPerfil(props: any) {
 
             {modoEdicion ? (
               <View>
+                {/* 📱 TELÉFONO */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
                     style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
@@ -1566,6 +1585,57 @@ export default function PantallaPerfil(props: any) {
                   />
                 </View>
 
+                {/* 🎂 CUMPLEAÑOS */}
+                <View style={{ marginBottom: tamanos.formGap }}>
+                  <Text
+                    style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
+                    allowFontScaling={false}
+                  >
+                    🎂 Cumpleaños
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.formInput,
+                      {
+                        fontSize: tamanos.formInputSize,
+                        paddingHorizontal: tamanos.formInputPaddingH,
+                        paddingVertical: tamanos.formInputPaddingV,
+                        borderRadius: tamanos.formInputRadius,
+                      },
+                    ]}
+                    value={cumpleanos}
+                    onChangeText={(text) => {
+                      // Permitir solo dígitos y "/"
+                      const soloNumerosYBarra = text.replace(/[^0-9/]/g, '');
+                      // Auto-formatear: si el usuario escribe "1405" → "14/05"
+                      let formateado = soloNumerosYBarra;
+                      if (soloNumerosYBarra.length === 4 && !soloNumerosYBarra.includes('/')) {
+                        formateado = `${soloNumerosYBarra.slice(0, 2)}/${soloNumerosYBarra.slice(2, 4)}`;
+                      }
+                      setCumpleanos(formateado);
+                    }}
+                    placeholder="DD/MM (ej: 14/05)"
+                    keyboardType="numbers-and-punctuation"
+                    placeholderTextColor={DISENO.colors.textTertiary}
+                    allowFontScaling={false}
+                    maxLength={5}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.regular,
+                      fontSize: 11,
+                      color: DISENO.colors.textTertiary,
+                      marginTop: 4,
+                      fontStyle: 'italic',
+                      includeFontPadding: false,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    🎁 Ese día te mandamos una promo especial
+                  </Text>
+                </View>
+
+                {/* 📍 DIRECCIÓN */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
                     style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
@@ -1573,6 +1643,16 @@ export default function PantallaPerfil(props: any) {
                   >
                     📍 Dirección
                   </Text>
+
+                  {/* ✅ Botón "Usar mi ubicación actual" */}
+                  <View style={{ marginBottom: 10 }}>
+                    <BotonUsarMiUbicacion
+                      onUbicacionObtenida={handleUbicacionPerfil}
+                      texto="Usar mi ubicación actual"
+                      variante="primario"
+                    />
+                  </View>
+
                   <View style={[styles.direccionRow, { gap: 8, marginBottom: 8 }]}>
                     <TextInput
                       style={[
@@ -1703,6 +1783,7 @@ export default function PantallaPerfil(props: any) {
                   </View>
                 </View>
 
+                {/* 🍽️ PREFERENCIAS DE COMIDA */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
                     style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
@@ -1775,6 +1856,12 @@ export default function PantallaPerfil(props: any) {
                   <Ionicons name="call-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
                   <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
                     {telefono || 'No especificado'}
+                  </Text>
+                </View>
+                <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
+                  <Ionicons name="gift-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
+                  <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
+                    {cumpleanos ? `🎂 ${cumpleanos}` : 'Cumpleaños no especificado'}
                   </Text>
                 </View>
                 <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
@@ -2072,110 +2159,345 @@ export default function PantallaPerfil(props: any) {
         animationType="fade"
         onRequestClose={() => setMostrarPreferenciasNotificaciones(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMostrarPreferenciasNotificaciones(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => { }}
             style={[
               styles.modalContent,
               {
-                width: isTablet ? 460 : screenWidth - 40,
+                width: isTablet ? 500 : screenWidth - 32,
                 padding: tamanos.modalPadding,
                 borderRadius: tamanos.modalRadius,
+                alignItems: 'stretch',
               },
             ]}
           >
-            <View style={{ marginBottom: 12 }}>
-              <Ionicons name="notifications-outline" size={tamanos.modalIconSize} color={DISENO.colors.accent} />
-            </View>
-            <Text style={[styles.modalTitle, { fontSize: tamanos.modalTitleSize }]} allowFontScaling={false}>
-              Preferencias de notificaciones
-            </Text>
-            <Text style={[styles.modalText, { fontSize: tamanos.modalTextSize }]} allowFontScaling={false}>
-              Elegí qué comunicaciones querés recibir. Podés cambiar estas preferencias cuando quieras.
-            </Text>
-
-            <View style={[styles.notificationPreferenceRow, { paddingVertical: tamanos.notifPrefRowPaddingV }]}>
-              <View style={styles.notificationPreferenceInfo}>
-                <Text
-                  style={[styles.notificationPreferenceTitle, { fontSize: tamanos.notifPrefTitleSize }]}
-                  allowFontScaling={false}
-                >
-                  Avisos de pedidos
-                </Text>
-                <Text
-                  style={[styles.notificationPreferenceDescription, { fontSize: tamanos.notifPrefDescSize }]}
-                  allowFontScaling={false}
-                >
-                  Actualizaciones sobre confirmación, preparación y entrega. Se controlan desde los permisos del dispositivo.
-                </Text>
-              </View>
+            {/* ─── HEADER con X ─── */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4 }}>
               <TouchableOpacity
-                style={[
-                  styles.notificationPermissionButton,
-                  {
-                    paddingHorizontal: tamanos.notifPrefBtnPaddingH,
-                    paddingVertical: tamanos.notifPrefBtnPaddingV,
-                    borderRadius: tamanos.notifPrefBtnRadius,
-                  },
-                ]}
-                onPress={activarNotificaciones}
+                onPress={() => setMostrarPreferenciasNotificaciones(false)}
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: DISENO.colors.surfaceHover,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={20} color={DISENO.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* ─── TÍTULO ─── */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View
+                style={{
+                  width: tamanos.modalIconSize,
+                  height: tamanos.modalIconSize,
+                  borderRadius: tamanos.modalIconSize / 2,
+                  backgroundColor: DISENO.colors.accent + '15',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={tamanos.modalIconSize * 0.55}
+                  color={DISENO.colors.accent}
+                />
+              </View>
+              <Text
+                style={[styles.modalTitle, { fontSize: tamanos.modalTitleSize, marginBottom: 4 }]}
+                allowFontScaling={false}
+              >
+                Preferencias de notificaciones
+              </Text>
+              <Text
+                style={[styles.modalText, { fontSize: tamanos.modalTextSize, marginBottom: 0 }]}
+                allowFontScaling={false}
+              >
+                Elegí qué comunicaciones querés recibir. Podés cambiarlas cuando quieras.
+              </Text>
+            </View>
+
+            {/* ─── SECCIÓN 1: AVISOS DE PEDIDOS ─── */}
+            <View
+              style={{
+                backgroundColor: DISENO.colors.surfaceHover,
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: DISENO.colors.border,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: DISENO.colors.accent + '15',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons name="receipt-outline" size={18} color={DISENO.colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.display,
+                      fontSize: tamanos.notifPrefTitleSize,
+                      color: DISENO.colors.text,
+                      includeFontPadding: false,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    Avisos de pedidos
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.regular,
+                      fontSize: tamanos.notifPrefDescSize,
+                      color: notificacionesPermitidas
+                        ? DISENO.colors.success
+                        : DISENO.colors.textTertiary,
+                      includeFontPadding: false,
+                      marginTop: 1,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    {notificacionesPermitidas
+                      ? '✓ Activadas en este dispositivo'
+                      : 'Desactivadas — no recibirás avisos'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={{
+                  fontFamily: FUENTES.regular,
+                  fontSize: tamanos.notifPrefDescSize,
+                  color: DISENO.colors.textSecondary,
+                  lineHeight: 16,
+                  includeFontPadding: false,
+                  marginBottom: 10,
+                }}
+                allowFontScaling={false}
+              >
+                Confirmación, preparación, en camino y entrega de tus pedidos.{'\n'}
+                <Text style={{ fontStyle: 'italic', color: DISENO.colors.textTertiary }}>
+                  Se controla desde los permisos del sistema operativo.
+                </Text>
+              </Text>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: tamanos.notifPrefBtnPaddingV,
+                  paddingHorizontal: tamanos.notifPrefBtnPaddingH,
+                  borderRadius: tamanos.notifPrefBtnRadius,
+                  backgroundColor: notificacionesPermitidas
+                    ? DISENO.colors.success + '15'
+                    : DISENO.colors.accent,
+                  borderWidth: notificacionesPermitidas ? 1 : 0,
+                  borderColor: notificacionesPermitidas
+                    ? DISENO.colors.success + '40'
+                    : 'transparent',
+                }}
+                onPress={activarNotificacionesHandler}
                 activeOpacity={0.8}
               >
+                <Ionicons
+                  name={notificacionesPermitidas ? 'settings-outline' : 'notifications'}
+                  size={16}
+                  color={notificacionesPermitidas ? DISENO.colors.success : DISENO.colors.surface}
+                />
                 <Text
-                  style={[styles.notificationPermissionButtonText, { fontSize: tamanos.notifPrefBtnTextSize }]}
+                  style={{
+                    fontFamily: FUENTES.display,
+                    fontSize: tamanos.notifPrefBtnTextSize,
+                    color: notificacionesPermitidas
+                      ? DISENO.colors.success
+                      : DISENO.colors.surface,
+                    includeFontPadding: false,
+                  }}
                   allowFontScaling={false}
                 >
-                  {notificacionesPermitidas ? 'Administrar' : 'Activar'}
+                  {notificacionesPermitidas ? 'Administrar en ajustes' : 'Activar notificaciones'}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.notificationPreferenceRow, { paddingVertical: tamanos.notifPrefRowPaddingV }]}>
-              <View style={styles.notificationPreferenceInfo}>
-                <Text
-                  style={[styles.notificationPreferenceTitle, { fontSize: tamanos.notifPrefTitleSize }]}
-                  allowFontScaling={false}
-                >
-                  Promociones y ofertas
-                </Text>
-                <Text
-                  style={[styles.notificationPreferenceDescription, { fontSize: tamanos.notifPrefDescSize }]}
-                  allowFontScaling={false}
-                >
-                  Acepto recibir novedades comerciales. Esta opción es independiente del permiso del dispositivo.
-                </Text>
-              </View>
-              <Switch
-                value={perfil?.acepta_promociones === true}
-                onValueChange={cambiarConsentimientoPromociones}
-                disabled={guardandoPreferenciasNotificaciones}
-                trackColor={{ false: DISENO.colors.border, true: DISENO.colors.success }}
-                thumbColor="#FFFFFF"
-                accessibilityLabel="Aceptar promociones y ofertas"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.modalButton,
-                styles.modalButtonConfirm,
-                {
-                  marginTop: 20,
-                  alignSelf: 'stretch',
-                  paddingVertical: tamanos.modalButtonPaddingV,
-                  borderRadius: tamanos.modalButtonRadius,
-                },
-              ]}
-              onPress={() => setMostrarPreferenciasNotificaciones(false)}
+            {/* ─── SECCIÓN 2: NOVEDADES Y PROMOS ESPECIALES ─── */}
+            <View
+              style={{
+                backgroundColor: DISENO.colors.surfaceHover,
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor:
+                  perfil?.acepta_promociones === true
+                    ? DISENO.colors.accentSecondary + '40'
+                    : DISENO.colors.border,
+              }}
             >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
+                    backgroundColor: DISENO.colors.accentSecondary + '20',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 10,
+                  }}
+                >
+                  <Ionicons name="pricetags-outline" size={18} color={DISENO.colors.accentSecondary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.display,
+                      fontSize: tamanos.notifPrefTitleSize,
+                      color: DISENO.colors.text,
+                      includeFontPadding: false,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    Novedades y promos especiales
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.regular,
+                      fontSize: tamanos.notifPrefDescSize,
+                      color: perfil?.acepta_promociones
+                        ? DISENO.colors.success
+                        : DISENO.colors.textTertiary,
+                      includeFontPadding: false,
+                      marginTop: 1,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    {perfil?.acepta_promociones ? '✓ Activadas' : 'Desactivadas'}
+                  </Text>
+                </View>
+                <Switch
+                  value={perfil?.acepta_promociones === true}
+                  onValueChange={cambiarConsentimientoPromociones}
+                  disabled={guardandoPreferenciasNotificaciones}
+                  trackColor={{ false: DISENO.colors.border, true: DISENO.colors.success }}
+                  thumbColor="#FFFFFF"
+                  accessibilityLabel="Aceptar novedades y promos especiales"
+                />
+              </View>
+
               <Text
-                style={[styles.modalButtonText, styles.modalButtonConfirmText, { fontSize: tamanos.modalButtonTextSize }]}
+                style={{
+                  fontFamily: FUENTES.regular,
+                  fontSize: tamanos.notifPrefDescSize,
+                  color: DISENO.colors.textSecondary,
+                  lineHeight: 16,
+                  includeFontPadding: false,
+                }}
                 allowFontScaling={false}
               >
-                Listo
+                Lanzamientos, combos nuevos y promos exclusivas.{'\n'}
+                <Text style={{ fontStyle: 'italic', color: DISENO.colors.textTertiary }}>
+                  Las ofertas activas del día llegan igual, siempre que tengas las notificaciones activadas.
+                </Text>
+              </Text>
+
+              {perfil?.acepta_promociones === true && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 10,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    backgroundColor: DISENO.colors.success + '10',
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={14} color={DISENO.colors.success} />
+                  <Text
+                    style={{
+                      fontFamily: FUENTES.regular,
+                      fontSize: 11,
+                      color: DISENO.colors.success,
+                      flex: 1,
+                      includeFontPadding: false,
+                    }}
+                    allowFontScaling={false}
+                  >
+                    Vas a recibir novedades y promos especiales
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* ─── BOTÓN "ENTENDIDO" ─── */}
+            <TouchableOpacity
+              style={{
+                paddingVertical: 14,
+                borderRadius: 12,
+                backgroundColor: DISENO.colors.success,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+                ...DISENO.shadow.sm,
+              }}
+              onPress={() => setMostrarPreferenciasNotificaciones(false)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+              <Text
+                style={{
+                  fontFamily: FUENTES.display,
+                  fontSize: 14,
+                  color: '#FFFFFF',
+                  includeFontPadding: false,
+                }}
+                allowFontScaling={false}
+              >
+                Entendido
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
+
+            {/* ─── FOOTER INFORMATIVO ─── */}
+            <Text
+              style={{
+                fontFamily: FUENTES.regular,
+                fontSize: 11,
+                color: DISENO.colors.textTertiary,
+                textAlign: 'center',
+                marginTop: 12,
+                includeFontPadding: false,
+              }}
+              allowFontScaling={false}
+            >
+              Podés cambiar estas preferencias en cualquier momento desde tu perfil.
+            </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL FOTO COMPLETA */}
@@ -2241,7 +2563,7 @@ export default function PantallaPerfil(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS (solo lo estático)
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DISENO.colors.fondo },
@@ -2648,33 +2970,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 20,
-    includeFontPadding: false,
-  },
-  notificationPreferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: DISENO.colors.border,
-  },
-  notificationPreferenceInfo: { flex: 1 },
-  notificationPreferenceTitle: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-  },
-  notificationPreferenceDescription: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 16,
-    marginTop: 3,
-    includeFontPadding: false,
-  },
-  notificationPermissionButton: { backgroundColor: DISENO.colors.accent },
-  notificationPermissionButtonText: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.surface,
     includeFontPadding: false,
   },
   modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
