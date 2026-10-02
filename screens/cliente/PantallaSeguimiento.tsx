@@ -11,6 +11,7 @@ import {
   Animated,
   RefreshControl,
   useWindowDimensions,
+  Image,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,11 +29,10 @@ import { obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 import { formatearPrecio } from '../../lib/formateador';
 
 // ✅ MARCADORES
-import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
-import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
 import { MarcadorPersonalizado } from '../../components/Mapa/MarcadorPersonalizado';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const marcadorCasa = require('../../assets/iconos/casa.png');
+const marcadorRepartidor = require('../../assets/icon.png');
 
 // ✅ COORDENADAS REALES DE KRUSTY BURGER
 const UBICACION_KRUSTY = {
@@ -110,7 +110,6 @@ const ESTADO_COLORES_TEXTO: Record<string, string> = {
 // 🏠 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaSeguimiento(props: any) {
-  // ✅ NUEVO: sesion + cargandoAuth
   const { perfil, sesion, esAdministrador, cargando: cargandoAuth } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const responsive = useResponsive();
@@ -136,7 +135,7 @@ export default function PantallaSeguimiento(props: any) {
   const [direccionCliente, setDireccionCliente] = useState<string>('');
   const [rutaCargada, setRutaCargada] = useState(false);
   const [generandoTicket, setGenerandoTicket] = useState(false);
-  const [noAutorizado, setNoAutorizado] = useState(false);   // ✅ NUEVO
+  const [noAutorizado, setNoAutorizado] = useState(false);
 
   // ✅ DETALLES DE PRECIOS
   const [subtotal, setSubtotal] = useState(0);
@@ -163,6 +162,8 @@ export default function PantallaSeguimiento(props: any) {
   const mapaHeight = responsive.getValor({ tablet: 350, normal: 250, small: 200 });
   const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 17 });
   const estadoTextSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
+  const marcadorCasaSize = responsive.getValor({ tablet: 68, normal: 60, small: 54 });
+  const marcadorRepartidorSize = responsive.getValor({ tablet: 76, normal: 68, small: 62 });
 
   // ============================================================
   // 🔒 GUARD DE SESIÓN
@@ -194,7 +195,6 @@ export default function PantallaSeguimiento(props: any) {
   // 🎬 EFECTOS
   // ============================================================
   useEffect(() => {
-    // ✅ No cargar si no hay sesión
     if (!sesion) return;
 
     const pedidoId = props.route?.params?.pedidoId;
@@ -324,7 +324,6 @@ export default function PantallaSeguimiento(props: any) {
       if (error) { setError('No se pudo cargar el pedido'); return; }
 
       if (data) {
-        // ✅ VALIDACIÓN DE OWNERSHIP
         const esMio = data.id_de_usuario === perfil?.id;
         if (!esMio && !esAdministrador) {
           console.warn('⛔ [Seguimiento] Pedido no pertenece al usuario');
@@ -458,7 +457,7 @@ export default function PantallaSeguimiento(props: any) {
 
   const actualizarUbicacion = (p: Pedido) => {
     if (p.lat_repartidor !== null && p.lat_repartidor !== undefined &&
-        p.repartidor_de_lng !== null && p.repartidor_de_lng !== undefined) {
+      p.repartidor_de_lng !== null && p.repartidor_de_lng !== undefined) {
       const posRepartidor = {
         latitude: Number(p.lat_repartidor),
         longitude: Number(p.repartidor_de_lng),
@@ -466,7 +465,7 @@ export default function PantallaSeguimiento(props: any) {
       setUbicacionRepartidor(posRepartidor);
 
       if (!p.distancia_km && p.lat_cliente !== null && p.lat_cliente !== undefined &&
-          p.lng_cliente !== null && p.lng_cliente !== undefined) {
+        p.lng_cliente !== null && p.lng_cliente !== undefined) {
         const dist = calcularDistancia(
           posRepartidor.latitude, posRepartidor.longitude,
           p.lat_cliente, p.lng_cliente
@@ -831,7 +830,6 @@ export default function PantallaSeguimiento(props: any) {
   // ============================================================
   return (
     <View style={styles.container}>
-      {/* ✅ FONDO TEMA CLARO */}
       <LinearGradient
         colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
         style={styles.backgroundGradient}
@@ -891,10 +889,18 @@ export default function PantallaSeguimiento(props: any) {
                 <MarcadorPersonalizado color={DISENO.colors.accent} size="small" showRing={false} />
               </Marker>
               <Marker coordinate={posRepartidor}>
-                <MarcadorMoto size="normal" animated={true} />
+                <Image
+                  source={marcadorRepartidor}
+                  style={{ width: marcadorRepartidorSize, height: marcadorRepartidorSize }}
+                  resizeMode="contain"
+                />
               </Marker>
               <Marker coordinate={destinoCliente}>
-                <MarcadorDestino size="normal" />
+                <Image
+                  source={marcadorCasa}
+                  style={{ width: marcadorCasaSize, height: marcadorCasaSize }}
+                  resizeMode="contain"
+                />
               </Marker>
               {puntosValidos && rutaCargada && (
                 <Polyline

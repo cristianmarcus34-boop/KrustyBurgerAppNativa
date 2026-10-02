@@ -1,4 +1,4 @@
-// screens/repartidor/PantallaTransmision.tsx - COMPLETO CON PREVISUALIZACIÓN DE RUTA
+// screens/repartidor/PantallaTransmision.tsx - CON MARCADOR DE LOCAL CON LOGO Y CASA
 import React, { useEffect, useState, useRef } from 'react';
 import {
   AppState,
@@ -13,6 +13,7 @@ import {
   Animated,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,8 +23,11 @@ import * as Location from 'expo-location';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { Pedido } from '../../lib/tipos';
-import { Colores } from '../../lib/colores';
+import { DISENO, useResponsive } from '../../lib/colores';
+import { FUENTES } from '../../lib/fuentes';
+import { formatearPrecio } from '../../lib/formateador';
 import { notificacionService } from '../../services/notificacionService';
+import { useToast, Toast } from '../../components/Toast';
 import {
   detenerSeguimientoUbicacionEnSegundoPlano,
   iniciarSeguimientoUbicacionEnSegundoPlano,
@@ -35,36 +39,18 @@ import {
   obtenerInfoRutaPedido,
 } from '../../lib/directions';
 
-// ✅ IMPORTAR MARCADORES
-import { MarcadorMoto } from '../../components/Mapa/MarcadorMoto';
-import { MarcadorDestino } from '../../components/Mapa/MarcadorDestino';
-
-const { width, height } = Dimensions.get('window');
+// ✅ MARCADORES CON IMÁGENES
+const marcadorLocal = require('../../assets/icon.png');
+const marcadorCasa = require('../../assets/iconos/casa.png');
 
 // ✅ COORDENADAS REALES DE KRUSTY BURGER
 const UBICACION_KRUSTY = { latitude: -34.776484410467525, longitude: -58.29220250409459 };
 
-// ✅ PALETA DE COLORES CONSISTENTE
-const COLORS = {
-  amarillo: '#F5C518',
-  amarilloClaro: '#FFE066',
-  amarilloOscuro: '#D4A800',
-  rojo: '#E53935',
-  rojoOscuro: '#B71C1C',
-  verde: '#43A047',
-  verdeClaro: '#66BB6A',
-  blanco: '#FFFFFF',
-  negro: '#0A0A0A',
-  grisOscuro: '#1A1A1A',
-  gris: '#333333',
-  grisClaro: '#B0B0B0',
-  pendiente: '#FF9800',
-  confirmado: '#2196F3',
-  preparando: '#9C27B0',
-  listo: '#4CAF50',
-  enCamino: '#FF5722',
-  entregado: '#4CAF50',
-  cancelado: '#F44336',
+// ✅ COLORES DE ESTADO (se mantienen porque son semánticos)
+const COLORES_ESTADO: Record<string, string> = {
+  listo: DISENO.colors.success,
+  en_camino: DISENO.colors.naranja,
+  entregado: DISENO.colors.success,
 };
 
 const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) => {
@@ -83,6 +69,9 @@ const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) =
 export default function PantallaTransmision(props: any) {
   const { perfil, cerrarSesion } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
+  const responsive = useResponsive();
+  const toast = useToast();
+
   const [pedidosActivos, setPedidosActivos] = useState<Pedido[]>([]);
   const [pedidosEntregados, setPedidosEntregados] = useState<Pedido[]>([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
@@ -103,6 +92,10 @@ export default function PantallaTransmision(props: any) {
   const [tiempoReal, setTiempoReal] = useState<string>('');
   const [cargandoRuta, setCargandoRuta] = useState(false);
 
+  // ✅ Estados del modal de divulgación
+  const [mostrarModalUbicacion, setMostrarModalUbicacion] = useState(false);
+  const [pedidoPendienteTransmision, setPedidoPendienteTransmision] = useState<Pedido | null>(null);
+
   const mapRef = useRef<MapView>(null);
   const watchRef = useRef<any>(null);
 
@@ -110,30 +103,20 @@ export default function PantallaTransmision(props: any) {
   const slideUpAnim = useRef(new Animated.Value(30)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const isTablet = width >= 768;
-  const isSmallPhone = width < 375;
-
-  const paddingHorizontal = isTablet ? 32 : isSmallPhone ? 8 : 12;
-  const paddingVertical = isTablet ? 14 : isSmallPhone ? 6 : 8;
-  const tituloSize = isTablet ? 26 : isSmallPhone ? 18 : 20;
-  const subtituloSize = isTablet ? 14 : isSmallPhone ? 10 : 11;
-  const statValorSize = isTablet ? 22 : isSmallPhone ? 16 : 18;
-  const statLabelSize = isTablet ? 11 : isSmallPhone ? 8 : 9;
-  const pestanaTextSize = isTablet ? 14 : isSmallPhone ? 10 : 11;
-  const pestanaPaddingV = isTablet ? 10 : isSmallPhone ? 6 : 7;
-  const mapaHeight = isTablet ? 280 : isSmallPhone ? 180 : 210;
-  const mapaPadding = isTablet ? 14 : isSmallPhone ? 8 : 10;
-  const mapaBorderRadius = isTablet ? 18 : isSmallPhone ? 10 : 12;
-  const tarjetaPadding = isTablet ? 14 : isSmallPhone ? 8 : 10;
-  const tarjetaBorderRadius = isTablet ? 12 : isSmallPhone ? 8 : 10;
-  const pedidoIdSize = isTablet ? 15 : isSmallPhone ? 11 : 12;
-  const clienteNombreSize = isTablet ? 13 : isSmallPhone ? 9 : 10;
-  const botonTextSize = isTablet ? 15 : isSmallPhone ? 11 : 12;
-  const iconSize = isTablet ? 24 : isSmallPhone ? 16 : 18;
-  const modalPadding = isTablet ? 28 : isSmallPhone ? 18 : 20;
-  const gap = isTablet ? 10 : isSmallPhone ? 5 : 6;
-  const statsGap = isTablet ? 12 : isSmallPhone ? 5 : 6;
-  const headerPaddingTop = isTablet ? 18 : isSmallPhone ? 8 : 10;
+  // ✅ Tamaños responsive (con el sistema de la app)
+  const paddingHorizontal = responsive.getEspaciado('LG');
+  const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
+  const subtituloSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
+  const statValorSize = responsive.getValor({ tablet: 22, normal: 18, small: 16 });
+  const statLabelSize = responsive.getValor({ tablet: 11, normal: 10, small: 9 });
+  const pestanaTextSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
+  const mapaHeight = responsive.getValor({ tablet: 260, normal: 200, small: 170 });
+  const pedidoIdSize = responsive.getValor({ tablet: 15, normal: 13, small: 12 });
+  const clienteNombreSize = responsive.getValor({ tablet: 13, normal: 12, small: 10 });
+  const botonTextSize = responsive.getValor({ tablet: 15, normal: 14, small: 12 });
+  const tarjetaPadding = responsive.getValor({ tablet: 16, normal: 14, small: 10 });
+  const marcadorLocalSize = responsive.getValor({ tablet: 88, normal: 76, small: 64 });
+  const marcadorCasaSize = responsive.getValor({ tablet: 48, normal: 40, small: 34 });
 
   const obtenerCoordenadasPolyline = () => {
     if (rutaPuntos.length > 1) return rutaPuntos;
@@ -193,7 +176,6 @@ export default function PantallaTransmision(props: any) {
     }
   }, [transmitiendo]);
 
-  // ✅ CALCULAR LA RUTA DESDE LA ÚLTIMA UBICACIÓN GPS AL INICIAR O REANUDAR
   useEffect(() => {
     if (transmitiendo && pedidoSeleccionado) {
       const cargarRuta = async () => {
@@ -226,7 +208,6 @@ export default function PantallaTransmision(props: any) {
     }
   }, [transmitiendo, pedidoSeleccionado]);
 
-  // ✅ PREVISUALIZAR RUTA (NUEVA FUNCIÓN)
   const previsualizarRuta = async (pedido: Pedido) => {
     setCargandoRuta(true);
     try {
@@ -235,10 +216,8 @@ export default function PantallaTransmision(props: any) {
       const destinoLat = pedido.lat_cliente || UBICACION_KRUSTY.latitude;
       const destinoLng = pedido.lng_cliente || UBICACION_KRUSTY.longitude;
 
-      // ✅ PRIMERO: Intentar cargar ruta guardada
       const rutaGuardada = await obtenerRutaPedido(pedido.id);
       if (rutaGuardada && rutaGuardada.length > 1) {
-        console.log('📦 Ruta previsualizada desde DB:', rutaGuardada.length, 'puntos');
         setRutaPuntos(rutaGuardada);
         const infoRuta = await obtenerInfoRutaPedido(pedido.id);
         if (infoRuta) {
@@ -249,21 +228,14 @@ export default function PantallaTransmision(props: any) {
         return;
       }
 
-      // ✅ SEGUNDO: Obtener nueva ruta de Google Maps
-      console.log('🔄 Obteniendo ruta para previsualización...');
       const ruta = await obtenerRuta(origenLat, origenLng, destinoLat, destinoLng);
 
       if (ruta && ruta.points.length > 1) {
-        console.log('✅ Ruta previsualizada:', ruta.points.length, 'puntos');
         setRutaPuntos(ruta.points);
         setDistanciaReal(ruta.distance);
         setTiempoReal(ruta.duration);
-        // ✅ Guardar la ruta para que esté disponible
         await guardarRutaPedido(pedido.id, ruta.points, ruta.distance, ruta.duration);
-        console.log('💾 Ruta previsualizada guardada en la DB');
       } else {
-        console.warn('⚠️ No se pudo obtener ruta para previsualización');
-        // ✅ Usar línea recta como fallback
         const puntosLineaRecta = [
           { latitude: origenLat, longitude: origenLng },
           { latitude: destinoLat, longitude: destinoLng },
@@ -280,7 +252,6 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ✅ FUNCIÓN PARA SELECCIONAR PEDIDO Y PREVISUALIZAR RUTA
   const seleccionarPedido = (pedido: Pedido) => {
     setPedidoSeleccionado(pedido);
     if (!transmitiendo) {
@@ -288,7 +259,6 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ✅ ZOOM MEJORADO
   useEffect(() => {
     if (transmitiendo && ubicacionActual && mapRef.current) {
       if (rutaPuntos.length > 1) {
@@ -403,55 +373,45 @@ export default function PantallaTransmision(props: any) {
 
       const permisoSegundoPlano = await Location.getBackgroundPermissionsAsync();
       if (permisoSegundoPlano.status !== 'granted') {
-        const continuar = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Seguimiento durante la entrega',
-            'KrustyBurger necesita mantener la ubicación mientras la app está minimizada o el celular bloqueado. Se compartirá únicamente durante este pedido activo.',
-            [
-              { text: 'Ahora no', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Continuar', onPress: () => resolve(true) },
-            ],
-            { cancelable: false }
-          );
-        });
-        if (!continuar) return;
-
-        const permisoSolicitado = await Location.requestBackgroundPermissionsAsync();
-        if (permisoSolicitado.status !== 'granted') {
-          Alert.alert(
-            'Permiso de ubicación necesario',
-            'No se inició el seguimiento. Habilitá la ubicación en segundo plano en los ajustes para que el cliente pueda ver el recorrido.'
-          );
-          return;
-        }
+        setPedidoPendienteTransmision(pedido);
+        setMostrarModalUbicacion(true);
+        return;
       }
 
       const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = ubicacion.coords;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-          Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
         throw new Error('El dispositivo devolvió coordenadas inválidas.');
       }
 
-      const estadoEsperado = reanudar ? 'en_camino' : 'listo';
-      let actualizarPedido = supabase
-        .from('pedidos')
-        .update({
-          estado: 'en_camino',
-          repartidor_id: perfil.id,
-          encabezado_repartidor: perfil.nombre_cliente || 'Repartidor Krusty',
-          lat_repartidor: latitude,
-          repartidor_de_lng: longitude,
-        })
-        .eq('id', pedido.id)
-        .eq('estado', estadoEsperado);
-
+      let actualizarPedido;
       if (reanudar) {
-        actualizarPedido = pedido.repartidor_id
-          ? actualizarPedido.eq('repartidor_id', perfil.id)
-          : actualizarPedido.is('repartidor_id', null);
-      } else if (pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
-        throw new Error('Este pedido está asignado a otro repartidor.');
+        actualizarPedido = supabase
+          .from('pedidos')
+          .update({
+            lat_repartidor: latitude,
+            repartidor_de_lng: longitude,
+          })
+          .eq('id', pedido.id)
+          .eq('estado', 'en_camino')
+          .eq('repartidor_id', perfil.id);
+      } else {
+        actualizarPedido = supabase
+          .from('pedidos')
+          .update({
+            estado: 'en_camino',
+            repartidor_id: perfil.id,
+            encabezado_repartidor: perfil.nombre_cliente || 'Repartidor Krusty',
+            lat_repartidor: latitude,
+            repartidor_de_lng: longitude,
+          })
+          .eq('id', pedido.id)
+          .eq('estado', 'listo');
+
+        if (pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
+          throw new Error('Este pedido está asignado a otro repartidor.');
+        }
       }
 
       seguimientoNuevo = await iniciarSeguimientoUbicacionEnSegundoPlano({
@@ -467,7 +427,25 @@ export default function PantallaTransmision(props: any) {
 
       if (error) throw error;
       if (!pedidoActualizado) {
-        throw new Error('El estado del pedido cambió o ya fue tomado por otro repartidor. Actualizá la lista e intentá nuevamente.');
+        const { data: pedidoActual } = await supabase
+          .from('pedidos')
+          .select('estado, repartidor_id')
+          .eq('id', pedido.id)
+          .maybeSingle();
+
+        if (!pedidoActual) {
+          throw new Error('El pedido ya no existe. Puede haber sido eliminado.');
+        }
+        if (pedidoActual.estado === 'entregado') {
+          throw new Error('Este pedido ya fue entregado.');
+        }
+        if (pedidoActual.estado === 'cancelado') {
+          throw new Error('Este pedido fue cancelado.');
+        }
+        if (pedidoActual.repartidor_id && pedidoActual.repartidor_id !== perfil.id) {
+          throw new Error('Otro repartidor tomó este pedido.');
+        }
+        throw new Error('El estado del pedido cambió. Actualizá la lista e intentá nuevamente.');
       }
       pedidoYaActualizado = true;
 
@@ -485,6 +463,9 @@ export default function PantallaTransmision(props: any) {
       setPedidosActivos((actuales) => actuales.map((actual) =>
         actual.id === pedido.id ? pedidoEnCamino : actual
       ));
+
+      toast.exito('🛵 Transmitiendo ubicación');
+
       if (!reanudar && pedido.id_de_usuario) {
         notificacionService.notificarClienteCambioEstado(
           pedido.id_de_usuario,
@@ -536,6 +517,35 @@ export default function PantallaTransmision(props: any) {
     } finally {
       setProcesandoEntrega(false);
     }
+  };
+
+  const confirmarUbicacionBackground = async () => {
+    if (!pedidoPendienteTransmision) return;
+
+    setMostrarModalUbicacion(false);
+    const pedido = pedidoPendienteTransmision;
+    setPedidoPendienteTransmision(null);
+
+    try {
+      const permisoSolicitado = await Location.requestBackgroundPermissionsAsync();
+
+      if (permisoSolicitado.status !== 'granted') {
+        toast.advertencia('⚠️ Sin ubicación no se puede rastrear');
+        return;
+      }
+
+      toast.exito('✅ Ubicación activada');
+
+      await iniciarTransmision(pedido);
+    } catch (error) {
+      console.error('❌ Error solicitando permiso de segundo plano:', error);
+      toast.error('No se pudo solicitar el permiso');
+    }
+  };
+
+  const cancelarUbicacionBackground = () => {
+    setMostrarModalUbicacion(false);
+    setPedidoPendienteTransmision(null);
   };
 
   const confirmarEntrega = (pedido: Pedido) => {
@@ -609,7 +619,7 @@ export default function PantallaTransmision(props: any) {
     }
     setTransmitiendo(false);
     setPedidoSeleccionado(null);
-    // ✅ No limpiar la ruta para que se mantenga visible
+    toast.info('⏸️ GPS pausado');
   };
 
   const confirmarCerrarSesion = async () => {
@@ -621,29 +631,20 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  const estadoColor = (estado: string) => {
-    const c: any = {
-      listo: COLORS.listo,
-      en_camino: COLORS.enCamino,
-      entregado: COLORS.entregado,
-    };
-    return c[estado] || COLORS.grisClaro;
-  };
+  const estadoColor = (estado: string) => COLORES_ESTADO[estado] || DISENO.colors.textTertiary;
 
   const renderPedido = ({ item }: { item: Pedido }) => (
     <TouchableOpacity
       style={[
         estilos.tarjeta,
         {
-          borderColor: estadoColor(item.estado) + '40',
+          borderLeftColor: estadoColor(item.estado),
           padding: tarjetaPadding,
-          borderRadius: tarjetaBorderRadius,
-          marginBottom: gap,
         },
         pedidoSeleccionado?.id === item.id && {
-          borderColor: COLORS.amarillo,
+          borderColor: DISENO.colors.accent,
           borderWidth: 2,
-          backgroundColor: COLORS.amarillo + '05',
+          backgroundColor: DISENO.colors.accent + '05',
         },
       ]}
       onPress={() => seleccionarPedido(item)}
@@ -663,221 +664,121 @@ export default function PantallaTransmision(props: any) {
             estilos.estadoBadge,
             {
               backgroundColor: estadoColor(item.estado) + '20',
-              paddingHorizontal: isTablet ? 10 : isSmallPhone ? 4 : 6,
-              paddingVertical: isTablet ? 4 : isSmallPhone ? 2 : 3,
-              borderRadius: isTablet ? 10 : isSmallPhone ? 4 : 6,
+              borderColor: estadoColor(item.estado) + '40',
             },
           ]}
         >
-          <Text
-            style={[
-              estilos.estadoTexto,
-              {
-                color: estadoColor(item.estado),
-                fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
-              },
-            ]}
-          >
+          <Text style={[estilos.estadoTexto, { color: estadoColor(item.estado) }]}>
             {item.estado === 'listo' ? '📦' : item.estado === 'en_camino' ? '🚲' : '✅'}
           </Text>
         </View>
       </View>
 
-      <View
-        style={[
-          estilos.infoEnvioContainer,
-          {
-            flexDirection: 'row',
-            justifyContent: 'space-around',
-            backgroundColor: COLORS.negro + '30',
-            paddingVertical: isTablet ? 6 : isSmallPhone ? 3 : 4,
-            paddingHorizontal: isTablet ? 8 : isSmallPhone ? 4 : 6,
-            borderRadius: isTablet ? 8 : isSmallPhone ? 4 : 6,
-            marginBottom: isTablet ? 6 : isSmallPhone ? 3 : 4,
-            borderWidth: 1,
-            borderColor: COLORS.blanco + '5',
-            flexWrap: 'wrap',
-          },
-        ]}
-      >
+      <View style={estilos.infoEnvioContainer}>
         {item.distancia_km !== undefined && item.distancia_km !== null ? (
           <View style={estilos.infoEnvioItem}>
-            <Ionicons name="navigate" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
-            <Text
-              style={[
-                estilos.infoEnvioTexto,
-                {
-                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                  color: COLORS.grisClaro,
-                },
-              ]}
-            >
+            <Ionicons name="navigate" size={12} color={DISENO.colors.accent} />
+            <Text style={estilos.infoEnvioTexto}>
               {item.distancia_km.toFixed(1)} km
             </Text>
           </View>
         ) : (
           <View style={estilos.infoEnvioItem}>
-            <Ionicons name="navigate" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
-            <Text
-              style={[
-                estilos.infoEnvioTexto,
-                {
-                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                  color: COLORS.grisClaro,
-                  opacity: 0.5,
-                },
-              ]}
-            >
-              ---
-            </Text>
+            <Ionicons name="navigate" size={12} color={DISENO.colors.textTertiary} />
+            <Text style={[estilos.infoEnvioTexto, { opacity: 0.5 }]}>---</Text>
           </View>
         )}
 
         {item.tiempo_estimado !== undefined && item.tiempo_estimado !== null ? (
           <View style={estilos.infoEnvioItem}>
-            <Ionicons name="time" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.amarillo} />
-            <Text
-              style={[
-                estilos.infoEnvioTexto,
-                {
-                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                  color: COLORS.grisClaro,
-                },
-              ]}
-            >
+            <Ionicons name="time" size={12} color={DISENO.colors.accent} />
+            <Text style={estilos.infoEnvioTexto}>
               {item.tiempo_estimado} min
             </Text>
           </View>
         ) : (
           <View style={estilos.infoEnvioItem}>
-            <Ionicons name="time" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.grisClaro} />
-            <Text
-              style={[
-                estilos.infoEnvioTexto,
-                {
-                  fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                  color: COLORS.grisClaro,
-                  opacity: 0.5,
-                },
-              ]}
-            >
-              ---
-            </Text>
+            <Ionicons name="time" size={12} color={DISENO.colors.textTertiary} />
+            <Text style={[estilos.infoEnvioTexto, { opacity: 0.5 }]}>---</Text>
           </View>
         )}
 
         <View style={estilos.infoEnvioItem}>
-          <Ionicons name="cash" size={isTablet ? 14 : isSmallPhone ? 10 : 12} color={COLORS.verdeClaro} />
-          <Text
-            style={[
-              estilos.infoEnvioTexto,
-              {
-                fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                color: item.costo_envio && item.costo_envio > 0 ? COLORS.verdeClaro : COLORS.grisClaro,
-              },
-            ]}
-          >
-            {item.costo_envio && item.costo_envio > 0 ? `$${item.costo_envio.toFixed(2)}` : 'Gratis'}
+          <Ionicons name="cash" size={12} color={item.costo_envio && item.costo_envio > 0 ? DISENO.colors.success : DISENO.colors.textTertiary} />
+          <Text style={[estilos.infoEnvioTexto, { color: item.costo_envio && item.costo_envio > 0 ? DISENO.colors.success : DISENO.colors.textSecondary }]}>
+            {item.costo_envio && item.costo_envio > 0 ? formatearPrecio(item.costo_envio) : 'Gratis'}
           </Text>
         </View>
 
         <View style={estilos.infoEnvioItem}>
           <Ionicons
             name={item.tipo_entrega === 'retiro' ? 'storefront' : 'home'}
-            size={isTablet ? 14 : isSmallPhone ? 10 : 12}
-            color={COLORS.grisClaro}
+            size={12}
+            color={DISENO.colors.textTertiary}
           />
-          <Text
-            style={[
-              estilos.infoEnvioTexto,
-              {
-                fontSize: isTablet ? 10 : isSmallPhone ? 8 : 9,
-                color: COLORS.grisClaro,
-              },
-            ]}
-          >
+          <Text style={estilos.infoEnvioTexto}>
             {item.tipo_entrega === 'retiro' ? 'Retiro' : 'Domicilio'}
           </Text>
         </View>
       </View>
 
       <View style={estilos.tarjetaInfo}>
-        <Text
-          style={[estilos.tarjetaDireccion, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
-          numberOfLines={1}
-        >
+        <Text style={[estilos.tarjetaDireccion, { fontSize: clienteNombreSize }]} numberOfLines={1}>
           📍 {item.direccion || 'Retiro en local'}
         </Text>
-        <Text
-          style={[estilos.tarjetaTelefono, { fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11 }]}
-          numberOfLines={1}
-        >
+        <Text style={[estilos.tarjetaTelefono, { fontSize: clienteNombreSize }]} numberOfLines={1}>
           📱 {item.telefono || 'Sin teléfono'}
         </Text>
-        <Text style={[estilos.tarjetaTotal, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
-          💰 ${item.total?.toFixed(2)}
+        <Text style={[estilos.tarjetaTotal, { fontSize: pedidoIdSize + 2 }]}>
+          💰 {formatearPrecio(item.total || 0)}
         </Text>
       </View>
 
       {item.estado === 'listo' && !transmitiendo && (
         <TouchableOpacity
-          style={[
-            estilos.botonIniciar,
-            {
-              paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-              borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-            },
-          ]}
+          style={estilos.botonIniciar}
           onPress={() => iniciarTransmision(item)}
           activeOpacity={0.7}
         >
           <LinearGradient
-            colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
+            colors={[DISENO.colors.accentSecondary, DISENO.colors.amarilloOscuro]}
             style={estilos.botonIniciarGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
           >
-            <Ionicons name="play-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.negro} />
-            <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>Iniciar Entrega</Text>
+            <Ionicons name="play-circle" size={18} color={DISENO.colors.text} />
+            <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>
+              Iniciar Entrega
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
       )}
 
-      {item.estado === 'en_camino' &&
-        !transmitiendo &&
-        (!item.repartidor_id || item.repartidor_id === perfil?.id) && (
-          <TouchableOpacity
-            style={[
-              estilos.botonIniciar,
-              {
-                paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-              },
-            ]}
-            onPress={() => iniciarTransmision(item, true)}
-            activeOpacity={0.7}
-            disabled={procesandoEntrega}
+      {item.estado === 'en_camino' && !transmitiendo && (!item.repartidor_id || item.repartidor_id === perfil?.id) && (
+        <TouchableOpacity
+          style={estilos.botonIniciar}
+          onPress={() => iniciarTransmision(item, true)}
+          activeOpacity={0.7}
+          disabled={procesandoEntrega}
+        >
+          <LinearGradient
+            colors={[DISENO.colors.accentSecondary, DISENO.colors.amarilloOscuro]}
+            style={estilos.botonIniciarGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
           >
-            <LinearGradient
-              colors={[COLORS.amarillo, COLORS.amarilloOscuro]}
-              style={estilos.botonIniciarGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="refresh-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.negro} />
-              <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>
-                {procesandoEntrega ? 'Reanudando...' : 'Reanudar seguimiento'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
+            <Ionicons name="refresh-circle" size={18} color={DISENO.colors.text} />
+            <Text style={[estilos.botonIniciarTexto, { fontSize: botonTextSize }]}>
+              {procesandoEntrega ? 'Reanudando...' : 'Reanudar seguimiento'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
 
       {item.estado === 'en_camino' && (
         <View style={estilos.enCaminoBadge}>
-          <Ionicons name="bicycle" size={isTablet ? 16 : isSmallPhone ? 12 : 14} color={COLORS.enCamino} />
-          <Text style={[estilos.enCaminoTexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
-            En camino 🚲
-          </Text>
+          <Ionicons name="bicycle" size={14} color={DISENO.colors.naranja} />
+          <Text style={estilos.enCaminoTexto}>En camino 🚲</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -886,42 +787,27 @@ export default function PantallaTransmision(props: any) {
   return (
     <View style={estilos.contenedor}>
       <LinearGradient
-        colors={[COLORS.verde, COLORS.negro]}
-        style={estilos.fondoGradiente}
+        colors={[DISENO.colors.fondo, DISENO.colors.surface]}
+        style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
       <ScrollView
         style={estilos.scrollView}
-        contentContainerStyle={[
-          estilos.scrollContent,
-          {
-            paddingBottom: insets.bottom + 80,
-          },
-        ]}
+        contentContainerStyle={[estilos.scrollContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={true}
         refreshControl={
           <RefreshControl
             refreshing={refrescando}
             onRefresh={manejarRefresh}
-            tintColor={COLORS.amarillo}
-            colors={[COLORS.amarillo]}
+            tintColor={DISENO.colors.accent}
+            colors={[DISENO.colors.accent]}
           />
         }
       >
-        <View
-          style={[
-            estilos.encabezado,
-            {
-              paddingTop: insets.top + headerPaddingTop,
-              paddingHorizontal: paddingHorizontal,
-              paddingBottom: paddingVertical,
-              borderBottomWidth: 1,
-              borderBottomColor: COLORS.blanco + '10',
-            },
-          ]}
-        >
+        {/* HEADER */}
+        <View style={[estilos.encabezado, { paddingTop: insets.top + 12, paddingHorizontal: paddingHorizontal }]}>
           <View style={{ flex: 1 }}>
             <Text style={[estilos.titulo, { fontSize: tituloSize }]} numberOfLines={1}>
               🚲 Reparto
@@ -932,67 +818,43 @@ export default function PantallaTransmision(props: any) {
           </View>
           <TouchableOpacity
             onPress={() => setMostrarModalCerrar(true)}
-            style={[
-              estilos.botonCerrarSesion,
-              {
-                padding: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                borderRadius: isTablet ? 24 : isSmallPhone ? 16 : 18,
-              },
-            ]}
+            style={estilos.botonCerrarSesion}
             activeOpacity={0.7}
           >
-            <Ionicons name="log-out-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 18} color={COLORS.rojo} />
+            <Ionicons name="log-out-outline" size={20} color={DISENO.colors.danger} />
           </TouchableOpacity>
         </View>
 
-        <View
-          style={[
-            estilos.stats,
-            {
-              paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-              paddingHorizontal: paddingHorizontal,
-              gap: statsGap,
-            },
-          ]}
-        >
+        {/* STATS */}
+        <View style={[estilos.stats, { marginHorizontal: paddingHorizontal }]}>
           <View style={estilos.statItem}>
-            <Text style={[estilos.statValor, { fontSize: statValorSize }]}>{pedidosActivos.length}</Text>
+            <Text style={[estilos.statValor, { fontSize: statValorSize }]}>
+              {pedidosActivos.length}
+            </Text>
             <Text style={[estilos.statLabel, { fontSize: statLabelSize }]}>Pend.</Text>
           </View>
           <View style={estilos.statDivider} />
           <View style={estilos.statItem}>
-            <Text style={[estilos.statValor, { fontSize: statValorSize }]}>{pedidosEntregados.length}</Text>
+            <Text style={[estilos.statValor, { fontSize: statValorSize }]}>
+              {pedidosEntregados.length}
+            </Text>
             <Text style={[estilos.statLabel, { fontSize: statLabelSize }]}>Ent.</Text>
           </View>
           <View style={estilos.statDivider} />
           <View style={estilos.statItem}>
-            <Text style={[estilos.statValor, { fontSize: statValorSize }]}>
-              ${pedidosEntregados.reduce((s, p) => s + (p.total || 0), 0).toFixed(0)}
+            <Text style={[estilos.statValor, { fontSize: statValorSize, color: DISENO.colors.accent }]}>
+              {formatearPrecio(pedidosEntregados.reduce((s, p) => s + (p.total || 0), 0))}
             </Text>
             <Text style={[estilos.statLabel, { fontSize: statLabelSize }]}>Total</Text>
           </View>
         </View>
 
-        <View
-          style={[
-            estilos.pestanas,
-            {
-              paddingHorizontal: paddingHorizontal,
-              marginVertical: isTablet ? 10 : isSmallPhone ? 4 : 6,
-              gap: isTablet ? 8 : isSmallPhone ? 4 : 5,
-            },
-          ]}
-        >
+        {/* PESTAÑAS */}
+        <View style={[estilos.pestanas, { paddingHorizontal: paddingHorizontal }]}>
           <TouchableOpacity
             style={[
               estilos.pestana,
-              {
-                paddingVertical: pestanaPaddingV,
-                borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                backgroundColor: pestana === 'activos' ? COLORS.amarillo : COLORS.negro + '40',
-                borderWidth: 1,
-                borderColor: pestana === 'activos' ? COLORS.amarillo : COLORS.blanco + '8',
-              },
+              pestana === 'activos' && estilos.pestanaActiva,
             ]}
             onPress={() => setPestana('activos')}
             activeOpacity={0.7}
@@ -1000,11 +862,8 @@ export default function PantallaTransmision(props: any) {
             <Text
               style={[
                 estilos.pestanaTexto,
-                {
-                  fontSize: pestanaTextSize,
-                  color: pestana === 'activos' ? COLORS.negro : COLORS.grisClaro,
-                  fontWeight: pestana === 'activos' ? '700' : '500',
-                },
+                { fontSize: pestanaTextSize },
+                pestana === 'activos' && estilos.pestanaTextoActiva,
               ]}
             >
               🚀 Activos
@@ -1013,13 +872,7 @@ export default function PantallaTransmision(props: any) {
           <TouchableOpacity
             style={[
               estilos.pestana,
-              {
-                paddingVertical: pestanaPaddingV,
-                borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                backgroundColor: pestana === 'historial' ? COLORS.amarillo : COLORS.negro + '40',
-                borderWidth: 1,
-                borderColor: pestana === 'historial' ? COLORS.amarillo : COLORS.blanco + '8',
-              },
+              pestana === 'historial' && estilos.pestanaActiva,
             ]}
             onPress={() => setPestana('historial')}
             activeOpacity={0.7}
@@ -1027,11 +880,8 @@ export default function PantallaTransmision(props: any) {
             <Text
               style={[
                 estilos.pestanaTexto,
-                {
-                  fontSize: pestanaTextSize,
-                  color: pestana === 'historial' ? COLORS.negro : COLORS.grisClaro,
-                  fontWeight: pestana === 'historial' ? '700' : '500',
-                },
+                { fontSize: pestanaTextSize },
+                pestana === 'historial' && estilos.pestanaTextoActiva,
               ]}
             >
               📋 Historial
@@ -1039,27 +889,21 @@ export default function PantallaTransmision(props: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ✅ MAPA CON PREVISUALIZACIÓN DE RUTA */}
+        {/* MAPA */}
         {pedidoSeleccionado && (
           <Animated.View
             style={[
               estilos.mapaContenedor,
               {
                 marginHorizontal: paddingHorizontal,
-                borderRadius: mapaBorderRadius,
-                padding: mapaPadding,
                 opacity: fadeAnim,
                 transform: [{ translateY: slideUpAnim }],
-                marginBottom: gap,
               },
             ]}
           >
             <MapView
               ref={mapRef}
-              style={[
-                estilos.mapa,
-                { height: mapaHeight, borderRadius: isTablet ? 14 : isSmallPhone ? 6 : 8 },
-              ]}
+              style={[estilos.mapa, { height: mapaHeight }]}
               provider={PROVIDER_GOOGLE}
               initialRegion={{
                 latitude: UBICACION_KRUSTY.latitude,
@@ -1070,23 +914,16 @@ export default function PantallaTransmision(props: any) {
               showsUserLocation={transmitiendo}
               showsMyLocationButton={transmitiendo}
             >
-              {/* 📍 Krusty Burger */}
+              {/* ✅ MARCADOR DEL LOCAL CON LOGO */}
               <Marker coordinate={UBICACION_KRUSTY}>
-                <View style={estilos.marcadorKrusty}>
-                  <Text style={estilos.marcadorKrustyTexto}>🍔</Text>
-                </View>
+                <Image
+                  source={marcadorLocal}
+                  style={{ width: marcadorLocalSize, height: marcadorLocalSize }}
+                  resizeMode="contain"
+                />
               </Marker>
 
-              {/* 🛵 REPARTIDOR (si está transmitiendo) */}
-              {transmitiendo && (
-                <Marker
-                  coordinate={{ latitude: ubicacionActual.lat, longitude: ubicacionActual.lng }}
-                >
-                  <MarcadorMoto size="normal" animated={true} scale={pulseAnim} />
-                </Marker>
-              )}
-
-              {/* 📍 DESTINO CLIENTE */}
+              {/* ✅ MARCADOR DEL DESTINO CON CASA */}
               {pedidoSeleccionado && (
                 <Marker
                   coordinate={{
@@ -1094,217 +931,84 @@ export default function PantallaTransmision(props: any) {
                     longitude: pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude,
                   }}
                 >
-                  <MarcadorDestino size="normal" />
+                  <Image
+                    source={marcadorCasa}
+                    style={{ width: marcadorCasaSize, height: marcadorCasaSize }}
+                    resizeMode="contain"
+                  />
                 </Marker>
               )}
 
-              {/* 🗺️ RUTA */}
               {puntosValidos && rutaPuntos.length > 1 && (
                 <>
-                  <Polyline
-                    coordinates={rutaPuntos}
-                    strokeColor="rgba(0,0,0,0.3)"
-                    strokeWidth={10}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
-                  <Polyline
-                    coordinates={rutaPuntos}
-                    strokeColor={COLORS.amarillo}
-                    strokeWidth={5}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
-                  <Polyline
-                    coordinates={rutaPuntos}
-                    strokeColor={COLORS.amarilloClaro}
-                    strokeWidth={2}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
+                  <Polyline coordinates={rutaPuntos} strokeColor="rgba(0,0,0,0.15)" strokeWidth={9} lineCap="round" lineJoin="round" />
+                  <Polyline coordinates={rutaPuntos} strokeColor={DISENO.colors.accent} strokeWidth={4} lineCap="round" lineJoin="round" />
                 </>
               )}
             </MapView>
 
-            {/* ✅ INFO DE RUTA */}
-            <View
-              style={[
-                estilos.mapaInfo,
-                {
-                  marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                  gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
-                },
-              ]}
-            >
+            <View style={estilos.mapaInfo}>
               <View style={estilos.mapaInfoItem}>
-                <Ionicons name="navigate" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
-                <Text style={[estilos.mapaInfoTexto, { fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10 }]}>
-                  {cargandoRuta
-                    ? 'Cargando...'
-                    : distanciaReal ||
-                    (pedidoSeleccionado &&
-                      calcularDistancia(
-                        UBICACION_KRUSTY.latitude,
-                        UBICACION_KRUSTY.longitude,
-                        pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-                        pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-                      ).toFixed(1) + ' km')}
+                <Ionicons name="navigate" size={14} color={DISENO.colors.accent} />
+                <Text style={estilos.mapaInfoTexto}>
+                  {cargandoRuta ? 'Cargando...' : distanciaReal || (pedidoSeleccionado && calcularDistancia(UBICACION_KRUSTY.latitude, UBICACION_KRUSTY.longitude, pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude, pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude).toFixed(1) + ' km')}
                 </Text>
               </View>
               <View style={estilos.mapaInfoItem}>
-                <Ionicons name="time" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.amarillo} />
-                <Text style={[estilos.mapaInfoTexto, { fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10 }]}>
-                  {cargandoRuta
-                    ? 'Cargando...'
-                    : tiempoReal ||
-                    (pedidoSeleccionado &&
-                      Math.ceil(
-                        calcularDistancia(
-                          UBICACION_KRUSTY.latitude,
-                          UBICACION_KRUSTY.longitude,
-                          pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude,
-                          pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude
-                        ) * 15
-                      ) + ' min')}
+                <Ionicons name="time" size={14} color={DISENO.colors.accent} />
+                <Text style={estilos.mapaInfoTexto}>
+                  {cargandoRuta ? 'Cargando...' : tiempoReal || (pedidoSeleccionado && Math.ceil(calcularDistancia(UBICACION_KRUSTY.latitude, UBICACION_KRUSTY.longitude, pedidoSeleccionado.lat_cliente || UBICACION_KRUSTY.latitude, pedidoSeleccionado.lng_cliente || UBICACION_KRUSTY.longitude) * 15) + ' min')}
                 </Text>
               </View>
             </View>
 
             {transmitiendo && (
-              <TouchableOpacity
-                style={[
-                  estilos.botonDetenerMapa,
-                  {
-                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                    marginTop: isTablet ? 8 : isSmallPhone ? 4 : 6,
-                  },
-                ]}
-                onPress={detenerTransmision}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={[COLORS.rojo, COLORS.rojoOscuro]}
-                  style={estilos.botonDetenerGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Ionicons name="stop-circle" size={isTablet ? 20 : isSmallPhone ? 14 : 16} color={COLORS.blanco} />
-                  <Text style={[estilos.botonDetenerMapaTexto, { fontSize: botonTextSize }]}>Pausar GPS</Text>
+              <TouchableOpacity style={estilos.botonDetenerMapa} onPress={detenerTransmision} activeOpacity={0.7}>
+                <LinearGradient colors={[DISENO.colors.danger, '#B71C1C']} style={estilos.botonDetenerGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                  <Ionicons name="stop-circle" size={16} color="#FFF" />
+                  <Text style={estilos.botonDetenerMapaTexto}>Pausar GPS</Text>
                 </LinearGradient>
               </TouchableOpacity>
             )}
           </Animated.View>
         )}
 
-        {/* ✅ TARJETA DE TRANSMISIÓN ACTIVA */}
+        {/* TARJETA TRANSMISIÓN ACTIVA */}
         {transmitiendo && pedidoSeleccionado && (
           <Animated.View
             style={[
               estilos.tarjetaTransmision,
               {
                 marginHorizontal: paddingHorizontal,
-                borderRadius: tarjetaBorderRadius,
                 padding: tarjetaPadding,
-                borderColor: COLORS.amarillo + '40',
                 opacity: fadeAnim,
                 transform: [{ translateY: slideUpAnim }],
-                marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
-                marginBottom: gap,
-                minHeight: isTablet ? 100 : isSmallPhone ? 70 : 80,
               },
             ]}
           >
-            <View style={[estilos.transmisionHeader, { marginBottom: isTablet ? 4 : isSmallPhone ? 1 : 2 }]}>
+            <View style={estilos.transmisionHeader}>
               <View style={estilos.puntoVivo} />
-              <Text
-                style={[
-                  estilos.transmitiendoTexto,
-                  {
-                    fontSize: isTablet ? 14 : isSmallPhone ? 10 : 11,
-                    flex: 1,
-                    flexWrap: 'wrap',
-                  },
-                ]}
-              >
-                Transmitiendo
-              </Text>
+              <Text style={estilos.transmitiendoTexto}>Transmitiendo</Text>
             </View>
-            <Text
-              style={[
-                estilos.pedidoTransmision,
-                {
-                  fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
-                  marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
-                },
-              ]}
-            >
-              Pedido #{pedidoSeleccionado.id}
-            </Text>
-            <Text
-              style={[
-                estilos.clienteTransmision,
-                {
-                  fontSize: isTablet ? 13 : isSmallPhone ? 9 : 10,
-                  marginTop: isTablet ? 1 : isSmallPhone ? 0 : 1,
-                },
-              ]}
-            >
-              {pedidoSeleccionado.cliente_nombre}
-            </Text>
-            <Text
-              style={[
-                estilos.direccionTransmision,
-                {
-                  fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10,
-                  marginTop: isTablet ? 2 : isSmallPhone ? 1 : 2,
-                  flexWrap: 'wrap',
-                },
-              ]}
-              numberOfLines={1}
-            >
+            <Text style={estilos.pedidoTransmision}>Pedido #{pedidoSeleccionado.id}</Text>
+            <Text style={estilos.clienteTransmision}>{pedidoSeleccionado.cliente_nombre}</Text>
+            <Text style={estilos.direccionTransmision} numberOfLines={1}>
               📍 {pedidoSeleccionado.direccion || 'Sin dirección'}
             </Text>
-            <View
-              style={[
-                estilos.gpsInfo,
-                {
-                  marginTop: isTablet ? 6 : isSmallPhone ? 2 : 4,
-                  padding: isTablet ? 6 : isSmallPhone ? 3 : 4,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  estilos.gpsTexto,
-                  {
-                    fontSize: isTablet ? 11 : isSmallPhone ? 8 : 9,
-                  },
-                ]}
-              >
+            <View style={estilos.gpsInfo}>
+              <Text style={estilos.gpsTexto}>
                 GPS: {ubicacionActual.lat.toFixed(6)}, {ubicacionActual.lng.toFixed(6)}
               </Text>
             </View>
             <TouchableOpacity
-              style={[
-                estilos.botonIniciar,
-                {
-                  marginTop: isTablet ? 8 : 6,
-                  borderRadius: isTablet ? 10 : 8,
-                },
-              ]}
+              style={estilos.botonConfirmarEntrega}
               onPress={() => confirmarEntrega(pedidoSeleccionado)}
               activeOpacity={0.8}
               disabled={procesandoEntrega}
             >
-              <LinearGradient
-                colors={[COLORS.verdeClaro, COLORS.verde]}
-                style={estilos.botonIniciarGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Ionicons name="checkmark-circle" size={isTablet ? 20 : 16} color={COLORS.blanco} />
-                <Text style={[estilos.botonIniciarTexto, { color: COLORS.blanco, fontSize: botonTextSize }]}>
+              <LinearGradient colors={[DISENO.colors.success, DISENO.colors.verdeOscuro]} style={estilos.botonIniciarGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                <Text style={[estilos.botonIniciarTexto, { color: '#FFF', fontSize: botonTextSize }]}>
                   {procesandoEntrega ? 'Procesando...' : 'Confirmar entrega'}
                 </Text>
               </LinearGradient>
@@ -1312,29 +1016,22 @@ export default function PantallaTransmision(props: any) {
           </Animated.View>
         )}
 
-        <View
-          style={[
-            estilos.listaContainer,
-            {
-              paddingHorizontal: paddingHorizontal,
-              paddingTop: isTablet ? 6 : 2,
-            },
-          ]}
-        >
+        {/* LISTA */}
+        <View style={[estilos.listaContainer, { paddingHorizontal: paddingHorizontal }]}>
           {pedidosActivos.length === 0 && pedidosEntregados.length === 0 ? (
             <View style={estilos.vacio}>
               <Ionicons
                 name={pestana === 'activos' ? 'bicycle-outline' : 'checkmark-done-outline'}
-                size={isTablet ? 56 : isSmallPhone ? 36 : 40}
-                color={COLORS.grisClaro + '30'}
+                size={56}
+                color={DISENO.colors.textTertiary}
               />
-              <Text style={[estilos.vacioTexto, { fontSize: isTablet ? 15 : isSmallPhone ? 11 : 12 }]}>
+              <Text style={estilos.vacioTexto}>
                 {pestana === 'activos' ? 'No hay pedidos' : 'No hay entregas'}
               </Text>
-              <Text style={[estilos.vacioSubtexto, { fontSize: isTablet ? 12 : isSmallPhone ? 9 : 10 }]}>
+              <Text style={estilos.vacioSubtexto}>
                 {pestana === 'activos'
-                  ? 'Los pedidos listos aparecerán aquí'
-                  : 'Tus entregas completadas aparecerán aquí'}
+                  ? 'Los pedidos listos aparecerán acá'
+                  : 'Tus entregas completadas aparecerán acá'}
               </Text>
             </View>
           ) : (
@@ -1347,165 +1044,89 @@ export default function PantallaTransmision(props: any) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ✅ MODAL CERRAR SESIÓN */}
+      {/* MODAL DIVULGACIÓN UBICACIÓN */}
       <Modal
-        visible={mostrarModalCerrar}
+        visible={mostrarModalUbicacion}
         transparent
         animationType="fade"
         statusBarTranslucent={true}
+        onRequestClose={cancelarUbicacionBackground}
       >
-        <View
-          style={[
-            estilos.modalFondo,
-            {
-              flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.85)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: 16,
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 9999,
-            },
-          ]}
-        >
-          <View
-            style={[
-              estilos.modal,
-              {
-                padding: modalPadding,
-                borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
-                borderColor: COLORS.rojo + '40',
-                width: isTablet ? '55%' : '90%',
-                maxWidth: 380,
-                backgroundColor: COLORS.grisOscuro,
-                alignItems: 'center',
-                borderWidth: 2,
-                shadowColor: COLORS.negro,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.5,
-                shadowRadius: 20,
-                elevation: 10,
-              },
-            ]}
-          >
-            <Text style={[estilos.modalIcono, { fontSize: isTablet ? 56 : isSmallPhone ? 40 : 48 }]}>🚪</Text>
-            <Text
-              style={[
-                estilos.modalTitulo,
-                {
-                  fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
-                  fontWeight: 'bold',
-                  color: COLORS.blanco,
-                  marginBottom: 6,
-                },
-              ]}
+        <View style={estilos.modalFondo}>
+          <View style={estilos.modalUbicacionContainer}>
+            <LinearGradient
+              colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+              style={estilos.modalUbicacionHeader}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             >
-              Cerrar Sesión
-            </Text>
-            <Text
-              style={[
-                estilos.modalTexto,
-                {
-                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  color: COLORS.grisClaro,
-                  textAlign: 'center',
-                  marginBottom: 18,
-                },
-              ]}
-            >
-              ¿Estás seguro de que quieres salir?
-            </Text>
-            <View
-              style={[
-                estilos.modalBotones,
-                {
-                  flexDirection: 'row',
-                  gap: isTablet ? 10 : isSmallPhone ? 4 : 6,
-                  width: '100%',
-                },
-              ]}
-            >
+              <View style={estilos.modalUbicacionIconContainer}>
+                <Ionicons name="location" size={22} color="#FFF" />
+              </View>
+              <Text style={estilos.modalUbicacionTitulo}>
+                Ubicación durante la entrega
+              </Text>
+            </LinearGradient>
+
+            <View style={estilos.modalUbicacionBody}>
+              <Text style={estilos.modalUbicacionPregunta}>
+                📍 ¿Por qué necesitamos tu ubicación?
+              </Text>
+
+              <Text style={estilos.modalUbicacionExplicacion}>
+                Para que <Text style={estilos.modalUbicacionDestacado}>el cliente vea el recorrido de su pedido en tiempo real</Text> mientras vos hacés la entrega.
+              </Text>
+
+              <View style={estilos.modalUbicacionLista}>
+                <View style={estilos.modalUbicacionItem}>
+                  <Ionicons name="time-outline" size={18} color={DISENO.colors.success} />
+                  <Text style={estilos.modalUbicacionItemTexto}>
+                    Solo durante la <Text style={estilos.modalUbicacionItemDestacado}>entrega activa</Text>
+                  </Text>
+                </View>
+
+                <View style={estilos.modalUbicacionItem}>
+                  <Ionicons name="eye-outline" size={18} color={DISENO.colors.success} />
+                  <Text style={estilos.modalUbicacionItemTexto}>
+                    Solo la ve el <Text style={estilos.modalUbicacionItemDestacado}>cliente del pedido</Text>
+                  </Text>
+                </View>
+
+                <View style={estilos.modalUbicacionItem}>
+                  <Ionicons name="stop-circle-outline" size={18} color={DISENO.colors.success} />
+                  <Text style={estilos.modalUbicacionItemTexto}>
+                    Se <Text style={estilos.modalUbicacionItemDestacado}>detiene al confirmar</Text> la entrega
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={estilos.modalUbicacionAviso}>
+                Vas a ver un aviso del sistema para elegir <Text style={estilos.modalUbicacionDestacado}>"Permitir todo el tiempo"</Text>. Es lo que permite que siga funcionando con la pantalla bloqueada.
+              </Text>
+            </View>
+
+            <View style={estilos.modalUbicacionBotones}>
               <TouchableOpacity
-                style={[
-                  estilos.modalBoton,
-                  estilos.modalCancelar,
-                  {
-                    flex: 1,
-                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                    backgroundColor: COLORS.negro + '50',
-                    borderWidth: 1,
-                    borderColor: COLORS.blanco + '10',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
-                ]}
-                onPress={() => setMostrarModalCerrar(false)}
+                style={estilos.modalUbicacionBotonCancelar}
+                onPress={cancelarUbicacionBackground}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    estilos.modalCancelarTexto,
-                    {
-                      fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                      color: COLORS.blanco,
-                      fontWeight: '600',
-                    },
-                  ]}
-                >
-                  Cancelar
-                </Text>
+                <Text style={estilos.modalUbicacionBotonCancelarTexto}>Ahora no</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={[
-                  estilos.modalBoton,
-                  estilos.modalConfirmar,
-                  {
-                    flex: 1,
-                    paddingVertical: isTablet ? 12 : isSmallPhone ? 6 : 8,
-                    borderRadius: isTablet ? 10 : isSmallPhone ? 6 : 8,
-                    overflow: 'hidden',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  },
-                ]}
-                onPress={confirmarCerrarSesion}
-                activeOpacity={0.7}
+                style={estilos.modalUbicacionBotonContinuar}
+                onPress={confirmarUbicacionBackground}
+                activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={[COLORS.rojo, COLORS.rojoOscuro]}
-                  style={[
-                    estilos.modalConfirmarGradient,
-                    {
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      paddingHorizontal: 14,
-                      width: '100%',
-                      height: '100%',
-                    },
-                  ]}
+                  colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+                  style={estilos.modalUbicacionBotonContinuarGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Ionicons name="log-out-outline" size={isTablet ? 18 : isSmallPhone ? 12 : 14} color={COLORS.blanco} />
-                  <Text
-                    style={[
-                      estilos.modalConfirmarTexto,
-                      {
-                        fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                        color: COLORS.blanco,
-                        fontWeight: 'bold',
-                      },
-                    ]}
-                  >
-                    Salir
-                  </Text>
+                  <Ionicons name="location" size={18} color="#FFF" />
+                  <Text style={estilos.modalUbicacionBotonContinuarTexto}>Continuar</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -1513,177 +1134,588 @@ export default function PantallaTransmision(props: any) {
         </View>
       </Modal>
 
-      {/* ✅ MODAL ÉXITO */}
-      <Modal
-        visible={mostrarModalExito}
-        transparent
-        animationType="fade"
-        statusBarTranslucent={true}
-      >
-        <View
-          style={[
-            estilos.modalFondo,
-            {
-              flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.85)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: 16,
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 9999,
-            },
-          ]}
-        >
-          <View
-            style={[
-              estilos.modal,
-              estilos.modalExito,
-              {
-                padding: modalPadding,
-                borderRadius: isTablet ? 22 : isSmallPhone ? 14 : 18,
-                borderColor: COLORS.verdeClaro + '40',
-                width: isTablet ? '55%' : '90%',
-                maxWidth: 380,
-                backgroundColor: COLORS.grisOscuro,
-                alignItems: 'center',
-                borderWidth: 2,
-                shadowColor: COLORS.negro,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.5,
-                shadowRadius: 20,
-                elevation: 10,
-              },
-            ]}
-          >
-            <Text style={[estilos.modalIcono, { fontSize: isTablet ? 56 : isSmallPhone ? 40 : 48 }]}>🎉</Text>
-            <Text
-              style={[
-                estilos.modalTitulo,
-                {
-                  fontSize: isTablet ? 22 : isSmallPhone ? 16 : 18,
-                  fontWeight: 'bold',
-                  color: COLORS.verdeClaro,
-                  marginBottom: 6,
-                },
-              ]}
-            >
-              ¡Éxito!
-            </Text>
-            <Text
-              style={[
-                estilos.modalTexto,
-                {
-                  fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
-                  color: COLORS.grisClaro,
-                  textAlign: 'center',
-                },
-              ]}
-            >
-              {mensajeExito}
-            </Text>
+      {/* MODAL CERRAR SESIÓN */}
+      <Modal visible={mostrarModalCerrar} transparent animationType="fade" statusBarTranslucent={true}>
+        <View style={estilos.modalFondo}>
+          <View style={estilos.modal}>
+            <Text style={estilos.modalIcono}>🚪</Text>
+            <Text style={estilos.modalTitulo}>Cerrar Sesión</Text>
+            <Text style={estilos.modalTexto}>¿Estás seguro de que querés salir?</Text>
+            <View style={estilos.modalBotones}>
+              <TouchableOpacity
+                style={[estilos.modalBoton, estilos.modalCancelar]}
+                onPress={() => setMostrarModalCerrar(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={estilos.modalCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[estilos.modalBoton, estilos.modalConfirmar]}
+                onPress={confirmarCerrarSesion}
+                activeOpacity={0.7}
+              >
+                <LinearGradient colors={[DISENO.colors.danger, '#B71C1C']} style={estilos.modalConfirmarGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                  <Ionicons name="log-out-outline" size={16} color="#FFF" />
+                  <Text style={estilos.modalConfirmarTexto}>Salir</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
+
+      {/* MODAL ÉXITO */}
+      <Modal visible={mostrarModalExito} transparent animationType="fade" statusBarTranslucent={true}>
+        <View style={estilos.modalFondo}>
+          <View style={[estilos.modal, estilos.modalExito]}>
+            <Text style={estilos.modalIcono}>🎉</Text>
+            <Text style={[estilos.modalTitulo, { color: DISENO.colors.success }]}>
+              ¡Éxito!
+            </Text>
+            <Text style={estilos.modalTexto}>{mensajeExito}</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TOAST GLOBAL */}
+      <Toast
+        visible={toast.visible}
+        mensaje={toast.mensaje}
+        tipo={toast.tipo}
+        ocultar={toast.ocultar}
+      />
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  contenedor: { flex: 1, backgroundColor: COLORS.negro },
-  fondoGradiente: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  contenedor: {
+    flex: 1,
+    backgroundColor: DISENO.colors.fondo,
+  },
   scrollView: { flex: 1 },
   scrollContent: { flexGrow: 1 },
-  encabezado: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  titulo: { fontWeight: 'bold', color: COLORS.blanco, letterSpacing: 0.5 },
-  subtitulo: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
-  botonCerrarSesion: { backgroundColor: COLORS.rojo + '15', borderWidth: 1, borderColor: COLORS.rojo + '20' },
-  stats: { flexDirection: 'row', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: COLORS.blanco + '8' },
+
+  // HEADER
+  encabezado: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  titulo: {
+    fontFamily: FUENTES.display,
+    fontWeight: '400',
+    color: DISENO.colors.text,
+  },
+  subtitulo: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    marginTop: 2,
+  },
+  botonCerrarSesion: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: DISENO.colors.surface,
+    ...DISENO.shadow.sm,
+  },
+
+  // STATS
+  stats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.lg,
+    padding: 14,
+    marginBottom: 12,
+    ...DISENO.shadow.sm,
+  },
   statItem: { alignItems: 'center', flex: 1 },
-  statDivider: { width: 1, backgroundColor: COLORS.blanco + '8' },
-  statValor: { fontWeight: 'bold', color: COLORS.blanco },
-  statLabel: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.6 },
-  pestanas: { flexDirection: 'row' },
-  pestana: { flex: 1, alignItems: 'center' },
-  pestanaTexto: { fontWeight: '600' },
-  mapaContenedor: { backgroundColor: COLORS.negro + '60', overflow: 'hidden', borderWidth: 1, borderColor: COLORS.blanco + '10' },
-  mapa: { width: '100%' },
-  mapaInfo: { flexDirection: 'row', justifyContent: 'space-around' },
-  mapaInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  mapaInfoTexto: { color: COLORS.blanco, fontWeight: 'bold' },
-  marcadorKrusty: {
-    backgroundColor: COLORS.rojo,
-    borderRadius: 20,
-    padding: 4,
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: DISENO.colors.border,
+  },
+  statValor: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.text,
+  },
+  statLabel: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    marginTop: 2,
+  },
+
+  // PESTAÑAS
+  pestanas: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  pestana: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: DISENO.colors.surface,
+    borderWidth: 1,
+    borderColor: DISENO.colors.border,
+  },
+  pestanaActiva: {
+    backgroundColor: DISENO.colors.accentSecondary,
+    borderColor: DISENO.colors.accentSecondary,
+  },
+  pestanaTexto: {
+    fontFamily: FUENTES.regular,
+    fontWeight: '600',
+    color: DISENO.colors.textSecondary,
+  },
+  pestanaTextoActiva: {
+    color: DISENO.colors.text,
+    fontWeight: '700',
+  },
+
+  // MAPA
+  mapaContenedor: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.lg,
+    padding: 10,
+    marginBottom: 12,
+    ...DISENO.shadow.sm,
+  },
+  mapa: {
+    width: '100%',
+    borderRadius: DISENO.radius.md,
+  },
+  mapaInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+  },
+  mapaInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mapaInfoTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: DISENO.colors.text,
+  },
+
+  // ✅ MARCADOR DEL LOCAL CON LOGO
+  marcadorLocalContainer: {
+    backgroundColor: '#FFF',
     borderWidth: 2,
-    borderColor: COLORS.blanco,
+    borderColor: DISENO.colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  marcadorKrustyTexto: { fontSize: 14 },
-  botonDetenerMapa: { overflow: 'hidden' },
-  botonDetenerGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
-  botonDetenerMapaTexto: { color: COLORS.blanco, fontWeight: 'bold', letterSpacing: 0.3 },
-  tarjetaTransmision: { backgroundColor: COLORS.amarillo + '10', borderWidth: 1 },
-  transmisionHeader: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  marcadorLocalImagen: {
+    width: '100%',
+    height: '100%',
+  },
+
+  botonDetenerMapa: {
+    marginTop: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  botonDetenerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  botonDetenerMapaTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+
+  // TARJETA TRANSMISIÓN
+  tarjetaTransmision: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.lg,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accentSecondary + '40',
+    marginBottom: 12,
+    ...DISENO.shadow.sm,
+  },
+  transmisionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
   puntoVivo: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.amarillo,
-    shadowColor: COLORS.amarillo,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: DISENO.colors.success,
   },
-  transmitiendoTexto: { fontWeight: 'bold', color: COLORS.amarillo },
-  pedidoTransmision: { fontWeight: 'bold', color: COLORS.blanco },
-  clienteTransmision: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
-  direccionTransmision: { color: COLORS.blanco, marginTop: 2 },
-  gpsInfo: { backgroundColor: COLORS.negro + '40', borderRadius: 4, borderWidth: 1, borderColor: COLORS.blanco + '5' },
-  gpsTexto: { color: COLORS.amarillo, fontFamily: 'monospace', opacity: 0.8 },
+  transmitiendoTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 14,
+    color: DISENO.colors.success,
+  },
+  pedidoTransmision: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: DISENO.colors.text,
+    marginTop: 2,
+  },
+  clienteTransmision: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    color: DISENO.colors.textSecondary,
+    marginTop: 2,
+  },
+  direccionTransmision: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    color: DISENO.colors.text,
+    marginTop: 4,
+  },
+  gpsInfo: {
+    backgroundColor: DISENO.colors.surfaceHover,
+    borderRadius: 6,
+    padding: 6,
+    marginTop: 6,
+  },
+  gpsTexto: {
+    fontFamily: FUENTES.mono,
+    fontSize: 10,
+    color: DISENO.colors.accent,
+  },
+  botonConfirmarEntrega: {
+    marginTop: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+
+  // LISTA
   listaContainer: { flex: 1 },
-  tarjeta: { backgroundColor: COLORS.negro + '60', borderWidth: 1 },
-  tarjetaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 },
-  pedidoId: { fontWeight: 'bold', color: COLORS.blanco },
-  clienteNombre: { color: COLORS.grisClaro, marginTop: 1, opacity: 0.7 },
-  estadoBadge: { borderWidth: 1, borderColor: COLORS.blanco + '10' },
-  estadoTexto: { fontWeight: 'bold', textTransform: 'capitalize' },
+  tarjeta: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.lg,
+    borderLeftWidth: 4,
+    marginBottom: 10,
+    ...DISENO.shadow.sm,
+  },
+  tarjetaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 8,
+  },
+  pedidoId: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.text,
+  },
+  clienteNombre: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    marginTop: 2,
+  },
+  estadoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  estadoTexto: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   infoEnvioContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     flexWrap: 'wrap',
-    backgroundColor: COLORS.negro + '30',
-    borderWidth: 1,
-    borderColor: COLORS.blanco + '5',
+    backgroundColor: DISENO.colors.surfaceHover,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    gap: 4,
   },
-  infoEnvioItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  infoEnvioTexto: { color: COLORS.grisClaro, fontWeight: '500' },
-  tarjetaInfo: { marginBottom: 4 },
-  tarjetaDireccion: { color: COLORS.blanco, marginBottom: 1 },
-  tarjetaTelefono: { color: COLORS.grisClaro, marginBottom: 1, opacity: 0.6 },
-  tarjetaTotal: { fontWeight: 'bold', color: COLORS.amarillo, marginTop: 1 },
-  botonIniciar: { overflow: 'hidden', elevation: 3, shadowColor: COLORS.amarillo, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8 },
-  botonIniciarGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 14 },
-  botonIniciarTexto: { color: COLORS.negro, fontWeight: 'bold', letterSpacing: 0.3 },
-  enCaminoBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  enCaminoTexto: { color: COLORS.enCamino, fontWeight: '600' },
-  vacio: { alignItems: 'center', paddingVertical: 30 },
-  vacioTexto: { color: COLORS.blanco, fontWeight: 'bold', marginTop: 8, textAlign: 'center' },
-  vacioSubtexto: { color: COLORS.grisClaro, textAlign: 'center', marginTop: 2, opacity: 0.6 },
-  modalFondo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  modal: { backgroundColor: COLORS.grisOscuro, alignItems: 'center', borderWidth: 2 },
-  modalExito: { borderColor: COLORS.verdeClaro },
-  modalIcono: { marginBottom: 6 },
-  modalTitulo: { fontWeight: 'bold', color: COLORS.blanco, marginBottom: 4 },
-  modalTexto: { color: COLORS.grisClaro, textAlign: 'center', marginBottom: 14 },
-  modalBotones: { flexDirection: 'row', width: '100%' },
-  modalBoton: { flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 3 },
-  modalCancelar: { backgroundColor: COLORS.negro + '50', borderWidth: 1, borderColor: COLORS.blanco + '10' },
-  modalCancelarTexto: { color: COLORS.blanco, fontWeight: '600' },
-  modalConfirmar: { overflow: 'hidden' },
-  modalConfirmarGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 14, width: '100%', height: '100%' },
-  modalConfirmarTexto: { color: COLORS.blanco, fontWeight: 'bold' },
+  infoEnvioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoEnvioTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 10,
+    color: DISENO.colors.textSecondary,
+    fontWeight: '500',
+  },
+  tarjetaInfo: { marginBottom: 8 },
+  tarjetaDireccion: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    marginBottom: 2,
+  },
+  tarjetaTelefono: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.textSecondary,
+    marginBottom: 2,
+  },
+  tarjetaTotal: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.accent,
+    marginTop: 2,
+  },
+  botonIniciar: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    ...DISENO.shadow.sm,
+  },
+  botonIniciarGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  botonIniciarTexto: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.text,
+  },
+  enCaminoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  enCaminoTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    fontWeight: '600',
+    color: DISENO.colors.naranja,
+  },
+  vacio: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  vacioTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 16,
+    color: DISENO.colors.text,
+    marginTop: 12,
+  },
+  vacioSubtexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    color: DISENO.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // MODALES
+  modalFondo: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modal: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.xl,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    ...DISENO.shadow.lg,
+  },
+  modalExito: {
+    borderWidth: 2,
+    borderColor: DISENO.colors.success + '40',
+  },
+  modalIcono: {
+    fontSize: 48,
+    marginBottom: 10,
+  },
+  modalTitulo: {
+    fontFamily: FUENTES.display,
+    fontSize: 20,
+    color: DISENO.colors.text,
+    marginBottom: 6,
+  },
+  modalTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    color: DISENO.colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  modalBotones: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  modalBoton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelar: {
+    backgroundColor: DISENO.colors.surfaceHover,
+  },
+  modalCancelarTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    fontWeight: '600',
+    color: DISENO.colors.text,
+  },
+  modalConfirmar: {
+    overflow: 'hidden',
+  },
+  modalConfirmarGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    width: '100%',
+  },
+  modalConfirmarTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 13,
+    color: '#FFF',
+  },
+
+  // MODAL DIVULGACIÓN UBICACIÓN
+  modalUbicacionContainer: {
+    backgroundColor: DISENO.colors.surface,
+    borderRadius: DISENO.radius.xl,
+    width: '100%',
+    maxWidth: 440,
+    overflow: 'hidden',
+    ...DISENO.shadow.lg,
+  },
+  modalUbicacionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  modalUbicacionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalUbicacionTitulo: {
+    flex: 1,
+    fontFamily: FUENTES.display,
+    fontSize: 17,
+    color: '#FFF',
+  },
+  modalUbicacionBody: {
+    padding: 20,
+    gap: 14,
+  },
+  modalUbicacionPregunta: {
+    fontFamily: FUENTES.display,
+    fontSize: 15,
+    color: DISENO.colors.text,
+  },
+  modalUbicacionExplicacion: {
+    fontFamily: FUENTES.regular,
+    fontSize: 14,
+    color: DISENO.colors.textSecondary,
+    lineHeight: 20,
+  },
+  modalUbicacionDestacado: {
+    fontFamily: FUENTES.display,
+    color: DISENO.colors.accent,
+    fontWeight: '700',
+  },
+  modalUbicacionLista: {
+    gap: 10,
+    backgroundColor: DISENO.colors.surfaceHover,
+    borderRadius: 12,
+    padding: 14,
+  },
+  modalUbicacionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  modalUbicacionItemTexto: {
+    flex: 1,
+    fontFamily: FUENTES.regular,
+    fontSize: 13,
+    color: DISENO.colors.textSecondary,
+    lineHeight: 18,
+  },
+  modalUbicacionItemDestacado: {
+    fontFamily: FUENTES.regular,
+    color: DISENO.colors.text,
+    fontWeight: '700',
+  },
+  modalUbicacionAviso: {
+    fontFamily: FUENTES.regular,
+    fontSize: 12,
+    color: DISENO.colors.textTertiary,
+    lineHeight: 17,
+    fontStyle: 'italic',
+  },
+  modalUbicacionBotones: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 20,
+    paddingTop: 0,
+  },
+  modalUbicacionBotonCancelar: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: DISENO.colors.surfaceHover,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalUbicacionBotonCancelarTexto: {
+    fontFamily: FUENTES.regular,
+    fontSize: 14,
+    fontWeight: '600',
+    color: DISENO.colors.textSecondary,
+  },
+  modalUbicacionBotonContinuar: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalUbicacionBotonContinuarGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    width: '100%',
+  },
+  modalUbicacionBotonContinuarTexto: {
+    fontFamily: FUENTES.display,
+    fontSize: 14,
+    color: '#FFF',
+  },
 });

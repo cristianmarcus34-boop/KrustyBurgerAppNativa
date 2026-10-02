@@ -892,16 +892,23 @@ export default function PantallaInicio(props: any) {
           style={[styles.heroWrap, { paddingHorizontal: padding }]}
         >
           <Shadow
-            distance={10}
-            startColor="rgba(0,0,0,0.10)"
-            offset={[0, 5]}
-            style={{ borderRadius: DISENO.radius.md, width: '100%' }}
+            distance={0}
+            startColor="rgba(0,0,0,0)"
+            offset={[0, 0]}
+            style={{ borderRadius: 0, width: '100%' }}
           >
-            <View style={[styles.heroCard, { height: tamanos.heroHeight }]}>
-              <Image source={springfieldFondo} style={styles.heroImage} resizeMode="cover" />
+            <View style={[styles.heroCard, { height: tamanos.heroHeight, backgroundColor: 'transparent' }]}>
+              <View
+                style={[
+                  styles.heroImage,
+                  {
+                    backgroundColor: 'transparent',
+                  },
+                ]}
+              />
               <LinearGradient
-                colors={['rgba(0,0,0,0.0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.85)']}
-                locations={[0, 0.4, 1]}
+                colors={['rgba(255,255,255,0.00)', 'rgba(255,255,255,0.00)', 'rgba(255,255,255,0.00)']}
+                locations={[0, 0.5, 1]}
                 style={StyleSheet.absoluteFill}
               />
               <View style={styles.heroContent}>
@@ -927,27 +934,28 @@ export default function PantallaInicio(props: any) {
                 >
                   {ofertaHero?.descripcion || 'Las mejores burgers de Springfield'}
                 </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.heroCta,
-                    {
-                      paddingHorizontal: tamanos.heroCtaPaddingH,
-                      paddingVertical: tamanos.heroCtaPaddingV,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
-                    if (ofertaHero)
+                {ofertaHero && (
+                  <TouchableOpacity
+                    style={[
+                      styles.heroCta,
+                      {
+                        paddingHorizontal: 0,
+                        paddingVertical: 0,
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
                       props.navigation.navigate('DetalleOferta', { oferta: ofertaHero });
-                    else props.navigation.navigate('Menu');
-                  }}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.heroCtaText} allowFontScaling={false}>
-                    Pedir ahora
-                  </Text>
-                  <Ionicons name="arrow-forward" size={15} color={DISENO.colors.accent} />
-                </TouchableOpacity>
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[styles.heroCtaText, { color: DISENO.colors.accent, textDecorationLine: 'underline' }]} allowFontScaling={false}>
+                      Ver oferta
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </Shadow>
@@ -1026,7 +1034,7 @@ export default function PantallaInicio(props: any) {
               numberOfLines={1}
               allowFontScaling={false}
             >
-              Ofertas para vos
+              Hoy te conviene
             </Text>
             <BotonVer
               texto="Ver todas"
@@ -1181,11 +1189,16 @@ const styles = StyleSheet.create({
   heroWrap: { marginBottom: 16 },
   heroCard: {
     width: '100%',
-    borderRadius: DISENO.radius.md,
-    overflow: 'hidden',
-    backgroundColor: '#111',
+    borderRadius: 0,
+    overflow: 'visible',
+    backgroundColor: 'transparent',
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 0,
   },
-  heroImage: { width: '100%', height: '100%' },
+  heroImage: { width: '100%', height: '100%', backgroundColor: 'transparent' },
   heroContent: { position: 'absolute', bottom: 18, left: 18, right: 18 },
   heroBadge: {
     flexDirection: 'row',
@@ -1199,10 +1212,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   heroBadgeText: { color: '#fff', fontFamily: FUENTES.display, fontSize: 11 },
-  heroTitle: { fontFamily: FUENTES.display, color: '#fff', lineHeight: 32 },
+  heroTitle: { fontFamily: FUENTES.display, color: DISENO.colors.text, lineHeight: 32 },
   heroSubtitle: {
     fontFamily: FUENTES.regular,
-    color: 'rgba(255,255,255,0.9)',
+    color: DISENO.colors.textSecondary,
     marginTop: 6,
     lineHeight: 18,
   },
@@ -1211,11 +1224,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     borderRadius: DISENO.radius.full,
     marginTop: 14,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '25',
   },
-  heroCtaText: { fontFamily: FUENTES.display, fontSize: 14, color: DISENO.colors.accent },
+  heroCtaText: { fontFamily: FUENTES.display, fontSize: 13, color: DISENO.colors.accent },
 
   // Secciones
   seccionContainer: { marginVertical: 10 },
@@ -1228,12 +1243,17 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: FUENTES.display,
-    fontWeight: '400',
+    fontWeight: '700',
     color: DISENO.colors.text,
     letterSpacing: -0.3,
     lineHeight: 28,
     includeFontPadding: false,
     flexShrink: 1,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
 
   // ✅ FIX definitivo para "Ver todas" / "Ver menú" en Galaxy A20
@@ -1322,22 +1342,26 @@ const styles = StyleSheet.create({
   ofertaCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     borderRadius: DISENO.radius.md,
     borderWidth: 1,
-    borderColor: DISENO.colors.accent + '25',
-    backgroundColor: DISENO.colors.surface,
-    ...DISENO.shadow.sm,
+    borderColor: DISENO.colors.accent + '18',
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    overflow: 'hidden',
   },
   ofertaImagen: {
     borderRadius: DISENO.radius.sm,
     backgroundColor: DISENO.colors.surfaceHover,
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '18',
   },
   ofertaImagenFallback: {
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: DISENO.radius.sm,
     backgroundColor: DISENO.colors.accent + '12',
+    borderWidth: 1,
+    borderColor: DISENO.colors.accent + '18',
   },
   ofertaInfo: { flex: 1, minWidth: 0, paddingLeft: 12 },
   ofertaDescuento: {

@@ -29,8 +29,8 @@ const calcularDistanciaMetros = (
   const a =
     Math.sin(aLat / 2) ** 2 +
     Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(aLng / 2) ** 2;
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(aLng / 2) ** 2;
   return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
@@ -39,28 +39,66 @@ export const obtenerSeguimientoEntregaActivo = async (): Promise<SeguimientoEntr
   return datos ? JSON.parse(datos) as SeguimientoEntregaActivo : null;
 };
 
+/**
+ * Limpia cualquier tarea de ubicación que haya quedado huérfana.
+ * Útil para llamar al iniciar la app o la pantalla de reparto.
+ */
+export const limpiarSeguimientoHuerfano = async (): Promise<void> => {
+  try {
+    const tareaActiva = await Location.hasStartedLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
+    if (!tareaActiva) return;
+
+    const seguimiento = await obtenerSeguimientoEntregaActivo();
+    if (seguimiento) return; // hay una entrega legítima en curso
+
+    console.warn('🧹 Detectada tarea de ubicación huérfana al iniciar, limpiando...');
+    try {
+      await Location.stopLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
+    } catch (error) {
+      console.warn('No se pudo detener la tarea huérfana:', error);
+    }
+    await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
+  } catch (error) {
+    console.warn('Error limpiando seguimiento huérfano:', error);
+  }
+};
+
 export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
   seguimiento: SeguimientoEntregaActivo
 ): Promise<boolean> => {
-  let tareaYaRegistrada = false;
+  let tareaIniciadaAhora = false;
   try {
     const disponible = await TaskManager.isAvailableAsync();
     if (!disponible) {
       throw new Error('El seguimiento en segundo plano no está disponible en esta versión de la app.');
     }
 
-    tareaYaRegistrada = await Location.hasStartedLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
+    const tareaYaRegistrada = await Location.hasStartedLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
     if (tareaYaRegistrada) {
       const seguimientoAnterior = await obtenerSeguimientoEntregaActivo();
-      if (!seguimientoAnterior) {
-        throw new Error('Hay una tarea de ubicación activa sin datos de entrega. Reiniciá la app antes de iniciar otra.');
-      }
-      if (seguimientoAnterior.pedidoId !== seguimiento.pedidoId) {
-        throw new Error('Ya hay otra entrega con seguimiento activo en este dispositivo.');
-      }
 
-      await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
-      return false;
+      // ✅ Caso 1: tarea huérfana (sin datos) → limpiar y seguir
+      if (!seguimientoAnterior) {
+        console.warn('🧹 Tarea de ubicación huérfana detectada, limpiando antes de reiniciar...');
+        try {
+          await Location.stopLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
+        } catch (limpiarError) {
+          console.warn('No se pudo detener la tarea huérfana:', limpiarError);
+        }
+        await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
+      }
+      // ✅ Caso 2: otra entrega activa → bloquear
+      else if (seguimientoAnterior.pedidoId !== seguimiento.pedidoId) {
+        throw new Error(
+          `Ya hay una entrega activa (pedido #${seguimientoAnterior.pedidoId}). ` +
+          `Detenela antes de iniciar otra.`
+        );
+      }
+      // ✅ Caso 3: misma entrega → reanudar
+      else {
+        await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
+        return false;
+      }
     }
 
     await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
@@ -81,11 +119,19 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     };
 
     await Location.startLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR, opciones);
+    tareaIniciadaAhora = true;
     return true;
   } catch (error) {
-    if (!tareaYaRegistrada) {
-      await AsyncStorage.removeItem(CLAVE_SEGUIMIENTO_ACTIVO);
+    // ✅ Si algo falló, intentar limpiar todo
+    if (tareaIniciadaAhora) {
+      try {
+        await Location.stopLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
+      } catch (limpiarError) {
+        console.warn('No se pudo detener la tarea tras error:', limpiarError);
+      }
     }
+    await AsyncStorage.removeItem(CLAVE_SEGUIMIENTO_ACTIVO);
+    await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
     throw error;
   }
 };
@@ -152,11 +198,11 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       const ultimoPuntoGuardado = await AsyncStorage.getItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
       const ultimoPunto = ultimoPuntoGuardado
         ? JSON.parse(ultimoPuntoGuardado) as {
-            pedidoId: number;
-            latitude: number;
-            longitude: number;
-            timestamp: number;
-          }
+          pedidoId: number;
+          latitude: number;
+          longitude: number;
+          timestamp: number;
+        }
         : null;
       const puntoYaReciente =
         ultimoPunto?.pedidoId === seguimiento.pedidoId &&

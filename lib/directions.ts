@@ -18,6 +18,27 @@ interface ErrorResponse {
     code?: number;
 }
 
+// ✅ NUEVO: Evitar spam de logs con el mismo error repetido
+let ultimoErrorRegistrado: string | null = null;
+let ultimoErrorTimestamp = 0;
+
+function registrarErrorUnaVez(mensaje: string, esCritico = false) {
+    const ahora = Date.now();
+    const esMismoError = ultimoErrorRegistrado === mensaje;
+    const pasaronSuficientesSegundos = (ahora - ultimoErrorTimestamp) > 60000; // 1 minuto
+
+    // ✅ Solo loguear si es un error DISTINTO o pasó más de 1 minuto
+    if (!esMismoError || pasaronSuficientesSegundos) {
+        if (esCritico) {
+            console.warn(mensaje);
+        } else {
+            console.warn(mensaje);
+        }
+        ultimoErrorRegistrado = mensaje;
+        ultimoErrorTimestamp = ahora;
+    }
+}
+
 // ✅ Función mejorada con más información y manejo de errores
 export async function obtenerRuta(
     origenLat: number,
@@ -29,7 +50,7 @@ export async function obtenerRuta(
     try {
         const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
         if (!apiKey) {
-            console.error('❌ Falta EXPO_PUBLIC_GOOGLE_MAPS_API_KEY. Configurala en el entorno antes de solicitar rutas.');
+            registrarErrorUnaVez('⚠️ Falta EXPO_PUBLIC_GOOGLE_MAPS_API_KEY');
             return null;
         }
 
@@ -41,13 +62,17 @@ export async function obtenerRuta(
             Math.abs(origenLng) > 180 ||
             Math.abs(destinoLng) > 180
         ) {
-            console.error('❌ Coordenadas inválidas:', { origenLat, origenLng, destinoLat, destinoLng });
+            registrarErrorUnaVez(`⚠️ Coordenadas inválidas: ${origenLat},${origenLng} → ${destinoLat},${destinoLng}`);
             return null;
         }
 
-        console.log(`📍 Origen: ${origenLat}, ${origenLng}`);
-        console.log(`📍 Destino: ${destinoLat}, ${destinoLng}`);
-        console.log(`🚗 Modo de viaje: ${modo}`);
+        // ✅ Silencioso por defecto (solo se ven si DEBUG_ROUTES = true)
+        const DEBUG_ROUTES = false;
+        if (DEBUG_ROUTES) {
+            console.log(`📍 Origen: ${origenLat}, ${origenLng}`);
+            console.log(`📍 Destino: ${destinoLat}, ${destinoLng}`);
+            console.log(`🚗 Modo de viaje: ${modo}`);
+        }
 
         const url = new URL('https://maps.googleapis.com/maps/api/directions/json');
         url.searchParams.append('origin', `${origenLat},${origenLng}`);
@@ -77,13 +102,15 @@ export async function obtenerRuta(
         }
 
         if (!response.ok) {
-            console.error(`❌ Error HTTP: ${response.status} ${response.statusText}`);
+            registrarErrorUnaVez(`⚠️ Google Maps HTTP ${response.status}`);
             return null;
         }
 
         const data = await response.json();
 
-        console.log('📡 Respuesta de Directions API:', data.status);
+        if (DEBUG_ROUTES) {
+            console.log('📡 Respuesta de Directions API:', data.status);
+        }
 
         if (data.status !== 'OK') {
             const errorInfo: ErrorResponse = {
@@ -91,32 +118,35 @@ export async function obtenerRuta(
                 message: data.error_message || 'Error desconocido',
             };
 
+            // ✅ Todos los errores de Google son console.warn, no console.error
             switch (data.status) {
                 case 'REQUEST_DENIED':
-                    console.error('❌ Clave API no autorizada. Verifica que la Directions API esté habilitada y la clave sea correcta.');
+                    registrarErrorUnaVez(
+                        '⚠️ Google Maps: Clave sin billing o Directions API no habilitada. La app usará línea recta mientras tanto.'
+                    );
                     break;
                 case 'ZERO_RESULTS':
-                    console.warn('⚠️ No se encontró ninguna ruta entre los puntos especificados.');
+                    registrarErrorUnaVez('⚠️ No se encontró ruta entre los puntos indicados.');
                     break;
                 case 'OVER_QUERY_LIMIT':
-                    console.error('❌ Límite de consultas excedido. Espera un momento y vuelve a intentar.');
+                    registrarErrorUnaVez('⚠️ Google Maps: límite de consultas excedido.');
                     break;
                 case 'INVALID_REQUEST':
-                    console.error('❌ Petición inválida. Verifica los parámetros enviados.');
+                    registrarErrorUnaVez('⚠️ Google Maps: petición inválida.');
                     break;
                 default:
-                    console.error(`❌ Error en Directions API: ${data.status}`, data);
+                    registrarErrorUnaVez(`⚠️ Google Maps: ${data.status}`);
             }
 
-            if (data.error_message) {
-                console.error(`📝 Mensaje: ${data.error_message}`);
+            if (data.error_message && DEBUG_ROUTES) {
+                console.warn(`📝 Google: ${data.error_message}`);
             }
 
             return null;
         }
 
         if (!data.routes || data.routes.length === 0) {
-            console.warn('⚠️ No se encontraron rutas');
+            registrarErrorUnaVez('⚠️ No se encontraron rutas');
             return null;
         }
 
@@ -124,7 +154,7 @@ export async function obtenerRuta(
         const leg = route.legs[0];
 
         if (!leg.steps || leg.steps.length === 0) {
-            console.warn('⚠️ La ruta no tiene pasos detallados');
+            registrarErrorUnaVez('⚠️ La ruta no tiene pasos detallados');
             return null;
         }
 
@@ -140,11 +170,15 @@ export async function obtenerRuta(
         if (points.length === 0 && route.overview_polyline && route.overview_polyline.points) {
             const overviewPoints = decodePolyline(route.overview_polyline.points);
             points.push(...overviewPoints);
-            console.log('📍 Usando polyline de resumen de la ruta');
+            if (DEBUG_ROUTES) {
+                console.log('📍 Usando polyline de resumen de la ruta');
+            }
         }
 
         if (points.length === 0) {
-            console.warn('⚠️ No se pudieron decodificar los polylines, usando puntos de inicio y fin');
+            if (DEBUG_ROUTES) {
+                console.warn('⚠️ No se pudieron decodificar los polylines, usando puntos de inicio y fin');
+            }
             points.push(
                 { latitude: leg.start_location.lat, longitude: leg.start_location.lng },
                 { latitude: leg.end_location.lat, longitude: leg.end_location.lng }
@@ -156,8 +190,14 @@ export async function obtenerRuta(
         const durationText = leg.duration?.text || '0 min';
         const durationSeconds = leg.duration?.value || 0;
 
-        console.log(`✅ Ruta obtenida: ${distanceText}, ${durationText}`);
-        console.log(`📍 Puntos de la ruta: ${points.length}`);
+        // ✅ Reset del cache de errores cuando la API funciona
+        ultimoErrorRegistrado = null;
+        ultimoErrorTimestamp = 0;
+
+        if (DEBUG_ROUTES) {
+            console.log(`✅ Ruta obtenida: ${distanceText}, ${durationText}`);
+            console.log(`📍 Puntos de la ruta: ${points.length}`);
+        }
 
         return {
             points,
@@ -170,9 +210,9 @@ export async function obtenerRuta(
         };
     } catch (error: any) {
         if (error.name === 'AbortError') {
-            console.error('❌ Timeout al obtener la ruta (10 segundos)');
+            registrarErrorUnaVez('⚠️ Timeout al obtener la ruta (10 segundos)');
         } else {
-            console.error('❌ Error obteniendo ruta:', error.message || error);
+            registrarErrorUnaVez(`⚠️ Error obteniendo ruta: ${error.message || error}`);
         }
         return null;
     }
@@ -227,7 +267,6 @@ export async function guardarRutaPedido(
     duracion?: string
 ): Promise<boolean> {
     try {
-        // ✅ Validar puntos
         const puntosValidos = puntos.filter(p =>
             p.latitude !== undefined &&
             p.longitude !== undefined &&
@@ -238,11 +277,9 @@ export async function guardarRutaPedido(
         );
 
         if (puntosValidos.length < 2) {
-            console.warn('⚠️ Puntos insuficientes para guardar ruta');
             return false;
         }
 
-        // ✅ Construir objeto con las columnas correctas de tu DB
         const updateData: any = {
             ruta_puntos: puntosValidos,
         };
@@ -261,27 +298,19 @@ export async function guardarRutaPedido(
             }
         }
 
-        console.log('💾 Guardando ruta en DB:', {
-            pedidoId,
-            puntos: puntosValidos.length,
-            distancia: updateData.distancia_km,
-            tiempo: updateData.tiempo_estimado,
-        });
-
         const { error } = await supabase
             .from('pedidos')
             .update(updateData)
             .eq('id', pedidoId);
 
         if (error) {
-            console.error('❌ Error guardando ruta:', error);
+            console.warn('⚠️ Error guardando ruta:', error.message);
             return false;
         }
 
-        console.log(`✅ Ruta guardada correctamente para pedido ${pedidoId}`);
         return true;
     } catch (error) {
-        console.error('❌ Error guardando ruta:', error);
+        console.warn('⚠️ Error guardando ruta:', error);
         return false;
     }
 }
@@ -296,7 +325,7 @@ export async function obtenerRutaPedido(pedidoId: number): Promise<{ latitude: n
             .single();
 
         if (error) {
-            console.error('❌ Error obteniendo ruta:', error);
+            console.warn('⚠️ Error obteniendo ruta:', error.message);
             return null;
         }
 
@@ -306,7 +335,7 @@ export async function obtenerRutaPedido(pedidoId: number): Promise<{ latitude: n
 
         return null;
     } catch (error) {
-        console.error('❌ Error obteniendo ruta:', error);
+        console.warn('⚠️ Error obteniendo ruta:', error);
         return null;
     }
 }
@@ -321,7 +350,7 @@ export async function obtenerInfoRutaPedido(pedidoId: number): Promise<{ distanc
             .single();
 
         if (error) {
-            console.error('❌ Error obteniendo info de ruta:', error);
+            console.warn('⚠️ Error obteniendo info de ruta:', error.message);
             return null;
         }
 
@@ -330,7 +359,7 @@ export async function obtenerInfoRutaPedido(pedidoId: number): Promise<{ distanc
             duracion: data?.tiempo_estimado ? data.tiempo_estimado + ' min' : '0 min',
         };
     } catch (error) {
-        console.error('❌ Error obteniendo info de ruta:', error);
+        console.warn('⚠️ Error obteniendo info de ruta:', error);
         return null;
     }
 }
