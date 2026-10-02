@@ -119,7 +119,22 @@ export const notificacionService = {
             }
 
             const projectId = getProjectId();
-            const token = await Notifications.getExpoPushTokenAsync({ projectId });
+            let token;
+
+            try {
+                token = await Notifications.getExpoPushTokenAsync({ projectId });
+            } catch (expoError: any) {
+                // 🔍 Si el error viene de Firebase/Expo por el bundle o red, lo manejamos de forma limpia
+                const mensajeError = expoError?.message || '';
+                if (mensajeError.includes('LoadBundle') || mensajeError.includes('Could not load bundle')) {
+                    console.warn('⚠️ [Notif] Advertencia menor de Firebase (Bundle ignorado):', mensajeError);
+                    return false;
+                }
+                throw expoError; // Si es otro error, que pase al catch principal
+            }
+
+            if (!token?.data) return false;
+
             const plataforma = Platform.OS;
 
             const { error: errorDispositivo } = await supabase
@@ -223,132 +238,155 @@ export const notificacionService = {
         }
     },
 
+    // ✅ HELPER INTERNO: configura todos los canales de Android
+    // Se llama cada vez que se confirman permisos (granted), sin importar
+    // si fue recién pedido o ya estaba concedido.
+    async configurarCanalesAndroid() {
+        if (Platform.OS !== 'android') return;
+
+        try {
+            await Notifications.setNotificationChannelAsync('promociones', {
+                name: '🎪 Promociones Krusty',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#F5C518',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'krustyyotequieromucho.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('ofertas', {
+                name: '💰 Ofertas Krusty',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF6F00',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('recompensa', {
+                name: '🎁 Recompensas',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#EC407A',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'circopararapapa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('pedidos', {
+                name: '📦 Pedidos',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#E53935',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('pedidos_admin', {
+                name: '🔔 Nuevos pedidos (admin)',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 500, 200, 500],
+                lightColor: '#E53935',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('sistema', {
+                name: '⚙️ Sistema',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#42A5F5',
+                enableVibrate: true,
+                enableLights: true,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('default', {
+                name: '🔔 General',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#B0B0B0',
+                enableVibrate: true,
+                enableLights: true,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('imagenes', {
+                name: '🖼️ Promociones con imagen',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#F5C518',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'saxolisa.wav',
+            });
+
+            await Notifications.setNotificationChannelAsync('imagenes_v2', {
+                name: '🖼️ Promociones con imagen',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#F5C518',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: null,
+            });
+
+            console.log('✅ [Notif] Canales Android configurados');
+        } catch (error) {
+            console.error('❌ [Notif] Error configurando canales:', error);
+        }
+    },
+
     async solicitarPermisos() {
         try {
             let { status } = await Notifications.getPermissionsAsync();
+
+            // ✅ Ya concedido: solo aseguramos canales y salimos
+            if (status === 'granted') {
+                console.log('✅ [Notif] Permisos ya concedidos');
+                await this.configurarCanalesAndroid();
+                return true;
+            }
+
+            // ⚠️ Denegado permanentemente: NO se puede volver a pedir desde la app.
+            // El caller (hook o pantalla) debe mostrar un Alert con "Abrir ajustes".
             if (status === 'denied') {
-                console.log('❌ Permisos denegados previamente; no se vuelve a solicitar');
+                console.log('⚠️ [Notif] Permiso denegado — requiere acción manual en ajustes');
                 return false;
             }
 
-            if (status !== 'granted') {
-                ({ status } = await Notifications.requestPermissionsAsync());
-            }
+            // status === 'undetermined' → primera vez, se puede pedir
+            ({ status } = await Notifications.requestPermissionsAsync());
 
             if (status !== 'granted') {
-                console.log('❌ Permisos denegados');
+                console.log('❌ [Notif] Permisos no concedidos tras solicitud');
                 return false;
             }
 
-            if (Platform.OS === 'android') {
-                await Notifications.setNotificationChannelAsync('promociones', {
-                    name: '🎪 Promociones Krusty',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#F5C518',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'krustyyotequieromucho.wav',
-                });
+            await this.configurarCanalesAndroid();
 
-                await Notifications.setNotificationChannelAsync('ofertas', {
-                    name: '💰 Ofertas Krusty',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#FF6F00',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('recompensa', {
-                    name: '🎁 Recompensas',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#EC407A',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'circopararapapa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('pedidos', {
-                    name: '📦 Pedidos',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#E53935',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('pedidos_admin', {
-                    name: '🔔 Nuevos pedidos (admin)',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 500, 200, 500],
-                    lightColor: '#E53935',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('sistema', {
-                    name: '⚙️ Sistema',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#42A5F5',
-                    enableVibrate: true,
-                    enableLights: true,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('default', {
-                    name: '🔔 General',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#B0B0B0',
-                    enableVibrate: true,
-                    enableLights: true,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('imagenes', {
-                    name: '🖼️ Promociones con imagen',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#F5C518',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: 'saxolisa.wav',
-                });
-
-                await Notifications.setNotificationChannelAsync('imagenes_v2', {
-                    name: '🖼️ Promociones con imagen',
-                    importance: Notifications.AndroidImportance.MAX,
-                    vibrationPattern: [0, 250, 250, 250],
-                    lightColor: '#F5C518',
-                    enableVibrate: true,
-                    enableLights: true,
-                    bypassDnd: true,
-                    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-                    sound: null,
-                });
-            }
-            console.log('✅ Permisos concedidos y canales configurados');
+            console.log('✅ [Notif] Permisos concedidos y canales configurados');
             return true;
         } catch (error) {
-            console.error('❌ Error solicitando permisos:', error);
+            console.error('❌ [Notif] Error solicitando permisos:', error);
             return false;
         }
     },
@@ -493,7 +531,9 @@ export const notificacionService = {
         sonido?: string
     ) {
         try {
-            if (tipo === 'promocion' || tipo === 'oferta') {
+            // ✅ SOLO 'promocion' requiere consentimiento explícito.
+            // 'oferta' se manda a todos (es info útil, no marketing).
+            if (tipo === 'promocion') {
                 const { data: perfil, error: errorPerfil } = await supabase
                     .from('perfiles')
                     .select('acepta_promociones')
@@ -557,7 +597,9 @@ export const notificacionService = {
                 .eq('activo', true)
                 .gte('ultima_actividad', hace60dias);
 
-            if (tipo === 'promocion' || tipo === 'oferta') {
+            // ✅ SOLO 'promocion' filtra por consentimiento.
+            // 'oferta' va a todos los que tengan permiso nativo.
+            if (tipo === 'promocion') {
                 const { data: perfilesConConsentimiento, error: errorPerfiles } = await supabase
                     .from('perfiles')
                     .select('id')
@@ -696,7 +738,7 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // 🎪 NOTIFICAR AL CLIENTE CAMBIO DE ESTADO  ✅ NUEVO
+    // 🎪 NOTIFICAR AL CLIENTE CAMBIO DE ESTADO
     // ============================================================
     async notificarClienteCambioEstado(
         clienteId: string,
@@ -708,7 +750,6 @@ export const notificacionService = {
 
             console.log(`🎪 [Notif] Notificando a cliente ${clienteId} cambio a "${nuevoEstado}"`);
 
-            // ✅ Textos con personalidad Krusty
             const textos: Record<string, { titulo: string; cuerpo: string }> = {
                 confirmado: {
                     titulo: '🎪 ¡Hey hey!',
@@ -742,7 +783,6 @@ export const notificacionService = {
                 return { success: true, enviados: 0 };
             }
 
-            // ✅ Guardar en el historial de notificaciones del cliente
             try {
                 await supabase
                     .from('notificaciones_usuarios')
@@ -758,7 +798,6 @@ export const notificacionService = {
                 console.warn('⚠️ No se pudo guardar en historial:', e);
             }
 
-            // ✅ Buscar tokens del cliente
             const { data: dispositivos } = await supabase
                 .from('dispositivos_push')
                 .select('expo_push_token')
