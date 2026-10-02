@@ -316,6 +316,9 @@ export default Sentry.wrap(function App() {
 
   const yaOcultoSplashNativo = useRef(false);
 
+  // ✅ FIX: ref para evitar resets fantasma al cerrar sesión
+  const yaReseteoPorLogout = useRef(false);
+
   // ============================================================
   // ⏱️ TIMER MÍNIMO DEL SPLASH
   // ============================================================
@@ -448,8 +451,12 @@ export default Sentry.wrap(function App() {
   // ============================================================
   useEffect(() => {
     if (sesion && perfil?.id) {
-      notificacionService.registrarToken(perfil.id).catch((error) => {
-        console.warn('⚠️ [Notif] Error registrando token existente:', error);
+      notificacionService.tienePermisos().then((tienePermiso) => {
+        if (tienePermiso) {
+          notificacionService.registrarToken(perfil.id).catch((error) => {
+            console.warn('⚠️ [Notif] Error registrando token existente:', error);
+          });
+        }
       });
     }
   }, [sesion, perfil?.id]);
@@ -458,8 +465,12 @@ export default Sentry.wrap(function App() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !sesion || !perfil?.id) return;
 
-      notificacionService.registrarToken(perfil.id).catch((error) => {
-        console.warn('⚠️ [Notif] Error verificando permiso al reanudar:', error);
+      notificacionService.tienePermisos().then((tienePermiso) => {
+        if (tienePermiso) {
+          notificacionService.registrarToken(perfil.id).catch((error) => {
+            console.warn('⚠️ [Notif] Error verificando permiso al reanudar:', error);
+          });
+        }
       });
     });
 
@@ -485,33 +496,38 @@ export default Sentry.wrap(function App() {
 
   // ============================================================
   // 🔄 REDIRECCIÓN AUTOMÁTICA AL CERRAR SESIÓN
+  // ✅ FIX: usar ref para evitar resets fantasma cuando
+  //    la app arranca sin sesión o cuando cargando cambia.
   // ============================================================
   useEffect(() => {
     if (!sesion && !cargando && navigationRef.current && splashTerminado) {
-      navigationRef.current.reset({
-        index: 0,
-        routes: [{ name: 'Bienvenida' }],
-      });
+      if (!yaReseteoPorLogout.current) {
+        yaReseteoPorLogout.current = true;
+        console.log('🔄 [App] Reset por logout → Bienvenida');
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'Bienvenida' }],
+        });
+      }
+    }
+    // Resetear el flag cuando el usuario vuelve a tener sesión
+    if (sesion) {
+      yaReseteoPorLogout.current = false;
     }
   }, [sesion, cargando, splashTerminado]);
 
   // ============================================================
   // 🔗 MANEJAR DEEP LINKING (CUPONES Y RECUPERACIÓN)
   // ============================================================
-  // ✅ NUEVO: Si el deep link requiere sesión y no la hay,
-  // redirigimos a Login en vez de dejar la navegación rota.
-  // ============================================================
   useEffect(() => {
     const handleDeepLink = async (event: any) => {
       const url = event.url;
       if (!url) return;
 
-      // Esperamos un poco por si la app recién arranca
       const navegarSeguro = (nombre: string, params?: any) => {
         setTimeout(() => {
           if (!navigationRef.current) return;
 
-          // ✅ Si la ruta requiere sesión y no hay, mandamos a Login
           const requiereSesion = ['CanjearCupon', 'MisCupones', 'Recompensas',
             'Checkout', 'NotificacionesUsuario', 'Seguimiento'];
 
