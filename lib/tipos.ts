@@ -187,6 +187,7 @@ export interface Perfil {
     created_at?: string;
     nivel?: 'bronce' | 'plata' | 'oro' | 'platino';
     mes_actual_beneficios?: string;
+    fecha_nacimiento?: string | null; // Formato ISO: YYYY-MM-DD
 }
 
 export interface ElementoCarrito {
