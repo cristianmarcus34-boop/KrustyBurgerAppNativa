@@ -1,4 +1,4 @@
-﻿// screens/auth/PantallaLogin.tsx - V2 100% RESPONSIVE (Galaxy A20 friendly)
+﻿// screens/auth/PantallaLogin.tsx - V2 100% RESPONSIVE + PERMISOS ONBOARDING
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -32,7 +32,10 @@ import { DISENO, useResponsive } from '../../lib/colores';
 import { FUENTES, TAMANOS_DISPLAY } from '../../lib/fuentes';
 import { RootStackParamList } from '../../lib/tipos';
 
-// Es necesario para cerrar la sesión de WebBrowser correctamente en Android/iOS
+// 🚀 Imports para la estrategia de permisos amigables
+import { yaVioModalPermisos, marcarModalPermisosVisto, solicitarPermisosCompletosApp } from '../../utils/permisosHelper';
+import ModalPermisosEntrada from '../../components/ModalPermisosEntrada';
+
 WebBrowser.maybeCompleteAuthSession();
 
 const logoImage = require('../../assets/logo-krusty.png');
@@ -41,7 +44,6 @@ const COLOR_TEXTO_SECUNDARIO_LOGIN = '#5F6368';
 const COLOR_DETALLE_LOGIN = '#687078';
 const COLOR_PUNTOS_LOGIN = '#705300';
 
-// ✅ TIPADO DE NAVEGACIÓN
 type Navigation = {
   navigate: <T extends keyof RootStackParamList>(
     screen: T,
@@ -50,7 +52,6 @@ type Navigation = {
   goBack: () => void;
 };
 
-// ✅ CLAVES
 const STORAGE_KEYS = {
   REMEMBER_EMAIL: 'krusty_remember_email',
   REMEMBER_PASSWORD: 'krusty_remember_password',
@@ -59,25 +60,18 @@ const STORAGE_KEYS = {
   LOGIN_BLOCKED_UNTIL: 'krusty_login_blocked_until',
 };
 
-// ✅ CONFIGURACIÓN DE BLOQUEO
 const MAX_INTENTOS = 5;
 const TIEMPO_BLOQUEO_SEGUNDOS = 60;
 
-// ============================================================
-// 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
-// ============================================================
 interface TamanosLogin {
-  // Layout general
   paddingHorizontal: number;
   paddingTop: number;
   paddingBottom: number;
   maxFormWidth: number;
   formPadding: number;
   formRadius: number;
-  // Logo
   logoSize: number;
   logoMarginBottom: number;
-  // Textos
   formTitleSize: number;
   formSubtitleSize: number;
   labelSize: number;
@@ -86,19 +80,15 @@ interface TamanosLogin {
   smallTextSize: number;
   legalTextSize: number;
   versionTextSize: number;
-  // Inputs
   inputHeight: number;
   inputPaddingH: number;
   inputRadius: number;
   iconSize: number;
   iconActionSize: number;
-  // Botones
   buttonPaddingV: number;
   buttonRadius: number;
-  // Espaciados
   sectionGap: number;
   errorIconSize: number;
-  // Header
   headerHeightPercent: number;
 }
 
@@ -109,38 +99,17 @@ const calcularTamanosLogin = (
   isDesktop: boolean,
   isSmall: boolean,
 ): TamanosLogin => {
-  // isSmall = ancho < 380 (Galaxy A20, iPhone SE, etc.)
   const ancho = width;
-
-  // Padding lateral adaptativo
-  const paddingHorizontal = isDesktop
-    ? 60
-    : isTablet
-      ? 40
-      : isSmall
-        ? 16
-        : 20;
-
-  // Ancho máximo del formulario
+  const paddingHorizontal = isDesktop ? 60 : isTablet ? 40 : isSmall ? 16 : 20;
   const maxFormWidth = isDesktop ? 480 : isTablet ? 460 : ancho;
-
-  // Padding del formulario
   const formPadding = isDesktop ? 32 : isTablet ? 28 : isSmall ? 18 : 22;
   const formRadius = isDesktop ? 28 : 24;
 
-  // Logo: proporcional al ancho útil
   const anchoUtil = Math.min(ancho - paddingHorizontal * 2, maxFormWidth);
   const logoBase = anchoUtil * 0.45;
-  const logoSize = isDesktop
-    ? 200
-    : isTablet
-      ? 180
-      : isSmall
-        ? Math.min(logoBase, 130)
-        : Math.min(logoBase, 160);
+  const logoSize = isDesktop ? 200 : isTablet ? 180 : isSmall ? Math.min(logoBase, 130) : Math.min(logoBase, 160);
   const logoMarginBottom = isSmall ? 12 : 18;
 
-  // Textos
   const formTitleSize = isDesktop ? 26 : isTablet ? 24 : isSmall ? 19 : 22;
   const formSubtitleSize = isDesktop ? 15 : isTablet ? 15 : isSmall ? 12.5 : 14;
   const labelSize = isDesktop ? 15 : isTablet ? 14 : isSmall ? 12.5 : 13.5;
@@ -150,25 +119,17 @@ const calcularTamanosLogin = (
   const legalTextSize = isSmall ? 11 : 12;
   const versionTextSize = isSmall ? 10 : 11;
 
-  // Inputs
   const inputHeight = isDesktop ? 60 : isTablet ? 58 : isSmall ? 50 : 54;
   const inputPaddingH = isDesktop ? 16 : isTablet ? 15 : isSmall ? 12 : 14;
   const inputRadius = isDesktop ? 16 : isSmall ? 12 : 14;
   const iconSize = isDesktop ? 22 : isTablet ? 22 : isSmall ? 20 : 21;
   const iconActionSize = isDesktop ? 48 : isSmall ? 40 : 44;
 
-  // Botones
   const buttonPaddingV = isDesktop ? 18 : isTablet ? 17 : isSmall ? 14 : 16;
   const buttonRadius = isSmall ? 12 : 14;
-
-  // Espaciados
   const sectionGap = isSmall ? 10 : 14;
   const errorIconSize = isSmall ? 18 : 20;
-
-  // Altura del header gradient (0-100)
   const headerHeightPercent = isSmall ? 38 : 42;
-
-  // PaddingTop y Bottom
   const paddingTop = isSmall ? 8 : 12;
   const paddingBottom = isSmall ? 20 : 30;
 
@@ -202,9 +163,6 @@ const calcularTamanosLogin = (
   };
 };
 
-// ============================================================
-// 🏠 COMPONENTE
-// ============================================================
 export default function PantallaLogin(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
@@ -218,9 +176,9 @@ export default function PantallaLogin(props: any) {
         screenHeight,
         responsive.isTablet,
         responsive.isDesktop,
-        responsive.isSmallPhone,   // ✅
+        responsive.isSmallPhone,
       ),
-    [screenWidth, screenHeight, responsive.isTablet, responsive.isDesktop, responsive.isSmallPhone],  // ✅
+    [screenWidth, screenHeight, responsive.isTablet, responsive.isDesktop, responsive.isSmallPhone],
   );
 
   const [correo, setCorreo] = useState('');
@@ -236,6 +194,10 @@ export default function PantallaLogin(props: any) {
   const [tiempoRestante, setTiempoRestante] = useState(0);
   const [mensajeErrorGeneral, setMensajeErrorGeneral] = useState<string | null>(null);
 
+  // 🚀 Estados para el Modal de Permisos de Entrada
+  const [mostrarModalPermisos, setMostrarModalPermisos] = useState(false);
+  const [userIdLogueado, setUserIdLogueado] = useState<string | null>(null);
+
   const { iniciarSesion } = tiendaAutenticacion();
 
   const correoInputRef = useRef<TextInput>(null);
@@ -246,9 +208,6 @@ export default function PantallaLogin(props: any) {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<number | null>(null);
 
-  // ============================================================
-  // CARGA INICIAL
-  // ============================================================
   useEffect(() => {
     cargarCredencialesGuardadas();
     cargarEstadoBloqueo();
@@ -532,11 +491,20 @@ export default function PantallaLogin(props: any) {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
-        try {
-          await notificacionService.registrarToken(session.user.id);
-        } catch (error) {
-          console.log('⚠️ Error registrando notificaciones:', error);
+        setUserIdLogueado(session.user.id);
+        const yaVisto = await yaVioModalPermisos();
+        if (!yaVisto) {
+          setMostrarModalPermisos(true);
+        } else {
+          try {
+            await notificacionService.registrarToken(session.user.id);
+          } catch (error) {
+            console.log('⚠️ Error registrando notificaciones:', error);
+          }
+          navigation.navigate('Principal');
         }
+      } else {
+        navigation.navigate('Principal');
       }
 
     } catch (error: any) {
@@ -559,6 +527,22 @@ export default function PantallaLogin(props: any) {
     }
   };
 
+  // 🚀 Acciones del Modal Amigable de Permisos
+  const handleAceptarModalPermisos = async () => {
+    setMostrarModalPermisos(false);
+    await marcarModalPermisosVisto();
+    if (userIdLogueado) {
+      await solicitarPermisosCompletosApp(userIdLogueado);
+    }
+    navigation.navigate('Principal');
+  };
+
+  const handleOmitirModalPermisos = async () => {
+    setMostrarModalPermisos(false);
+    await marcarModalPermisosVisto();
+    navigation.navigate('Principal');
+  };
+
   const manejarGoogleLogin = async () => {
     try {
       setCargandoGoogle(true);
@@ -568,8 +552,6 @@ export default function PantallaLogin(props: any) {
         scheme: 'krustyburger',
         path: 'auth/callback',
       });
-
-      console.log('🔵 [Google] redirectTo:', redirectTo);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -582,41 +564,45 @@ export default function PantallaLogin(props: any) {
       if (error) throw error;
       if (!data?.url) throw new Error('No OAuth URL');
 
-      console.log('🔵 [Google] Abriendo navegador...');
-
       const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
       if (res.type !== 'success' || !res.url) {
-        console.log('🔵 [Google] Usuario canceló o cerró el navegador');
         return;
       }
 
       const url = res.url;
-
       const queryParams = new URLSearchParams(url.split('?')[1] || '');
       const code = queryParams.get('code');
 
       if (code) {
-        console.log('🔵 [Google] Intercambiando code por sesión...');
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) throw exchangeError;
-        console.log('✅ [Google] Sesión creada con PKCE');
       } else {
         const fragmentParams = new URLSearchParams(url.split('#')[1] || '');
         const access_token = fragmentParams.get('access_token');
         const refresh_token = fragmentParams.get('refresh_token');
 
         if (access_token && refresh_token) {
-          console.log('🔵 [Google] Seteando sesión con tokens directos...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token,
             refresh_token,
           });
           if (sessionError) throw sessionError;
-          console.log('✅ [Google] Sesión creada con tokens');
         } else {
-          console.warn('⚠️ [Google] No hay code ni tokens en la URL:', url);
           throw new Error('No se recibieron credenciales de Google');
+        }
+      }
+
+      // Después de Google Login exitoso, verificamos también los permisos
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        setUserIdLogueado(session.user.id);
+        const yaVisto = await yaVioModalPermisos();
+        if (!yaVisto) {
+          setMostrarModalPermisos(true);
+        } else {
+          await notificacionService.registrarToken(session.user.id);
+          navigation.navigate('Principal');
         }
       }
     } catch (error: any) {
@@ -686,7 +672,7 @@ export default function PantallaLogin(props: any) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ============ LOGO ============ */}
+          {/* LOGO */}
           <Animated.View
             style={[
               estilos.logoContainer,
@@ -711,7 +697,7 @@ export default function PantallaLogin(props: any) {
             </View>
           </Animated.View>
 
-          {/* ============ FORMULARIO ============ */}
+          {/* FORMULARIO */}
           <Animated.View
             style={[
               estilos.formulario,
@@ -759,7 +745,6 @@ export default function PantallaLogin(props: any) {
               </View>
             )}
 
-            {/* Campo: Correo */}
             <Text
               style={[estilos.label, { fontSize: tamanos.labelSize }]}
               allowFontScaling={false}
@@ -827,7 +812,6 @@ export default function PantallaLogin(props: any) {
               </Text>
             )}
 
-            {/* Campo: Contraseña */}
             <Text
               style={[
                 estilos.label,
@@ -898,7 +882,6 @@ export default function PantallaLogin(props: any) {
               </Text>
             )}
 
-            {/* Recordar + Olvidé */}
             <View style={[estilos.recordarContainer, { marginTop: tamanos.sectionGap }]}>
               <View style={estilos.recordarLeft}>
                 <Switch
@@ -958,7 +941,6 @@ export default function PantallaLogin(props: any) {
               </View>
             )}
 
-            {/* Botón principal */}
             <TouchableOpacity
               style={[
                 estilos.boton,
@@ -1015,7 +997,6 @@ export default function PantallaLogin(props: any) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Separador */}
             <View style={[estilos.separadorContainer, { marginTop: tamanos.sectionGap + 2 }]}>
               <View style={estilos.separador} />
               <Text
@@ -1027,7 +1008,6 @@ export default function PantallaLogin(props: any) {
               <View style={estilos.separador} />
             </View>
 
-            {/* Google */}
             <TouchableOpacity
               style={[
                 estilos.botonGoogle,
@@ -1061,7 +1041,6 @@ export default function PantallaLogin(props: any) {
               )}
             </TouchableOpacity>
 
-            {/* Card de registro */}
             <TouchableOpacity
               style={[
                 estilos.registroCard,
@@ -1084,7 +1063,6 @@ export default function PantallaLogin(props: any) {
               <Ionicons name="chevron-forward" size={16} color={COLOR_DETALLE_LOGIN} />
             </TouchableOpacity>
 
-            {/* Invitado */}
             <TouchableOpacity
               style={[
                 estilos.botonInvitado,
@@ -1106,7 +1084,6 @@ export default function PantallaLogin(props: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* Legal */}
             <View style={estilos.legalContainer}>
               <TouchableOpacity onPress={() => navigation.navigate('Terminos')} activeOpacity={0.6}>
                 <Text
@@ -1136,336 +1113,63 @@ export default function PantallaLogin(props: any) {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 🚀 MODAL AMIGABLE DE PERMISOS */}
+      <ModalPermisosEntrada
+        visible={mostrarModalPermisos}
+        onAceptar={handleAceptarModalPermisos}
+        onOmitir={handleOmitirModalPermisos}
+      />
     </View>
   );
 }
 
-// ============================================================
-// 🎨 ESTILOS (solo lo estático; lo dinámico va inline)
-// ============================================================
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: DISENO.colors.fondo,
-  },
-  background: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: DISENO.colors.fondo,
-  },
-  headerGradiente: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-  },
-  logoWrapper: {
-    ...DISENO.shadow.lg,
-    shadowColor: DISENO.colors.accent,
-    shadowOpacity: 0.25,
-  },
-  formulario: {
-    width: '100%',
-    alignSelf: 'center',
-    backgroundColor: DISENO.colors.surface,
-    ...DISENO.shadow.lg,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-  },
-  formHeader: {
-    alignItems: 'center',
-  },
-  formTitle: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 32,
-    includeFontPadding: false,
-  },
-  formSubtitle: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
-    marginTop: 4,
-    textAlign: 'center',
-    lineHeight: 20,
-    includeFontPadding: false,
-  },
-  label: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '600',
-    color: DISENO.colors.text,
-    marginBottom: 4,
-    letterSpacing: 0.2,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: DISENO.colors.surfaceHover,
-    borderWidth: 1.5,
-    borderColor: DISENO.colors.border,
-  },
-  inputError: {
-    borderColor: DISENO.colors.danger,
-    backgroundColor: DISENO.colors.danger + '10',
-  },
-  inputIcon: {
-    marginRight: 10,
-    flexShrink: 0,
-  },
-  input: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    paddingVertical: 0,
-    flex: 1,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-  iconActionButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  textoError: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.danger,
-    marginTop: 4,
-    marginLeft: 4,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  errorGeneralContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: DISENO.colors.danger + '10',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: DISENO.colors.danger + '30',
-  },
-  errorGeneralTexto: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.danger,
-    fontSize: 13,
-    flex: 1,
-    fontWeight: '500',
-    lineHeight: 19,
-    includeFontPadding: false,
-  },
-  recordarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    gap: 6,
-  },
-  recordarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-  },
-  recordarTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
-    fontWeight: '500',
-    includeFontPadding: false,
-  },
-  olvidoContainer: {
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-    flexShrink: 0,
-  },
-  olvidoTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_DETALLE_LOGIN,
-    textDecorationLine: 'underline',
-    fontWeight: '400',
-    includeFontPadding: false,
-  },
-  intentosContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    gap: 4,
-  },
-  intentosTexto: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.danger + '80',
-    fontWeight: '500',
-    includeFontPadding: false,
-  },
-  bloqueoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    gap: 6,
-    backgroundColor: DISENO.colors.accent + '10',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  bloqueoTexto: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.accent,
-    fontWeight: '600',
-    includeFontPadding: false,
-  },
-  boton: {
-    overflow: 'hidden',
-    ...DISENO.shadow.md,
-    shadowColor: DISENO.colors.accent,
-    shadowOpacity: 0.25,
-  },
-  botonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 24,
-  },
-  textoBoton: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.surface,
-    letterSpacing: 1,
-    lineHeight: 24,
-    includeFontPadding: false,
-  },
-  botonGoogle: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#747775',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  googleButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  botonGoogleTexto: {
-    color: '#1F1F1F',
-    fontWeight: '500',
-    lineHeight: 20,
-    includeFontPadding: false,
-  },
-  separadorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  separador: {
-    flex: 1,
-    height: 1,
-    backgroundColor: DISENO.colors.border,
-  },
-  separadorTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_DETALLE_LOGIN,
-    paddingHorizontal: 16,
-    fontWeight: '600',
-    includeFontPadding: false,
-  },
-  registroCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    marginTop: 8,
-    marginBottom: 8,
-    backgroundColor: '#FFF8DB',
-    borderWidth: 1,
-    borderColor: '#F0D675',
-  },
-  registroCardTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
-    fontWeight: '400',
-    flex: 1,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  registroCardDestacado: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_PUNTOS_LOGIN,
-    fontWeight: '700',
-  },
-  botonInvitado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-    backgroundColor: DISENO.colors.surfaceHover,
-    marginTop: 4,
-  },
-  botonInvitadoTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_TEXTO_SECUNDARIO_LOGIN,
-    fontWeight: '500',
-    letterSpacing: 0.2,
-    includeFontPadding: false,
-  },
-  legalContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  legalTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_DETALLE_LOGIN,
-    fontWeight: '400',
-    textDecorationLine: 'underline',
-    includeFontPadding: false,
-  },
-  legalSeparador: {
-    color: COLOR_DETALLE_LOGIN,
-    fontSize: 10,
-    opacity: 0.8,
-  },
-  versionTexto: {
-    fontFamily: FUENTES.regular,
-    color: COLOR_DETALLE_LOGIN,
-    textAlign: 'center',
-    marginTop: 10,
-    includeFontPadding: false,
-  },
+  contenedor: { flex: 1, backgroundColor: DISENO.colors.fondo },
+  background: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: DISENO.colors.fondo },
+  headerGradiente: { position: 'absolute', top: 0, left: 0, right: 0, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+  keyboardView: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
+  logoContainer: { alignItems: 'center', justifyContent: 'center', width: '100%' },
+  logoWrapper: { ...DISENO.shadow.lg, shadowColor: DISENO.colors.accent, shadowOpacity: 0.25 },
+  formulario: { width: '100%', alignSelf: 'center', backgroundColor: DISENO.colors.surface, ...DISENO.shadow.lg, borderWidth: 1, borderColor: DISENO.colors.border },
+  formHeader: { alignItems: 'center' },
+  formTitle: { fontFamily: FUENTES.regular, color: DISENO.colors.text, fontWeight: '700', textAlign: 'center', lineHeight: 32, includeFontPadding: false },
+  formSubtitle: { fontFamily: FUENTES.regular, color: COLOR_TEXTO_SECUNDARIO_LOGIN, marginTop: 4, textAlign: 'center', lineHeight: 20, includeFontPadding: false },
+  label: { fontFamily: FUENTES.regular, fontWeight: '600', color: DISENO.colors.text, marginBottom: 4, letterSpacing: 0.2, lineHeight: 18, includeFontPadding: false },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: DISENO.colors.surfaceHover, borderWidth: 1.5, borderColor: DISENO.colors.border },
+  inputError: { borderColor: DISENO.colors.danger, backgroundColor: DISENO.colors.danger + '10' },
+  inputIcon: { marginRight: 10, flexShrink: 0 },
+  input: { fontFamily: FUENTES.regular, color: DISENO.colors.text, paddingVertical: 0, flex: 1, includeFontPadding: false, textAlignVertical: 'center' },
+  iconActionButton: { alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  textoError: { fontFamily: FUENTES.regular, color: DISENO.colors.danger, marginTop: 4, marginLeft: 4, lineHeight: 18, includeFontPadding: false },
+  errorGeneralContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: DISENO.colors.danger + '10', borderRadius: 12, padding: 12, marginBottom: 16, gap: 8, borderWidth: 1, borderColor: DISENO.colors.danger + '30' },
+  errorGeneralTexto: { fontFamily: FUENTES.regular, color: DISENO.colors.danger, fontSize: 13, flex: 1, fontWeight: '500', lineHeight: 19, includeFontPadding: false },
+  recordarContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2, gap: 6 },
+  recordarLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  recordarTexto: { fontFamily: FUENTES.regular, color: COLOR_TEXTO_SECUNDARIO_LOGIN, fontWeight: '500', includeFontPadding: false },
+  olvidoContainer: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 2, flexShrink: 0 },
+  olvidoTexto: { fontFamily: FUENTES.regular, color: COLOR_DETALLE_LOGIN, textDecorationLine: 'underline', fontWeight: '400', includeFontPadding: false },
+  intentosContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 4 },
+  intentosTexto: { fontFamily: FUENTES.regular, color: DISENO.colors.danger + '80', fontWeight: '500', includeFontPadding: false },
+  bloqueoContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, gap: 6, backgroundColor: DISENO.colors.accent + '10', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
+  bloqueoTexto: { fontFamily: FUENTES.regular, color: DISENO.colors.accent, fontWeight: '600', includeFontPadding: false },
+  boton: { overflow: 'hidden', ...DISENO.shadow.md, shadowColor: DISENO.colors.accent, shadowOpacity: 0.25 },
+  botonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 24 },
+  textoBoton: { fontFamily: FUENTES.display, fontWeight: '400', color: DISENO.colors.surface, letterSpacing: 1, lineHeight: 24, includeFontPadding: false },
+  botonGoogle: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#747775', paddingVertical: 10, paddingHorizontal: 12, marginTop: 10, marginBottom: 10 },
+  googleButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  botonGoogleTexto: { color: '#1F1F1F', fontWeight: '500', lineHeight: 20, includeFontPadding: false },
+  separadorContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  separador: { flex: 1, height: 1, backgroundColor: DISENO.colors.border },
+  separadorTexto: { fontFamily: FUENTES.regular, color: COLOR_DETALLE_LOGIN, paddingHorizontal: 16, fontWeight: '600', includeFontPadding: false },
+  registroCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 10, marginTop: 8, marginBottom: 8, backgroundColor: '#FFF8DB', borderWidth: 1, borderColor: '#F0D675' },
+  registroCardTexto: { fontFamily: FUENTES.regular, color: COLOR_TEXTO_SECUNDARIO_LOGIN, fontWeight: '400', flex: 1, lineHeight: 18, includeFontPadding: false },
+  registroCardDestacado: { fontFamily: FUENTES.regular, color: COLOR_PUNTOS_LOGIN, fontWeight: '700' },
+  botonInvitado: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, borderWidth: 1, borderColor: DISENO.colors.border, backgroundColor: DISENO.colors.surfaceHover, marginTop: 4 },
+  botonInvitadoTexto: { fontFamily: FUENTES.regular, color: COLOR_TEXTO_SECUNDARIO_LOGIN, fontWeight: '500', letterSpacing: 0.2, includeFontPadding: false },
+  legalContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12, gap: 8, flexWrap: 'wrap' },
+  legalTexto: { fontFamily: FUENTES.regular, color: COLOR_DETALLE_LOGIN, fontWeight: '400', textDecorationLine: 'underline', includeFontPadding: false },
+  legalSeparador: { color: COLOR_DETALLE_LOGIN, fontSize: 10, opacity: 0.8 },
+  versionTexto: { fontFamily: FUENTES.regular, color: COLOR_DETALLE_LOGIN, textAlign: 'center', marginTop: 10, includeFontPadding: false },
 });
