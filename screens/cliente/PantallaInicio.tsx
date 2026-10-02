@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx - V8 (fix Ver todas en Galaxy A20)
+﻿// screens/cliente/PantallaInicio.tsx - V10 (Con Modal Amigable de Permisos + Onboarding Progresivo)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -24,7 +24,6 @@ import Animated, {
   withRepeat,
   withTiming,
   FadeInDown,
-  FadeIn,
 } from 'react-native-reanimated';
 import { Shadow } from 'react-native-shadow-2';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +36,20 @@ import { supabase } from '../../lib/supabase';
 import { DISENO, useResponsive } from '../../lib/colores';
 import { FUENTES } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
+
+// 🚀 Imports para el sistema de permisos amigables
+import { yaVioModalPermisos, marcarModalPermisosVisto, solicitarPermisosCompletosApp } from '../../utils/permisosHelper';
+import ModalPermisosEntrada from '../../components/ModalPermisosEntrada';
+
+// 🎯 Imports para el onboarding progresivo de datos
+import ModalDatoFaltante from '../../components/ModalDatoFaltante';
+import {
+  leerEstadoOnboarding,
+  siguienteDatoFaltante,
+  marcarOfrecido,
+  parsearCumpleanosDDMM,
+} from '../../utils/perfilOnboardingHelper';
+import type { EstadoOnboarding, TipoDatoFaltante } from '../../utils/perfilOnboardingHelper';
 
 // ✅ ASSETS
 const hamburguesasImg = require('../../assets/imagenes/categorias/hamburguesaCat.jpg');
@@ -188,9 +201,6 @@ const calcularTamanos = (
   };
 };
 
-// ============================================================
-// 📋 TIPOS
-// ============================================================
 interface CategoriaData {
   id: string;
   nombre: string;
@@ -216,9 +226,6 @@ interface FavoritoConOrigen {
   origen: 'manual' | 'ranking';
 }
 
-// ============================================================
-// 📋 CATEGORÍAS
-// ============================================================
 const CATEGORIAS: CategoriaData[] = [
   { id: 'ofertas', nombre: 'Ofertas', imagen: ofertasImg, color: DISENO.colors.danger, descripcion: 'Descuentos', icono: 'flame', esOferta: true },
   { id: 'burgers', nombre: 'Burgers', imagen: hamburguesasImg, color: DISENO.colors.danger, descripcion: 'Premium', icono: 'fast-food' },
@@ -227,9 +234,6 @@ const CATEGORIAS: CategoriaData[] = [
   { id: 'postres', nombre: 'Postres', imagen: postresImg, color: DISENO.colors.rosa, descripcion: 'Dulces', icono: 'ice-cream' },
 ];
 
-// ============================================================
-// 🧠 HELPER
-// ============================================================
 const unificarFavoritos = (
   favoritosManuales: any[],
   topRanking: any[],
@@ -252,9 +256,6 @@ const unificarFavoritos = (
   return resultado;
 };
 
-// ============================================================
-// 🔘 BOTÓN AGREGAR
-// ============================================================
 const AddButton: React.FC<{ onPress: () => void; size?: number; nombre?: string }> = ({
   onPress,
   size = 32,
@@ -306,9 +307,6 @@ const AddButton: React.FC<{ onPress: () => void; size?: number; nombre?: string 
   );
 };
 
-// ============================================================
-// 💀 SKELETON CARD
-// ============================================================
 const SkeletonCard: React.FC<{ width: number; height: number }> = ({ width, height }) => {
   const opacity = useSharedValue(0.4);
   useEffect(() => {
@@ -325,9 +323,6 @@ const SkeletonCard: React.FC<{ width: number; height: number }> = ({ width, heig
   );
 };
 
-// ============================================================
-// 🎯 COMPONENTE REUTILIZABLE: "Ver todas" / "Ver menú"
-// ============================================================
 const BotonVer: React.FC<{
   texto: string;
   onPress: () => void;
@@ -356,11 +351,8 @@ const BotonVer: React.FC<{
   </TouchableOpacity>
 );
 
-// ============================================================
-// 🏠 PANTALLA
-// ============================================================
 export default function PantallaInicio(props: any) {
-  const { perfil, esAdministrador, sesion } = tiendaAutenticacion();
+  const { perfil, esAdministrador, sesion, actualizarPerfil } = tiendaAutenticacion();
   const { agregarProducto } = tiendaCarrito();
   const {
     favoritosManuales,
@@ -393,6 +385,18 @@ export default function PantallaInicio(props: any) {
   const [cantidadProductos, setCantidadProductos] = useState<Record<string, number>>({});
   const [ofertaActiva, setOfertaActiva] = useState(0);
 
+  // 🚀 Estado para el Modal Amigable de Permisos
+  const [mostrarModalPermisos, setMostrarModalPermisos] = useState(false);
+
+  // 🎯 Estado para el onboarding progresivo de datos
+  const [estadoOnboarding, setEstadoOnboarding] = useState<EstadoOnboarding>({
+    bienvenidaVista: false,
+    telefonoOfrecido: false,
+    direccionOfrecida: false,
+    cumpleanosOfrecido: false,
+  });
+  const [datoFaltanteActual, setDatoFaltanteActual] = useState<TipoDatoFaltante | null>(null);
+
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
   const slideAnim = useRef(new RNAnimated.Value(25)).current;
   const logoScale = useRef(new RNAnimated.Value(0.85)).current;
@@ -404,7 +408,106 @@ export default function PantallaInicio(props: any) {
   });
 
   // ============================================================
-  // CARGA DE DATOS
+  // 🚀 PERMISOS ONBOARDING
+  // ============================================================
+  useEffect(() => {
+    const verificarPermisosOnboarding = async () => {
+      if (sesion?.user?.id) {
+        const yaVisto = await yaVioModalPermisos();
+        if (!yaVisto) {
+          setMostrarModalPermisos(true);
+        }
+      }
+    };
+    verificarPermisosOnboarding();
+  }, [sesion]);
+
+  const handleAceptarModalPermisos = async () => {
+    setMostrarModalPermisos(false);
+    await marcarModalPermisosVisto();
+    if (sesion?.user?.id) {
+      await solicitarPermisosCompletosApp(sesion.user.id);
+    }
+  };
+
+  const handleOmitirModalPermisos = async () => {
+    setMostrarModalPermisos(false);
+    await marcarModalPermisosVisto();
+  };
+
+  // ============================================================
+  // 🎯 ONBOARDING DE DATOS (teléfono, cumpleaños, etc.)
+  // ============================================================
+  useEffect(() => {
+    const cargar = async () => {
+      const userId = sesion?.user?.id;
+      if (!userId) return;
+      const estado = await leerEstadoOnboarding(userId);
+      setEstadoOnboarding(estado);
+    };
+    cargar();
+  }, [sesion?.user?.id]);
+
+  useEffect(() => {
+    const userId = sesion?.user?.id;
+    if (!userId || !perfil) return;
+    if (mostrarModalPermisos) return; // no competir con el de permisos
+    if (datoFaltanteActual) return; // ya hay uno abierto
+
+    const siguiente = siguienteDatoFaltante(perfil, estadoOnboarding, 'onboarding');
+    if (siguiente) {
+      const timer = setTimeout(() => setDatoFaltanteActual(siguiente), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [sesion?.user?.id, perfil, estadoOnboarding, mostrarModalPermisos, datoFaltanteActual]);
+
+  const handleGuardarDatoFaltante = async (valor: string) => {
+    const userId = sesion?.user?.id;
+    if (!userId || !datoFaltanteActual) return;
+
+    try {
+      if (datoFaltanteActual === 'bienvenida') {
+        await marcarOfrecido(userId, 'bienvenida');
+        setEstadoOnboarding((prev) => ({ ...prev, bienvenidaVista: true }));
+      } else if (datoFaltanteActual === 'telefono') {
+        const resultado = await actualizarPerfil({ telefono: valor });
+        if (resultado.success) {
+          await marcarOfrecido(userId, 'telefono');
+          setEstadoOnboarding((prev) => ({ ...prev, telefonoOfrecido: true }));
+        }
+      } else if (datoFaltanteActual === 'cumpleanos') {
+        const fechaISO = parsearCumpleanosDDMM(valor);
+        if (fechaISO) {
+          await actualizarPerfil({ fecha_nacimiento: fechaISO } as any);
+        }
+        await marcarOfrecido(userId, 'cumpleanos');
+        setEstadoOnboarding((prev) => ({ ...prev, cumpleanosOfrecido: true }));
+      }
+
+      setDatoFaltanteActual(null);
+    } catch (error) {
+      console.error('❌ [Onboarding] Error guardando dato:', error);
+      setDatoFaltanteActual(null);
+    }
+  };
+
+  const handleSaltarDatoFaltante = async () => {
+    const userId = sesion?.user?.id;
+    if (!userId || !datoFaltanteActual) return;
+
+    await marcarOfrecido(userId, datoFaltanteActual);
+    setEstadoOnboarding((prev) => ({
+      ...prev,
+      ...(datoFaltanteActual === 'bienvenida' && { bienvenidaVista: true }),
+      ...(datoFaltanteActual === 'telefono' && { telefonoOfrecido: true }),
+      ...(datoFaltanteActual === 'direccion' && { direccionOfrecida: true }),
+      ...(datoFaltanteActual === 'cumpleanos' && { cumpleanosOfrecido: true }),
+    }));
+    setDatoFaltanteActual(null);
+  };
+
+  // ============================================================
+  // 📦 FAVORITOS + OFERTAS + CONTEO
   // ============================================================
   useFocusEffect(
     useCallback(() => {
@@ -429,7 +532,6 @@ export default function PantallaInicio(props: any) {
       if (error) throw error;
       setOfertas((data || []) as OfertaInicio[]);
     } catch (error) {
-      console.error('❌ ofertas:', error);
       setOfertas([]);
       setErrorOfertas(true);
     } finally {
@@ -481,9 +583,6 @@ export default function PantallaInicio(props: any) {
     setRefrescando(false);
   }, [cargarOfertas, cargarCantidadProductos, cargarFavoritos, perfil?.id]);
 
-  // ============================================================
-  // DERIVADOS
-  // ============================================================
   const favoritosUnificados = useMemo(
     () => unificarFavoritos(favoritosManuales, topRanking, 10),
     [favoritosManuales, topRanking],
@@ -502,9 +601,6 @@ export default function PantallaInicio(props: any) {
     props.navigation.navigate('Principal', { screen: 'Perfil' });
   };
 
-  // ============================================================
-  // RENDER: categoría
-  // ============================================================
   const renderCategoria = useCallback(
     ({ item, index }: { item: CategoriaData; index: number }) => {
       const count = cantidadProductos[item.id] || 0;
@@ -563,9 +659,6 @@ export default function PantallaInicio(props: any) {
     [cantidadProductos, tamanos, props.navigation],
   );
 
-  // ============================================================
-  // RENDER: favorito
-  // ============================================================
   const renderFavorito = useCallback(
     ({ item, index }: { item: FavoritoConOrigen; index: number }) => {
       const producto = item.producto;
@@ -641,9 +734,6 @@ export default function PantallaInicio(props: any) {
     [tamanos, props.navigation, agregarProducto],
   );
 
-  // ============================================================
-  // RENDER: oferta
-  // ============================================================
   const renderOferta = useCallback(
     ({ item }: { item: OfertaInicio }) => (
       <TouchableOpacity
@@ -709,12 +799,8 @@ export default function PantallaInicio(props: any) {
     [tamanos, props.navigation],
   );
 
-  // ============================================================
-  // RETURN
-  // ============================================================
   return (
     <View style={styles.container}>
-      {/* FONDO */}
       <View style={styles.backgroundGradient}>
         <Image
           source={springfieldFondo}
@@ -749,7 +835,6 @@ export default function PantallaInicio(props: any) {
           />
         }
       >
-        {/* ============ HEADER ============ */}
         <RNAnimated.View
           style={[
             styles.header,
@@ -886,7 +971,6 @@ export default function PantallaInicio(props: any) {
           </View>
         </RNAnimated.View>
 
-        {/* ============ HERO ============ */}
         <Animated.View
           entering={FadeInDown.duration(500).springify()}
           style={[styles.heroWrap, { paddingHorizontal: padding }]}
@@ -961,7 +1045,6 @@ export default function PantallaInicio(props: any) {
           </Shadow>
         </Animated.View>
 
-        {/* ============ CATEGORÍAS ============ */}
         <View style={styles.seccionContainer}>
           <View style={[styles.sectionHeading, { paddingHorizontal: padding }]}>
             <Text
@@ -987,7 +1070,6 @@ export default function PantallaInicio(props: any) {
           />
         </View>
 
-        {/* ============ FAVORITOS ============ */}
         {cargandoFavoritos && sesion && (
           <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
             <View style={styles.horizontalList}>
@@ -1026,7 +1108,6 @@ export default function PantallaInicio(props: any) {
           </View>
         )}
 
-        {/* ============ OFERTAS ============ */}
         <View style={styles.seccionContainer}>
           <View style={[styles.sectionHeading, { paddingHorizontal: padding }]}>
             <Text
@@ -1107,19 +1188,35 @@ export default function PantallaInicio(props: any) {
 
         <View style={styles.footerSpacing} />
       </Animated.ScrollView>
+
+      {/* 🚀 MODAL AMIGABLE GLOBAL DE PERMISOS */}
+      <ModalPermisosEntrada
+        visible={mostrarModalPermisos}
+        onAceptar={handleAceptarModalPermisos}
+        onOmitir={handleOmitirModalPermisos}
+      />
+
+      {/* 🎯 MODAL DE DATOS FALTANTES (onboarding progresivo) */}
+      {datoFaltanteActual && (
+        <ModalDatoFaltante
+          visible={!!datoFaltanteActual}
+          tipo={datoFaltanteActual}
+          nombreUsuario={perfil?.nombre_cliente || ''}
+          valorInicial={datoFaltanteActual === 'telefono' ? perfil?.telefono || '' : ''}
+          obligatorio={false}
+          onGuardar={handleGuardarDatoFaltante}
+          onSaltar={handleSaltarDatoFaltante}
+        />
+      )}
     </View>
   );
 }
 
-// ============================================================
-// 🎨 ESTILOS
-// ============================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DISENO.colors.fondo },
   backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   scrollContent: { flexGrow: 1 },
 
-  // Header
   header: { marginBottom: 20, position: 'relative' },
   headerActionsTop: {
     position: 'absolute',
@@ -1185,7 +1282,6 @@ const styles = StyleSheet.create({
   headerButtonAdmin: { overflow: 'hidden', ...DISENO.shadow.md },
   headerButtonAdminGradient: { alignItems: 'center', justifyContent: 'center' },
 
-  // Hero
   heroWrap: { marginBottom: 16 },
   heroCard: {
     width: '100%',
@@ -1232,7 +1328,6 @@ const styles = StyleSheet.create({
   },
   heroCtaText: { fontFamily: FUENTES.display, fontSize: 13, color: DISENO.colors.accent },
 
-  // Secciones
   seccionContainer: { marginVertical: 10 },
   sectionHeading: {
     flexDirection: 'row',
@@ -1256,7 +1351,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // ✅ FIX definitivo para "Ver todas" / "Ver menú" en Galaxy A20
   botonVer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1278,7 +1372,6 @@ const styles = StyleSheet.create({
     paddingBottom: 1,
   },
 
-  // Categorías
   categoriaItem: { alignItems: 'center', marginRight: 18 },
   categoriaImageWrap: { position: 'relative' },
   categoriaIconBadge: {
@@ -1303,7 +1396,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Favoritos
   favoritoItem: { borderRadius: DISENO.radius.md, overflow: 'hidden' },
   favoritoImageContainer: {
     width: '100%',
@@ -1338,7 +1430,6 @@ const styles = StyleSheet.create({
   },
   addButton: { alignItems: 'center', justifyContent: 'center' },
 
-  // Ofertas
   ofertaCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1397,7 +1488,6 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
 
-  // Dots
   dotsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
   dot: {
     width: 6,
@@ -1409,7 +1499,6 @@ const styles = StyleSheet.create({
 
   horizontalList: { paddingVertical: 4, gap: 12 },
 
-  // Estados
   offerStatus: {
     minHeight: 72,
     flexDirection: 'row',
