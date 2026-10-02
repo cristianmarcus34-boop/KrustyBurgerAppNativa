@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaSeguimiento.tsx - CON SIMPSONFONT Y TEMA CLARO
+﻿// screens/cliente/PantallaSeguimiento.tsx - CON SIMPSONFONT Y TEMA CLARO + MENÚ DE CONTACTO (Llamar / WhatsApp msj / WhatsApp call)
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -83,20 +84,41 @@ const calcularDistancia = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+/**
+ * Normaliza un teléfono argentino para usarlo en tel:/whatsapp:
+ * Ejemplos:
+ *   "11 1234 5678"       → "+5491112345678"
+ *   "+54 9 11 1234-5678" → "+5491112345678"
+ *   "5491112345678"      → "+5491112345678"
+ */
+const normalizarTelefonoAR = (tel: string): string => {
+  let limpio = tel.replace(/[^\d+]/g, '');
+
+  if (limpio.startsWith('+54')) {
+    if (!limpio.startsWith('+549')) {
+      limpio = '+549' + limpio.slice(3);
+    }
+    return limpio;
+  }
+
+  if (limpio.startsWith('54')) {
+    if (!limpio.startsWith('549')) {
+      limpio = '549' + limpio.slice(2);
+    }
+    return '+' + limpio;
+  }
+
+  if (limpio.startsWith('9')) {
+    return '+54' + limpio;
+  }
+
+  return '+549' + limpio;
+};
+
 // ============================================================
 // 🎨 COLORES DE ESTADOS
 // ============================================================
 const ESTADO_COLORES: Record<string, string> = {
-  pendiente: '#FF9800',
-  confirmado: '#2196F3',
-  preparando: '#9C27B0',
-  listo: '#43A047',
-  en_camino: '#E53935',
-  entregado: '#43A047',
-  cancelado: '#E53935',
-};
-
-const ESTADO_COLORES_TEXTO: Record<string, string> = {
   pendiente: '#FF9800',
   confirmado: '#2196F3',
   preparando: '#9C27B0',
@@ -473,6 +495,105 @@ export default function PantallaSeguimiento(props: any) {
         setDistancia(dist);
       }
     }
+  };
+
+  // ============================================================
+  // 📱 CONTACTO: LLAMAR / WHATSAPP MSJ / WHATSAPP CALL
+  // ============================================================
+
+  /** Llamada telefónica normal (al fijo o al celular) */
+  const llamarTelefono = async (tel: string) => {
+    const numero = normalizarTelefonoAR(tel);
+    try {
+      await Linking.openURL(`tel:${numero}`);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo iniciar la llamada.');
+    }
+  };
+
+  /** Abrir chat de WhatsApp (para enviar mensaje) */
+  const abrirWhatsAppChat = async (tel: string) => {
+    const numero = normalizarTelefonoAR(tel);
+
+    // Intento 1: esquema nativo
+    try {
+      const urlNativa = `whatsapp://send?phone=${numero}`;
+      const puedeAbrir = await Linking.canOpenURL(urlNativa);
+      if (puedeAbrir) {
+        await Linking.openURL(urlNativa);
+        return;
+      }
+    } catch (error) {
+      console.warn('No se pudo abrir WhatsApp nativo:', error);
+    }
+
+    // Fallback: wa.me
+    try {
+      await Linking.openURL(`https://wa.me/${numero.replace('+', '')}`);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo abrir WhatsApp. Verificá que esté instalado.');
+    }
+  };
+
+  /** Llamada por WhatsApp (voz) */
+  const abrirWhatsAppLlamada = async (tel: string) => {
+    const numero = normalizarTelefonoAR(tel);
+
+    // Intento 1: esquema de llamada de WhatsApp (funciona en algunas versiones)
+    try {
+      const urlLlamada = `whatsapp://call?phone=${numero}`;
+      const puedeAbrir = await Linking.canOpenURL(urlLlamada);
+      if (puedeAbrir) {
+        await Linking.openURL(urlLlamada);
+        return;
+      }
+    } catch (error) {
+      console.warn('No se pudo abrir WhatsApp call:', error);
+    }
+
+    // Fallback: abrir el chat (la llamada de WhatsApp no está soportada por esquema en la mayoría de dispositivos)
+    Alert.alert(
+      'Llamada por WhatsApp',
+      'Tu versión de WhatsApp no soporta iniciar llamadas desde un link. ¿Querés abrir el chat para llamar desde ahí?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Abrir chat', onPress: () => abrirWhatsAppChat(tel) },
+      ]
+    );
+  };
+
+  /** Menú con 3 opciones */
+  const contactarCliente = () => {
+    if (!pedido?.telefono) {
+      Alert.alert('Sin teléfono', 'Este pedido no tiene teléfono registrado.');
+      return;
+    }
+
+    const tel = pedido.telefono;
+
+    Alert.alert(
+      `Contactar a ${pedido.cliente_nombre || 'cliente'}`,
+      `📱 ${tel}`,
+      [
+        {
+          text: '📞 Llamar (teléfono)',
+          onPress: () => llamarTelefono(tel),
+        },
+        {
+          text: '💬 WhatsApp (mensaje)',
+          onPress: () => abrirWhatsAppChat(tel),
+        },
+        {
+          text: '📱 WhatsApp (llamada)',
+          onPress: () => abrirWhatsAppLlamada(tel),
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   // ============================================================
@@ -1093,6 +1214,40 @@ export default function PantallaSeguimiento(props: any) {
             </Text>
           </View>
 
+          {/* ✅ Teléfono clickeable con menú de 3 opciones */}
+          {pedido.telefono && (
+            <View style={styles.infoFila}>
+              <Text style={[styles.infoLabel, { fontSize: isTablet ? 13 : 11 }]}>📱 Teléfono</Text>
+              <TouchableOpacity
+                onPress={contactarCliente}
+                activeOpacity={0.7}
+                style={styles.telefonoBoton}
+              >
+                <Text
+                  style={[
+                    styles.infoValor,
+                    {
+                      fontSize: isTablet ? 13 : 12,
+                      color: DISENO.colors.accent,
+                      marginRight: 6,
+                    },
+                  ]}
+                >
+                  {pedido.telefono}
+                </Text>
+                <View style={styles.telefonoIconosWrap}>
+                  <Ionicons name="call" size={isTablet ? 14 : 12} color={DISENO.colors.accent} />
+                  <Ionicons
+                    name="logo-whatsapp"
+                    size={isTablet ? 14 : 12}
+                    color="#25D366"
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.infoFila}>
             <Text style={[styles.infoLabel, { fontSize: isTablet ? 13 : 11 }]}>👑 Nivel</Text>
             <Text style={[styles.infoValor, { fontSize: isTablet ? 13 : 12, color: DISENO.colors.accent }]}>
@@ -1488,6 +1643,14 @@ const styles = StyleSheet.create({
     fontFamily: FUENTES.regular,
     fontWeight: '600',
     color: DISENO.colors.text,
+  },
+  telefonoBoton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  telefonoIconosWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   resumenContainer: {
     marginTop: 8,
