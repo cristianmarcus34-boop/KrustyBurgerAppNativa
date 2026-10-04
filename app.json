@@ -6,7 +6,7 @@
     "scheme": "krustyburger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.agenciapowa.KrustyBurger",
@@ -150,7 +150,7 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0,
+      "fallbackToCacheTimeout": 3000,
       "url": "https://u.expo.dev/3bb3f5cf-a572-4703-8a2a-e727bc44a0e6"
     },
     "extra": {
