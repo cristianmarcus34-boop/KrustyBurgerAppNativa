@@ -1,4 +1,4 @@
-// screens/cliente/PantallaPerfil.tsx - V4 RESPONSIVE + FIX IMAGEN + HOOK NOTIFICACIONES + USAR MI UBICACIÓN + FECHA NACIMIENTO
+// screens/cliente/PantallaPerfil.tsx - V6 DISEÑO SOFISTICADO + MODO OSCURO + APARIENCIA
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
@@ -16,6 +16,9 @@ import {
   Image,
   Linking,
   Switch,
+  LayoutAnimation,
+  Platform,
+  UIManager,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +29,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { DISENO } from '../../lib/colores';
+import { DISENO, Sizes } from '../../lib/colores';
+import { useTema, useColores, type PaletaTema, type ModoTema } from '../../lib/theme';
 import { formatearPrecio } from '../../lib/formateador';
 import BarraProgreso from '../../components/BarraProgreso';
 import { servicioEliminacionCuenta } from '../../services/servicioEliminacionCuenta';
@@ -43,6 +47,14 @@ import {
   formatearCumpleanosDDMM,
   parsearCumpleanosDDMM,
 } from '../../utils/perfilOnboardingHelper';
+
+// Habilitar LayoutAnimation en Android
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // ============================================================
 // 📋 TIPOS
@@ -92,6 +104,10 @@ interface TamanosPerfil {
   seccionRadius: number;
   seccionMarginTop: number;
   seccionTituloSize: number;
+  sectionIconSize: number;
+  sectionIconContainer: number;
+  sectionSubtitleSize: number;
+  sectionChevronSize: number;
   actividadItemPaddingV: number;
   actividadIconContainer: number;
   actividadIconSize: number;
@@ -222,9 +238,14 @@ const calcularTamanosPerfil = (
 
   const seccionPaddingH = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 14 : 16;
   const seccionPaddingV = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
-  const seccionRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
+  const seccionRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 14 : 16;
   const seccionMarginTop = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 10 : 12;
-  const seccionTituloSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
+  const seccionTituloSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+
+  const sectionIconSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 16 : 18;
+  const sectionIconContainer = isDesktop ? 42 : isTablet ? 40 : isSmallPhone ? 34 : 38;
+  const sectionSubtitleSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 10 : 11;
+  const sectionChevronSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 16 : 18;
 
   const actividadItemPaddingV = isDesktop ? 12 : isSmallPhone ? 9 : 10;
   const actividadIconContainer = isDesktop ? 40 : isTablet ? 38 : isSmallPhone ? 30 : 34;
@@ -324,6 +345,7 @@ const calcularTamanosPerfil = (
     beneficiosPadding, beneficiosRadius, beneficiosTitleSize, beneficioIconSize, beneficioIconContainerSize, beneficioTextSize,
     statPaddingV, statValorSize, statLabelSize,
     seccionPaddingH, seccionPaddingV, seccionRadius, seccionMarginTop, seccionTituloSize,
+    sectionIconSize, sectionIconContainer, sectionSubtitleSize, sectionChevronSize,
     actividadItemPaddingV, actividadIconContainer, actividadIconSize, actividadDescSize, actividadFechaSize,
     historialItemPaddingV, historialIconContainer, historialIconSize, historialDescSize, historialFechaSize, historialCantidadSize,
     infoTituloSize, infoEditButtonPaddingH, infoEditButtonPaddingV, infoEditButtonTextSize,
@@ -344,12 +366,140 @@ const calcularTamanosPerfil = (
 };
 
 // ============================================================
+// 🧩 SUB-COMPONENTE: SECCIÓN COLAPSABLE
+// ============================================================
+interface SeccionColapsableProps {
+  icono: keyof typeof Ionicons.glyphMap;
+  titulo: string;
+  subtitulo?: string;
+  color: string;
+  expandida: boolean;
+  onToggle: () => void;
+  tamanos: TamanosPerfil;
+  children: React.ReactNode;
+  colores: PaletaTema;
+  estilos: any;
+}
+
+const SeccionColapsable: React.FC<SeccionColapsableProps> = ({
+  icono,
+  titulo,
+  subtitulo,
+  color,
+  expandida,
+  onToggle,
+  tamanos,
+  children,
+  colores,
+  estilos,
+}) => {
+  const rotacion = useRef(new Animated.Value(expandida ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(rotacion, {
+      toValue: expandida ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [expandida, rotacion]);
+
+  const rotacionInterpolada = rotacion.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
+  return (
+    <View
+      style={[
+        estilos.seccionColapsable,
+        {
+          marginHorizontal: tamanos.padding,
+          marginTop: tamanos.seccionMarginTop,
+          borderRadius: tamanos.seccionRadius,
+        },
+      ]}
+    >
+      <TouchableOpacity
+        onPress={onToggle}
+        activeOpacity={0.7}
+        style={[
+          estilos.seccionHeader,
+          {
+            paddingHorizontal: tamanos.seccionPaddingH,
+            paddingVertical: tamanos.seccionPaddingV,
+          },
+        ]}
+      >
+        <View
+          style={[
+            estilos.seccionHeaderIconWrap,
+            {
+              width: tamanos.sectionIconContainer,
+              height: tamanos.sectionIconContainer,
+              borderRadius: tamanos.sectionIconContainer / 2,
+              backgroundColor: color + '15',
+            },
+          ]}
+        >
+          <Ionicons name={icono} size={tamanos.sectionIconSize} color={color} />
+        </View>
+
+        <View style={estilos.seccionHeaderText}>
+          <Text
+            style={[estilos.seccionHeaderTitulo, { fontSize: tamanos.seccionTituloSize }]}
+            allowFontScaling={false}
+          >
+            {titulo}
+          </Text>
+          {subtitulo && !expandida && (
+            <Text
+              style={[estilos.seccionHeaderSubtitulo, { fontSize: tamanos.sectionSubtitleSize }]}
+              numberOfLines={1}
+              allowFontScaling={false}
+            >
+              {subtitulo}
+            </Text>
+          )}
+        </View>
+
+        <Animated.View style={{ transform: [{ rotate: rotacionInterpolada }] }}>
+          <Ionicons
+            name="chevron-down"
+            size={tamanos.sectionChevronSize}
+            color={colores.textTertiary}
+          />
+        </Animated.View>
+      </TouchableOpacity>
+
+      {expandida && (
+        <View
+          style={[
+            estilos.seccionContenido,
+            {
+              paddingHorizontal: tamanos.seccionPaddingH,
+              paddingBottom: tamanos.seccionPaddingV,
+            },
+          ]}
+        >
+          {children}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ============================================================
 // 🏠 COMPONENTE
 // ============================================================
 export default function PantallaPerfil(props: any) {
   const { perfil, sesion, cerrarSesion, actualizarPerfil, cargarPerfil } = tiendaAutenticacion();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // ✅ TEMA
+  const { modo, setModo } = useTema();
+  const colores = useColores();
+  const estilos = useMemo(() => crearEstilos(colores), [colores]);
 
   const isTablet = screenWidth >= 768;
   const isDesktop = screenWidth >= 1024;
@@ -401,8 +551,22 @@ export default function PantallaPerfil(props: any) {
   const [cumpleanos, setCumpleanos] = useState('');
   const [geocodificando, setGeocodificando] = useState(false);
 
+  // 🎯 Estados de secciones colapsables
+  const [beneficiosExpandida, setBeneficiosExpandida] = useState(false);
+  const [actividadExpandida, setActividadExpandida] = useState(false);
+  const [historialExpandido, setHistorialExpandido] = useState(false);
+  const [infoExpandida, setInfoExpandida] = useState(false);
+  const [canjesExpandidos, setCanjesExpandidos] = useState(false);
+  const [aparienciaExpandida, setAparienciaExpandida] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
+
+  // ✅ Helper para animar cambios de layout
+  const toggleSeccion = (setter: React.Dispatch<React.SetStateAction<boolean>>, actual: boolean) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setter(!actual);
+  };
 
   // ============================================================
   // EFECTOS
@@ -570,11 +734,11 @@ export default function PantallaPerfil(props: any) {
       if (pedidosRecientes) {
         pedidosRecientes.forEach((p: any) => {
           const estadoMap: Record<string, { icono: string; texto: string; color: string }> = {
-            entregado: { icono: 'checkmark-circle', texto: '✅ Entregado', color: DISENO.colors.success },
-            pendiente: { icono: 'time', texto: '⏳ Pendiente', color: DISENO.colors.accentSecondary },
-            confirmado: { icono: 'checkmark-circle-outline', texto: '✅ Confirmado', color: DISENO.colors.info },
-            preparando: { icono: 'restaurant', texto: '🍔 Preparando', color: DISENO.colors.warning },
-            en_camino: { icono: 'bicycle', texto: '🚴 En camino', color: DISENO.colors.azul },
+            entregado: { icono: 'checkmark-circle', texto: '✅ Entregado', color: colores.success },
+            pendiente: { icono: 'time', texto: '⏳ Pendiente', color: colores.accentSecondary },
+            confirmado: { icono: 'checkmark-circle-outline', texto: '✅ Confirmado', color: colores.info },
+            preparando: { icono: 'restaurant', texto: '🍔 Preparando', color: colores.warning },
+            en_camino: { icono: 'bicycle', texto: '🚴 En camino', color: colores.azul },
           };
           const estadoInfo = estadoMap[p.estado] || estadoMap.pendiente;
           actividades.push({
@@ -603,7 +767,7 @@ export default function PantallaPerfil(props: any) {
             descripcion: `🎁 Canjeaste ${c.puntos_usados} pts por "${nombreRecompensa}"`,
             fecha: c.created_at,
             icono: 'gift',
-            color: DISENO.colors.rosa,
+            color: colores.rosa,
           });
         });
       }
@@ -684,7 +848,6 @@ export default function PantallaPerfil(props: any) {
       return;
     }
 
-    // Validar cumpleaños si lo cargó
     let fechaNacimientoISO: string | null = null;
     if (cumpleanos && cumpleanos.trim().length > 0) {
       fechaNacimientoISO = parsearCumpleanosDDMM(cumpleanos);
@@ -908,7 +1071,7 @@ export default function PantallaPerfil(props: any) {
       id: 'notificaciones',
       label: 'Notificaciones',
       icono: 'notifications-outline',
-      color: DISENO.colors.azul,
+      color: colores.azul,
       subtitle: notificacionesNoLeidas > 0 ? `${notificacionesNoLeidas} sin leer` : 'Ver notificaciones',
       navigate: 'NotificacionesUsuario',
       show: true,
@@ -918,7 +1081,7 @@ export default function PantallaPerfil(props: any) {
       id: 'preferencias-notificaciones',
       label: 'Preferencias de notificaciones',
       icono: 'options-outline',
-      color: DISENO.colors.accent,
+      color: colores.accent,
       subtitle: 'Pedidos y promociones',
       navigate: '',
       show: true,
@@ -928,7 +1091,7 @@ export default function PantallaPerfil(props: any) {
       id: 'pedidos',
       label: 'Mis Pedidos',
       icono: 'receipt-outline',
-      color: DISENO.colors.success,
+      color: colores.success,
       navigate: 'Pedidos',
       show: true,
       requiereSesion: true,
@@ -937,7 +1100,7 @@ export default function PantallaPerfil(props: any) {
       id: 'cupones',
       label: 'Mis Cupones',
       icono: 'ticket-outline',
-      color: DISENO.colors.accent,
+      color: colores.accent,
       subtitle: 'Ver mis cupones disponibles',
       navigate: 'MisCupones',
       show: true,
@@ -947,7 +1110,7 @@ export default function PantallaPerfil(props: any) {
       id: 'recompensas',
       label: 'Recompensas',
       icono: 'star-outline',
-      color: DISENO.colors.rosa,
+      color: colores.rosa,
       subtitle: 'Canjear puntos',
       navigate: 'Recompensas',
       show: true,
@@ -957,7 +1120,7 @@ export default function PantallaPerfil(props: any) {
       id: 'privacidad',
       label: '🔒 Privacidad',
       icono: 'lock-closed-outline',
-      color: DISENO.colors.info,
+      color: colores.info,
       navigate: 'Privacidad',
       show: true,
       requiereSesion: false,
@@ -966,7 +1129,7 @@ export default function PantallaPerfil(props: any) {
       id: 'terminos',
       label: '📋 Términos',
       icono: 'document-text-outline',
-      color: DISENO.colors.textSecondary,
+      color: colores.textSecondary,
       navigate: 'Terminos',
       show: true,
       requiereSesion: false,
@@ -998,24 +1161,25 @@ export default function PantallaPerfil(props: any) {
   // RENDER
   // ============================================================
   return (
-    <View style={styles.container}>
-      <View style={styles.background} />
+    <View style={estilos.container}>
+      <View style={estilos.background} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+        contentContainerStyle={[estilos.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         refreshControl={
           <RefreshControl
             refreshing={refrescando}
             onRefresh={manejarRefresh}
-            tintColor={DISENO.colors.accent}
-            colors={[DISENO.colors.accent]}
+            tintColor={colores.accent}
+            colors={[colores.accent]}
           />
         }
       >
+        {/* HERO */}
         <Animated.View
           style={[
-            styles.header,
+            estilos.header,
             {
               paddingHorizontal: tamanos.padding,
               paddingTop: insets.top + tamanos.paddingTop,
@@ -1043,7 +1207,7 @@ export default function PantallaPerfil(props: any) {
             >
               <View
                 style={[
-                  styles.avatarContainer,
+                  estilos.avatarContainer,
                   {
                     width: tamanos.avatarSize,
                     height: tamanos.avatarSize,
@@ -1063,7 +1227,7 @@ export default function PantallaPerfil(props: any) {
                   />
                 ) : (
                   <Text
-                    style={[styles.avatarEmoji, { fontSize: tamanos.avatarSize * 0.45 }]}
+                    style={[estilos.avatarEmoji, { fontSize: tamanos.avatarSize * 0.45 }]}
                     allowFontScaling={false}
                   >
                     {perfil?.nombre_cliente?.charAt(0)?.toUpperCase() || '🍔'}
@@ -1075,7 +1239,7 @@ export default function PantallaPerfil(props: any) {
             {perfil?.id && (
               <TouchableOpacity
                 style={[
-                  styles.cameraIcon,
+                  estilos.cameraIcon,
                   {
                     width: tamanos.cameraIconSize,
                     height: tamanos.cameraIconSize,
@@ -1091,38 +1255,38 @@ export default function PantallaPerfil(props: any) {
                 <Ionicons
                   name="camera"
                   size={tamanos.cameraIconInnerSize}
-                  color={DISENO.colors.surface}
+                  color={colores.surface}
                 />
               </TouchableOpacity>
             )}
           </View>
 
           {subiendoImagen && (
-            <View style={styles.uploadingContainer}>
-              <ActivityIndicator size="small" color={DISENO.colors.accent} />
-              <Text style={styles.uploadingText} allowFontScaling={false}>
+            <View style={estilos.uploadingContainer}>
+              <ActivityIndicator size="small" color={colores.accent} />
+              <Text style={[estilos.uploadingText, { color: colores.textSecondary }]} allowFontScaling={false}>
                 Subiendo imagen...
               </Text>
             </View>
           )}
 
-          <Text style={[styles.name, { fontSize: tamanos.nombreSize }]} allowFontScaling={false}>
+          <Text style={[estilos.name, { fontSize: tamanos.nombreSize }]} allowFontScaling={false}>
             {perfil?.nombre_cliente || 'Invitado'}
           </Text>
 
-          <Text style={[styles.email, { fontSize: tamanos.correoSize }]} allowFontScaling={false}>
+          <Text style={[estilos.email, { fontSize: tamanos.correoSize }]} allowFontScaling={false}>
             {perfil?.email || 'Inicia sesión para ver tus datos'}
           </Text>
 
           {perfil?.id ? (
             <>
-              <View style={styles.pointsContainer}>
-                <View style={styles.pointsWrapper}>
+              <View style={estilos.pointsContainer}>
+                <View style={estilos.pointsWrapper}>
                   <Text style={{ fontSize: tamanos.pointsIconSize }} allowFontScaling={false}>
                     ⭐
                   </Text>
                   <Text
-                    style={[styles.pointsText, { fontSize: tamanos.pointsTextSize }]}
+                    style={[estilos.pointsText, { fontSize: tamanos.pointsTextSize }]}
                     allowFontScaling={false}
                   >
                     {perfil?.puntos_acumulados || 0} Krusty Points
@@ -1132,7 +1296,7 @@ export default function PantallaPerfil(props: any) {
 
               <View
                 style={[
-                  styles.levelBadge,
+                  estilos.levelBadge,
                   {
                     paddingHorizontal: tamanos.levelBadgePaddingH,
                     paddingVertical: tamanos.levelBadgePaddingV,
@@ -1142,171 +1306,134 @@ export default function PantallaPerfil(props: any) {
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.levelText,
-                    {
-                      color: nivelActual.color,
-                      fontSize: tamanos.levelTextSize,
-                      marginBottom: 4,
-                    },
-                  ]}
-                  allowFontScaling={false}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 6,
+                  }}
                 >
-                  {nivelActual.icono} Nivel {nivelActual.nombre}
-                  {nivelActual.siguiente !== '—' && ` → ${nivelActual.siguiente}`}
-                </Text>
+                  <Text
+                    style={[
+                      estilos.levelText,
+                      {
+                        color: nivelActual.color,
+                        fontSize: tamanos.levelTextSize,
+                        flexShrink: 1,
+                      },
+                    ]}
+                    numberOfLines={1}
+                    allowFontScaling={false}
+                  >
+                    {nivelActual.icono} Nivel {nivelActual.nombre}
+                    {nivelActual.siguiente !== '—' && ` → ${nivelActual.siguiente}`}
+                  </Text>
+                  <Text
+                    style={[
+                      estilos.levelText,
+                      {
+                        color: nivelActual.color,
+                        fontSize: tamanos.levelTextSize,
+                        fontWeight: '600',
+                        marginLeft: 8,
+                      },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    {Math.round(nivelActual.progreso)}%
+                  </Text>
+                </View>
 
                 <BarraProgreso
                   progreso={nivelActual.progreso}
                   color={nivelActual.color}
                   altura={tamanos.barraProgresoAltura}
-                  label={`${Math.round(nivelActual.progreso)}%`}
                 />
-              </View>
 
-              {beneficios && (
-                <View
-                  style={[
-                    styles.beneficiosContainer,
-                    {
-                      padding: tamanos.beneficiosPadding,
-                      borderRadius: tamanos.beneficiosRadius,
-                    },
-                  ]}
-                >
+                {nivelActual.siguiente !== '—' ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginTop: 8,
+                      gap: 6,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FUENTES.regular,
+                        fontSize: tamanos.levelTextSize - 1,
+                        color: colores.textSecondary,
+                        includeFontPadding: false,
+                      }}
+                      allowFontScaling={false}
+                    >
+                      <Text style={{ fontWeight: '600', color: colores.text }}>
+                        {perfil?.puntos_acumulados || 0} pts
+                      </Text>
+                      {' '}· Te faltan{' '}
+                      <Text style={{ fontWeight: '600', color: nivelActual.color }}>
+                        {Math.max(0, nivelActual.puntos_requeridos - (perfil?.puntos_acumulados || 0))} pts
+                      </Text>
+                      {' '}para {nivelActual.siguiente}
+                    </Text>
+                  </View>
+                ) : (
                   <Text
-                    style={[styles.beneficiosTitle, { fontSize: tamanos.beneficiosTitleSize }]}
+                    style={{
+                      fontFamily: FUENTES.regular,
+                      fontSize: tamanos.levelTextSize - 1,
+                      color: colores.textSecondary,
+                      marginTop: 8,
+                      textAlign: 'center',
+                      includeFontPadding: false,
+                    }}
                     allowFontScaling={false}
                   >
-                    🎁 Beneficios de tu nivel
+                    🎉 ¡Alcanzaste el nivel máximo!
                   </Text>
+                )}
+              </View>
 
-                  <View style={styles.beneficioItem}>
-                    <View
-                      style={[
-                        styles.beneficioIcon,
-                        {
-                          backgroundColor: DISENO.colors.accent + '15',
-                          width: tamanos.beneficioIconContainerSize,
-                          height: tamanos.beneficioIconContainerSize,
-                          borderRadius: tamanos.beneficioIconContainerSize / 2,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="pricetag-outline"
-                        size={tamanos.beneficioIconSize}
-                        color={DISENO.colors.accent}
-                      />
-                    </View>
-                    <Text
-                      style={[styles.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
-                      allowFontScaling={false}
-                    >
-                      {beneficios.descuento > 0
-                        ? `${beneficios.descuento}% de descuento en todos tus pedidos`
-                        : 'Acumulá puntos para obtener descuentos'}
-                    </Text>
-                  </View>
-
-                  <View style={styles.beneficioItem}>
-                    <View
-                      style={[
-                        styles.beneficioIcon,
-                        {
-                          backgroundColor: DISENO.colors.success + '15',
-                          width: tamanos.beneficioIconContainerSize,
-                          height: tamanos.beneficioIconContainerSize,
-                          borderRadius: tamanos.beneficioIconContainerSize / 2,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="bicycle-outline"
-                        size={tamanos.beneficioIconSize}
-                        color={DISENO.colors.success}
-                      />
-                    </View>
-                    <Text
-                      style={[styles.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
-                      allowFontScaling={false}
-                    >
-                      {beneficios.envioGratis
-                        ? beneficios.envioGratisMinimo
-                          ? `Envío gratis en pedidos > $${formatearPrecio(beneficios.envioGratisMinimo)}`
-                          : 'Envío gratis en todos tus pedidos'
-                        : 'Envío con costo estándar'}
-                    </Text>
-                  </View>
-
-                  {beneficios.accesoAnticipadoOfertas && (
-                    <View style={styles.beneficioItem}>
-                      <View
-                        style={[
-                          styles.beneficioIcon,
-                          {
-                            backgroundColor: DISENO.colors.info + '15',
-                            width: tamanos.beneficioIconContainerSize,
-                            height: tamanos.beneficioIconContainerSize,
-                            borderRadius: tamanos.beneficioIconContainerSize / 2,
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name="rocket-outline"
-                          size={tamanos.beneficioIconSize}
-                          color={DISENO.colors.info}
-                        />
-                      </View>
-                      <Text
-                        style={[styles.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
-                        allowFontScaling={false}
-                      >
-                        🚀 Acceso anticipado a ofertas exclusivas
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              <View style={[styles.stats, { paddingVertical: tamanos.statPaddingV }]}>
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
+              <View style={[estilos.stats, { paddingVertical: tamanos.statPaddingV }]}>
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
                     {totalPedidos}
                   </Text>
-                  <Text style={[styles.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
+                  <Text style={[estilos.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
                     Pedidos
                   </Text>
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
+                <View style={estilos.statDivider} />
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
                     {formatearPrecio(totalGastado)}
                   </Text>
-                  <Text style={[styles.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
+                  <Text style={[estilos.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
                     Gastado
                   </Text>
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={[styles.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
+                <View style={estilos.statDivider} />
+                <View style={estilos.statItem}>
+                  <Text style={[estilos.statValue, { fontSize: tamanos.statValorSize }]} allowFontScaling={false}>
                     {totalCanjes}
                   </Text>
-                  <Text style={[styles.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
+                  <Text style={[estilos.statLabel, { fontSize: tamanos.statLabelSize }]} allowFontScaling={false}>
                     Canjes
                   </Text>
                 </View>
               </View>
             </>
           ) : (
-            <View style={styles.guestMessage}>
-              <Ionicons name="person-outline" size={tamanos.guestIconSize} color={DISENO.colors.textTertiary} />
-              <Text style={[styles.guestText, { fontSize: tamanos.guestTextSize }]} allowFontScaling={false}>
+            <View style={estilos.guestMessage}>
+              <Ionicons name="person-outline" size={tamanos.guestIconSize} color={colores.textTertiary} />
+              <Text style={[estilos.guestText, { fontSize: tamanos.guestTextSize }]} allowFontScaling={false}>
                 Estás viendo como invitado
               </Text>
               <Text
-                style={[styles.guestSubText, { fontSize: tamanos.guestSubTextSize }]}
+                style={[estilos.guestSubText, { fontSize: tamanos.guestSubTextSize }]}
                 allowFontScaling={false}
               >
                 Inicia sesión para acceder a tus pedidos, puntos y recompensas
@@ -1314,7 +1441,7 @@ export default function PantallaPerfil(props: any) {
 
               <TouchableOpacity
                 style={[
-                  styles.loginButtonGuest,
+                  estilos.loginButtonGuest,
                   {
                     paddingVertical: tamanos.loginGuestPaddingV,
                     paddingHorizontal: tamanos.loginGuestPaddingH,
@@ -1324,18 +1451,18 @@ export default function PantallaPerfil(props: any) {
                 onPress={() => props.navigation.navigate('Login')}
               >
                 <LinearGradient
-                  colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                  style={[styles.loginButtonGradient, { gap: 8 }]}
+                  colors={[colores.gradientStart, colores.gradientEnd]}
+                  style={[estilos.loginButtonGradient, { gap: 8 }]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   <Ionicons
                     name="log-in-outline"
                     size={tamanos.loginGuestIconSize}
-                    color={DISENO.colors.surface}
+                    color={colores.surface}
                   />
                   <Text
-                    style={[styles.loginButtonText, { fontSize: tamanos.loginGuestTextSize }]}
+                    style={[estilos.loginButtonText, { fontSize: tamanos.loginGuestTextSize }]}
                     allowFontScaling={false}
                   >
                     Iniciar sesión / Registrarse
@@ -1346,34 +1473,125 @@ export default function PantallaPerfil(props: any) {
           )}
         </Animated.View>
 
+        {/* BENEFICIOS */}
+        {perfil?.id && beneficios && (
+          <SeccionColapsable
+            icono="gift-outline"
+            titulo="Beneficios de tu nivel"
+            subtitulo={`${nivelActual.icono} ${nivelActual.nombre}${beneficios.descuento > 0 ? ` · ${beneficios.descuento}% OFF` : ''}`}
+            color={colores.accent}
+            expandida={beneficiosExpandida}
+            onToggle={() => toggleSeccion(setBeneficiosExpandida, beneficiosExpandida)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
+          >
+            <View style={estilos.beneficioItem}>
+              <View
+                style={[
+                  estilos.beneficioIcon,
+                  {
+                    backgroundColor: colores.accent + '15',
+                    width: tamanos.beneficioIconContainerSize,
+                    height: tamanos.beneficioIconContainerSize,
+                    borderRadius: tamanos.beneficioIconContainerSize / 2,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="pricetag-outline"
+                  size={tamanos.beneficioIconSize}
+                  color={colores.accent}
+                />
+              </View>
+              <Text
+                style={[estilos.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
+                allowFontScaling={false}
+              >
+                {beneficios.descuento > 0
+                  ? `${beneficios.descuento}% de descuento en todos tus pedidos`
+                  : 'Acumulá puntos para obtener descuentos'}
+              </Text>
+            </View>
+
+            <View style={estilos.beneficioItem}>
+              <View
+                style={[
+                  estilos.beneficioIcon,
+                  {
+                    backgroundColor: colores.success + '15',
+                    width: tamanos.beneficioIconContainerSize,
+                    height: tamanos.beneficioIconContainerSize,
+                    borderRadius: tamanos.beneficioIconContainerSize / 2,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="bicycle-outline"
+                  size={tamanos.beneficioIconSize}
+                  color={colores.success}
+                />
+              </View>
+              <Text
+                style={[estilos.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
+                allowFontScaling={false}
+              >
+                {beneficios.envioGratis
+                  ? beneficios.envioGratisMinimo
+                    ? `Envío gratis en pedidos > $${formatearPrecio(beneficios.envioGratisMinimo)}`
+                    : 'Envío gratis en todos tus pedidos'
+                  : 'Envío con costo estándar'}
+              </Text>
+            </View>
+
+            {beneficios.accesoAnticipadoOfertas && (
+              <View style={estilos.beneficioItem}>
+                <View
+                  style={[
+                    estilos.beneficioIcon,
+                    {
+                      backgroundColor: colores.info + '15',
+                      width: tamanos.beneficioIconContainerSize,
+                      height: tamanos.beneficioIconContainerSize,
+                      borderRadius: tamanos.beneficioIconContainerSize / 2,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="rocket-outline"
+                    size={tamanos.beneficioIconSize}
+                    color={colores.info}
+                  />
+                </View>
+                <Text
+                  style={[estilos.beneficioText, { fontSize: tamanos.beneficioTextSize }]}
+                  allowFontScaling={false}
+                >
+                  🚀 Acceso anticipado a ofertas exclusivas
+                </Text>
+              </View>
+            )}
+          </SeccionColapsable>
+        )}
+
         {/* ACTIVIDAD RECIENTE */}
         {perfil?.id && actividadesRecientes.length > 0 && (
-          <Animated.View
-            style={[
-              styles.actividadContainer,
-              {
-                paddingHorizontal: tamanos.seccionPaddingH,
-                paddingVertical: tamanos.seccionPaddingV,
-                marginHorizontal: tamanos.padding,
-                marginTop: tamanos.seccionMarginTop,
-                borderRadius: tamanos.seccionRadius,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
+          <SeccionColapsable
+            icono="pulse-outline"
+            titulo="Actividad reciente"
+            subtitulo={`${actividadesRecientes.length} movimientos`}
+            color={colores.info}
+            expandida={actividadExpandida}
+            onToggle={() => toggleSeccion(setActividadExpandida, actividadExpandida)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
           >
-            <Text
-              style={[styles.actividadTitulo, { fontSize: tamanos.seccionTituloSize }]}
-              allowFontScaling={false}
-            >
-              📈 Actividad reciente
-            </Text>
-
             {actividadesRecientes.slice(0, 4).map((actividad, index) => (
               <View
                 key={actividad.id}
                 style={[
-                  styles.actividadItem,
+                  estilos.actividadItem,
                   {
                     paddingVertical: tamanos.actividadItemPaddingV,
                     borderBottomWidth: index < actividadesRecientes.length - 1 ? 1 : 0,
@@ -1382,7 +1600,7 @@ export default function PantallaPerfil(props: any) {
               >
                 <View
                   style={[
-                    styles.actividadIcono,
+                    estilos.actividadIcono,
                     {
                       width: tamanos.actividadIconContainer,
                       height: tamanos.actividadIconContainer,
@@ -1396,15 +1614,15 @@ export default function PantallaPerfil(props: any) {
                     color={actividad.color}
                   />
                 </View>
-                <View style={styles.actividadInfo}>
+                <View style={estilos.actividadInfo}>
                   <Text
-                    style={[styles.actividadDesc, { fontSize: tamanos.actividadDescSize }]}
+                    style={[estilos.actividadDesc, { fontSize: tamanos.actividadDescSize }]}
                     allowFontScaling={false}
                   >
                     {actividad.descripcion}
                   </Text>
                   <Text
-                    style={[styles.actividadFecha, { fontSize: tamanos.actividadFechaSize }]}
+                    style={[estilos.actividadFecha, { fontSize: tamanos.actividadFechaSize }]}
                     allowFontScaling={false}
                   >
                     {new Date(actividad.fecha).toLocaleDateString('es-AR', {
@@ -1418,35 +1636,25 @@ export default function PantallaPerfil(props: any) {
                 </View>
               </View>
             ))}
-          </Animated.View>
+          </SeccionColapsable>
         )}
 
         {/* HISTORIAL PUNTOS */}
         {perfil?.id && historialPuntos.length > 0 && (
-          <Animated.View
-            style={[
-              styles.historialPuntosContainer,
-              {
-                paddingHorizontal: tamanos.seccionPaddingH,
-                paddingVertical: tamanos.seccionPaddingV,
-                marginHorizontal: tamanos.padding,
-                marginTop: tamanos.seccionMarginTop,
-                borderRadius: tamanos.seccionRadius,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
+          <SeccionColapsable
+            icono="star-outline"
+            titulo="Historial de puntos"
+            subtitulo={`${historialPuntos.length} registros`}
+            color={colores.accentSecondary}
+            expandida={historialExpandido}
+            onToggle={() => toggleSeccion(setHistorialExpandido, historialExpandido)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
           >
-            <Text
-              style={[styles.historialPuntosTitulo, { fontSize: tamanos.seccionTituloSize }]}
-              allowFontScaling={false}
-            >
-              ⭐ Historial de puntos
-            </Text>
-
             {historialPuntos.slice(0, 10).map((item, index) => {
               const esPositivo = item.puntos > 0;
-              const color = esPositivo ? DISENO.colors.success : DISENO.colors.accent;
+              const color = esPositivo ? colores.success : colores.accent;
               const esAdmin = item.tipo?.startsWith('ajuste_admin');
               const esBonus = item.tipo === 'bonus_bienvenida';
 
@@ -1454,7 +1662,7 @@ export default function PantallaPerfil(props: any) {
                 <View
                   key={item.id}
                   style={[
-                    styles.historialPuntosItem,
+                    estilos.historialPuntosItem,
                     {
                       paddingVertical: tamanos.historialItemPaddingV,
                       borderBottomWidth: index < historialPuntos.length - 1 ? 1 : 0,
@@ -1463,7 +1671,7 @@ export default function PantallaPerfil(props: any) {
                 >
                   <View
                     style={[
-                      styles.historialPuntosIcono,
+                      estilos.historialPuntosIcono,
                       {
                         backgroundColor: color + '15',
                         width: tamanos.historialIconContainer,
@@ -1480,16 +1688,16 @@ export default function PantallaPerfil(props: any) {
                       color={color}
                     />
                   </View>
-                  <View style={styles.historialPuntosInfo}>
+                  <View style={estilos.historialPuntosInfo}>
                     <Text
-                      style={[styles.historialPuntosDescripcion, { fontSize: tamanos.historialDescSize }]}
+                      style={[estilos.historialPuntosDescripcion, { fontSize: tamanos.historialDescSize }]}
                       numberOfLines={2}
                       allowFontScaling={false}
                     >
                       {item.descripcion || 'Ajuste de puntos'}
                     </Text>
                     <Text
-                      style={[styles.historialPuntosFecha, { fontSize: tamanos.historialFechaSize }]}
+                      style={[estilos.historialPuntosFecha, { fontSize: tamanos.historialFechaSize }]}
                       allowFontScaling={false}
                     >
                       {new Date(item.fecha).toLocaleDateString('es-AR', {
@@ -1503,7 +1711,7 @@ export default function PantallaPerfil(props: any) {
                   </View>
                   <Text
                     style={[
-                      styles.historialPuntosCantidad,
+                      estilos.historialPuntosCantidad,
                       { fontSize: tamanos.historialCantidadSize, color },
                     ]}
                     allowFontScaling={false}
@@ -1514,33 +1722,48 @@ export default function PantallaPerfil(props: any) {
                 </View>
               );
             })}
-          </Animated.View>
+          </SeccionColapsable>
         )}
 
-        {/* INFO PERFIL */}
+        {/* INFO CONTACTO */}
         {perfil?.id && (
-          <Animated.View
-            style={[
-              styles.infoContainer,
-              {
-                paddingHorizontal: tamanos.seccionPaddingH,
-                paddingVertical: tamanos.seccionPaddingV,
-                marginHorizontal: tamanos.padding,
-                marginTop: tamanos.seccionMarginTop,
-                borderRadius: tamanos.seccionRadius,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
+          <SeccionColapsable
+            icono="person-circle-outline"
+            titulo="Info contacto"
+            subtitulo={
+              telefono && direccionCalle
+                ? '✓ Completa'
+                : telefono || direccionCalle
+                  ? '⚠️ Incompleta'
+                  : '⚠️ Sin completar'
+            }
+            color={colores.success}
+            expandida={infoExpandida}
+            onToggle={() => toggleSeccion(setInfoExpandida, infoExpandida)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
           >
-            <View style={styles.infoHeader}>
-              <Text style={[styles.infoTitulo, { fontSize: tamanos.infoTituloSize }]} allowFontScaling={false}>
-                📋 Info contacto
+            <View style={estilos.infoHeaderInline}>
+              <Text
+                style={{
+                  fontFamily: FUENTES.regular,
+                  fontSize: tamanos.sectionSubtitleSize,
+                  color: colores.textTertiary,
+                  flex: 1,
+                  includeFontPadding: false,
+                }}
+                allowFontScaling={false}
+              >
+                {modoEdicion ? 'Editando tus datos' : 'Tus datos de contacto y envío'}
               </Text>
               <TouchableOpacity
-                onPress={() => setModoEdicion(!modoEdicion)}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setModoEdicion(!modoEdicion);
+                }}
                 style={[
-                  styles.editButton,
+                  estilos.editButton,
                   {
                     paddingHorizontal: tamanos.infoEditButtonPaddingH,
                     paddingVertical: tamanos.infoEditButtonPaddingV,
@@ -1548,7 +1771,7 @@ export default function PantallaPerfil(props: any) {
                 ]}
               >
                 <Text
-                  style={[styles.editButtonText, { fontSize: tamanos.infoEditButtonTextSize }]}
+                  style={[estilos.editButtonText, { fontSize: tamanos.infoEditButtonTextSize }]}
                   allowFontScaling={false}
                 >
                   {modoEdicion ? 'Cancelar' : '✏️ Editar'}
@@ -1558,17 +1781,17 @@ export default function PantallaPerfil(props: any) {
 
             {modoEdicion ? (
               <View>
-                {/* 📱 TELÉFONO */}
+                {/* Teléfono */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
-                    style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
+                    style={[estilos.formLabel, { fontSize: tamanos.formLabelSize }]}
                     allowFontScaling={false}
                   >
                     📱 Teléfono
                   </Text>
                   <TextInput
                     style={[
-                      styles.formInput,
+                      estilos.formInput,
                       {
                         fontSize: tamanos.formInputSize,
                         paddingHorizontal: tamanos.formInputPaddingH,
@@ -1580,22 +1803,22 @@ export default function PantallaPerfil(props: any) {
                     onChangeText={setTelefono}
                     placeholder="Ej: 11 1234 5678"
                     keyboardType="phone-pad"
-                    placeholderTextColor={DISENO.colors.textTertiary}
+                    placeholderTextColor={colores.textTertiary}
                     allowFontScaling={false}
                   />
                 </View>
 
-                {/* 🎂 CUMPLEAÑOS */}
+                {/* Cumpleaños */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
-                    style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
+                    style={[estilos.formLabel, { fontSize: tamanos.formLabelSize }]}
                     allowFontScaling={false}
                   >
                     🎂 Cumpleaños
                   </Text>
                   <TextInput
                     style={[
-                      styles.formInput,
+                      estilos.formInput,
                       {
                         fontSize: tamanos.formInputSize,
                         paddingHorizontal: tamanos.formInputPaddingH,
@@ -1605,9 +1828,7 @@ export default function PantallaPerfil(props: any) {
                     ]}
                     value={cumpleanos}
                     onChangeText={(text) => {
-                      // Permitir solo dígitos y "/"
                       const soloNumerosYBarra = text.replace(/[^0-9/]/g, '');
-                      // Auto-formatear: si el usuario escribe "1405" → "14/05"
                       let formateado = soloNumerosYBarra;
                       if (soloNumerosYBarra.length === 4 && !soloNumerosYBarra.includes('/')) {
                         formateado = `${soloNumerosYBarra.slice(0, 2)}/${soloNumerosYBarra.slice(2, 4)}`;
@@ -1616,7 +1837,7 @@ export default function PantallaPerfil(props: any) {
                     }}
                     placeholder="DD/MM (ej: 14/05)"
                     keyboardType="numbers-and-punctuation"
-                    placeholderTextColor={DISENO.colors.textTertiary}
+                    placeholderTextColor={colores.textTertiary}
                     allowFontScaling={false}
                     maxLength={5}
                   />
@@ -1624,7 +1845,7 @@ export default function PantallaPerfil(props: any) {
                     style={{
                       fontFamily: FUENTES.regular,
                       fontSize: 11,
-                      color: DISENO.colors.textTertiary,
+                      color: colores.textTertiary,
                       marginTop: 4,
                       fontStyle: 'italic',
                       includeFontPadding: false,
@@ -1635,16 +1856,15 @@ export default function PantallaPerfil(props: any) {
                   </Text>
                 </View>
 
-                {/* 📍 DIRECCIÓN */}
+                {/* Dirección */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
-                    style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
+                    style={[estilos.formLabel, { fontSize: tamanos.formLabelSize }]}
                     allowFontScaling={false}
                   >
                     📍 Dirección
                   </Text>
 
-                  {/* ✅ Botón "Usar mi ubicación actual" */}
                   <View style={{ marginBottom: 10 }}>
                     <BotonUsarMiUbicacion
                       onUbicacionObtenida={handleUbicacionPerfil}
@@ -1653,11 +1873,11 @@ export default function PantallaPerfil(props: any) {
                     />
                   </View>
 
-                  <View style={[styles.direccionRow, { gap: 8, marginBottom: 8 }]}>
+                  <View style={[estilos.direccionRow, { gap: 8, marginBottom: 8 }]}>
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionCalle,
+                        estilos.formInput,
+                        estilos.direccionCalle,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1668,13 +1888,13 @@ export default function PantallaPerfil(props: any) {
                       value={direccionCalle}
                       onChangeText={setDireccionCalle}
                       placeholder="Calle"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionNumero,
+                        estilos.formInput,
+                        estilos.direccionNumero,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1686,15 +1906,15 @@ export default function PantallaPerfil(props: any) {
                       onChangeText={setDireccionNumero}
                       placeholder="N°"
                       keyboardType="number-pad"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                   </View>
-                  <View style={[styles.direccionRow, { gap: 8, marginBottom: 8 }]}>
+                  <View style={[estilos.direccionRow, { gap: 8, marginBottom: 8 }]}>
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionPiso,
+                        estilos.formInput,
+                        estilos.direccionPiso,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1706,13 +1926,13 @@ export default function PantallaPerfil(props: any) {
                       onChangeText={setDireccionPiso}
                       placeholder="Piso"
                       keyboardType="number-pad"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionDepto,
+                        estilos.formInput,
+                        estilos.direccionDepto,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1723,13 +1943,13 @@ export default function PantallaPerfil(props: any) {
                       value={direccionDepartamento}
                       onChangeText={setDireccionDepartamento}
                       placeholder="Depto"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                   </View>
                   <TextInput
                     style={[
-                      styles.formInput,
+                      estilos.formInput,
                       {
                         fontSize: tamanos.formInputSize,
                         paddingHorizontal: tamanos.formInputPaddingH,
@@ -1741,14 +1961,14 @@ export default function PantallaPerfil(props: any) {
                     value={direccionBarrio}
                     onChangeText={setDireccionBarrio}
                     placeholder="Barrio"
-                    placeholderTextColor={DISENO.colors.textTertiary}
+                    placeholderTextColor={colores.textTertiary}
                     allowFontScaling={false}
                   />
-                  <View style={[styles.direccionRow, { gap: 8 }]}>
+                  <View style={[estilos.direccionRow, { gap: 8 }]}>
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionCiudad,
+                        estilos.formInput,
+                        estilos.direccionCiudad,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1759,13 +1979,13 @@ export default function PantallaPerfil(props: any) {
                       value={direccionCiudad}
                       onChangeText={setDireccionCiudad}
                       placeholder="Ciudad"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                     <TextInput
                       style={[
-                        styles.formInput,
-                        styles.direccionCP,
+                        estilos.formInput,
+                        estilos.direccionCP,
                         {
                           fontSize: tamanos.formInputSize,
                           paddingHorizontal: tamanos.formInputPaddingH,
@@ -1777,24 +1997,24 @@ export default function PantallaPerfil(props: any) {
                       onChangeText={setDireccionCodigoPostal}
                       placeholder="CP"
                       keyboardType="number-pad"
-                      placeholderTextColor={DISENO.colors.textTertiary}
+                      placeholderTextColor={colores.textTertiary}
                       allowFontScaling={false}
                     />
                   </View>
                 </View>
 
-                {/* 🍽️ PREFERENCIAS DE COMIDA */}
+                {/* Preferencias de comida */}
                 <View style={{ marginBottom: tamanos.formGap }}>
                   <Text
-                    style={[styles.formLabel, { fontSize: tamanos.formLabelSize }]}
+                    style={[estilos.formLabel, { fontSize: tamanos.formLabelSize }]}
                     allowFontScaling={false}
                   >
                     🍽️ Preferencias de comida
                   </Text>
                   <TextInput
                     style={[
-                      styles.formInput,
-                      styles.textArea,
+                      estilos.formInput,
+                      estilos.textArea,
                       {
                         fontSize: tamanos.formInputSize,
                         paddingHorizontal: tamanos.formInputPaddingH,
@@ -1808,14 +2028,14 @@ export default function PantallaPerfil(props: any) {
                     placeholder="Ej: Sin TACC, vegetariano, etc."
                     multiline
                     numberOfLines={3}
-                    placeholderTextColor={DISENO.colors.textTertiary}
+                    placeholderTextColor={colores.textTertiary}
                     allowFontScaling={false}
                   />
                 </View>
 
                 <TouchableOpacity
                   style={[
-                    styles.saveButton,
+                    estilos.saveButton,
                     {
                       borderRadius: tamanos.saveButtonRadius,
                     },
@@ -1824,8 +2044,8 @@ export default function PantallaPerfil(props: any) {
                   disabled={cargandoActualizacion || geocodificando}
                 >
                   <LinearGradient
-                    colors={[DISENO.colors.gradientStart, DISENO.colors.gradientEnd]}
-                    style={[styles.saveButtonGradient, { paddingVertical: tamanos.saveButtonPaddingV }]}
+                    colors={[colores.gradientStart, colores.gradientEnd]}
+                    style={[estilos.saveButtonGradient, { paddingVertical: tamanos.saveButtonPaddingV }]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
@@ -1833,7 +2053,7 @@ export default function PantallaPerfil(props: any) {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <ActivityIndicator size="small" color="#FFFFFF" />
                         <Text
-                          style={[styles.saveButtonText, { fontSize: tamanos.saveButtonTextSize }]}
+                          style={[estilos.saveButtonText, { fontSize: tamanos.saveButtonTextSize }]}
                           allowFontScaling={false}
                         >
                           {geocodificando ? '📍 Obteniendo ubicación...' : 'Guardando...'}
@@ -1841,7 +2061,7 @@ export default function PantallaPerfil(props: any) {
                       </View>
                     ) : (
                       <Text
-                        style={[styles.saveButtonText, { fontSize: tamanos.saveButtonTextSize }]}
+                        style={[estilos.saveButtonText, { fontSize: tamanos.saveButtonTextSize }]}
                         allowFontScaling={false}
                       >
                         ✅ Guardar cambios
@@ -1851,61 +2071,122 @@ export default function PantallaPerfil(props: any) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.infoDisplay}>
-                <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
-                  <Ionicons name="call-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
-                  <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
+              <View style={estilos.infoDisplay}>
+                <View style={[estilos.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
+                  <Ionicons name="call-outline" size={tamanos.infoIconSize} color={colores.textSecondary} />
+                  <Text style={[estilos.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
                     {telefono || 'No especificado'}
                   </Text>
                 </View>
-                <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
-                  <Ionicons name="gift-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
-                  <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
+                <View style={[estilos.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
+                  <Ionicons name="gift-outline" size={tamanos.infoIconSize} color={colores.textSecondary} />
+                  <Text style={[estilos.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
                     {cumpleanos ? `🎂 ${cumpleanos}` : 'Cumpleaños no especificado'}
                   </Text>
                 </View>
-                <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
-                  <Ionicons name="location-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
-                  <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
+                <View style={[estilos.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
+                  <Ionicons name="location-outline" size={tamanos.infoIconSize} color={colores.textSecondary} />
+                  <Text style={[estilos.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
                     {obtenerDireccionCompleta()}
                   </Text>
                 </View>
-                <View style={[styles.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
-                  <Ionicons name="restaurant-outline" size={tamanos.infoIconSize} color={DISENO.colors.textSecondary} />
-                  <Text style={[styles.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
+                <View style={[estilos.infoRow, { paddingVertical: tamanos.infoRowPaddingV }]}>
+                  <Ionicons name="restaurant-outline" size={tamanos.infoIconSize} color={colores.textSecondary} />
+                  <Text style={[estilos.infoText, { fontSize: tamanos.infoTextSize }]} allowFontScaling={false}>
                     {preferenciasComida || 'Sin preferencias'}
                   </Text>
                 </View>
               </View>
             )}
-          </Animated.View>
+          </SeccionColapsable>
+        )}
+
+        {/* APARIENCIA */}
+        {perfil?.id && (
+          <SeccionColapsable
+            icono="contrast-outline"
+            titulo="Apariencia"
+            subtitulo={
+              modo === 'claro' ? '☀️ Tema claro'
+                : modo === 'oscuro' ? '🌙 Tema oscuro'
+                  : '📱 Según el sistema'
+            }
+            color={colores.morado}
+            expandida={aparienciaExpandida}
+            onToggle={() => toggleSeccion(setAparienciaExpandida, aparienciaExpandida)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
+          >
+            {(['claro', 'oscuro', 'sistema'] as ModoTema[]).map((opcion) => {
+              const activo = modo === opcion;
+              const info = {
+                claro: { icono: 'sunny-outline', label: 'Claro', desc: 'Siempre tema claro' },
+                oscuro: { icono: 'moon-outline', label: 'Oscuro', desc: 'Siempre tema oscuro' },
+                sistema: { icono: 'phone-portrait-outline', label: 'Sistema', desc: 'Sigue el tema del teléfono' },
+              }[opcion];
+              return (
+                <TouchableOpacity
+                  key={opcion}
+                  onPress={() => setModo(opcion)}
+                  activeOpacity={0.7}
+                  style={[
+                    estilos.opcionTema,
+                    {
+                      borderColor: activo ? colores.morado : colores.border,
+                      backgroundColor: activo ? colores.morado + '10' : 'transparent',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={info.icono as any}
+                    size={tamanos.menuIconSize}
+                    color={activo ? colores.morado : colores.textSecondary}
+                  />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text
+                      style={[
+                        estilos.opcionTemaLabel,
+                        { color: activo ? colores.morado : colores.text },
+                      ]}
+                      allowFontScaling={false}
+                    >
+                      {info.label}
+                    </Text>
+                    <Text
+                      style={[estilos.opcionTemaDesc, { color: colores.textTertiary }]}
+                      allowFontScaling={false}
+                    >
+                      {info.desc}
+                    </Text>
+                  </View>
+                  {activo && (
+                    <Ionicons name="checkmark-circle" size={22} color={colores.morado} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </SeccionColapsable>
         )}
 
         {/* ÚLTIMOS CANJES */}
         {perfil?.id && ultimosCanjes.length > 0 && (
-          <Animated.View
-            style={[
-              styles.canjesContainer,
-              {
-                paddingHorizontal: tamanos.seccionPaddingH,
-                paddingVertical: tamanos.seccionPaddingV,
-                marginHorizontal: tamanos.padding,
-                marginTop: tamanos.seccionMarginTop,
-                borderRadius: tamanos.seccionRadius,
-                opacity: fadeAnim,
-                transform: [{ translateY: slideUpAnim }],
-              },
-            ]}
+          <SeccionColapsable
+            icono="trophy-outline"
+            titulo="Últimas recompensas canjeadas"
+            subtitulo={`${ultimosCanjes.length} recompensas`}
+            color={colores.rosa}
+            expandida={canjesExpandidos}
+            onToggle={() => toggleSeccion(setCanjesExpandidos, canjesExpandidos)}
+            tamanos={tamanos}
+            colores={colores}
+            estilos={estilos}
           >
-            <Text style={[styles.canjesTitulo, { fontSize: tamanos.seccionTituloSize }]} allowFontScaling={false}>
-              🎁 Últimas recompensas canjeadas
-            </Text>
-
             {ultimosCanjes.map((canje, index) => (
               <View
                 key={canje.id}
                 style={[
-                  styles.canjeItem,
+                  estilos.canjeItem,
                   {
                     paddingVertical: tamanos.canjeItemPaddingV,
                     borderBottomWidth: index < ultimosCanjes.length - 1 ? 1 : 0,
@@ -1914,7 +2195,7 @@ export default function PantallaPerfil(props: any) {
               >
                 <View
                   style={[
-                    styles.canjeIcono,
+                    estilos.canjeIcono,
                     {
                       width: tamanos.canjeIconContainer,
                       height: tamanos.canjeIconContainer,
@@ -1926,15 +2207,15 @@ export default function PantallaPerfil(props: any) {
                     🎯
                   </Text>
                 </View>
-                <View style={styles.canjeInfo}>
+                <View style={estilos.canjeInfo}>
                   <Text
-                    style={[styles.canjeNombre, { fontSize: tamanos.canjeNombreSize }]}
+                    style={[estilos.canjeNombre, { fontSize: tamanos.canjeNombreSize }]}
                     allowFontScaling={false}
                   >
                     {canje.recompensas?.nombre || 'Recompensa'}
                   </Text>
                   <Text
-                    style={[styles.canjeDetalle, { fontSize: tamanos.canjeDetalleSize }]}
+                    style={[estilos.canjeDetalle, { fontSize: tamanos.canjeDetalleSize }]}
                     allowFontScaling={false}
                   >
                     {canje.puntos_usados} pts •{' '}
@@ -1944,7 +2225,7 @@ export default function PantallaPerfil(props: any) {
                   </Text>
                 </View>
                 <Text
-                  style={[styles.canjeFecha, { fontSize: tamanos.canjeFechaSize }]}
+                  style={[estilos.canjeFecha, { fontSize: tamanos.canjeFechaSize }]}
                   allowFontScaling={false}
                 >
                   {new Date(canje.created_at).toLocaleDateString('es-AR', {
@@ -1954,19 +2235,35 @@ export default function PantallaPerfil(props: any) {
                 </Text>
               </View>
             ))}
-          </Animated.View>
+          </SeccionColapsable>
         )}
 
-        {/* MENÚ NAVEGACIÓN */}
+        {/* MENÚ */}
         <Animated.View
           style={{
             paddingHorizontal: tamanos.padding,
-            marginTop: tamanos.seccionMarginTop,
+            marginTop: tamanos.seccionMarginTop * 1.5,
             gap: 8,
             opacity: fadeAnim,
             transform: [{ translateY: slideUpAnim }],
           }}
         >
+          <Text
+            style={{
+              fontFamily: FUENTES.display,
+              fontSize: tamanos.sectionSubtitleSize + 1,
+              color: colores.textTertiary,
+              textTransform: 'uppercase',
+              letterSpacing: 1.5,
+              marginBottom: 4,
+              marginLeft: 4,
+              includeFontPadding: false,
+            }}
+            allowFontScaling={false}
+          >
+            Accesos rápidos
+          </Text>
+
           {menuItems.map((item) => {
             const bloqueado = item.requiereSesion && !sesion;
             const tieneBadge = item.id === 'notificaciones' && notificacionesNoLeidas > 0;
@@ -1975,7 +2272,7 @@ export default function PantallaPerfil(props: any) {
               <TouchableOpacity
                 key={item.id}
                 style={[
-                  styles.menuItem,
+                  estilos.menuItem,
                   {
                     paddingVertical: tamanos.menuItemPaddingV,
                     paddingHorizontal: tamanos.menuItemPaddingH,
@@ -1984,10 +2281,10 @@ export default function PantallaPerfil(props: any) {
                 ]}
                 onPress={() => handleNavigate(item)}
               >
-                <View style={styles.menuItemLeft}>
+                <View style={estilos.menuItemLeft}>
                   <View
                     style={[
-                      styles.menuIcon,
+                      estilos.menuIcon,
                       {
                         backgroundColor: item.color + '15',
                         width: tamanos.menuIconContainer,
@@ -2000,10 +2297,10 @@ export default function PantallaPerfil(props: any) {
                     {tieneBadge && (
                       <View
                         style={[
-                          styles.badgeNotificaciones,
+                          estilos.badgeNotificaciones,
                           {
-                            backgroundColor: DISENO.colors.accent,
-                            borderColor: DISENO.colors.surface,
+                            backgroundColor: colores.accent,
+                            borderColor: colores.surface,
                             minWidth: tamanos.menuBadgeSize,
                             height: tamanos.menuBadgeSize,
                             borderRadius: tamanos.menuBadgeSize / 2,
@@ -2012,7 +2309,7 @@ export default function PantallaPerfil(props: any) {
                         ]}
                       >
                         <Text
-                          style={[styles.badgeNotificacionesTexto, { fontSize: tamanos.menuBadgeTextSize }]}
+                          style={[estilos.badgeNotificacionesTexto, { fontSize: tamanos.menuBadgeTextSize }]}
                           allowFontScaling={false}
                         >
                           {notificacionesNoLeidas > 99 ? '99+' : notificacionesNoLeidas}
@@ -2020,9 +2317,9 @@ export default function PantallaPerfil(props: any) {
                       </View>
                     )}
                   </View>
-                  <View style={styles.menuLabelContainer}>
+                  <View style={estilos.menuLabelContainer}>
                     <Text
-                      style={[styles.menuLabel, { fontSize: tamanos.menuLabelSize }]}
+                      style={[estilos.menuLabel, { fontSize: tamanos.menuLabelSize }]}
                       numberOfLines={1}
                       allowFontScaling={false}
                     >
@@ -2030,7 +2327,7 @@ export default function PantallaPerfil(props: any) {
                     </Text>
                     {bloqueado ? (
                       <Text
-                        style={[styles.menuSubtitle, { fontSize: tamanos.menuSubtitleSize }]}
+                        style={[estilos.menuSubtitle, { fontSize: tamanos.menuSubtitleSize }]}
                         numberOfLines={1}
                         allowFontScaling={false}
                       >
@@ -2038,7 +2335,7 @@ export default function PantallaPerfil(props: any) {
                       </Text>
                     ) : item.subtitle ? (
                       <Text
-                        style={[styles.menuSubtitle, { fontSize: tamanos.menuSubtitleSize }]}
+                        style={[estilos.menuSubtitle, { fontSize: tamanos.menuSubtitleSize }]}
                         numberOfLines={1}
                         allowFontScaling={false}
                       >
@@ -2050,7 +2347,7 @@ export default function PantallaPerfil(props: any) {
                 <Ionicons
                   name={bloqueado ? 'lock-closed-outline' : 'chevron-forward'}
                   size={tamanos.menuChevronSize}
-                  color={bloqueado ? DISENO.colors.warning : DISENO.colors.textTertiary}
+                  color={bloqueado ? colores.warning : colores.textTertiary}
                 />
               </TouchableOpacity>
             );
@@ -2063,7 +2360,7 @@ export default function PantallaPerfil(props: any) {
             style={{
               alignItems: 'center',
               paddingHorizontal: tamanos.padding,
-              marginTop: tamanos.seccionMarginTop,
+              marginTop: tamanos.seccionMarginTop * 1.5,
               marginBottom: 20,
               opacity: fadeAnim,
               transform: [{ translateY: slideUpAnim }],
@@ -2071,7 +2368,7 @@ export default function PantallaPerfil(props: any) {
           >
             <TouchableOpacity
               style={[
-                styles.logoutButton,
+                estilos.logoutButton,
                 {
                   paddingVertical: tamanos.logoutButtonPaddingV,
                   paddingHorizontal: tamanos.logoutButtonPaddingH,
@@ -2080,9 +2377,9 @@ export default function PantallaPerfil(props: any) {
               ]}
               onPress={() => setMostrarModal(true)}
             >
-              <Ionicons name="log-out-outline" size={tamanos.logoutIconSize} color={DISENO.colors.danger} />
+              <Ionicons name="log-out-outline" size={tamanos.logoutIconSize} color={colores.danger} />
               <Text
-                style={[styles.logoutText, { fontSize: tamanos.logoutTextSize }]}
+                style={[estilos.logoutText, { fontSize: tamanos.logoutTextSize }]}
                 allowFontScaling={false}
               >
                 Cerrar sesión
@@ -2099,10 +2396,10 @@ export default function PantallaPerfil(props: any) {
         animationType="fade"
         onRequestClose={() => setMostrarModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={estilos.modalOverlay}>
           <View
             style={[
-              styles.modalContent,
+              estilos.modalContent,
               {
                 width: isTablet ? 400 : screenWidth - 40,
                 padding: tamanos.modalPadding,
@@ -2111,37 +2408,37 @@ export default function PantallaPerfil(props: any) {
             ]}
           >
             <View style={{ marginBottom: 12 }}>
-              <Ionicons name="log-out-outline" size={tamanos.modalIconSize} color={DISENO.colors.danger} />
+              <Ionicons name="log-out-outline" size={tamanos.modalIconSize} color={colores.danger} />
             </View>
-            <Text style={[styles.modalTitle, { fontSize: tamanos.modalTitleSize }]} allowFontScaling={false}>
+            <Text style={[estilos.modalTitle, { fontSize: tamanos.modalTitleSize }]} allowFontScaling={false}>
               ¿Cerrar sesión?
             </Text>
-            <Text style={[styles.modalText, { fontSize: tamanos.modalTextSize }]} allowFontScaling={false}>
+            <Text style={[estilos.modalText, { fontSize: tamanos.modalTextSize }]} allowFontScaling={false}>
               ¿Estás seguro que querés cerrar sesión? Podrás volver a iniciar sesión cuando quieras.
             </Text>
-            <View style={styles.modalButtons}>
+            <View style={estilos.modalButtons}>
               <TouchableOpacity
                 style={[
-                  styles.modalButton,
-                  styles.modalButtonCancel,
+                  estilos.modalButton,
+                  estilos.modalButtonCancel,
                   { paddingVertical: tamanos.modalButtonPaddingV, borderRadius: tamanos.modalButtonRadius },
                 ]}
                 onPress={() => setMostrarModal(false)}
               >
-                <Text style={[styles.modalButtonText, { fontSize: tamanos.modalButtonTextSize }]} allowFontScaling={false}>
+                <Text style={[estilos.modalButtonText, { fontSize: tamanos.modalButtonTextSize }]} allowFontScaling={false}>
                   Cancelar
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalButton,
-                  styles.modalButtonConfirm,
+                  estilos.modalButton,
+                  estilos.modalButtonConfirm,
                   { paddingVertical: tamanos.modalButtonPaddingV, borderRadius: tamanos.modalButtonRadius },
                 ]}
                 onPress={confirmarCerrarSesion}
               >
                 <Text
-                  style={[styles.modalButtonText, styles.modalButtonConfirmText, { fontSize: tamanos.modalButtonTextSize }]}
+                  style={[estilos.modalButtonText, estilos.modalButtonConfirmText, { fontSize: tamanos.modalButtonTextSize }]}
                   allowFontScaling={false}
                 >
                   Sí, cerrar sesión
@@ -2160,7 +2457,7 @@ export default function PantallaPerfil(props: any) {
         onRequestClose={() => setMostrarPreferenciasNotificaciones(false)}
       >
         <TouchableOpacity
-          style={styles.modalOverlay}
+          style={estilos.modalOverlay}
           activeOpacity={1}
           onPress={() => setMostrarPreferenciasNotificaciones(false)}
         >
@@ -2168,7 +2465,7 @@ export default function PantallaPerfil(props: any) {
             activeOpacity={1}
             onPress={() => { }}
             style={[
-              styles.modalContent,
+              estilos.modalContent,
               {
                 width: isTablet ? 500 : screenWidth - 32,
                 padding: tamanos.modalPadding,
@@ -2177,7 +2474,6 @@ export default function PantallaPerfil(props: any) {
               },
             ]}
           >
-            {/* ─── HEADER con X ─── */}
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 4 }}>
               <TouchableOpacity
                 onPress={() => setMostrarPreferenciasNotificaciones(false)}
@@ -2185,24 +2481,23 @@ export default function PantallaPerfil(props: any) {
                   width: 34,
                   height: 34,
                   borderRadius: 17,
-                  backgroundColor: DISENO.colors.surfaceHover,
+                  backgroundColor: colores.surfaceHover,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close" size={20} color={DISENO.colors.textSecondary} />
+                <Ionicons name="close" size={20} color={colores.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            {/* ─── TÍTULO ─── */}
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <View
                 style={{
                   width: tamanos.modalIconSize,
                   height: tamanos.modalIconSize,
                   borderRadius: tamanos.modalIconSize / 2,
-                  backgroundColor: DISENO.colors.accent + '15',
+                  backgroundColor: colores.accent + '15',
                   justifyContent: 'center',
                   alignItems: 'center',
                   marginBottom: 12,
@@ -2211,32 +2506,31 @@ export default function PantallaPerfil(props: any) {
                 <Ionicons
                   name="notifications-outline"
                   size={tamanos.modalIconSize * 0.55}
-                  color={DISENO.colors.accent}
+                  color={colores.accent}
                 />
               </View>
               <Text
-                style={[styles.modalTitle, { fontSize: tamanos.modalTitleSize, marginBottom: 4 }]}
+                style={[estilos.modalTitle, { fontSize: tamanos.modalTitleSize, marginBottom: 4 }]}
                 allowFontScaling={false}
               >
                 Preferencias de notificaciones
               </Text>
               <Text
-                style={[styles.modalText, { fontSize: tamanos.modalTextSize, marginBottom: 0 }]}
+                style={[estilos.modalText, { fontSize: tamanos.modalTextSize, marginBottom: 0 }]}
                 allowFontScaling={false}
               >
                 Elegí qué comunicaciones querés recibir. Podés cambiarlas cuando quieras.
               </Text>
             </View>
 
-            {/* ─── SECCIÓN 1: AVISOS DE PEDIDOS ─── */}
             <View
               style={{
-                backgroundColor: DISENO.colors.surfaceHover,
+                backgroundColor: colores.surfaceHover,
                 borderRadius: 14,
                 padding: 14,
                 marginBottom: 12,
                 borderWidth: 1,
-                borderColor: DISENO.colors.border,
+                borderColor: colores.border,
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -2245,20 +2539,20 @@ export default function PantallaPerfil(props: any) {
                     width: 34,
                     height: 34,
                     borderRadius: 17,
-                    backgroundColor: DISENO.colors.accent + '15',
+                    backgroundColor: colores.accent + '15',
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 10,
                   }}
                 >
-                  <Ionicons name="receipt-outline" size={18} color={DISENO.colors.accent} />
+                  <Ionicons name="receipt-outline" size={18} color={colores.accent} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FUENTES.display,
                       fontSize: tamanos.notifPrefTitleSize,
-                      color: DISENO.colors.text,
+                      color: colores.text,
                       includeFontPadding: false,
                     }}
                     allowFontScaling={false}
@@ -2269,9 +2563,7 @@ export default function PantallaPerfil(props: any) {
                     style={{
                       fontFamily: FUENTES.regular,
                       fontSize: tamanos.notifPrefDescSize,
-                      color: notificacionesPermitidas
-                        ? DISENO.colors.success
-                        : DISENO.colors.textTertiary,
+                      color: notificacionesPermitidas ? colores.success : colores.textTertiary,
                       includeFontPadding: false,
                       marginTop: 1,
                     }}
@@ -2288,7 +2580,7 @@ export default function PantallaPerfil(props: any) {
                 style={{
                   fontFamily: FUENTES.regular,
                   fontSize: tamanos.notifPrefDescSize,
-                  color: DISENO.colors.textSecondary,
+                  color: colores.textSecondary,
                   lineHeight: 16,
                   includeFontPadding: false,
                   marginBottom: 10,
@@ -2296,7 +2588,7 @@ export default function PantallaPerfil(props: any) {
                 allowFontScaling={false}
               >
                 Confirmación, preparación, en camino y entrega de tus pedidos.{'\n'}
-                <Text style={{ fontStyle: 'italic', color: DISENO.colors.textTertiary }}>
+                <Text style={{ fontStyle: 'italic', color: colores.textTertiary }}>
                   Se controla desde los permisos del sistema operativo.
                 </Text>
               </Text>
@@ -2311,11 +2603,11 @@ export default function PantallaPerfil(props: any) {
                   paddingHorizontal: tamanos.notifPrefBtnPaddingH,
                   borderRadius: tamanos.notifPrefBtnRadius,
                   backgroundColor: notificacionesPermitidas
-                    ? DISENO.colors.success + '15'
-                    : DISENO.colors.accent,
+                    ? colores.success + '15'
+                    : colores.accent,
                   borderWidth: notificacionesPermitidas ? 1 : 0,
                   borderColor: notificacionesPermitidas
-                    ? DISENO.colors.success + '40'
+                    ? colores.success + '40'
                     : 'transparent',
                 }}
                 onPress={activarNotificacionesHandler}
@@ -2324,15 +2616,13 @@ export default function PantallaPerfil(props: any) {
                 <Ionicons
                   name={notificacionesPermitidas ? 'settings-outline' : 'notifications'}
                   size={16}
-                  color={notificacionesPermitidas ? DISENO.colors.success : DISENO.colors.surface}
+                  color={notificacionesPermitidas ? colores.success : colores.surface}
                 />
                 <Text
                   style={{
                     fontFamily: FUENTES.display,
                     fontSize: tamanos.notifPrefBtnTextSize,
-                    color: notificacionesPermitidas
-                      ? DISENO.colors.success
-                      : DISENO.colors.surface,
+                    color: notificacionesPermitidas ? colores.success : colores.surface,
                     includeFontPadding: false,
                   }}
                   allowFontScaling={false}
@@ -2342,18 +2632,17 @@ export default function PantallaPerfil(props: any) {
               </TouchableOpacity>
             </View>
 
-            {/* ─── SECCIÓN 2: NOVEDADES Y PROMOS ESPECIALES ─── */}
             <View
               style={{
-                backgroundColor: DISENO.colors.surfaceHover,
+                backgroundColor: colores.surfaceHover,
                 borderRadius: 14,
                 padding: 14,
                 marginBottom: 16,
                 borderWidth: 1,
                 borderColor:
                   perfil?.acepta_promociones === true
-                    ? DISENO.colors.accentSecondary + '40'
-                    : DISENO.colors.border,
+                    ? colores.accentSecondary + '40'
+                    : colores.border,
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -2362,20 +2651,20 @@ export default function PantallaPerfil(props: any) {
                     width: 34,
                     height: 34,
                     borderRadius: 17,
-                    backgroundColor: DISENO.colors.accentSecondary + '20',
+                    backgroundColor: colores.accentSecondary + '20',
                     justifyContent: 'center',
                     alignItems: 'center',
                     marginRight: 10,
                   }}
                 >
-                  <Ionicons name="pricetags-outline" size={18} color={DISENO.colors.accentSecondary} />
+                  <Ionicons name="pricetags-outline" size={18} color={colores.accentSecondary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FUENTES.display,
                       fontSize: tamanos.notifPrefTitleSize,
-                      color: DISENO.colors.text,
+                      color: colores.text,
                       includeFontPadding: false,
                     }}
                     allowFontScaling={false}
@@ -2386,9 +2675,7 @@ export default function PantallaPerfil(props: any) {
                     style={{
                       fontFamily: FUENTES.regular,
                       fontSize: tamanos.notifPrefDescSize,
-                      color: perfil?.acepta_promociones
-                        ? DISENO.colors.success
-                        : DISENO.colors.textTertiary,
+                      color: perfil?.acepta_promociones ? colores.success : colores.textTertiary,
                       includeFontPadding: false,
                       marginTop: 1,
                     }}
@@ -2401,7 +2688,7 @@ export default function PantallaPerfil(props: any) {
                   value={perfil?.acepta_promociones === true}
                   onValueChange={cambiarConsentimientoPromociones}
                   disabled={guardandoPreferenciasNotificaciones}
-                  trackColor={{ false: DISENO.colors.border, true: DISENO.colors.success }}
+                  trackColor={{ false: colores.border, true: colores.success }}
                   thumbColor="#FFFFFF"
                   accessibilityLabel="Aceptar novedades y promos especiales"
                 />
@@ -2411,14 +2698,14 @@ export default function PantallaPerfil(props: any) {
                 style={{
                   fontFamily: FUENTES.regular,
                   fontSize: tamanos.notifPrefDescSize,
-                  color: DISENO.colors.textSecondary,
+                  color: colores.textSecondary,
                   lineHeight: 16,
                   includeFontPadding: false,
                 }}
                 allowFontScaling={false}
               >
                 Lanzamientos, combos nuevos y promos exclusivas.{'\n'}
-                <Text style={{ fontStyle: 'italic', color: DISENO.colors.textTertiary }}>
+                <Text style={{ fontStyle: 'italic', color: colores.textTertiary }}>
                   Las ofertas activas del día llegan igual, siempre que tengas las notificaciones activadas.
                 </Text>
               </Text>
@@ -2433,15 +2720,15 @@ export default function PantallaPerfil(props: any) {
                     paddingVertical: 6,
                     paddingHorizontal: 10,
                     borderRadius: 8,
-                    backgroundColor: DISENO.colors.success + '10',
+                    backgroundColor: colores.success + '10',
                   }}
                 >
-                  <Ionicons name="checkmark-circle" size={14} color={DISENO.colors.success} />
+                  <Ionicons name="checkmark-circle" size={14} color={colores.success} />
                   <Text
                     style={{
                       fontFamily: FUENTES.regular,
                       fontSize: 11,
-                      color: DISENO.colors.success,
+                      color: colores.success,
                       flex: 1,
                       includeFontPadding: false,
                     }}
@@ -2453,12 +2740,11 @@ export default function PantallaPerfil(props: any) {
               )}
             </View>
 
-            {/* ─── BOTÓN "ENTENDIDO" ─── */}
             <TouchableOpacity
               style={{
                 paddingVertical: 14,
                 borderRadius: 12,
-                backgroundColor: DISENO.colors.success,
+                backgroundColor: colores.success,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
@@ -2482,12 +2768,11 @@ export default function PantallaPerfil(props: any) {
               </Text>
             </TouchableOpacity>
 
-            {/* ─── FOOTER INFORMATIVO ─── */}
             <Text
               style={{
                 fontFamily: FUENTES.regular,
                 fontSize: 11,
-                color: DISENO.colors.textTertiary,
+                color: colores.textTertiary,
                 textAlign: 'center',
                 marginTop: 12,
                 includeFontPadding: false,
@@ -2508,10 +2793,10 @@ export default function PantallaPerfil(props: any) {
         onRequestClose={() => setMostrarFotoCompleta(false)}
         statusBarTranslucent
       >
-        <View style={styles.fotoCompletaOverlay}>
+        <View style={estilos.fotoCompletaOverlay}>
           <TouchableOpacity
             style={[
-              styles.fotoCompletaCerrar,
+              estilos.fotoCompletaCerrar,
               {
                 top: insets.top + 16,
                 width: tamanos.fotoCerrarSize,
@@ -2526,18 +2811,18 @@ export default function PantallaPerfil(props: any) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.fotoCompletaTouchable}
+            style={estilos.fotoCompletaTouchable}
             activeOpacity={1}
             onPress={() => setMostrarFotoCompleta(false)}
           >
             {imagenPerfil && (
-              <Image source={{ uri: imagenPerfil }} style={styles.fotoCompletaImagen} resizeMode="contain" />
+              <Image source={{ uri: imagenPerfil }} style={estilos.fotoCompletaImagen} resizeMode="contain" />
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
-              styles.fotoCompletaCambiar,
+              estilos.fotoCompletaCambiar,
               {
                 bottom: insets.bottom + 24,
                 paddingHorizontal: tamanos.fotoCambiarPaddingH,
@@ -2552,7 +2837,7 @@ export default function PantallaPerfil(props: any) {
             activeOpacity={0.8}
           >
             <Ionicons name="camera-outline" size={tamanos.fotoCambiarIconSize} color="#FFFFFF" />
-            <Text style={[styles.fotoCompletaCambiarTexto, { fontSize: tamanos.fotoCambiarTextSize }]} allowFontScaling={false}>
+            <Text style={[estilos.fotoCompletaCambiarTexto, { fontSize: tamanos.fotoCambiarTextSize }]} allowFontScaling={false}>
               Cambiar foto
             </Text>
           </TouchableOpacity>
@@ -2563,456 +2848,477 @@ export default function PantallaPerfil(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS DINÁMICOS
 // ============================================================
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DISENO.colors.fondo },
-  background: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 300,
-    backgroundColor: DISENO.colors.surface,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  scrollContent: { flexGrow: 1 },
-  header: { alignItems: 'center', backgroundColor: 'transparent' },
-  avatarContainer: {
-    backgroundColor: DISENO.colors.surface,
-    borderColor: DISENO.colors.border,
-    ...DISENO.shadow.md,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarEmoji: {
-    textAlign: 'center',
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-  },
-  cameraIcon: {
-    position: 'absolute',
-    backgroundColor: DISENO.colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderColor: DISENO.colors.surface,
-    ...DISENO.shadow.sm,
-  },
-  uploadingContainer: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  uploadingText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    color: DISENO.colors.textSecondary,
-    includeFontPadding: false,
-  },
-  name: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginTop: 12,
-    includeFontPadding: false,
-    lineHeight: 30,
-  },
-  email: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    marginTop: 2,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  pointsContainer: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 4 },
-  pointsWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  pointsText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.accentSecondary,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  levelBadge: {
-    marginTop: 8,
-    backgroundColor: DISENO.colors.surface,
-    borderWidth: 1,
-    ...DISENO.shadow.sm,
-  },
-  levelText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  beneficiosContainer: {
-    marginTop: 12,
-    backgroundColor: DISENO.colors.surface,
-    width: '100%',
-    ...DISENO.shadow.sm,
-  },
-  beneficiosTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginBottom: 10,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  beneficioItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
-  beneficioIcon: { justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  beneficioText: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    flex: 1,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  stats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginTop: 12,
-    backgroundColor: DISENO.colors.surface,
-    borderRadius: DISENO.radius.md,
-    ...DISENO.shadow.sm,
-  },
-  statItem: { alignItems: 'center', flex: 1 },
-  statValue: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-    lineHeight: 26,
-  },
-  statLabel: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    marginTop: 2,
-    fontWeight: '500',
-    includeFontPadding: false,
-    lineHeight: 16,
-  },
-  statDivider: { width: 1, backgroundColor: DISENO.colors.border },
-  guestMessage: { alignItems: 'center', marginTop: 16, padding: 20 },
-  guestText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginTop: 8,
-    includeFontPadding: false,
-    lineHeight: 22,
-  },
-  guestSubText: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 300,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  loginButtonGuest: { overflow: 'hidden', marginTop: 16, width: '100%', maxWidth: 280 },
-  loginButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  loginButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.surface,
-    includeFontPadding: false,
-  },
-  actividadContainer: { backgroundColor: DISENO.colors.surface, ...DISENO.shadow.sm },
-  actividadTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginBottom: 8,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  actividadItem: { flexDirection: 'row', alignItems: 'center', borderBottomColor: DISENO.colors.border },
-  actividadIcono: {
-    backgroundColor: DISENO.colors.fondo,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  actividadInfo: { flex: 1 },
-  actividadDesc: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    fontWeight: '500',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  actividadFecha: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
-    marginTop: 1,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  historialPuntosContainer: { backgroundColor: DISENO.colors.surface, ...DISENO.shadow.sm },
-  historialPuntosTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginBottom: 8,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  historialPuntosItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomColor: DISENO.colors.border,
-    gap: 12,
-  },
-  historialPuntosIcono: { justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-  historialPuntosInfo: { flex: 1 },
-  historialPuntosDescripcion: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    fontWeight: '500',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  historialPuntosFecha: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
-    marginTop: 2,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  historialPuntosCantidad: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  infoContainer: { backgroundColor: DISENO.colors.surface, ...DISENO.shadow.sm },
-  infoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  editButton: { backgroundColor: DISENO.colors.fondo, borderRadius: DISENO.radius.sm },
-  editButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.accent,
-    includeFontPadding: false,
-  },
-  infoDisplay: { gap: 10 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  infoText: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    flex: 1,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  formLabel: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '500',
-    color: DISENO.colors.textSecondary,
-    marginBottom: 4,
-    includeFontPadding: false,
-  },
-  formInput: {
-    fontFamily: FUENTES.regular,
-    backgroundColor: DISENO.colors.fondo,
-    color: DISENO.colors.text,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-  direccionRow: { flexDirection: 'row' },
-  direccionCalle: { flex: 2 },
-  direccionNumero: { flex: 1 },
-  direccionPiso: { flex: 1 },
-  direccionDepto: { flex: 1 },
-  direccionCiudad: { flex: 2 },
-  direccionCP: { flex: 1 },
-  textArea: { textAlignVertical: 'top' },
-  saveButton: { overflow: 'hidden', marginTop: 8 },
-  saveButtonGradient: { alignItems: 'center', justifyContent: 'center' },
-  saveButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.surface,
-    includeFontPadding: false,
-  },
-  canjesContainer: { backgroundColor: DISENO.colors.surface, ...DISENO.shadow.sm },
-  canjesTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginBottom: 8,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  canjeItem: { flexDirection: 'row', alignItems: 'center', borderBottomColor: DISENO.colors.border },
-  canjeIcono: {
-    backgroundColor: DISENO.colors.fondo,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  canjeInfo: { flex: 1 },
-  canjeNombre: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.text,
-    fontWeight: '500',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  canjeDetalle: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    marginTop: 1,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  canjeFecha: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: DISENO.colors.surface,
-    ...DISENO.shadow.sm,
-  },
-  menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  menuLabelContainer: { flex: 1, marginRight: 8 },
-  menuIcon: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-    position: 'relative',
-  },
-  badgeNotificaciones: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  badgeNotificacionesTexto: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.surface,
-    includeFontPadding: false,
-  },
-  menuLabel: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  menuSubtitle: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textTertiary,
-    marginTop: 1,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: DISENO.colors.surface,
-    borderWidth: 1,
-    borderColor: DISENO.colors.danger + '30',
-  },
-  logoutText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.danger,
-    includeFontPadding: false,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: DISENO.colors.surface,
-    alignItems: 'center',
-    ...DISENO.shadow.lg,
-  },
-  modalTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    marginBottom: 8,
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 24,
-  },
-  modalText: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
-    includeFontPadding: false,
-  },
-  modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
-  modalButton: { flex: 1, alignItems: 'center' },
-  modalButtonCancel: { backgroundColor: DISENO.colors.fondo },
-  modalButtonConfirm: { backgroundColor: DISENO.colors.danger },
-  modalButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-  },
-  modalButtonConfirmText: { color: DISENO.colors.surface },
+const crearEstilos = (colores: PaletaTema) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo },
+    background: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 300,
+      backgroundColor: colores.surface,
+      borderBottomLeftRadius: 30,
+      borderBottomRightRadius: 30,
+    },
+    scrollContent: { flexGrow: 1 },
+    header: { alignItems: 'center', backgroundColor: 'transparent' },
+    avatarContainer: {
+      backgroundColor: colores.surface,
+      borderColor: colores.border,
+      ...DISENO.shadow.md,
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarEmoji: {
+      textAlign: 'center',
+      color: colores.text,
+      includeFontPadding: false,
+    },
+    cameraIcon: {
+      position: 'absolute',
+      backgroundColor: colores.accent,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderColor: colores.surface,
+      ...DISENO.shadow.sm,
+    },
+    uploadingContainer: { marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    uploadingText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      includeFontPadding: false,
+    },
+    name: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      marginTop: 12,
+      includeFontPadding: false,
+      lineHeight: 30,
+    },
+    email: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      marginTop: 2,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    pointsContainer: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 4 },
+    pointsWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+    pointsText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.accentSecondary,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    levelBadge: {
+      marginTop: 8,
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+      ...DISENO.shadow.sm,
+    },
+    levelText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      textAlign: 'center',
+      includeFontPadding: false,
+      lineHeight: 20,
+    },
+    stats: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      width: '100%',
+      marginTop: 12,
+      backgroundColor: colores.surface,
+      borderRadius: DISENO.radius.md,
+      ...DISENO.shadow.sm,
+    },
+    statItem: { alignItems: 'center', flex: 1 },
+    statValue: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      includeFontPadding: false,
+      lineHeight: 26,
+    },
+    statLabel: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      marginTop: 2,
+      fontWeight: '500',
+      includeFontPadding: false,
+      lineHeight: 16,
+    },
+    statDivider: { width: 1, backgroundColor: colores.border },
 
-  // FOTO COMPLETA
-  fotoCompletaOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fotoCompletaTouchable: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
-  fotoCompletaImagen: { width: '100%', height: '100%' },
-  fotoCompletaCerrar: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fotoCompletaCambiar: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    zIndex: 10,
-  },
-  fotoCompletaCambiarTexto: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    includeFontPadding: false,
-  },
-});
+    seccionColapsable: {
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+      borderColor: colores.border,
+      overflow: 'hidden',
+      ...DISENO.shadow.sm,
+    },
+    seccionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    seccionHeaderIconWrap: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    seccionHeaderText: {
+      flex: 1,
+      marginRight: 8,
+    },
+    seccionHeaderTitulo: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      includeFontPadding: false,
+      lineHeight: 22,
+    },
+    seccionHeaderSubtitulo: {
+      fontFamily: FUENTES.regular,
+      color: colores.textTertiary,
+      marginTop: 2,
+      includeFontPadding: false,
+      lineHeight: 16,
+    },
+    seccionContenido: {
+      borderTopWidth: 1,
+      borderTopColor: colores.border + '80',
+      paddingTop: 14,
+    },
+
+    guestMessage: { alignItems: 'center', marginTop: 16, padding: 20 },
+    guestText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      marginTop: 8,
+      includeFontPadding: false,
+      lineHeight: 22,
+    },
+    guestSubText: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      textAlign: 'center',
+      marginTop: 4,
+      maxWidth: 300,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    loginButtonGuest: { overflow: 'hidden', marginTop: 16, width: '100%', maxWidth: 280 },
+    loginButtonGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    loginButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.surface,
+      includeFontPadding: false,
+    },
+
+    beneficioItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+    beneficioIcon: { justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+    beneficioText: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      flex: 1,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+
+    actividadItem: { flexDirection: 'row', alignItems: 'center', borderBottomColor: colores.border },
+    actividadIcono: {
+      backgroundColor: colores.fondo,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    actividadInfo: { flex: 1 },
+    actividadDesc: {
+      fontFamily: FUENTES.regular,
+      color: colores.text,
+      fontWeight: '500',
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    actividadFecha: {
+      fontFamily: FUENTES.regular,
+      color: colores.textTertiary,
+      marginTop: 1,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+
+    historialPuntosItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderBottomColor: colores.border,
+      gap: 12,
+    },
+    historialPuntosIcono: { justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+    historialPuntosInfo: { flex: 1 },
+    historialPuntosDescripcion: {
+      fontFamily: FUENTES.regular,
+      color: colores.text,
+      fontWeight: '500',
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    historialPuntosFecha: {
+      fontFamily: FUENTES.regular,
+      color: colores.textTertiary,
+      marginTop: 2,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+    historialPuntosCantidad: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      includeFontPadding: false,
+      lineHeight: 20,
+    },
+
+    infoHeaderInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+      gap: 8,
+    },
+    editButton: { backgroundColor: colores.fondo, borderRadius: DISENO.radius.sm },
+    editButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.accent,
+      includeFontPadding: false,
+    },
+    infoDisplay: { gap: 10 },
+    infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    infoText: {
+      fontFamily: FUENTES.regular,
+      color: colores.text,
+      flex: 1,
+      fontWeight: '400',
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    formLabel: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '500',
+      color: colores.textSecondary,
+      marginBottom: 4,
+      includeFontPadding: false,
+    },
+    formInput: {
+      fontFamily: FUENTES.regular,
+      backgroundColor: colores.fondo,
+      color: colores.text,
+      borderWidth: 1,
+      borderColor: colores.border,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    },
+    direccionRow: { flexDirection: 'row' },
+    direccionCalle: { flex: 2 },
+    direccionNumero: { flex: 1 },
+    direccionPiso: { flex: 1 },
+    direccionDepto: { flex: 1 },
+    direccionCiudad: { flex: 2 },
+    direccionCP: { flex: 1 },
+    textArea: { textAlignVertical: 'top' },
+    saveButton: { overflow: 'hidden', marginTop: 8 },
+    saveButtonGradient: { alignItems: 'center', justifyContent: 'center' },
+    saveButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.surface,
+      includeFontPadding: false,
+    },
+
+    canjeItem: { flexDirection: 'row', alignItems: 'center', borderBottomColor: colores.border },
+    canjeIcono: {
+      backgroundColor: colores.fondo,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    canjeInfo: { flex: 1 },
+    canjeNombre: {
+      fontFamily: FUENTES.regular,
+      color: colores.text,
+      fontWeight: '500',
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    canjeDetalle: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      marginTop: 1,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+    canjeFecha: {
+      fontFamily: FUENTES.regular,
+      color: colores.textTertiary,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+
+    // 🆕 Opciones de tema
+    opcionTema: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      marginBottom: 8,
+    },
+    opcionTemaLabel: {
+      fontFamily: FUENTES.display,
+      fontSize: 14,
+      fontWeight: '400',
+      includeFontPadding: false,
+    },
+    opcionTemaDesc: {
+      fontFamily: FUENTES.regular,
+      fontSize: 11,
+      marginTop: 2,
+      includeFontPadding: false,
+    },
+
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colores.surface,
+      ...DISENO.shadow.sm,
+    },
+    menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+    menuLabelContainer: { flex: 1, marginRight: 8 },
+    menuIcon: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexShrink: 0,
+      position: 'relative',
+    },
+    badgeNotificaciones: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+    },
+    badgeNotificacionesTexto: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.surface,
+      includeFontPadding: false,
+    },
+    menuLabel: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    menuSubtitle: {
+      fontFamily: FUENTES.regular,
+      color: colores.textTertiary,
+      marginTop: 1,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+    logoutButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+      borderColor: colores.danger + '30',
+    },
+    logoutText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.danger,
+      includeFontPadding: false,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: colores.surface,
+      alignItems: 'center',
+      ...DISENO.shadow.lg,
+    },
+    modalTitle: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      marginBottom: 8,
+      textAlign: 'center',
+      includeFontPadding: false,
+      lineHeight: 24,
+    },
+    modalText: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      textAlign: 'center',
+      marginBottom: 20,
+      lineHeight: 20,
+      includeFontPadding: false,
+    },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: { flex: 1, alignItems: 'center' },
+    modalButtonCancel: { backgroundColor: colores.fondo },
+    modalButtonConfirm: { backgroundColor: colores.danger },
+    modalButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.text,
+      includeFontPadding: false,
+    },
+    modalButtonConfirmText: { color: colores.surface },
+
+    fotoCompletaOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.95)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fotoCompletaTouchable: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' },
+    fotoCompletaImagen: { width: '100%', height: '100%' },
+    fotoCompletaCerrar: {
+      position: 'absolute',
+      right: 20,
+      zIndex: 10,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fotoCompletaCambiar: {
+      position: 'absolute',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      zIndex: 10,
+    },
+    fotoCompletaCambiarTexto: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: '#FFFFFF',
+      includeFontPadding: false,
+    },
+  });

@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaCarrito.tsx - V2 RESPONSIVE
+﻿// screens/cliente/PantallaCarrito.tsx - V4 (Modo oscuro + Swipe-to-delete + expo-image)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -6,7 +6,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
+  Image as RNImage,
   Modal,
   Animated,
   ActivityIndicator,
@@ -14,15 +14,31 @@ import {
   useWindowDimensions,
   ScrollView,
   TextInput,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated2, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+  withRepeat,
+  interpolate,
+  Extrapolate,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { TouchableRipple } from 'react-native-paper';
+
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { supabase } from '../../lib/supabase';
-import { DISENO } from '../../lib/colores';
+import { useColores, type PaletaTema } from '../../lib/theme';
 import { FUENTES } from '../../lib/fuentes';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 import { UbicacionGuardada } from '../../lib/tipos';
@@ -38,18 +54,17 @@ const MAX_PORCENTAJE_PUNTOS = 0.25;
 const MINIMO_PARA_PUNTOS = 15000;
 const MINIMO_PUNTOS_CANJE = 100;
 const VALOR_POR_PUNTO = 100;
+const SWIPE_THRESHOLD = -90;
 
 // ============================================================
 // 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
 // ============================================================
 interface TamanosCarrito {
   padding: number;
-  // Header
   headerPaddingTop: number;
   headerPaddingBottom: number;
   tituloSize: number;
   backIconSize: number;
-  // Item
   itemPadding: number;
   itemRadius: number;
   itemImageSize: number;
@@ -61,27 +76,22 @@ interface TamanosCarrito {
   controlIconSize: number;
   controlQuantitySize: number;
   deleteIconSize: number;
-  // Footer
   footerMarginTop: number;
   footerPadding: number;
   footerRadius: number;
-  // Puntos button
   puntosPaddingV: number;
   puntosPaddingH: number;
   puntosTextSize: number;
   puntosLabelSize: number;
   puntosChevronSize: number;
-  // Aviso
   avisoPaddingV: number;
   avisoPaddingH: number;
   avisoTextoSize: number;
   avisoSubSize: number;
-  // Nivel
   nivelPadding: number;
   nivelEmojiSize: number;
   nivelTituloSize: number;
   nivelDetalleSize: number;
-  // Summary
   summaryPadding: number;
   summaryRadius: number;
   summaryLabelSize: number;
@@ -99,7 +109,6 @@ interface TamanosCarrito {
   ahorroEmojiSize: number;
   ahorroTextoSize: number;
   ahorroRadius: number;
-  // Checkout
   checkoutPaddingV: number;
   checkoutRadius: number;
   checkoutTextSize: number;
@@ -108,14 +117,12 @@ interface TamanosCarrito {
   checkoutPricePaddingV: number;
   checkoutPriceTextSize: number;
   checkoutPriceRadius: number;
-  // Empty cart
   emptyButtonPaddingV: number;
   emptyButtonPaddingH: number;
   emptyButtonRadius: number;
   emptyIconSize: number;
   emptyButtonTextSize: number;
   emptyButtonIconSize: number;
-  // Empty state
   emptyCartIconSize: number;
   emptyTextSize: number;
   emptySubtextSize: number;
@@ -126,7 +133,6 @@ interface TamanosCarrito {
   cuponVacioDetalleSize: number;
   vaciarPaddingV: number;
   vaciarTextSize: number;
-  // Modal login
   modalLoginPadding: number;
   modalLoginRadius: number;
   modalLoginIconSize: number;
@@ -137,7 +143,6 @@ interface TamanosCarrito {
   modalLoginButtonTextSize: number;
   modalLoginButtonIconSize: number;
   modalLoginLinkSize: number;
-  // Modal puntos
   modalPuntosPadding: number;
   modalPuntosRadius: number;
   modalPuntosWidth: number;
@@ -174,78 +179,68 @@ const calcularTamanosCarrito = (
   isSmallPhone: boolean,
 ): TamanosCarrito => {
   const padding = isDesktop ? 40 : isTablet ? 32 : isSmallPhone ? 14 : 18;
-
   const headerPaddingTop = isDesktop ? 16 : isTablet ? 16 : isSmallPhone ? 8 : 12;
   const headerPaddingBottom = isDesktop ? 12 : isTablet ? 12 : isSmallPhone ? 8 : 10;
   const tituloSize = isDesktop ? 24 : isTablet ? 22 : isSmallPhone ? 17 : 20;
   const backIconSize = isDesktop ? 26 : isTablet ? 24 : isSmallPhone ? 20 : 22;
-
   const itemPadding = isDesktop ? 14 : isTablet ? 14 : isSmallPhone ? 10 : 12;
-  const itemRadius = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 12 : 14;
+  const itemRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 14 : 16;
   const itemImageSize = isDesktop ? 80 : isTablet ? 76 : isSmallPhone ? 58 : 68;
   const itemImageRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
   const itemEmojiSize = isDesktop ? 32 : isTablet ? 30 : isSmallPhone ? 24 : 28;
-  const itemNameSize = isDesktop ? 14 : isTablet ? 14 : isSmallPhone ? 12 : 13;
-  const itemPriceSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+  const itemNameSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+  const itemPriceSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 14 : 16;
   const controlButtonSize = isDesktop ? 32 : isTablet ? 30 : isSmallPhone ? 24 : 28;
   const controlIconSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 14 : 16;
-  const controlQuantitySize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
+  const controlQuantitySize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
   const deleteIconSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 14 : 16;
-
   const footerMarginTop = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 10 : 12;
   const footerPadding = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 14 : 16;
-  const footerRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
-
+  const footerRadius = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 14 : 16;
   const puntosPaddingV = isDesktop ? 12 : isTablet ? 10 : isSmallPhone ? 8 : 10;
   const puntosPaddingH = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 14 : 16;
-  const puntosTextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
+  const puntosTextSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
   const puntosLabelSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 9 : 10;
   const puntosChevronSize = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 14 : 15;
-
   const avisoPaddingV = isDesktop ? 12 : isTablet ? 10 : isSmallPhone ? 8 : 10;
   const avisoPaddingH = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 12 : 14;
   const avisoTextoSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 10 : 11;
   const avisoSubSize = isDesktop ? 11 : isTablet ? 10 : isSmallPhone ? 9 : 10;
-
   const nivelPadding = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
   const nivelEmojiSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 16 : 18;
   const nivelTituloSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
   const nivelDetalleSize = isDesktop ? 11 : isTablet ? 10 : isSmallPhone ? 9 : 10;
-
-  const summaryPadding = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 9 : 10;
-  const summaryRadius = isDesktop ? 12 : isSmallPhone ? 8 : 10;
-  const summaryLabelSize = isDesktop ? 12 : isTablet ? 11.5 : isSmallPhone ? 10 : 11;
-  const summaryValueSize = isDesktop ? 12 : isTablet ? 11.5 : isSmallPhone ? 10 : 11;
-  const totalLabelSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 13 : 14;
-  const totalPriceSize = isDesktop ? 17 : isTablet ? 16 : isSmallPhone ? 14 : 15;
-  const cuponTextSize = isDesktop ? 12 : isTablet ? 12 : isSmallPhone ? 10 : 11;
-  const cuponSubtextSize = isDesktop ? 10 : isTablet ? 10 : isSmallPhone ? 9 : 10;
+  const summaryPadding = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
+  const summaryRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
+  const summaryLabelSize = isDesktop ? 13 : isTablet ? 12.5 : isSmallPhone ? 11 : 12;
+  const summaryValueSize = isDesktop ? 13 : isTablet ? 12.5 : isSmallPhone ? 11 : 12;
+  const totalLabelSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 14 : 15;
+  const totalPriceSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 16 : 18;
+  const cuponTextSize = isDesktop ? 13 : isTablet ? 13 : isSmallPhone ? 11 : 12;
+  const cuponSubtextSize = isDesktop ? 11 : isTablet ? 11 : isSmallPhone ? 10 : 10;
   const cuponIconSize = isDesktop ? 18 : isSmallPhone ? 16 : 17;
-  const cuponPaddingH = isDesktop ? 8 : isSmallPhone ? 6 : 7;
-  const cuponPaddingV = isDesktop ? 4 : isSmallPhone ? 3 : 4;
-  const cuponRadius = isDesktop ? 8 : 6;
-  const ahorroPaddingV = isDesktop ? 10 : isTablet ? 9 : isSmallPhone ? 7 : 8;
-  const ahorroPaddingH = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 8 : 10;
-  const ahorroEmojiSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
-  const ahorroTextoSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 11 : 12;
-  const ahorroRadius = isDesktop ? 10 : isSmallPhone ? 8 : 9;
-
-  const checkoutPaddingV = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
-  const checkoutRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
-  const checkoutTextSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
-  const checkoutIconSize = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 16 : 17;
-  const checkoutPricePaddingH = isDesktop ? 10 : isSmallPhone ? 6 : 8;
-  const checkoutPricePaddingV = isDesktop ? 4 : isSmallPhone ? 2 : 3;
-  const checkoutPriceTextSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 10 : 11;
+  const cuponPaddingH = isDesktop ? 10 : isSmallPhone ? 8 : 9;
+  const cuponPaddingV = isDesktop ? 8 : isSmallPhone ? 6 : 7;
+  const cuponRadius = isDesktop ? 10 : 8;
+  const ahorroPaddingV = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 9 : 10;
+  const ahorroPaddingH = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
+  const ahorroEmojiSize = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 14 : 15;
+  const ahorroTextoSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
+  const ahorroRadius = isDesktop ? 12 : isSmallPhone ? 10 : 11;
+  const checkoutPaddingV = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+  const checkoutRadius = isDesktop ? 16 : isSmallPhone ? 12 : 14;
+  const checkoutTextSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
+  const checkoutIconSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 17 : 18;
+  const checkoutPricePaddingH = isDesktop ? 12 : isSmallPhone ? 8 : 10;
+  const checkoutPricePaddingV = isDesktop ? 5 : isSmallPhone ? 3 : 4;
+  const checkoutPriceTextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
   const checkoutPriceRadius = isDesktop ? 12 : isSmallPhone ? 8 : 10;
-
   const emptyButtonPaddingV = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
   const emptyButtonPaddingH = isDesktop ? 28 : isTablet ? 26 : isSmallPhone ? 20 : 24;
   const emptyButtonRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
   const emptyIconSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 18 : 19;
   const emptyButtonTextSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 13 : 14;
   const emptyButtonIconSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 18 : 19;
-
   const emptyCartIconSize = isDesktop ? 100 : isTablet ? 90 : isSmallPhone ? 60 : 78;
   const emptyTextSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 15 : 17;
   const emptySubtextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
@@ -256,7 +251,6 @@ const calcularTamanosCarrito = (
   const cuponVacioDetalleSize = isSmallPhone ? 10 : 11;
   const vaciarPaddingV = isSmallPhone ? 4 : 6;
   const vaciarTextSize = isSmallPhone ? 10 : 11;
-
   const modalLoginPadding = isDesktop ? 30 : isTablet ? 28 : isSmallPhone ? 20 : 24;
   const modalLoginRadius = isDesktop ? 24 : isSmallPhone ? 18 : 20;
   const modalLoginIconSize = isDesktop ? 60 : isTablet ? 60 : isSmallPhone ? 44 : 52;
@@ -267,7 +261,6 @@ const calcularTamanosCarrito = (
   const modalLoginButtonTextSize = isDesktop ? 14 : isTablet ? 14 : isSmallPhone ? 12 : 13;
   const modalLoginButtonIconSize = isDesktop ? 18 : isSmallPhone ? 16 : 17;
   const modalLoginLinkSize = isDesktop ? 13 : isSmallPhone ? 11 : 12;
-
   const modalPuntosPadding = isDesktop ? 28 : isTablet ? 24 : isSmallPhone ? 16 : 20;
   const modalPuntosRadius = isDesktop ? 24 : isSmallPhone ? 18 : 22;
   const modalPuntosWidth = isDesktop ? width * 0.5 : isTablet ? width * 0.6 : width * 0.92;
@@ -326,11 +319,249 @@ const calcularTamanosCarrito = (
 };
 
 // ============================================================
-// 🏠 COMPONENTE
+// 🎴 ITEM CON SWIPE-TO-DELETE
+// ============================================================
+interface ItemCarritoProps {
+  item: any;
+  tamanos: TamanosCarrito;
+  onAumentar: (id: number) => void;
+  onDisminuir: (id: number) => void;
+  onEliminar: (id: number) => void;
+  onPressItem: (item: any) => void;
+  colores: PaletaTema;
+  estilos: any;
+}
+
+const ItemCarrito: React.FC<ItemCarritoProps> = ({
+  item, tamanos, onAumentar, onDisminuir, onEliminar, onPressItem, colores, estilos,
+}) => {
+  const translateX = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const itemScale = useSharedValue(1);
+
+  const triggerHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+  };
+
+  const pan = Gesture.Pan()
+    .activeOffsetX([-15, 15])
+    .failOffsetY([-10, 10])
+    .onStart(() => {
+      startX.value = translateX.value;
+    })
+    .onUpdate((e) => {
+      const next = startX.value + e.translationX;
+      translateX.value = next < 0 ? next : next * 0.15;
+    })
+    .onEnd((e) => {
+      if (e.translationX < SWIPE_THRESHOLD || e.velocityX < -700) {
+        translateX.value = withTiming(-500, { duration: 220 });
+        runOnJS(triggerHaptic)();
+        runOnJS(onEliminar)(item.producto.id);
+      } else {
+        translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
+      }
+    });
+
+  const itemStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { scale: itemScale.value },
+    ],
+  }));
+
+  const trashStyle = useAnimatedStyle(() => {
+    const progress = interpolate(
+      translateX.value,
+      [SWIPE_THRESHOLD, -20],
+      [1, 0],
+      Extrapolate.CLAMP,
+    );
+    return {
+      opacity: progress,
+      transform: [{ scale: 0.8 + progress * 0.2 }],
+    };
+  });
+
+  return (
+    <View style={estilos.swipeContainer}>
+      <Animated2.View style={[estilos.trashBackground, trashStyle]}>
+        <LinearGradient
+          colors={['#E53935', '#B71C1C']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        />
+        <Ionicons name="trash" size={26} color="#FFF" />
+        <Text style={estilos.trashText} allowFontScaling={false}>
+          Eliminar
+        </Text>
+      </Animated2.View>
+
+      <GestureDetector gesture={pan}>
+        <Animated2.View style={[itemStyle]}>
+          <TouchableRipple
+            onPress={() => onPressItem(item)}
+            borderless
+            rippleColor={colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
+            style={[
+              estilos.item,
+              {
+                padding: tamanos.itemPadding,
+                borderRadius: tamanos.itemRadius,
+                backgroundColor: colores.surface,
+                borderColor: colores.border,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              {item.producto.imagen ? (
+                <View
+                  style={[
+                    estilos.imagenWrap,
+                    {
+                      width: tamanos.itemImageSize,
+                      height: tamanos.itemImageSize,
+                      borderRadius: tamanos.itemImageRadius,
+                    },
+                  ]}
+                >
+                  <Image
+                    source={{ uri: item.producto.imagen }}
+                    style={estilos.imagen}
+                    contentFit="cover"
+                    transition={200}
+                    placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+                    cachePolicy="memory-disk"
+                  />
+                </View>
+              ) : (
+                <View
+                  style={[
+                    estilos.imagenPlaceholder,
+                    {
+                      width: tamanos.itemImageSize,
+                      height: tamanos.itemImageSize,
+                      borderRadius: tamanos.itemImageRadius,
+                      backgroundColor: colores.surfaceHover,
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: tamanos.itemEmojiSize }} allowFontScaling={false}>
+                    🍔
+                  </Text>
+                </View>
+              )}
+
+              <View style={estilos.itemInfo}>
+                <Text
+                  style={[
+                    estilos.itemNombre,
+                    { fontSize: tamanos.itemNameSize, color: colores.text },
+                  ]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  {item.producto.nombre}
+                </Text>
+                <Text
+                  style={[
+                    estilos.itemPrecioUnitario,
+                    { fontSize: tamanos.itemPriceSize - 3, color: colores.textSecondary },
+                  ]}
+                  allowFontScaling={false}
+                >
+                  {formatearPrecio(
+                    typeof item.producto.precio === 'number'
+                      ? item.producto.precio
+                      : Number(item.producto.precio)
+                  )}{' '}
+                  c/u
+                </Text>
+                <Text
+                  style={[
+                    estilos.itemPrecioTotal,
+                    { fontSize: tamanos.itemPriceSize, color: colores.accent },
+                  ]}
+                  allowFontScaling={false}
+                >
+                  {formatearPrecio(
+                    (typeof item.producto.precio === 'number'
+                      ? item.producto.precio
+                      : Number(item.producto.precio)) * item.cantidad
+                  )}
+                </Text>
+              </View>
+
+              <View style={estilos.controles}>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => { });
+                    onDisminuir(item.producto.id);
+                  }}
+                  style={[
+                    estilos.botonControl,
+                    {
+                      width: tamanos.controlButtonSize,
+                      height: tamanos.controlButtonSize,
+                      borderRadius: tamanos.controlButtonSize / 2,
+                      backgroundColor: colores.accentSecondary,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  hitSlop={4}
+                >
+                  <Ionicons name="remove" size={tamanos.controlIconSize} color={colores.text} />
+                </TouchableOpacity>
+
+                <Text
+                  style={[
+                    estilos.cantidad,
+                    { fontSize: tamanos.controlQuantitySize, color: colores.text },
+                  ]}
+                  allowFontScaling={false}
+                >
+                  {item.cantidad}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => { });
+                    onAumentar(item.producto.id);
+                  }}
+                  style={[
+                    estilos.botonControl,
+                    {
+                      width: tamanos.controlButtonSize,
+                      height: tamanos.controlButtonSize,
+                      borderRadius: tamanos.controlButtonSize / 2,
+                      backgroundColor: colores.accentSecondary,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  hitSlop={4}
+                >
+                  <Ionicons name="add" size={tamanos.controlIconSize} color={colores.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableRipple>
+        </Animated2.View>
+      </GestureDetector>
+    </View>
+  );
+};
+
+// ============================================================
+// 🏠 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaCarrito(props: any) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // ✅ TEMA
+  const colores = useColores();
+  const estilos = useMemo(() => crearEstilos(colores), [colores]);
 
   const isTablet = screenWidth >= 768;
   const isDesktop = screenWidth >= 1024;
@@ -356,7 +587,6 @@ export default function PantallaCarrito(props: any) {
     perfil?.id,
   );
 
-  // Estados
   const [mostrarModalLogin, setMostrarModalLogin] = useState(false);
   const [mostrarModalPuntos, setMostrarModalPuntos] = useState(false);
   const [puntosSeleccionados, setPuntosSeleccionados] = useState(0);
@@ -383,11 +613,24 @@ export default function PantallaCarrito(props: any) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
 
+  const shineX = useSharedValue(-1);
+  const shineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shineX.value * 300 }],
+  }));
+
+  useEffect(() => {
+    shineX.value = withRepeat(
+      withTiming(1, { duration: 2200 }),
+      -1,
+      false,
+    );
+  }, []);
+
   const total = calcularTotal();
   const totalProductos = elementos.reduce((sum, item) => sum + item.cantidad, 0);
 
   // ============================================================
-  // 🆕 REGLAS DE PUNTOS
+  // REGLAS DE PUNTOS
   // ============================================================
   const puedeUsarPuntos = useMemo(() => {
     if (!perfil?.id) return false;
@@ -635,6 +878,7 @@ export default function PantallaCarrito(props: any) {
   };
 
   const quitarDescuento = () => {
+    Haptics.selectionAsync().catch(() => { });
     restaurarPuntos();
   };
 
@@ -723,6 +967,8 @@ export default function PantallaCarrito(props: any) {
       setPuntosSeleccionados(0);
       setInputPuntos('');
 
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+
       Alert.alert(
         '🎉 ¡Éxito!',
         `Canjeaste ${puntosSeleccionados} puntos por ${formatearPrecio(descuentoEnPesos)} de descuento`,
@@ -777,141 +1023,32 @@ export default function PantallaCarrito(props: any) {
   const padding = tamanos.padding;
 
   // ============================================================
-  // RENDER ITEM
+  // MANEJADORES DE ITEM
   // ============================================================
-  const precioUnitario = (precio: any) => (typeof precio === 'number' ? precio : Number(precio));
+  const handleEliminarItem = useCallback((id: number) => {
+    quitarProducto(id);
+  }, [quitarProducto]);
+
+  const handlePressItem = useCallback((item: any) => {
+    if (item?.producto) {
+      props.navigation.navigate('DetalleProducto', { producto: item.producto });
+    }
+  }, [props.navigation]);
 
   const renderItem = useCallback(
-    ({ item }: { item: any }) => {
-      const itemFade = fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-
-      return (
-        <Animated.View style={{ opacity: itemFade, transform: [{ translateY: slideUpAnim }] }}>
-          <View
-            style={[
-              styles.item,
-              {
-                padding: tamanos.itemPadding,
-                borderRadius: tamanos.itemRadius,
-                backgroundColor: DISENO.colors.surface,
-                borderColor: DISENO.colors.border,
-                ...DISENO.shadow.sm,
-              },
-            ]}
-          >
-            {item.producto.imagen ? (
-              <Image
-                source={{ uri: item.producto.imagen }}
-                style={[
-                  styles.imagen,
-                  {
-                    width: tamanos.itemImageSize,
-                    height: tamanos.itemImageSize,
-                    borderRadius: tamanos.itemImageRadius,
-                  },
-                ]}
-                resizeMode="cover"
-              />
-            ) : (
-              <View
-                style={[
-                  styles.imagenPlaceholder,
-                  {
-                    width: tamanos.itemImageSize,
-                    height: tamanos.itemImageSize,
-                    borderRadius: tamanos.itemImageRadius,
-                    backgroundColor: DISENO.colors.surfaceHover,
-                  },
-                ]}
-              >
-                <Text style={{ fontSize: tamanos.itemEmojiSize }} allowFontScaling={false}>
-                  🍔
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.itemInfo}>
-              <Text
-                style={[
-                  styles.itemNombre,
-                  { fontSize: tamanos.itemNameSize, color: DISENO.colors.text },
-                ]}
-                numberOfLines={1}
-                allowFontScaling={false}
-              >
-                {item.producto.nombre}
-              </Text>
-              <Text
-                style={[
-                  styles.itemPrecioTotal,
-                  { fontSize: tamanos.itemPriceSize, color: DISENO.colors.accent },
-                ]}
-                allowFontScaling={false}
-              >
-                {formatearPrecio(precioUnitario(item.producto.precio) * item.cantidad)}
-              </Text>
-            </View>
-
-            <View style={styles.controles}>
-              <TouchableOpacity
-                onPress={() => disminuirCantidad(item.producto.id)}
-                style={[
-                  styles.botonControl,
-                  {
-                    width: tamanos.controlButtonSize,
-                    height: tamanos.controlButtonSize,
-                    borderRadius: tamanos.controlButtonSize / 2,
-                    backgroundColor: DISENO.colors.accentSecondary,
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="remove" size={tamanos.controlIconSize} color={DISENO.colors.text} />
-              </TouchableOpacity>
-
-              <Text
-                style={[
-                  styles.cantidad,
-                  { fontSize: tamanos.controlQuantitySize, color: DISENO.colors.text },
-                ]}
-                allowFontScaling={false}
-              >
-                {item.cantidad}
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => aumentarCantidad(item.producto.id)}
-                style={[
-                  styles.botonControl,
-                  {
-                    width: tamanos.controlButtonSize,
-                    height: tamanos.controlButtonSize,
-                    borderRadius: tamanos.controlButtonSize / 2,
-                    backgroundColor: DISENO.colors.accentSecondary,
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="add" size={tamanos.controlIconSize} color={DISENO.colors.text} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => quitarProducto(item.producto.id)}
-                style={styles.botonEliminar}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="trash-outline"
-                  size={tamanos.deleteIconSize}
-                  color={DISENO.colors.accent}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Animated.View>
-      );
-    },
-    [tamanos, fadeAnim, slideUpAnim, disminuirCantidad, aumentarCantidad, quitarProducto],
+    ({ item }: { item: any }) => (
+      <ItemCarrito
+        item={item}
+        tamanos={tamanos}
+        onAumentar={aumentarCantidad}
+        onDisminuir={disminuirCantidad}
+        onEliminar={handleEliminarItem}
+        onPressItem={handlePressItem}
+        colores={colores}
+        estilos={estilos}
+      />
+    ),
+    [tamanos, aumentarCantidad, disminuirCantidad, handleEliminarItem, handlePressItem, colores, estilos],
   );
 
   // ============================================================
@@ -919,92 +1056,152 @@ export default function PantallaCarrito(props: any) {
   // ============================================================
   if (elementos.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={estilos.container}>
         <LinearGradient
-          colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
-          style={styles.backgroundGradient}
+          colors={[colores.fondo, colores.surface, colores.fondo]}
+          style={estilos.backgroundGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-        <View style={styles.emptyContainer}>
-          <Ionicons
-            name="cart-outline"
-            size={tamanos.emptyCartIconSize}
-            color={DISENO.colors.textTertiary}
-          />
+
+        <View
+          style={[
+            estilos.headerMini,
+            {
+              paddingTop: insets.top + tamanos.headerPaddingTop,
+              paddingHorizontal: padding,
+              paddingBottom: tamanos.headerPaddingBottom,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => props.navigation.goBack()}
+            style={[
+              estilos.backButtonGlass,
+              {
+                backgroundColor: colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.85)',
+                borderColor: colores.border,
+              },
+            ]}
+            activeOpacity={0.7}
+            hitSlop={8}
+          >
+            <Ionicons name="arrow-back" size={tamanos.backIconSize} color={colores.text} />
+          </TouchableOpacity>
           <Text
-            style={[styles.emptyText, { fontSize: tamanos.emptyTextSize, color: DISENO.colors.text }]}
+            style={[estilos.headerTitleMini, { fontSize: tamanos.tituloSize, color: colores.text }]}
+            allowFontScaling={false}
+          >
+            Carrito
+          </Text>
+          <View style={{ width: tamanos.backIconSize + 20 }} />
+        </View>
+
+        <View style={estilos.emptyContainer}>
+          <View
+            style={[
+              estilos.emptyIconCircle,
+              {
+                backgroundColor: colores.accent + '10',
+                borderColor: colores.accent + '18',
+              },
+            ]}
+          >
+            <Ionicons
+              name="cart-outline"
+              size={tamanos.emptyCartIconSize * 0.6}
+              color={colores.accent}
+            />
+          </View>
+          <Text
+            style={[estilos.emptyText, { fontSize: tamanos.emptyTextSize, color: colores.text }]}
             allowFontScaling={false}
           >
             Tu carrito está vacío
           </Text>
           <Text
             style={[
-              styles.emptySubtext,
-              { fontSize: tamanos.emptySubtextSize, color: DISENO.colors.textSecondary },
+              estilos.emptySubtext,
+              { fontSize: tamanos.emptySubtextSize, color: colores.textSecondary },
             ]}
             allowFontScaling={false}
           >
-            Agrega productos del menú 🍔
+            Agregá productos del menú para empezar 🍔
           </Text>
+
           {cuponAplicado && (
             <View
               style={[
-                styles.cuponVacioCard,
-                { padding: tamanos.cuponVacioPadding, borderRadius: tamanos.cuponVacioRadius },
+                estilos.cuponVacioCard,
+                {
+                  padding: tamanos.cuponVacioPadding,
+                  borderRadius: tamanos.cuponVacioRadius,
+                  backgroundColor: colores.surface,
+                  borderColor: colores.accent + '30',
+                },
               ]}
             >
-              <Ionicons
-                name="ticket-outline"
-                size={tamanos.cuponVacioIconSize}
-                color={DISENO.colors.accent}
-              />
-              <View style={styles.cuponVacioContenido}>
+              <View
+                style={[
+                  estilos.cuponVacioIconWrap,
+                  { backgroundColor: colores.accent + '12' },
+                ]}
+              >
+                <Ionicons
+                  name="ticket-outline"
+                  size={tamanos.cuponVacioIconSize}
+                  color={colores.accent}
+                />
+              </View>
+              <View style={estilos.cuponVacioContenido}>
                 <Text
                   style={[
-                    styles.cuponVacioTitulo,
-                    { fontSize: tamanos.cuponVacioTituloSize },
+                    estilos.cuponVacioTitulo,
+                    { fontSize: tamanos.cuponVacioTituloSize, color: colores.text },
                   ]}
                   allowFontScaling={false}
                 >
-                  Cupón listo para usar: {cuponAplicado.codigo || 'Cupón aplicado'}
+                  Cupón listo: {cuponAplicado.codigo || 'Aplicado'}
                 </Text>
                 <Text
                   style={[
-                    styles.cuponVacioDetalle,
-                    { fontSize: tamanos.cuponVacioDetalleSize },
+                    estilos.cuponVacioDetalle,
+                    { fontSize: tamanos.cuponVacioDetalleSize, color: colores.textSecondary },
                   ]}
                   allowFontScaling={false}
                 >
-                  {cuponAplicado.titulo || 'Agregá productos y se aplicará al confirmar tu pedido.'}
+                  {cuponAplicado.titulo || 'Se aplicará al confirmar tu pedido.'}
                 </Text>
               </View>
             </View>
           )}
+
           <TouchableOpacity
-            style={[styles.emptyButton, { borderRadius: tamanos.emptyButtonRadius }]}
+            style={[estilos.emptyButton, { borderRadius: tamanos.emptyButtonRadius }]}
             onPress={() => props.navigation.navigate('Principal', { screen: 'Menu' })}
-            activeOpacity={0.7}
+            activeOpacity={0.9}
           >
             <LinearGradient
-              colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
+              colors={[colores.accent, colores.accentSecondary]}
               style={[
-                styles.emptyButtonGradient,
+                estilos.emptyButtonGradient,
                 {
                   paddingHorizontal: tamanos.emptyButtonPaddingH,
                   paddingVertical: tamanos.emptyButtonPaddingV,
                 },
               ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             >
               <Ionicons
                 name="restaurant"
                 size={tamanos.emptyButtonIconSize}
-                color={DISENO.colors.text}
+                color="#FFF"
               />
               <Text
                 style={[
-                  styles.emptyButtonText,
-                  { fontSize: tamanos.emptyButtonTextSize, color: DISENO.colors.text },
+                  estilos.emptyButtonText,
+                  { fontSize: tamanos.emptyButtonTextSize, color: '#FFF' },
                 ]}
                 allowFontScaling={false}
               >
@@ -1021,67 +1218,96 @@ export default function PantallaCarrito(props: any) {
   // RENDER PRINCIPAL
   // ============================================================
   return (
-    <View style={styles.container}>
+    <View style={estilos.container}>
       <LinearGradient
-        colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
-        style={styles.backgroundGradient}
+        colors={[colores.fondo, colores.surface, colores.fondo]}
+        style={estilos.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
 
-      {/* HEADER */}
-      <View
+      <Animated.View
         style={[
-          styles.header,
+          estilos.header,
           {
             paddingTop: insets.top + tamanos.headerPaddingTop,
             paddingHorizontal: padding,
             paddingBottom: tamanos.headerPaddingBottom,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideUpAnim }],
           },
         ]}
       >
         <TouchableOpacity
           onPress={() => props.navigation.goBack()}
-          style={styles.backButton}
+          style={[
+            estilos.backButtonGlass,
+            {
+              backgroundColor: colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.85)',
+              borderColor: colores.border,
+            },
+          ]}
           activeOpacity={0.7}
+          hitSlop={8}
         >
-          <Ionicons name="arrow-back" size={tamanos.backIconSize} color={DISENO.colors.text} />
+          <Ionicons name="arrow-back" size={tamanos.backIconSize} color={colores.text} />
         </TouchableOpacity>
-        <Text
-          style={[styles.headerTitle, { fontSize: tamanos.tituloSize, color: DISENO.colors.text }]}
-          allowFontScaling={false}
-          numberOfLines={1}
-        >
-          🛒 Carrito
-        </Text>
-        <View style={{ width: tamanos.backIconSize }} />
-      </View>
 
-      {/* LISTA */}
+        <View style={estilos.headerTitleBlock}>
+          <Text
+            style={[estilos.headerTitle, { fontSize: tamanos.tituloSize, color: colores.text }]}
+            allowFontScaling={false}
+            numberOfLines={1}
+          >
+            Carrito
+          </Text>
+          <Text style={[estilos.headerSubtitle, { color: colores.textSecondary }]} allowFontScaling={false}>
+            {totalProductos} {totalProductos === 1 ? 'producto' : 'productos'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+            vaciarCarrito();
+          }}
+          style={[
+            estilos.trashAllButton,
+            {
+              backgroundColor: colores.accent + '10',
+              borderColor: colores.accent + '25',
+            },
+          ]}
+          activeOpacity={0.7}
+          hitSlop={8}
+        >
+          <Ionicons name="trash-outline" size={tamanos.backIconSize} color={colores.accent} />
+        </TouchableOpacity>
+      </Animated.View>
+
       <FlatList
         data={elementos}
         keyExtractor={(item) => item.producto.id?.toString() || Math.random().toString()}
         contentContainerStyle={[
-          styles.list,
+          estilos.list,
           {
             paddingHorizontal: padding,
             paddingTop: 6,
-            paddingBottom: 220,
+            paddingBottom: 40,
           },
         ]}
-        showsVerticalScrollIndicator={true}
+        showsVerticalScrollIndicator={false}
         renderItem={renderItem}
         ListFooterComponent={
           <View
             style={[
-              styles.footerContainer,
+              estilos.footerContainer,
               {
                 marginTop: tamanos.footerMarginTop,
                 padding: tamanos.footerPadding,
                 borderRadius: tamanos.footerRadius,
-                backgroundColor: DISENO.colors.surface,
-                borderColor: DISENO.colors.border,
-                ...DISENO.shadow.md,
+                backgroundColor: colores.surface,
+                borderColor: colores.border,
               },
             ]}
           >
@@ -1089,19 +1315,16 @@ export default function PantallaCarrito(props: any) {
             {puedeUsarPuntos ? (
               <TouchableOpacity
                 style={[
-                  styles.puntosButton,
+                  estilos.puntosButton,
                   {
-                    backgroundColor: DISENO.colors.accentSecondary + '10',
-                    borderColor: DISENO.colors.accentSecondary + '40',
-                    borderWidth: 1.5,
-                    paddingVertical: tamanos.puntosPaddingV,
-                    paddingHorizontal: tamanos.puntosPaddingH,
-                    borderRadius: tamanos.footerRadius - 2,
-                    marginBottom: 10,
-                    ...DISENO.shadow.sm,
+                    borderRadius: tamanos.footerRadius - 4,
+                    marginBottom: 12,
+                    overflow: 'hidden',
+                    borderColor: colores.accentSecondary + '40',
                   },
                 ]}
                 onPress={() => {
+                  Haptics.selectionAsync().catch(() => { });
                   if (cuponPuntosAplicado) {
                     setPuntosMaximos(puntosOriginalesAntesCanje || puntosOriginales);
                   }
@@ -1109,41 +1332,63 @@ export default function PantallaCarrito(props: any) {
                   setInputPuntos('');
                   setMostrarModalPuntos(true);
                 }}
-                activeOpacity={0.7}
+                activeOpacity={0.85}
               >
-                <View style={styles.puntosButtonContent}>
-                  <View style={styles.puntosButtonLeft}>
+                <LinearGradient
+                  colors={[colores.accentSecondary + '28', colores.accentSecondary + '10']}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: tamanos.puntosPaddingV,
+                    paddingHorizontal: tamanos.puntosPaddingH,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View
+                      style={[
+                        estilos.puntosStarWrap,
+                        { backgroundColor: colores.accentSecondary },
+                      ]}
+                    >
+                      <Ionicons name="star" size={16} color="#FFF" />
+                    </View>
                     <Text
                       style={[
-                        styles.puntosButtonText,
-                        { color: DISENO.colors.text, fontSize: tamanos.puntosTextSize },
+                        estilos.puntosButtonText,
+                        { color: colores.text, fontSize: tamanos.puntosTextSize },
                       ]}
                       allowFontScaling={false}
                     >
-                      ⭐ {puntosMaximos} pts
+                      {puntosMaximos} pts disponibles
                     </Text>
                   </View>
-                  <View style={styles.puntosButtonRight}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text
                       style={[
-                        styles.puntosButtonLabel,
+                        estilos.puntosButtonLabel,
                         {
-                          color: DISENO.colors.accent,
+                          color: colores.accent,
                           fontSize: tamanos.puntosLabelSize,
-                          backgroundColor: DISENO.colors.accent + '10',
+                          backgroundColor: colores.accent + '15',
                           paddingHorizontal: 8,
                           paddingVertical: 4,
-                          borderRadius: 6,
+                          borderRadius: 999,
                         },
                       ]}
                       allowFontScaling={false}
                     >
-                      Canjear X descuento
+                      Canjear
                     </Text>
                     <Ionicons
                       name="chevron-forward"
                       size={tamanos.puntosChevronSize}
-                      color={DISENO.colors.accent}
+                      color={colores.accent}
                     />
                   </View>
                 </View>
@@ -1151,47 +1396,38 @@ export default function PantallaCarrito(props: any) {
             ) : sesion && !puedeUsarPuntos ? (
               <View
                 style={[
-                  styles.avisoMinimo,
+                  estilos.avisoMinimo,
                   {
-                    backgroundColor: '#FFF3E0',
-                    borderColor: '#FFB74D',
-                    borderWidth: 1.5,
                     paddingVertical: tamanos.avisoPaddingV,
                     paddingHorizontal: tamanos.avisoPaddingH,
-                    borderRadius: tamanos.footerRadius - 2,
-                    marginBottom: 10,
+                    borderRadius: tamanos.footerRadius - 4,
+                    marginBottom: 12,
+                    backgroundColor: colores.isDark ? 'rgba(255,167,38,0.15)' : '#FFF3E0',
+                    borderColor: colores.isDark ? 'rgba(255,167,38,0.4)' : '#FFB74D',
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.avisoMinimoTexto,
-                    {
-                      color: '#E65100',
-                      fontSize: tamanos.avisoTextoSize,
-                      fontWeight: '700',
-                      textAlign: 'center',
-                    },
-                  ]}
-                  allowFontScaling={false}
-                >
-                  🛒 Agregá {formatearPrecio(faltaParaUsarPuntos)} más para usar tus {puntosMaximos} pts
-                </Text>
-                <Text
-                  style={[
-                    styles.avisoMinimoSub,
-                    {
-                      color: '#BF360C',
-                      fontSize: tamanos.avisoSubSize,
-                      fontWeight: '500',
-                      textAlign: 'center',
-                      marginTop: 3,
-                    },
-                  ]}
-                  allowFontScaling={false}
-                >
-                  Mínimo de compra: {formatearPrecio(MINIMO_PARA_PUNTOS)}
-                </Text>
+                <Ionicons name="information-circle" size={18} color={colores.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      estilos.avisoMinimoTexto,
+                      { color: colores.warning, fontSize: tamanos.avisoTextoSize },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    Agregá {formatearPrecio(faltaParaUsarPuntos)} más para usar tus {puntosMaximos} pts
+                  </Text>
+                  <Text
+                    style={[
+                      estilos.avisoMinimoSub,
+                      { color: colores.warning, fontSize: tamanos.avisoSubSize },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    Mínimo de compra: {formatearPrecio(MINIMO_PARA_PUNTOS)}
+                  </Text>
+                </View>
               </View>
             ) : null}
 
@@ -1199,27 +1435,24 @@ export default function PantallaCarrito(props: any) {
             {sesion && nivel && (
               <View
                 style={[
-                  styles.nivelBadge,
+                  estilos.nivelBadge,
                   {
-                    backgroundColor: (nivel.color || DISENO.colors.accentSecondary) + '12',
-                    borderColor: (nivel.color || DISENO.colors.accentSecondary) + '40',
+                    backgroundColor: (nivel.color || colores.accentSecondary) + '15',
+                    borderColor: (nivel.color || colores.accentSecondary) + '40',
                     padding: tamanos.nivelPadding,
-                    borderRadius: tamanos.footerRadius - 2,
+                    borderRadius: tamanos.footerRadius - 4,
                   },
                 ]}
               >
-                <Text
-                  style={{ fontSize: tamanos.nivelEmojiSize }}
-                  allowFontScaling={false}
-                >
+                <Text style={{ fontSize: tamanos.nivelEmojiSize }} allowFontScaling={false}>
                   {nivel.icono || '🏆'}
                 </Text>
                 <View style={{ flex: 1 }}>
                   <Text
                     style={[
-                      styles.nivelBadgeTitulo,
+                      estilos.nivelBadgeTitulo,
                       {
-                        color: nivel.color || DISENO.colors.accentSecondary,
+                        color: nivel.color || colores.accentSecondary,
                         fontSize: tamanos.nivelTituloSize,
                       },
                     ]}
@@ -1227,27 +1460,17 @@ export default function PantallaCarrito(props: any) {
                   >
                     Nivel {nivel.nombre || 'Sin nivel'}
                   </Text>
-                  {porcentajeDescuentoNivel > 0 ? (
-                    <Text
-                      style={[
-                        styles.nivelBadgeDetalle,
-                        { color: DISENO.colors.textSecondary, fontSize: tamanos.nivelDetalleSize },
-                      ]}
-                      allowFontScaling={false}
-                    >
-                      Tenés {porcentajeDescuentoNivel}% de descuento en todos tus pedidos
-                    </Text>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.nivelBadgeDetalle,
-                        { color: DISENO.colors.textSecondary, fontSize: tamanos.nivelDetalleSize },
-                      ]}
-                      allowFontScaling={false}
-                    >
-                      Sumá puntos para desbloquear descuentos 🎯
-                    </Text>
-                  )}
+                  <Text
+                    style={[
+                      estilos.nivelBadgeDetalle,
+                      { color: colores.textSecondary, fontSize: tamanos.nivelDetalleSize },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    {porcentajeDescuentoNivel > 0
+                      ? `Tenés ${porcentajeDescuentoNivel}% de descuento en todos tus pedidos`
+                      : 'Sumá puntos para desbloquear descuentos 🎯'}
+                  </Text>
                 </View>
               </View>
             )}
@@ -1255,24 +1478,30 @@ export default function PantallaCarrito(props: any) {
             {/* RESUMEN */}
             <View
               style={[
-                styles.summary,
+                estilos.summary,
                 {
-                  backgroundColor: DISENO.colors.surfaceHover,
-                  borderColor: DISENO.colors.border,
+                  backgroundColor: colores.surfaceHover,
+                  borderColor: colores.border,
                   borderRadius: tamanos.summaryRadius,
                   padding: tamanos.summaryPadding,
                 },
               ]}
             >
-              <View style={styles.summaryRow}>
+              <View style={estilos.summaryRow}>
                 <Text
-                  style={[styles.summaryLabel, { color: DISENO.colors.textSecondary, fontSize: tamanos.summaryLabelSize }]}
+                  style={[
+                    estilos.summaryLabel,
+                    { color: colores.textSecondary, fontSize: tamanos.summaryLabelSize },
+                  ]}
                   allowFontScaling={false}
                 >
                   Productos ({totalProductos})
                 </Text>
                 <Text
-                  style={[styles.summaryValue, { color: DISENO.colors.text, fontSize: tamanos.summaryValueSize }]}
+                  style={[
+                    estilos.summaryValue,
+                    { color: colores.text, fontSize: tamanos.summaryValueSize },
+                  ]}
                   allowFontScaling={false}
                 >
                   {formatearPrecio(total)}
@@ -1280,46 +1509,51 @@ export default function PantallaCarrito(props: any) {
               </View>
 
               {!calculandoEnvio && (
-                <View style={styles.summaryRow}>
+                <View style={estilos.summaryRow}>
                   <Text
-                    style={[styles.summaryLabel, { color: DISENO.colors.textSecondary, fontSize: tamanos.summaryLabelSize }]}
+                    style={[
+                      estilos.summaryLabel,
+                      { color: colores.textSecondary, fontSize: tamanos.summaryLabelSize },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    Envío
+                  </Text>
+                  <Text
+                    style={[
+                      estilos.summaryValue,
+                      { color: colores.text, fontSize: tamanos.summaryValueSize },
+                      (envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel) && {
+                        color: colores.success,
+                      },
+                    ]}
                     allowFontScaling={false}
                   >
                     {envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel
-                      ? '🚚 Envío '
-                      : '🚚 Envío'}
+                      ? 'GRATIS'
+                      : envioDisponible
+                        ? formatearPrecio(costoEnvioEstimado)
+                        : mensajeEnvio || '$0'}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text
-                      style={[
-                        styles.summaryValue,
-                        { color: DISENO.colors.text, fontSize: tamanos.summaryValueSize },
-                        (envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel) && {
-                          color: DISENO.colors.success,
-                        },
-                      ]}
-                      allowFontScaling={false}
-                    >
-                      {envioGratisPorPuntos || envioGratisPorCupon || envioGratisNivel
-                        ? 'GRATIS'
-                        : envioDisponible
-                          ? formatearPrecio(costoEnvioEstimado)
-                          : mensajeEnvio || '$0'}
-                    </Text>
-                  </View>
                 </View>
               )}
 
               {descuentoNivel > 0 && (
-                <View style={styles.summaryRow}>
+                <View style={estilos.summaryRow}>
                   <Text
-                    style={[styles.summaryLabel, { color: DISENO.colors.success, fontSize: tamanos.summaryLabelSize }]}
+                    style={[
+                      estilos.summaryLabel,
+                      { color: colores.success, fontSize: tamanos.summaryLabelSize },
+                    ]}
                     allowFontScaling={false}
                   >
-                    🏆 Descuento {nivel?.nombre || ''}
+                    Descuento {nivel?.nombre || ''}
                   </Text>
                   <Text
-                    style={[styles.summaryValue, { color: DISENO.colors.success, fontSize: tamanos.summaryValueSize }]}
+                    style={[
+                      estilos.summaryValue,
+                      { color: colores.success, fontSize: tamanos.summaryValueSize },
+                    ]}
                     allowFontScaling={false}
                   >
                     -{formatearPrecio(descuentoNivel)}
@@ -1328,15 +1562,21 @@ export default function PantallaCarrito(props: any) {
               )}
 
               {descuentoPuntos > 0 && (
-                <View style={styles.summaryRow}>
+                <View style={estilos.summaryRow}>
                   <Text
-                    style={[styles.summaryLabel, { color: DISENO.colors.success, fontSize: tamanos.summaryLabelSize }]}
+                    style={[
+                      estilos.summaryLabel,
+                      { color: colores.success, fontSize: tamanos.summaryLabelSize },
+                    ]}
                     allowFontScaling={false}
                   >
-                    🎯 Descuento por puntos
+                    Descuento por puntos
                   </Text>
                   <Text
-                    style={[styles.summaryValue, { color: DISENO.colors.success, fontSize: tamanos.summaryValueSize }]}
+                    style={[
+                      estilos.summaryValue,
+                      { color: colores.success, fontSize: tamanos.summaryValueSize },
+                    ]}
                     allowFontScaling={false}
                   >
                     -{formatearPrecio(descuentoPuntos)}
@@ -1345,15 +1585,21 @@ export default function PantallaCarrito(props: any) {
               )}
 
               {descuentoCupon > 0 && (
-                <View style={styles.summaryRow}>
+                <View style={estilos.summaryRow}>
                   <Text
-                    style={[styles.summaryLabel, { color: DISENO.colors.success, fontSize: tamanos.summaryLabelSize }]}
+                    style={[
+                      estilos.summaryLabel,
+                      { color: colores.success, fontSize: tamanos.summaryLabelSize },
+                    ]}
                     allowFontScaling={false}
                   >
-                    🎟️ Descuento cupón
+                    Descuento cupón
                   </Text>
                   <Text
-                    style={[styles.summaryValue, { color: DISENO.colors.success, fontSize: tamanos.summaryValueSize }]}
+                    style={[
+                      estilos.summaryValue,
+                      { color: colores.success, fontSize: tamanos.summaryValueSize },
+                    ]}
                     allowFontScaling={false}
                   >
                     -{formatearPrecio(descuentoCupon)}
@@ -1361,104 +1607,108 @@ export default function PantallaCarrito(props: any) {
                 </View>
               )}
 
+              {/* Cupón puntos aplicado */}
               {cuponPuntosAplicado && (
                 <View
                   style={[
-                    styles.cuponAplicado,
+                    estilos.cuponAplicado,
                     {
-                      backgroundColor: DISENO.colors.success + '15',
-                      borderColor: DISENO.colors.success + '20',
+                      backgroundColor: colores.success + '15',
+                      borderColor: colores.success + '30',
                       borderRadius: tamanos.cuponRadius,
                       paddingHorizontal: tamanos.cuponPaddingH,
                       paddingVertical: tamanos.cuponPaddingV,
                     },
                   ]}
                 >
+                  <Ionicons name="star" size={tamanos.cuponIconSize - 3} color={colores.success} />
                   <Text
-                    style={[styles.cuponAplicadoText, { color: DISENO.colors.success, fontSize: tamanos.cuponTextSize }]}
+                    style={[
+                      estilos.cuponAplicadoText,
+                      { color: colores.success, fontSize: tamanos.cuponTextSize },
+                    ]}
                     numberOfLines={1}
                     allowFontScaling={false}
                   >
                     {cuponPuntosAplicado.recompensas?.nombre}
                   </Text>
-                  <TouchableOpacity onPress={quitarDescuento} activeOpacity={0.7}>
-                    <Ionicons
-                      name="close-circle"
-                      size={tamanos.cuponIconSize}
-                      color={DISENO.colors.accent}
-                    />
+                  <TouchableOpacity onPress={quitarDescuento} activeOpacity={0.7} hitSlop={6}>
+                    <Ionicons name="close-circle" size={tamanos.cuponIconSize} color={colores.accent} />
                   </TouchableOpacity>
                 </View>
               )}
 
+              {/* Cupón aplicado */}
               {cuponAplicado && (
                 <View
                   style={[
-                    styles.cuponAplicado,
+                    estilos.cuponAplicado,
                     {
-                      backgroundColor: DISENO.colors.success + '15',
-                      borderColor: DISENO.colors.success + '20',
+                      backgroundColor: colores.success + '15',
+                      borderColor: colores.success + '30',
                       borderRadius: tamanos.cuponRadius,
                       paddingHorizontal: tamanos.cuponPaddingH,
                       paddingVertical: tamanos.cuponPaddingV,
                     },
                   ]}
                 >
+                  <Ionicons name="ticket" size={tamanos.cuponIconSize - 3} color={colores.success} />
                   <View style={{ flex: 1 }}>
                     <Text
-                      style={[styles.cuponAplicadoText, { color: DISENO.colors.success, fontSize: tamanos.cuponTextSize }]}
+                      style={[
+                        estilos.cuponAplicadoText,
+                        { color: colores.success, fontSize: tamanos.cuponTextSize },
+                      ]}
                       numberOfLines={1}
                       allowFontScaling={false}
                     >
-                      🎟️ {cuponAplicado.codigo || 'Cupón aplicado'}
+                      {cuponAplicado.codigo || 'Cupón aplicado'}
                     </Text>
                     <Text
                       style={[
-                        styles.cuponAplicadoSubtext,
-                        { color: DISENO.colors.textSecondary, fontSize: tamanos.cuponSubtextSize },
+                        estilos.cuponAplicadoSubtext,
+                        { color: colores.textSecondary, fontSize: tamanos.cuponSubtextSize },
                       ]}
                       numberOfLines={1}
                       allowFontScaling={false}
                     >
                       {cuponAplicado.titulo || 'Cupón disponible'}
                       {cuponEsEnvioGratis ? ' · Envío gratis' : ''}
-                      {cuponEsDescuento && cuponAplicado.es_porcentaje
-                        ? ` · ${cuponAplicado.valor_descuento}% de descuento`
-                        : ''}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => setCuponAplicado(null)} activeOpacity={0.7}>
-                    <Ionicons
-                      name="close-circle"
-                      size={tamanos.cuponIconSize}
-                      color={DISENO.colors.accent}
-                    />
+                  <TouchableOpacity onPress={() => setCuponAplicado(null)} activeOpacity={0.7} hitSlop={6}>
+                    <Ionicons name="close-circle" size={tamanos.cuponIconSize} color={colores.accent} />
                   </TouchableOpacity>
                 </View>
               )}
 
+              {/* Ahorro */}
               {mostrarAhorro && (
                 <View
                   style={[
-                    styles.ahorroContainer,
+                    estilos.ahorroContainer,
                     {
-                      backgroundColor: DISENO.colors.success + '12',
-                      borderColor: DISENO.colors.success + '30',
                       paddingVertical: tamanos.ahorroPaddingV,
                       paddingHorizontal: tamanos.ahorroPaddingH,
                       borderRadius: tamanos.ahorroRadius,
                       marginTop: 8,
-                      marginBottom: 6,
+                      borderColor: colores.success + '30',
                     },
                   ]}
                 >
+                  <LinearGradient
+                    colors={[colores.success + '20', colores.success + '08']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
                   <Text style={{ fontSize: tamanos.ahorroEmojiSize }} allowFontScaling={false}>
                     🎉
                   </Text>
                   <Text
                     style={[
-                      styles.ahorroTexto,
-                      { fontSize: tamanos.ahorroTextoSize, color: DISENO.colors.success },
+                      estilos.ahorroTexto,
+                      { fontSize: tamanos.ahorroTextoSize, color: colores.success },
                     ]}
                     allowFontScaling={false}
                   >
@@ -1467,15 +1717,22 @@ export default function PantallaCarrito(props: any) {
                 </View>
               )}
 
-              <View style={[styles.summaryRow, styles.summaryTotal]}>
+              {/* Total */}
+              <View style={[estilos.summaryRow, estilos.summaryTotal, { borderTopColor: colores.border }]}>
                 <Text
-                  style={[styles.totalLabel, { color: DISENO.colors.text, fontSize: tamanos.totalLabelSize }]}
+                  style={[
+                    estilos.totalLabel,
+                    { color: colores.text, fontSize: tamanos.totalLabelSize },
+                  ]}
                   allowFontScaling={false}
                 >
                   Total
                 </Text>
                 <Text
-                  style={[styles.totalPrice, { color: DISENO.colors.accent, fontSize: tamanos.totalPriceSize }]}
+                  style={[
+                    estilos.totalPrice,
+                    { color: colores.accent, fontSize: tamanos.totalPriceSize },
+                  ]}
                   allowFontScaling={false}
                 >
                   {formatearPrecio(totalFinal)}
@@ -1483,10 +1740,17 @@ export default function PantallaCarrito(props: any) {
               </View>
             </View>
 
-            {/* BOTÓN CHECKOUT */}
+            {/* BOTÓN CHECKOUT con shine */}
             <TouchableOpacity
-              style={[styles.checkoutButton, { borderRadius: tamanos.checkoutRadius }]}
+              style={[
+                estilos.checkoutButton,
+                {
+                  borderRadius: tamanos.checkoutRadius,
+                  shadowColor: colores.accent,
+                },
+              ]}
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
                 if (!perfil || !perfil.id) {
                   setMostrarModalLogin(true);
                   return;
@@ -1497,19 +1761,37 @@ export default function PantallaCarrito(props: any) {
                   ubicacionGuardada,
                 });
               }}
-              activeOpacity={0.8}
+              activeOpacity={0.9}
             >
               <LinearGradient
-                colors={[DISENO.colors.accent, DISENO.colors.accentSecondary]}
-                style={[styles.checkoutButtonGradient, { paddingVertical: tamanos.checkoutPaddingV }]}
+                colors={[colores.accent, colores.accentSecondary]}
+                style={[
+                  estilos.checkoutButtonGradient,
+                  { paddingVertical: tamanos.checkoutPaddingV },
+                ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Ionicons name="cart" size={tamanos.checkoutIconSize} color={DISENO.colors.text} />
+                <Animated2.View
+                  style={[
+                    {
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      width: 80,
+                      backgroundColor: 'rgba(255,255,255,0.25)',
+                      transform: [{ skewX: '-20deg' }],
+                    },
+                    shineStyle,
+                  ]}
+                  pointerEvents="none"
+                />
+
+                <Ionicons name="cart" size={tamanos.checkoutIconSize} color={colores.text} />
                 <Text
                   style={[
-                    styles.checkoutButtonText,
-                    { fontSize: tamanos.checkoutTextSize, color: DISENO.colors.text },
+                    estilos.checkoutButtonText,
+                    { fontSize: tamanos.checkoutTextSize, color: colores.text },
                   ]}
                   allowFontScaling={false}
                 >
@@ -1517,19 +1799,20 @@ export default function PantallaCarrito(props: any) {
                 </Text>
                 <View
                   style={[
-                    styles.checkoutPrice,
+                    estilos.checkoutPrice,
                     {
-                      backgroundColor: DISENO.colors.text + '15',
+                      backgroundColor: colores.text + '18',
                       paddingHorizontal: tamanos.checkoutPricePaddingH,
                       paddingVertical: tamanos.checkoutPricePaddingV,
                       borderRadius: tamanos.checkoutPriceRadius,
+                      borderColor: colores.text + '15',
                     },
                   ]}
                 >
                   <Text
                     style={[
-                      styles.checkoutPriceText,
-                      { fontSize: tamanos.checkoutPriceTextSize, color: DISENO.colors.text },
+                      estilos.checkoutPriceText,
+                      { fontSize: tamanos.checkoutPriceTextSize, color: colores.text },
                     ]}
                     allowFontScaling={false}
                   >
@@ -1541,14 +1824,14 @@ export default function PantallaCarrito(props: any) {
 
             {/* VACIAR CARRITO */}
             <TouchableOpacity
-              style={[styles.emptyCartButton, { paddingVertical: tamanos.vaciarPaddingV }]}
+              style={[estilos.emptyCartButton, { paddingVertical: tamanos.vaciarPaddingV }]}
               onPress={vaciarCarrito}
               activeOpacity={0.6}
             >
               <Text
                 style={[
-                  styles.emptyCartText,
-                  { fontSize: tamanos.vaciarTextSize, color: DISENO.colors.textTertiary },
+                  estilos.emptyCartText,
+                  { fontSize: tamanos.vaciarTextSize, color: colores.textTertiary },
                 ]}
                 allowFontScaling={false}
               >
@@ -1561,49 +1844,51 @@ export default function PantallaCarrito(props: any) {
 
       {/* MODAL LOGIN */}
       <Modal visible={mostrarModalLogin} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+        <View style={estilos.modalOverlay}>
           <View
             style={[
-              styles.modal,
+              estilos.modal,
               {
-                backgroundColor: DISENO.colors.surface,
-                borderColor: DISENO.colors.border,
-                borderWidth: 1,
+                backgroundColor: colores.surface,
                 borderRadius: tamanos.modalLoginRadius,
                 padding: tamanos.modalLoginPadding,
-                ...DISENO.shadow.lg,
               },
             ]}
           >
-            <Text style={{ fontSize: tamanos.modalLoginIconSize, marginBottom: 12 }} allowFontScaling={false}>
-              🔐
-            </Text>
+            <View
+              style={[
+                estilos.modalIconCircle,
+                { backgroundColor: colores.accent + '12' },
+              ]}
+            >
+              <Ionicons name="lock-closed" size={32} color={colores.accent} />
+            </View>
             <Text
-              style={[styles.modalTitle, { fontSize: tamanos.modalLoginTitleSize, color: DISENO.colors.text }]}
+              style={[estilos.modalTitle, { fontSize: tamanos.modalLoginTitleSize, color: colores.text }]}
               allowFontScaling={false}
             >
               Necesitás una cuenta
             </Text>
             <Text
               style={[
-                styles.modalText,
-                { color: DISENO.colors.textSecondary, fontSize: tamanos.modalLoginTextSize },
+                estilos.modalText,
+                { color: colores.textSecondary, fontSize: tamanos.modalLoginTextSize },
               ]}
               allowFontScaling={false}
             >
               Para hacer tu pedido tenés que iniciar sesión o registrarte.
             </Text>
 
-            <View style={styles.modalButtons}>
+            <View style={estilos.modalButtons}>
               <TouchableOpacity
                 style={[
-                  styles.modalButton,
-                  styles.modalCancel,
+                  estilos.modalButton,
+                  estilos.modalCancel,
                   {
-                    backgroundColor: DISENO.colors.surfaceHover,
-                    borderColor: DISENO.colors.border,
                     paddingVertical: tamanos.modalLoginButtonPaddingV,
                     borderRadius: tamanos.modalLoginButtonRadius,
+                    backgroundColor: colores.surfaceHover,
+                    borderColor: colores.border,
                   },
                 ]}
                 onPress={() => setMostrarModalLogin(false)}
@@ -1611,8 +1896,8 @@ export default function PantallaCarrito(props: any) {
               >
                 <Text
                   style={[
-                    styles.modalCancelText,
-                    { color: DISENO.colors.textSecondary, fontSize: tamanos.modalLoginButtonTextSize },
+                    estilos.modalCancelText,
+                    { color: colores.textSecondary, fontSize: tamanos.modalLoginButtonTextSize },
                   ]}
                   allowFontScaling={false}
                 >
@@ -1621,10 +1906,9 @@ export default function PantallaCarrito(props: any) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  styles.modalButton,
-                  styles.modalConfirm,
+                  estilos.modalButton,
+                  estilos.modalConfirm,
                   {
-                    backgroundColor: DISENO.colors.accentSecondary,
                     paddingVertical: tamanos.modalLoginButtonPaddingV,
                     borderRadius: tamanos.modalLoginButtonRadius,
                   },
@@ -1633,17 +1917,23 @@ export default function PantallaCarrito(props: any) {
                   setMostrarModalLogin(false);
                   props.navigation.navigate('Login');
                 }}
-                activeOpacity={0.7}
+                activeOpacity={0.85}
               >
+                <LinearGradient
+                  colors={[colores.accent, colores.accentSecondary]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                />
                 <Ionicons
                   name="log-in"
                   size={tamanos.modalLoginButtonIconSize}
-                  color={DISENO.colors.text}
+                  color="#FFF"
                 />
                 <Text
                   style={[
-                    styles.modalConfirmText,
-                    { color: DISENO.colors.text, fontSize: tamanos.modalLoginButtonTextSize },
+                    estilos.modalConfirmText,
+                    { color: '#FFF', fontSize: tamanos.modalLoginButtonTextSize },
                   ]}
                   allowFontScaling={false}
                 >
@@ -1664,7 +1954,7 @@ export default function PantallaCarrito(props: any) {
                 style={{
                   fontFamily: FUENTES.regular,
                   fontSize: tamanos.modalLoginLinkSize,
-                  color: DISENO.colors.accent,
+                  color: colores.accent,
                   textAlign: 'center',
                   textDecorationLine: 'underline',
                   includeFontPadding: false,
@@ -1680,43 +1970,46 @@ export default function PantallaCarrito(props: any) {
 
       {/* MODAL PUNTOS */}
       <Modal visible={mostrarModalPuntos} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+        <View style={estilos.modalOverlay}>
           <View
             style={[
-              styles.modalPuntos,
+              estilos.modalPuntos,
               {
-                backgroundColor: DISENO.colors.surface,
-                borderColor: DISENO.colors.border,
+                backgroundColor: colores.surface,
+                borderColor: colores.border,
                 borderRadius: tamanos.modalPuntosRadius,
                 width: tamanos.modalPuntosWidth,
                 maxWidth: 450,
                 padding: tamanos.modalPuntosPadding,
                 borderWidth: 1,
                 alignSelf: 'center',
-                ...DISENO.shadow.lg,
               },
             ]}
           >
+            <View style={estilos.modalPuntosHandle}>
+              <View style={[estilos.modalPuntosHandleBar, { backgroundColor: colores.textTertiary }]} />
+            </View>
+
             <View style={{ marginBottom: 4 }}>
               <Text
                 style={[
-                  styles.modalPuntosTitle,
+                  estilos.modalPuntosTitle,
                   {
                     fontSize: tamanos.modalPuntosTitleSize,
-                    color: DISENO.colors.text,
+                    color: colores.text,
                     textAlign: 'center',
                   },
                 ]}
                 allowFontScaling={false}
               >
-                ⭐ Canjear Puntos
+                Canjear Puntos
               </Text>
               <Text
                 style={[
-                  styles.modalPuntosSubtitle,
+                  estilos.modalPuntosSubtitle,
                   {
                     fontSize: tamanos.modalPuntosSubtitleSize,
-                    color: DISENO.colors.textSecondary,
+                    color: colores.textSecondary,
                     textAlign: 'center',
                     marginBottom: 12,
                   },
@@ -1729,12 +2022,12 @@ export default function PantallaCarrito(props: any) {
 
             <View
               style={{
-                backgroundColor: DISENO.colors.accentSecondary + '08',
+                backgroundColor: colores.accentSecondary + '08',
                 borderRadius: tamanos.modalPuntosInfoRadius,
                 padding: tamanos.modalPuntosInfoPadding,
                 marginBottom: 12,
                 borderWidth: 1,
-                borderColor: DISENO.colors.accentSecondary + '20',
+                borderColor: colores.accentSecondary + '20',
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -1744,18 +2037,18 @@ export default function PantallaCarrito(props: any) {
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosInfoLabelSize,
-                    color: DISENO.colors.textSecondary,
+                    color: colores.textSecondary,
                     fontWeight: '500',
                     includeFontPadding: false,
                   }}
                   allowFontScaling={false}
                 >
-                  Puntos disponibles
+                  Disponibles
                 </Text>
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosInfoValueSize,
-                    color: DISENO.colors.accentSecondary,
+                    color: colores.accentSecondary,
                     fontFamily: FUENTES.display,
                     includeFontPadding: false,
                   }}
@@ -1768,18 +2061,18 @@ export default function PantallaCarrito(props: any) {
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosInfoLabelSize,
-                    color: DISENO.colors.textSecondary,
+                    color: colores.textSecondary,
                     fontWeight: '500',
                     includeFontPadding: false,
                   }}
                   allowFontScaling={false}
                 >
-                  Máximo canjeable
+                  Máximo canje
                 </Text>
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosInfoValueSize,
-                    color: DISENO.colors.accent,
+                    color: colores.accent,
                     fontFamily: FUENTES.display,
                     includeFontPadding: false,
                   }}
@@ -1794,7 +2087,7 @@ export default function PantallaCarrito(props: any) {
               <Text
                 style={{
                   fontSize: tamanos.modalPuntosInputLabelSize,
-                  color: DISENO.colors.textSecondary,
+                  color: colores.textSecondary,
                   marginBottom: 6,
                   fontWeight: '500',
                   includeFontPadding: false,
@@ -1805,8 +2098,8 @@ export default function PantallaCarrito(props: any) {
               </Text>
               <View
                 style={{
-                  borderColor: DISENO.colors.border,
-                  backgroundColor: DISENO.colors.surfaceHover,
+                  borderColor: colores.border,
+                  backgroundColor: colores.surfaceHover,
                   borderRadius: tamanos.modalPuntosInputRadius,
                   borderWidth: 1,
                   flexDirection: 'row',
@@ -1817,9 +2110,9 @@ export default function PantallaCarrito(props: any) {
                   style={{
                     paddingHorizontal: tamanos.modalPuntosInputBtnPaddingH,
                     paddingVertical: tamanos.modalPuntosInputBtnPaddingV,
-                    backgroundColor: DISENO.colors.surface,
+                    backgroundColor: colores.surface,
                     borderRightWidth: 1,
-                    borderRightColor: DISENO.colors.border,
+                    borderRightColor: colores.border,
                     borderTopLeftRadius: tamanos.modalPuntosInputRadius,
                     borderBottomLeftRadius: tamanos.modalPuntosInputRadius,
                     justifyContent: 'center',
@@ -1832,17 +2125,13 @@ export default function PantallaCarrito(props: any) {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name="remove"
-                    size={tamanos.modalPuntosInputBtnIconSize}
-                    color={DISENO.colors.text}
-                  />
+                  <Ionicons name="remove" size={tamanos.modalPuntosInputBtnIconSize} color={colores.text} />
                 </TouchableOpacity>
 
                 <TextInput
                   style={{
                     fontSize: tamanos.modalPuntosInputFieldSize,
-                    color: DISENO.colors.text,
+                    color: colores.text,
                     paddingHorizontal: tamanos.modalPuntosInputFieldPaddingH,
                     paddingVertical: tamanos.modalPuntosInputFieldPaddingV,
                     flex: 1,
@@ -1855,8 +2144,8 @@ export default function PantallaCarrito(props: any) {
                   onChangeText={handleInputPuntos}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={DISENO.colors.textTertiary}
-                  selectionColor={DISENO.colors.accent}
+                  placeholderTextColor={colores.textTertiary}
+                  selectionColor={colores.accent}
                   allowFontScaling={false}
                 />
 
@@ -1864,9 +2153,9 @@ export default function PantallaCarrito(props: any) {
                   style={{
                     paddingHorizontal: tamanos.modalPuntosInputBtnPaddingH,
                     paddingVertical: tamanos.modalPuntosInputBtnPaddingV,
-                    backgroundColor: DISENO.colors.surface,
+                    backgroundColor: colores.surface,
                     borderLeftWidth: 1,
-                    borderLeftColor: DISENO.colors.border,
+                    borderLeftColor: colores.border,
                     borderTopRightRadius: tamanos.modalPuntosInputRadius,
                     borderBottomRightRadius: tamanos.modalPuntosInputRadius,
                     justifyContent: 'center',
@@ -1882,25 +2171,21 @@ export default function PantallaCarrito(props: any) {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name="add"
-                    size={tamanos.modalPuntosInputBtnIconSize}
-                    color={DISENO.colors.text}
-                  />
+                  <Ionicons name="add" size={tamanos.modalPuntosInputBtnIconSize} color={colores.text} />
                 </TouchableOpacity>
               </View>
 
               <Text
                 style={{
                   fontSize: tamanos.modalPuntosHintSize,
-                  color: DISENO.colors.textSecondary,
+                  color: colores.textSecondary,
                   textAlign: 'center',
                   marginTop: 6,
                   includeFontPadding: false,
                 }}
                 allowFontScaling={false}
               >
-                💡 Máximo 25% del total ({puntosMaximosPermitidos} pts ={' '}
+                Máximo 25% del total ({puntosMaximosPermitidos} pts ={' '}
                 {formatearPrecio(Math.floor(puntosMaximosPermitidos / 100) * 100)})
               </Text>
             </View>
@@ -1908,12 +2193,12 @@ export default function PantallaCarrito(props: any) {
             {puntosSeleccionados > 0 && (
               <View
                 style={{
-                  backgroundColor: DISENO.colors.accentSecondary + '08',
+                  backgroundColor: colores.accentSecondary + '12',
                   borderRadius: tamanos.modalPuntosDescuentoRadius,
                   padding: tamanos.modalPuntosDescuentoPadding,
                   marginBottom: 12,
                   borderWidth: 1,
-                  borderColor: DISENO.colors.accentSecondary + '20',
+                  borderColor: colores.accentSecondary + '30',
                   flexDirection: 'row',
                   justifyContent: 'center',
                   alignItems: 'center',
@@ -1923,18 +2208,18 @@ export default function PantallaCarrito(props: any) {
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosDescuentoLabelSize,
-                    color: DISENO.colors.text,
+                    color: colores.text,
                     fontWeight: '500',
                     includeFontPadding: false,
                   }}
                   allowFontScaling={false}
                 >
-                  💰 Descuento:
+                  Descuento:
                 </Text>
                 <Text
                   style={{
                     fontSize: tamanos.modalPuntosDescuentoValueSize,
-                    color: DISENO.colors.accent,
+                    color: colores.accent,
                     fontFamily: FUENTES.display,
                     includeFontPadding: false,
                   }}
@@ -1952,16 +2237,16 @@ export default function PantallaCarrito(props: any) {
                   paddingVertical: tamanos.modalPuntosBotonesPaddingV,
                   borderRadius: tamanos.modalPuntosBotonesRadius,
                   alignItems: 'center',
-                  backgroundColor: DISENO.colors.surfaceHover,
+                  backgroundColor: colores.surfaceHover,
                   borderWidth: 1,
-                  borderColor: DISENO.colors.border,
+                  borderColor: colores.border,
                 }}
                 onPress={cancelarCanje}
                 activeOpacity={0.7}
               >
                 <Text
                   style={{
-                    color: DISENO.colors.textSecondary,
+                    color: colores.textSecondary,
                     fontWeight: '600',
                     fontSize: tamanos.modalPuntosBotonesTextSize,
                     includeFontPadding: false,
@@ -1980,27 +2265,27 @@ export default function PantallaCarrito(props: any) {
                   alignItems: 'center',
                   backgroundColor:
                     puntosSeleccionados >= MINIMO_PUNTOS_CANJE
-                      ? DISENO.colors.accentSecondary
-                      : DISENO.colors.surfaceHover,
+                      ? colores.accentSecondary
+                      : colores.surfaceHover,
                   borderWidth: 1,
                   borderColor:
                     puntosSeleccionados >= MINIMO_PUNTOS_CANJE
-                      ? DISENO.colors.accentSecondary
-                      : DISENO.colors.border,
+                      ? colores.accentSecondary
+                      : colores.border,
                 }}
                 onPress={canjearPuntos}
                 disabled={canjeandoPuntos || puntosSeleccionados < MINIMO_PUNTOS_CANJE}
-                activeOpacity={0.7}
+                activeOpacity={0.85}
               >
                 {canjeandoPuntos ? (
-                  <ActivityIndicator size="small" color={DISENO.colors.text} />
+                  <ActivityIndicator size="small" color={colores.text} />
                 ) : (
                   <Text
                     style={{
                       color:
                         puntosSeleccionados >= MINIMO_PUNTOS_CANJE
-                          ? DISENO.colors.text
-                          : DISENO.colors.textTertiary,
+                          ? colores.text
+                          : colores.textTertiary,
                       fontWeight: 'bold',
                       fontSize: tamanos.modalPuntosBotonesTextSize,
                       fontFamily: FUENTES.display,
@@ -2010,7 +2295,7 @@ export default function PantallaCarrito(props: any) {
                   >
                     {puntosSeleccionados < MINIMO_PUNTOS_CANJE
                       ? `Mínimo ${MINIMO_PUNTOS_CANJE} pts`
-                      : '✅ Canjear'}
+                      : 'Canjear'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -2020,7 +2305,7 @@ export default function PantallaCarrito(props: any) {
               <Text
                 style={{
                   fontSize: tamanos.modalPuntosMinimoSize,
-                  color: DISENO.colors.accent,
+                  color: colores.accent,
                   textAlign: 'center',
                   marginTop: 8,
                   fontWeight: '500',
@@ -2028,7 +2313,7 @@ export default function PantallaCarrito(props: any) {
                 }}
                 allowFontScaling={false}
               >
-                ⚠️ Mínimo {MINIMO_PUNTOS_CANJE} puntos ({formatearPrecio(MINIMO_PUNTOS_CANJE)} de descuento)
+                Mínimo {MINIMO_PUNTOS_CANJE} puntos ({formatearPrecio(MINIMO_PUNTOS_CANJE)} de descuento)
               </Text>
             )}
           </View>
@@ -2039,304 +2324,394 @@ export default function PantallaCarrito(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS (solo lo estático)
+// 🎨 ESTILOS DINÁMICOS
 // ============================================================
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DISENO.colors.fondo },
-  backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: {
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: DISENO.colors.surface,
-    ...DISENO.shadow.sm,
-  },
-  headerTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.5,
-    includeFontPadding: false,
-  },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    marginTop: 16,
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 24,
-  },
-  emptySubtext: {
-    fontFamily: FUENTES.regular,
-    marginTop: 8,
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  cuponVacioCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 380,
-    marginTop: 20,
-    marginBottom: 4,
-    gap: 10,
-    backgroundColor: DISENO.colors.surface,
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '30',
-    ...DISENO.shadow.sm,
-  },
-  cuponVacioContenido: { flex: 1 },
-  cuponVacioTitulo: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 16,
-  },
-  cuponVacioDetalle: {
-    fontFamily: FUENTES.regular,
-    marginTop: 3,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 16,
-    includeFontPadding: false,
-  },
-  emptyButton: { marginTop: 24, overflow: 'hidden', ...DISENO.shadow.md },
-  emptyButtonGradient: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  emptyButtonText: { fontFamily: FUENTES.display, fontWeight: '400', includeFontPadding: false },
-  list: { flexGrow: 1 },
-  item: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, borderWidth: 1 },
-  imagen: { marginRight: 10, backgroundColor: DISENO.colors.surfaceHover },
-  imagenPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-  },
-  itemInfo: { flex: 1 },
-  itemNombre: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.3,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  itemPrecioTotal: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    marginTop: 2,
-    includeFontPadding: false,
-    lineHeight: 20,
-  },
-  controles: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 },
-  botonControl: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-  },
-  cantidad: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    minWidth: 24,
-    textAlign: 'center',
-    includeFontPadding: false,
-  },
-  botonEliminar: { padding: 4, marginLeft: 2 },
-  footerContainer: { borderWidth: 1, marginBottom: 20 },
-  avisoMinimo: { borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  avisoMinimoTexto: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 18 },
-  avisoMinimoSub: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 16 },
-  summary: { marginBottom: 10, borderWidth: 1 },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  summaryLabel: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 18 },
-  summaryValue: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '500',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  summaryTotal: {
-    borderTopWidth: 1,
-    borderTopColor: DISENO.colors.border,
-    paddingTop: 6,
-    marginTop: 4,
-  },
-  totalLabel: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 22,
-  },
-  totalPrice: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 24,
-  },
-  cuponAplicado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 4,
-    borderWidth: 1,
-  },
-  cuponAplicadoText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '500',
-    flex: 1,
-    includeFontPadding: false,
-    lineHeight: 16,
-  },
-  cuponAplicadoSubtext: {
-    fontFamily: FUENTES.regular,
-    marginTop: 2,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-  ahorroContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-  },
-  ahorroTexto: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.3,
-    includeFontPadding: false,
-  },
-  checkoutButton: { overflow: 'hidden', marginBottom: 6, ...DISENO.shadow.md },
-  checkoutButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  checkoutButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.3,
-    includeFontPadding: false,
-  },
-  checkoutPrice: {
-    borderWidth: 1,
-    borderColor: DISENO.colors.text + '10',
-  },
-  checkoutPriceText: { fontFamily: FUENTES.display, fontWeight: '400', includeFontPadding: false },
-  emptyCartButton: { alignItems: 'center' },
-  emptyCartText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '500',
-    opacity: 0.5,
-    includeFontPadding: false,
-  },
-  puntosButton: { flex: 1 },
-  puntosButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  puntosButtonLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  puntosButtonRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  puntosButtonText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-  },
-  puntosButtonLabel: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '600',
-    marginLeft: 6,
-    includeFontPadding: false,
-  },
-  modalPuntos: { alignSelf: 'center' },
-  modalPuntosTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 24,
-  },
-  modalPuntosSubtitle: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '400',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modal: {
-    width: '90%',
-    maxWidth: 400,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  modalTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    marginBottom: 8,
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 22,
-  },
-  modalText: {
-    fontFamily: FUENTES.regular,
-    textAlign: 'center',
-    marginBottom: 24,
-    opacity: 0.8,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
-  modalButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  modalCancel: { borderWidth: 1 },
-  modalCancelText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-  },
-  modalConfirm: { borderWidth: 1, borderColor: DISENO.colors.accentSecondary },
-  modalConfirmText: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    includeFontPadding: false,
-  },
-  nivelBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  nivelBadgeTitulo: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    letterSpacing: 0.3,
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  nivelBadgeDetalle: {
-    fontFamily: FUENTES.regular,
-    marginTop: 2,
-    includeFontPadding: false,
-    lineHeight: 14,
-  },
-});
+const crearEstilos = (colores: PaletaTema) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo },
+    backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    headerMini: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    backButtonGlass: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    },
+    trashAllButton: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1,
+    },
+    headerTitleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      letterSpacing: 0.5,
+      includeFontPadding: false,
+    },
+    headerTitleMini: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      letterSpacing: 0.5,
+      includeFontPadding: false,
+    },
+    headerSubtitle: {
+      fontFamily: FUENTES.regular,
+      fontSize: 11,
+      marginTop: 2,
+      includeFontPadding: false,
+    },
+
+    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+    emptyIconCircle: {
+      width: 130, height: 130, borderRadius: 65,
+      alignItems: 'center', justifyContent: 'center',
+      marginBottom: 20,
+      borderWidth: 2,
+    },
+    emptyText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      textAlign: 'center',
+      includeFontPadding: false,
+      lineHeight: 26,
+    },
+    emptySubtext: {
+      fontFamily: FUENTES.regular,
+      marginTop: 8,
+      textAlign: 'center',
+      includeFontPadding: false,
+      lineHeight: 20,
+    },
+    emptyButton: { marginTop: 24, overflow: 'hidden' },
+    emptyButtonGradient: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      shadowColor: colores.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+    },
+    emptyButtonText: { fontFamily: FUENTES.display, fontWeight: '600', includeFontPadding: false },
+
+    cuponVacioCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: '100%',
+      maxWidth: 380,
+      marginTop: 20,
+      marginBottom: 4,
+      gap: 10,
+      borderWidth: 1,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.06, shadowRadius: 10, elevation: 2,
+    },
+    cuponVacioIconWrap: {
+      width: 42, height: 42, borderRadius: 21,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    cuponVacioContenido: { flex: 1 },
+    cuponVacioTitulo: {
+      fontFamily: FUENTES.display,
+      fontWeight: '600',
+      includeFontPadding: false,
+      lineHeight: 16,
+    },
+    cuponVacioDetalle: {
+      fontFamily: FUENTES.regular,
+      marginTop: 3,
+      lineHeight: 16,
+      includeFontPadding: false,
+    },
+
+    list: { flexGrow: 1 },
+
+    swipeContainer: {
+      position: 'relative',
+      marginBottom: 10,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    trashBackground: {
+      position: 'absolute',
+      top: 0, bottom: 0, right: 0, left: 0,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      paddingRight: 28,
+      flexDirection: 'row',
+      gap: 8,
+      borderRadius: 16,
+    },
+    trashText: {
+      color: '#FFF',
+      fontFamily: FUENTES.display,
+      fontSize: 14,
+      fontWeight: '600',
+      includeFontPadding: false,
+      alignSelf: 'center',
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
+    },
+    imagenWrap: {
+      marginRight: 12,
+      overflow: 'hidden',
+      backgroundColor: colores.surfaceHover,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    },
+    imagen: { width: '100%', height: '100%' },
+    imagenPlaceholder: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+      borderWidth: 1,
+      borderColor: colores.border,
+    },
+    itemInfo: { flex: 1 },
+    itemNombre: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      letterSpacing: 0.3,
+      includeFontPadding: false,
+      lineHeight: 20,
+    },
+    itemPrecioUnitario: {
+      fontFamily: FUENTES.regular,
+      marginTop: 2,
+      includeFontPadding: false,
+    },
+    itemPrecioTotal: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      marginTop: 3,
+      includeFontPadding: false,
+      lineHeight: 22,
+    },
+    controles: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 },
+    botonControl: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: colores.accentSecondary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2, shadowRadius: 4, elevation: 2,
+    },
+    cantidad: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      minWidth: 26,
+      textAlign: 'center',
+      includeFontPadding: false,
+    },
+
+    footerContainer: {
+      borderWidth: 1,
+      marginBottom: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.08, shadowRadius: 20, elevation: 4,
+    },
+
+    puntosButton: { overflow: 'hidden', borderWidth: 1 },
+    puntosStarWrap: {
+      width: 28, height: 28, borderRadius: 14,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: colores.accentSecondary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.4, shadowRadius: 6, elevation: 3,
+    },
+    puntosButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '600',
+      includeFontPadding: false,
+    },
+    puntosButtonLabel: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      includeFontPadding: false,
+    },
+
+    avisoMinimo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderWidth: 1.5,
+    },
+    avisoMinimoTexto: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 18, fontWeight: '700' },
+    avisoMinimoSub: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 16, marginTop: 3 },
+
+    nivelBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderWidth: 1,
+      marginBottom: 10,
+    },
+    nivelBadgeTitulo: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      letterSpacing: 0.3,
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+    nivelBadgeDetalle: {
+      fontFamily: FUENTES.regular,
+      marginTop: 2,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+
+    summary: { marginBottom: 10, borderWidth: 1 },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+    summaryLabel: { fontFamily: FUENTES.regular, includeFontPadding: false, lineHeight: 18 },
+    summaryValue: { fontFamily: FUENTES.regular, fontWeight: '500', includeFontPadding: false, lineHeight: 18 },
+    summaryTotal: {
+      borderTopWidth: 1,
+      paddingTop: 8,
+      marginTop: 6,
+    },
+    totalLabel: { fontFamily: FUENTES.display, fontWeight: '700', includeFontPadding: false, lineHeight: 22 },
+    totalPrice: { fontFamily: FUENTES.display, fontWeight: '700', includeFontPadding: false, lineHeight: 24 },
+
+    cuponAplicado: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginVertical: 5,
+      borderWidth: 1,
+    },
+    cuponAplicadoText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      flex: 1,
+      includeFontPadding: false,
+      lineHeight: 16,
+    },
+    cuponAplicadoSubtext: {
+      fontFamily: FUENTES.regular,
+      marginTop: 2,
+      includeFontPadding: false,
+      lineHeight: 14,
+    },
+
+    ahorroContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderWidth: 1,
+      overflow: 'hidden',
+    },
+    ahorroTexto: { fontFamily: FUENTES.display, fontWeight: '700', includeFontPadding: false },
+
+    checkoutButton: {
+      overflow: 'hidden',
+      marginBottom: 6,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35, shadowRadius: 14, elevation: 6,
+    },
+    checkoutButtonGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      overflow: 'hidden',
+    },
+    checkoutButtonText: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      letterSpacing: 0.3,
+      includeFontPadding: false,
+    },
+    checkoutPrice: {
+      borderWidth: 1,
+    },
+    checkoutPriceText: { fontFamily: FUENTES.display, fontWeight: '700', includeFontPadding: false },
+    emptyCartButton: { alignItems: 'center' },
+    emptyCartText: { fontFamily: FUENTES.regular, fontWeight: '500', opacity: 0.6, includeFontPadding: false },
+
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modal: {
+      width: '90%',
+      maxWidth: 400,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 20 },
+      shadowOpacity: 0.25, shadowRadius: 40, elevation: 20,
+    },
+    modalIconCircle: {
+      width: 70, height: 70, borderRadius: 35,
+      alignItems: 'center', justifyContent: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      marginBottom: 8,
+      textAlign: 'center',
+      includeFontPadding: false,
+    },
+    modalText: {
+      fontFamily: FUENTES.regular,
+      textAlign: 'center',
+      marginBottom: 24,
+      opacity: 0.85,
+      includeFontPadding: false,
+      lineHeight: 19,
+    },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6,
+      overflow: 'hidden',
+    },
+    modalCancel: { borderWidth: 1 },
+    modalCancelText: { fontFamily: FUENTES.display, fontWeight: '600', includeFontPadding: false },
+    modalConfirm: { overflow: 'hidden' },
+    modalConfirmText: { fontFamily: FUENTES.display, fontWeight: '700', includeFontPadding: false },
+
+    modalPuntos: { alignSelf: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.25, shadowRadius: 40, elevation: 20 },
+    modalPuntosHandle: { alignItems: 'center', paddingBottom: 12 },
+    modalPuntosHandleBar: {
+      width: 40, height: 4, borderRadius: 2,
+    },
+    modalPuntosTitle: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      includeFontPadding: false,
+      lineHeight: 24,
+    },
+    modalPuntosSubtitle: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '400',
+      includeFontPadding: false,
+      lineHeight: 18,
+    },
+  });

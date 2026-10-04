@@ -1,5 +1,5 @@
-// screens/admin/PantallaPanelAdmin.tsx
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+// screens/admin/PantallaPanelAdmin.tsx - V2 MODO OSCURO + REPARTIDORES
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, Dimensions, Animated, Alert, useWindowDimensions
@@ -9,55 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { Colores } from '../../lib/colores';
+import { useColores, type PaletaTema } from '../../lib/theme';
 
 const { width, height } = Dimensions.get('window');
-
-// ============================================================
-// 🎨 SISTEMA DE DISEÑO - CLARO Y ELEGANTE
-// ============================================================
-const DESIGN = {
-  colors: {
-    fondo: '#F5F2ED',
-    surface: '#FFFFFF',
-    surfaceHover: '#F8F6F2',
-    card: '#FFFFFF',
-    cardShadow: 'rgba(0,0,0,0.06)',
-    border: 'rgba(0,0,0,0.06)',
-    borderLight: 'rgba(0,0,0,0.04)',
-    text: '#1A1A1A',
-    textSecondary: 'rgba(0,0,0,0.55)',
-    textTertiary: 'rgba(0,0,0,0.30)',
-    accent: '#E53935',
-    accentLight: '#FF6B6B',
-    accentSecondary: '#F5C518',
-    accentSecondaryLight: '#FFE135',
-    gradientStart: '#E53935',
-    gradientEnd: '#F5C518',
-    verde: '#43A047',
-    verdeClaro: '#66BB6A',
-    rosa: '#EC407A',
-    azul: '#1A237E',
-    azulClaro: '#3949AB',
-    platino: '#78909C',
-    morado: '#7B1FA2',
-  },
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-  },
-  radius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    full: 999,
-  },
-};
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -105,6 +59,10 @@ export default function PantallaPanelAdmin(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
+  // ✅ TEMA
+  const colores = useColores();
+  const estilos = useMemo(() => crearEstilos(colores), [colores]);
+
   // ✅ Animaciones
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
@@ -125,7 +83,7 @@ export default function PantallaPanelAdmin(props: any) {
   }, []);
 
   // ============================================================
-  // ✅ CONFIGURAR CANAL DE NOTIFICACIONES EN TIEMPO REAL
+  // ✅ CANAL DE NOTIFICACIONES EN TIEMPO REAL
   // ============================================================
   const canalInicializado = useRef(false);
 
@@ -222,7 +180,7 @@ export default function PantallaPanelAdmin(props: any) {
   const isTablet = responsive.isTablet;
   const isSmallPhone = responsive.isSmallPhone;
 
-  // ✅ Tamaños responsive - MEJORADOS PARA 2 COLUMNAS
+  // ✅ Tamaños responsive
   const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 16 : 20;
   const tituloSize = isTablet ? 34 : isSmallPhone ? 24 : 28;
   const subtituloSize = isTablet ? 18 : isSmallPhone ? 13 : 14;
@@ -236,26 +194,25 @@ export default function PantallaPanelAdmin(props: any) {
   const botonSize = isTablet ? 50 : isSmallPhone ? 40 : 44;
   const botonIconSize = isTablet ? 26 : isSmallPhone ? 18 : 22;
 
-  // ✅ Calcular ancho de las tarjetas (2 columnas)
+  // ✅ Ancho de las tarjetas (2 columnas)
   const cardWidth = (responsive.width - paddingHorizontal * 2 - gap) / 2;
 
-  // ✅ MENU ITEMS - ACTUALIZADO CON CUPONES
+  // ✅ MENU ITEMS - CON REPARTIDORES
   const menuItems: MenuItem[] = [
     {
       id: 'notificaciones',
       label: 'Notificaciones',
       sub: 'Enviar promociones',
       icono: 'notifications-outline',
-      color: DESIGN.colors.accentSecondary,
+      color: colores.accentSecondary,
       navigate: 'NotificacionesAdmin'
     },
-
     {
       id: 'pedidos',
       label: 'Pedidos',
       sub: 'Gestionar pedidos',
       icono: 'receipt-outline',
-      color: DESIGN.colors.accent,
+      color: colores.accent,
       navigate: 'GestionPedidos'
     },
     {
@@ -263,7 +220,7 @@ export default function PantallaPanelAdmin(props: any) {
       label: 'Menú',
       sub: 'Editar productos',
       icono: 'restaurant-outline',
-      color: DESIGN.colors.verde,
+      color: colores.verde,
       navigate: 'GestionMenu'
     },
     {
@@ -271,15 +228,24 @@ export default function PantallaPanelAdmin(props: any) {
       label: 'Clientes',
       sub: 'Gestionar usuarios',
       icono: 'people-outline',
-      color: DESIGN.colors.azulClaro,
+      color: colores.azulClaro,
       navigate: 'GestionClientes'
+    },
+    // 🆕 CARD REPARTIDORES
+    {
+      id: 'repartidores',
+      label: 'Repartidores',
+      sub: 'Estado y disponibilidad',
+      icono: 'bicycle',
+      color: colores.info,
+      navigate: 'Repartidores'
     },
     {
       id: 'estadisticas',
       label: 'Estadísticas',
       sub: 'Ventas y más',
       icono: 'bar-chart-outline',
-      color: DESIGN.colors.accentSecondary,
+      color: colores.accentSecondary,
       navigate: 'Estadisticas'
     },
     {
@@ -287,7 +253,7 @@ export default function PantallaPanelAdmin(props: any) {
       label: 'Ofertas',
       sub: 'Gestionar promociones',
       icono: 'pricetag-outline',
-      color: DESIGN.colors.accent,
+      color: colores.accent,
       navigate: 'GestionOfertas'
     },
     {
@@ -295,7 +261,7 @@ export default function PantallaPanelAdmin(props: any) {
       label: 'Recompensas',
       sub: 'Gestionar puntos y premios',
       icono: 'gift-outline',
-      color: DESIGN.colors.accentSecondary,
+      color: colores.accentSecondary,
       navigate: 'GestionRecompensas'
     },
     {
@@ -303,30 +269,28 @@ export default function PantallaPanelAdmin(props: any) {
       label: 'Envíos',
       sub: 'Tarifas y cobertura',
       icono: 'car-outline',
-      color: DESIGN.colors.verde,
+      color: colores.verde,
       navigate: 'ConfiguracionEnvios'
     },
-    // ✅ NUEVO: CUPONES
     {
       id: 'cupones',
       label: 'Cupones',
       sub: 'Crear y gestionar',
       icono: 'ticket-outline',
-      color: DESIGN.colors.morado,
+      color: colores.morado,
       navigate: 'ListaCupones'
     },
   ];
 
-  // ✅ Función de navegación personalizada
   const handleNavigate = (item: MenuItem) => {
     props.navigation.navigate(item.navigate);
   };
 
   return (
-    <View style={styles.container}>
+    <View style={estilos.container}>
       <LinearGradient
-        colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
-        style={styles.backgroundGradient}
+        colors={[colores.gradientStart, colores.gradientEnd]}
+        style={estilos.backgroundGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
@@ -334,7 +298,7 @@ export default function PantallaPanelAdmin(props: any) {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
-          styles.scroll,
+          estilos.scroll,
           {
             paddingHorizontal: paddingHorizontal,
             paddingTop: insets.top + (isTablet ? 30 : 20),
@@ -343,7 +307,7 @@ export default function PantallaPanelAdmin(props: any) {
         ]}
       >
         <Animated.View style={[
-          styles.header,
+          estilos.header,
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideUpAnim }],
@@ -351,17 +315,17 @@ export default function PantallaPanelAdmin(props: any) {
           }
         ]}>
           <View>
-            <Text style={[styles.title, { fontSize: tituloSize }]}>
+            <Text style={[estilos.title, { fontSize: tituloSize }]}>
               Panel Admin
             </Text>
-            <Text style={[styles.subtitle, { fontSize: subtituloSize }]}>
+            <Text style={[estilos.subtitle, { fontSize: subtituloSize }]}>
               Gestiona tu restaurante 🍔
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => setMostrarModal(true)}
             style={[
-              styles.logoutButton,
+              estilos.logoutButton,
               {
                 width: botonSize,
                 height: botonSize,
@@ -371,9 +335,9 @@ export default function PantallaPanelAdmin(props: any) {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={[DESIGN.colors.accent, DESIGN.colors.accentLight]}
+              colors={[colores.accent, colores.accentLight]}
               style={[
-                styles.logoutButtonGradient,
+                estilos.logoutButtonGradient,
                 {
                   width: botonSize,
                   height: botonSize,
@@ -381,13 +345,13 @@ export default function PantallaPanelAdmin(props: any) {
                 }
               ]}
             >
-              <Ionicons name="log-out-outline" size={botonIconSize} color={DESIGN.colors.surface} />
+              <Ionicons name="log-out-outline" size={botonIconSize} color={colores.surface} />
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
 
         <Animated.View style={[
-          styles.grid,
+          estilos.grid,
           {
             gap: gap,
             opacity: fadeAnim,
@@ -398,14 +362,14 @@ export default function PantallaPanelAdmin(props: any) {
             <TouchableOpacity
               key={item.id}
               style={[
-                styles.card,
+                estilos.card,
                 {
                   width: cardWidth,
                   padding: tarjetaPadding,
                   borderRadius: borderRadius,
-                  backgroundColor: DESIGN.colors.surface,
-                  borderColor: DESIGN.colors.border,
-                  shadowColor: DESIGN.colors.cardShadow,
+                  backgroundColor: colores.surface,
+                  borderColor: colores.border,
+                  shadowColor: colores.cardShadow,
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 1,
                   shadowRadius: 8,
@@ -416,7 +380,7 @@ export default function PantallaPanelAdmin(props: any) {
               activeOpacity={0.7}
             >
               <View style={[
-                styles.cardIconContainer,
+                estilos.cardIconContainer,
                 {
                   backgroundColor: item.color + '15',
                   borderRadius: borderRadius,
@@ -426,10 +390,10 @@ export default function PantallaPanelAdmin(props: any) {
               ]}>
                 <Ionicons name={item.icono as any} size={tarjetaIconSize} color={item.color} />
               </View>
-              <Text style={[styles.cardTitle, { fontSize: tarjetaTituloSize, color: item.color }]}>
+              <Text style={[estilos.cardTitle, { fontSize: tarjetaTituloSize, color: item.color }]}>
                 {item.label}
               </Text>
-              <Text style={[styles.cardSub, { fontSize: tarjetaSubSize }]}>
+              <Text style={[estilos.cardSub, { fontSize: tarjetaSubSize }]}>
                 {item.sub}
               </Text>
             </TouchableOpacity>
@@ -438,13 +402,13 @@ export default function PantallaPanelAdmin(props: any) {
           {/* Tarjeta ancha: Ver Tienda */}
           <TouchableOpacity
             style={[
-              styles.wideCard,
+              estilos.wideCard,
               {
                 padding: tarjetaPadding,
                 borderRadius: borderRadius,
-                backgroundColor: DESIGN.colors.surface,
-                borderColor: DESIGN.colors.border,
-                shadowColor: DESIGN.colors.cardShadow,
+                backgroundColor: colores.surface,
+                borderColor: colores.border,
+                shadowColor: colores.cardShadow,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 1,
                 shadowRadius: 8,
@@ -455,21 +419,21 @@ export default function PantallaPanelAdmin(props: any) {
             activeOpacity={0.7}
           >
             <View style={[
-              styles.wideCardIconContainer,
+              estilos.wideCardIconContainer,
               {
-                backgroundColor: DESIGN.colors.accentSecondary + '15',
+                backgroundColor: colores.accentSecondary + '15',
                 borderRadius: borderRadius,
                 padding: iconContainerPadding,
                 marginRight: 12,
               }
             ]}>
-              <Ionicons name="storefront-outline" size={tarjetaIconSize} color={DESIGN.colors.accentSecondary} />
+              <Ionicons name="storefront-outline" size={tarjetaIconSize} color={colores.accentSecondary} />
             </View>
-            <View style={styles.wideCardInfo}>
-              <Text style={[styles.wideCardTitle, { fontSize: tarjetaTituloSize, color: DESIGN.colors.accentSecondary }]}>
+            <View style={estilos.wideCardInfo}>
+              <Text style={[estilos.wideCardTitle, { fontSize: tarjetaTituloSize, color: colores.accentSecondary }]}>
                 Ver Tienda
               </Text>
-              <Text style={[styles.wideCardSub, { fontSize: tarjetaSubSize }]}>
+              <Text style={[estilos.wideCardSub, { fontSize: tarjetaSubSize }]}>
                 Ir al menú como cliente
               </Text>
             </View>
@@ -478,13 +442,13 @@ export default function PantallaPanelAdmin(props: any) {
           {/* Tarjeta ancha: Cerrar Sesión */}
           <TouchableOpacity
             style={[
-              styles.wideCard,
+              estilos.wideCard,
               {
                 padding: tarjetaPadding,
                 borderRadius: borderRadius,
-                backgroundColor: DESIGN.colors.surface,
-                borderColor: DESIGN.colors.border,
-                shadowColor: DESIGN.colors.cardShadow,
+                backgroundColor: colores.surface,
+                borderColor: colores.border,
+                shadowColor: colores.cardShadow,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 1,
                 shadowRadius: 8,
@@ -495,21 +459,21 @@ export default function PantallaPanelAdmin(props: any) {
             activeOpacity={0.7}
           >
             <View style={[
-              styles.wideCardIconContainer,
+              estilos.wideCardIconContainer,
               {
-                backgroundColor: DESIGN.colors.accent + '15',
+                backgroundColor: colores.accent + '15',
                 borderRadius: borderRadius,
                 padding: iconContainerPadding,
                 marginRight: 12,
               }
             ]}>
-              <Ionicons name="log-out-outline" size={tarjetaIconSize} color={DESIGN.colors.accent} />
+              <Ionicons name="log-out-outline" size={tarjetaIconSize} color={colores.accent} />
             </View>
-            <View style={styles.wideCardInfo}>
-              <Text style={[styles.wideCardTitle, { fontSize: tarjetaTituloSize, color: DESIGN.colors.accent }]}>
+            <View style={estilos.wideCardInfo}>
+              <Text style={[estilos.wideCardTitle, { fontSize: tarjetaTituloSize, color: colores.accent }]}>
                 Cerrar Sesión
               </Text>
-              <Text style={[styles.wideCardSub, { fontSize: tarjetaSubSize }]}>
+              <Text style={[estilos.wideCardSub, { fontSize: tarjetaSubSize }]}>
                 Salir de la cuenta
               </Text>
             </View>
@@ -518,49 +482,49 @@ export default function PantallaPanelAdmin(props: any) {
       </ScrollView>
 
       <Modal visible={mostrarModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
+        <View style={estilos.modalOverlay}>
           <View style={[
-            styles.modal,
+            estilos.modal,
             {
               padding: isTablet ? 40 : isSmallPhone ? 24 : 30,
               borderRadius: isTablet ? 28 : 24,
-              borderColor: DESIGN.colors.accent + '30',
-              backgroundColor: DESIGN.colors.surface,
+              borderColor: colores.accent + '30',
+              backgroundColor: colores.surface,
             }
           ]}>
-            <Text style={[styles.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>👔</Text>
-            <Text style={[styles.modalTitle, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
+            <Text style={[estilos.modalIcon, { fontSize: isTablet ? 80 : 60 }]}>👔</Text>
+            <Text style={[estilos.modalTitle, { fontSize: isTablet ? 26 : isSmallPhone ? 20 : 22 }]}>
               ¿Cerrar Sesión?
             </Text>
-            <Text style={[styles.modalText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+            <Text style={[estilos.modalText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
               ¿Estás seguro de que quieres salir del panel de administración?
             </Text>
-            <View style={styles.modalButtons}>
+            <View style={estilos.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancel, {
+                style={[estilos.modalButton, estilos.modalCancel, {
                   paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
                   borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                  borderColor: DESIGN.colors.border,
+                  borderColor: colores.border,
                 }]}
                 onPress={() => setMostrarModal(false)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.modalCancelText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                <Text style={[estilos.modalCancelText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
                   Cancelar
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirm, {
+                style={[estilos.modalButton, estilos.modalConfirm, {
                   paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
                   borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
                   overflow: 'hidden',
-                  backgroundColor: DESIGN.colors.accent,
+                  backgroundColor: colores.accent,
                 }]}
                 onPress={confirmarCerrarSesion}
                 activeOpacity={0.7}
               >
-                <Ionicons name="log-out-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DESIGN.colors.surface} />
-                <Text style={[styles.modalConfirmText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
+                <Ionicons name="log-out-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={colores.surface} />
+                <Text style={[estilos.modalConfirmText, { fontSize: isTablet ? 16 : isSmallPhone ? 13 : 14 }]}>
                   Cerrar Sesión
                 </Text>
               </TouchableOpacity>
@@ -573,149 +537,150 @@ export default function PantallaPanelAdmin(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - CLAROS Y ELEGANTES
+// 🎨 ESTILOS DINÁMICOS
 // ============================================================
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
-  },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  scroll: {
-    flexGrow: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontWeight: 'bold',
-    color: DESIGN.colors.surface,
-    letterSpacing: 1,
-  },
-  subtitle: {
-    color: DESIGN.colors.surface + '70',
-    marginTop: 2,
-    fontWeight: '300',
-    letterSpacing: 0.5,
-  },
-  logoutButton: {
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: DESIGN.colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  logoutButtonGradient: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 16,
-  },
-  card: {
-    alignItems: 'center',
-    borderWidth: 1,
-    marginBottom: 0,
-  },
-  cardIconContainer: {
-    marginBottom: 8,
-  },
-  cardTitle: {
-    fontWeight: 'bold',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  cardSub: {
-    marginTop: 2,
-    textAlign: 'center',
-    color: DESIGN.colors.textSecondary,
-  },
-  wideCard: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    marginBottom: 0,
-  },
-  wideCardIconContainer: {
-    // El marginRight se aplica dinámicamente
-  },
-  wideCardInfo: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  wideCardTitle: {
-    fontWeight: 'bold',
-  },
-  wideCardSub: {
-    marginTop: 2,
-    color: DESIGN.colors.textSecondary,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modal: {
-    width: '90%',
-    maxWidth: 400,
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  modalIcon: {
-    marginBottom: 12,
-  },
-  modalTitle: {
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: DESIGN.colors.text,
-  },
-  modalText: {
-    textAlign: 'center',
-    marginBottom: 24,
-    color: DESIGN.colors.textSecondary,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  modalButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  modalCancel: {
-    backgroundColor: DESIGN.colors.surfaceHover,
-    borderWidth: 1,
-  },
-  modalCancelText: {
-    color: DESIGN.colors.textSecondary,
-    fontWeight: '600',
-  },
-  modalConfirm: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  modalConfirmText: {
-    color: DESIGN.colors.surface,
-    fontWeight: 'bold',
-  },
-});
+const crearEstilos = (colores: PaletaTema) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colores.fondo,
+    },
+    backgroundGradient: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    scroll: {
+      flexGrow: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    title: {
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      letterSpacing: 1,
+    },
+    subtitle: {
+      color: 'rgba(255,255,255,0.85)',
+      marginTop: 2,
+      fontWeight: '300',
+      letterSpacing: 0.5,
+    },
+    logoutButton: {
+      overflow: 'hidden',
+      elevation: 4,
+      shadowColor: colores.accent,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+    },
+    logoutButtonGradient: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 16,
+    },
+    card: {
+      alignItems: 'center',
+      borderWidth: 1,
+      marginBottom: 0,
+    },
+    cardIconContainer: {
+      marginBottom: 8,
+    },
+    cardTitle: {
+      fontWeight: 'bold',
+      marginTop: 4,
+      textAlign: 'center',
+    },
+    cardSub: {
+      marginTop: 2,
+      textAlign: 'center',
+      color: colores.textSecondary,
+    },
+    wideCard: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      marginBottom: 0,
+    },
+    wideCardIconContainer: {
+      // El marginRight se aplica dinámicamente
+    },
+    wideCardInfo: {
+      flex: 1,
+      flexDirection: 'column',
+    },
+    wideCardTitle: {
+      fontWeight: 'bold',
+    },
+    wideCardSub: {
+      marginTop: 2,
+      color: colores.textSecondary,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.85)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modal: {
+      width: '90%',
+      maxWidth: 400,
+      alignItems: 'center',
+      borderWidth: 2,
+    },
+    modalIcon: {
+      marginBottom: 12,
+    },
+    modalTitle: {
+      fontWeight: 'bold',
+      marginBottom: 8,
+      color: colores.text,
+    },
+    modalText: {
+      textAlign: 'center',
+      marginBottom: 24,
+      color: colores.textSecondary,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      width: '100%',
+    },
+    modalButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6,
+    },
+    modalCancel: {
+      backgroundColor: colores.surfaceHover,
+      borderWidth: 1,
+    },
+    modalCancelText: {
+      color: colores.textSecondary,
+      fontWeight: '600',
+    },
+    modalConfirm: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    modalConfirmText: {
+      color: colores.surface,
+      fontWeight: 'bold',
+    },
+  });

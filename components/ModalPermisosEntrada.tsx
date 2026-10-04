@@ -1,4 +1,4 @@
-// components/ModalPermisosEntrada.tsx - Versión Mejorada
+// components/ModalPermisosEntrada.tsx - Versión Mejorada con copy claro
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,17 +39,26 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                         </Text>
 
                         <Text style={styles.subtitulo} allowFontScaling={false}>
-                            Para que disfrutes al 100% de la app, permitinos avisarte sobre novedades clave:
+                            Al activar todo vas a recibir:
                         </Text>
 
                         {/* Beneficios detallados visualmente */}
                         <View style={styles.beneficiosContainer}>
                             <View style={styles.beneficioItem}>
                                 <View style={styles.bulletIcon}>
-                                    <Ionicons name="volume-high" size={16} color={DISENO.colors.accent} />
+                                    <Ionicons name="receipt" size={16} color={DISENO.colors.accent} />
                                 </View>
                                 <Text style={styles.beneficioTexto} allowFontScaling={false}>
-                                    Audios personalizados y alertas de cuando tu pedido esté caliente y en camino.
+                                    <Text style={styles.beneficioTextoNegrita}>Avisos de pedidos:</Text> confirmación, preparación y entrega
+                                </Text>
+                            </View>
+
+                            <View style={styles.beneficioItem}>
+                                <View style={styles.bulletIcon}>
+                                    <Ionicons name="pricetags" size={16} color={DISENO.colors.accent} />
+                                </View>
+                                <Text style={styles.beneficioTexto} allowFontScaling={false}>
+                                    <Text style={styles.beneficioTextoNegrita}>Ofertas y promos:</Text> descuentos y novedades exclusivas
                                 </Text>
                             </View>
 
@@ -58,7 +67,7 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                                     <Ionicons name="navigate" size={16} color={DISENO.colors.accent} />
                                 </View>
                                 <Text style={styles.beneficioTexto} allowFontScaling={false}>
-                                    Seguimiento en tiempo real del repartidor hasta la puerta de tu casa.
+                                    <Text style={styles.beneficioTextoNegrita}>Seguimiento:</Text> mirá dónde está tu pedido en tiempo real
                                 </Text>
                             </View>
                         </View>
@@ -89,6 +98,11 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                                 Ahora no, gracias
                             </Text>
                         </TouchableOpacity>
+
+                        {/* ✅ NUEVO: Texto legal */}
+                        <Text style={styles.legalText} allowFontScaling={false}>
+                            Podés cambiar estas preferencias cuando quieras desde tu perfil
+                        </Text>
                     </ScrollView>
                 </View>
             </View>
@@ -192,6 +206,10 @@ const styles = StyleSheet.create({
         lineHeight: 16,
         includeFontPadding: false,
     },
+    beneficioTextoNegrita: {
+        fontFamily: FUENTES.display,
+        fontWeight: '600',
+    },
     botonAceptar: {
         width: '100%',
         borderRadius: 14,
@@ -218,6 +236,16 @@ const styles = StyleSheet.create({
         fontFamily: FUENTES.regular,
         fontSize: 13,
         color: DISENO.colors.textSecondary,
+        includeFontPadding: false,
+    },
+    legalText: {
+        fontFamily: FUENTES.regular,
+        fontSize: 10,
+        color: DISENO.colors.textTertiary,
+        textAlign: 'center',
+        marginTop: 8,
+        paddingHorizontal: 16,
+        lineHeight: 14,
         includeFontPadding: false,
     },
 });

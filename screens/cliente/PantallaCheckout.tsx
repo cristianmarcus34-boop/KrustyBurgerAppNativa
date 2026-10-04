@@ -1,5 +1,5 @@
-// screens/cliente/PantallaCheckout.tsx - V5 DISEÑO ELEGANTE + TÍTULOS MEJORADOS
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+// screens/cliente/PantallaCheckout.tsx - V8 (Modo oscuro + Lazy Skia + Lazy Mapa)
+import React, { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
     View,
     Text,
@@ -13,17 +13,32 @@ import {
     Alert,
     Linking,
     useWindowDimensions,
+    Platform,
+    Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
+import Animated2, {
+    useSharedValue,
+    useAnimatedStyle,
+    withRepeat,
+    withTiming,
+    withSpring,
+    withSequence,
+    interpolate,
+    Extrapolate,
+} from 'react-native-reanimated';
+import { TouchableRipple } from 'react-native-paper';
 
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaPedidos } from '../../stores/tiendaPedidos';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
-import { DISENO } from '../../lib/colores';
+import { useColores, type PaletaTema } from '../../lib/theme';
 import { FUENTES } from '../../lib/fuentes';
 import { servicioEnvios } from '../../lib/servicioEnvios';
 import { useToast, Toast } from '../../components/Toast';
@@ -38,7 +53,8 @@ import BotonUsarMiUbicacion from '../../components/BotonUsarMiUbicacion';
 import { DireccionNormalizada } from '../../utils/ubicacionHelper';
 import { solicitarPermisosCompletosApp } from '../../utils/permisosHelper';
 import ModalDatoFaltante from '../../components/ModalDatoFaltante';
-import MapaSelector from '../../components/Mapa';
+
+const MapaSelector = lazy(() => import('../../components/Mapa'));
 
 // ============================================================
 // 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
@@ -49,6 +65,9 @@ interface TamanosCheckout {
     headerBottomPadding: number;
     tituloSize: number;
     backIconSize: number;
+    stepSize: number;
+    stepLineWidth: number;
+    stepLabelSize: number;
     sectionIconSize: number;
     sectionIconContainer: number;
     sectionTitleSize: number;
@@ -155,8 +174,9 @@ const calcularTamanosCheckout = (
     const headerBottomPadding = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 10 : 12;
     const tituloSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 16 : 18;
     const backIconSize = isDesktop ? 24 : isTablet ? 22 : isSmallPhone ? 18 : 20;
-
-    // 🎯 TÍTULOS DE SECCIÓN MÁS GRANDES Y CON PESO
+    const stepSize = isDesktop ? 28 : isTablet ? 26 : isSmallPhone ? 20 : 24;
+    const stepLineWidth = isDesktop ? 60 : isTablet ? 50 : isSmallPhone ? 30 : 40;
+    const stepLabelSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 9 : 10;
     const sectionIconSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 16 : 18;
     const sectionIconContainer = isDesktop ? 40 : isTablet ? 38 : isSmallPhone ? 32 : 36;
     const sectionTitleSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 16 : 18;
@@ -164,11 +184,9 @@ const calcularTamanosCheckout = (
     const sectionMarginTop = isDesktop ? 24 : isTablet ? 22 : isSmallPhone ? 16 : 18;
     const sectionAccentWidth = 4;
     const sectionAccentHeight = isDesktop ? 38 : isTablet ? 36 : isSmallPhone ? 30 : 34;
-
     const cardPadding = isDesktop ? 20 : isTablet ? 18 : isSmallPhone ? 14 : 16;
     const cardRadius = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
     const cardMarginBottom = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 10 : 12;
-
     const inputSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 13 : 13.5;
     const inputPaddingH = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 12 : 14;
     const inputPaddingV = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
@@ -176,50 +194,41 @@ const calcularTamanosCheckout = (
     const inputMinHeight = isDesktop ? 54 : isTablet ? 52 : isSmallPhone ? 46 : 48;
     const inputRadius = isDesktop ? 14 : isSmallPhone ? 10 : 12;
     const inputLabelSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 10 : 11;
-
     const optionPadding = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 12 : 14;
     const optionRadius = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
     const optionIconSize = isDesktop ? 24 : isTablet ? 22 : isSmallPhone ? 18 : 20;
     const optionTextSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
     const optionPriceSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 11 : 12;
-
     const direccionPadding = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 10 : 12;
     const direccionRadius = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
     const direccionLabelSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 10 : 11;
     const direccionTextSize = isDesktop ? 15 : isTablet ? 14 : isSmallPhone ? 12 : 13;
     const direccionBadgeSize = isDesktop ? 11 : isTablet ? 10 : isSmallPhone ? 9 : 10;
-
     const infoEnvioPadding = isDesktop ? 14 : isTablet ? 12 : isSmallPhone ? 10 : 12;
     const infoEnvioRadius = isDesktop ? 12 : isSmallPhone ? 8 : 10;
     const infoEnvioTextSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 11 : 12;
     const infoEnvioIconSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 14 : 15;
-
     const efectivoPadding = isDesktop ? 16 : isTablet ? 14 : isSmallPhone ? 12 : 13;
     const efectivoRadius = isDesktop ? 12 : isSmallPhone ? 10 : 11;
     const efectivoTitleSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
     const efectivoSubtitleSize = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 11 : 11;
     const efectivoInputSize = isDesktop ? 17 : isTablet ? 17 : isSmallPhone ? 15 : 16;
     const efectivoInputPaddingV = isDesktop ? 10 : isTablet ? 10 : isSmallPhone ? 8 : 9;
-
     const vueltoPadding = isDesktop ? 12 : isTablet ? 11 : isSmallPhone ? 10 : 11;
     const vueltoRadius = isDesktop ? 10 : isSmallPhone ? 8 : 9;
     const vueltoLabelSize = isDesktop ? 12 : isTablet ? 12 : isSmallPhone ? 11 : 12;
     const vueltoMontoSize = isDesktop ? 18 : isTablet ? 17 : isSmallPhone ? 16 : 17;
     const vueltoIconSize = isDesktop ? 20 : isTablet ? 19 : isSmallPhone ? 18 : 19;
-
     const resumenTextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
     const resumenValorSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
     const totalTextSize = isDesktop ? 17 : isTablet ? 16 : isSmallPhone ? 14 : 15;
     const totalPriceSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 18 : 20;
-
     const botonPaddingV = isDesktop ? 18 : isTablet ? 16 : isSmallPhone ? 14 : 15;
     const botonRadius = isDesktop ? 16 : isSmallPhone ? 12 : 14;
     const botonTextSize = isDesktop ? 16 : isTablet ? 15 : isSmallPhone ? 14 : 15;
     const botonIconSize = isDesktop ? 22 : isTablet ? 20 : isSmallPhone ? 18 : 20;
-
     const productoTextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
     const productoPrecioSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
-
     const modalPadding = isDesktop ? 40 : isTablet ? 34 : isSmallPhone ? 24 : 28;
     const modalRadius = isDesktop ? 28 : isTablet ? 26 : isSmallPhone ? 22 : 24;
     const modalIconSize = isDesktop ? 80 : isTablet ? 72 : isSmallPhone ? 54 : 64;
@@ -227,7 +236,6 @@ const calcularTamanosCheckout = (
     const modalTextSize = isDesktop ? 14 : isTablet ? 13 : isSmallPhone ? 12 : 13;
     const modalSubtextSize = isDesktop ? 13 : isTablet ? 12 : isSmallPhone ? 11 : 12;
     const modalDotSize = isSmallPhone ? 8 : 10;
-
     const transModalWidth = isDesktop ? 500 : isTablet ? 480 : width * 0.92;
     const transModalRadius = isSmallPhone ? 16 : 20;
     const transModalHeaderPaddingV = isSmallPhone ? 12 : 14;
@@ -250,7 +258,6 @@ const calcularTamanosCheckout = (
     const transModalBotonTextSize = isSmallPhone ? 11 : 12;
     const transModalBotonIconSize = isSmallPhone ? 16 : 18;
     const transModalFooterSize = isSmallPhone ? 10 : 11;
-
     const beneficiosPadding = isSmallPhone ? 12 : 14;
     const beneficiosRadius = isSmallPhone ? 12 : 14;
     const beneficiosIconSize = isSmallPhone ? 32 : 36;
@@ -264,103 +271,31 @@ const calcularTamanosCheckout = (
     const beneficioTagRadius = isSmallPhone ? 8 : 10;
 
     return {
-        paddingHorizontal,
-        headerTopPadding,
-        headerBottomPadding,
-        tituloSize,
-        backIconSize,
-        sectionIconSize,
-        sectionIconContainer,
-        sectionTitleSize,
-        sectionSubtitleSize,
-        sectionMarginTop,
-        sectionAccentWidth,
-        sectionAccentHeight,
-        cardPadding,
-        cardRadius,
-        cardMarginBottom,
-        inputSize,
-        inputPaddingH,
-        inputPaddingV,
-        inputIconSize,
-        inputMinHeight,
-        inputRadius,
-        inputLabelSize,
-        optionPadding,
-        optionRadius,
-        optionIconSize,
-        optionTextSize,
-        optionPriceSize,
-        direccionPadding,
-        direccionRadius,
-        direccionLabelSize,
-        direccionTextSize,
-        direccionBadgeSize,
-        infoEnvioPadding,
-        infoEnvioRadius,
-        infoEnvioTextSize,
-        infoEnvioIconSize,
-        efectivoPadding,
-        efectivoRadius,
-        efectivoTitleSize,
-        efectivoSubtitleSize,
-        efectivoInputSize,
-        efectivoInputPaddingV,
-        vueltoPadding,
-        vueltoRadius,
-        vueltoLabelSize,
-        vueltoMontoSize,
-        vueltoIconSize,
-        resumenTextSize,
-        resumenValorSize,
-        totalTextSize,
-        totalPriceSize,
-        botonPaddingV,
-        botonRadius,
-        botonTextSize,
-        botonIconSize,
-        productoTextSize,
-        productoPrecioSize,
-        modalPadding,
-        modalRadius,
-        modalIconSize,
-        modalTitleSize,
-        modalTextSize,
-        modalSubtextSize,
-        modalDotSize,
-        transModalWidth,
-        transModalRadius,
-        transModalHeaderPaddingV,
-        transModalHeaderIconSize,
-        transModalHeaderTitleSize,
-        transModalBodyPadding,
-        transModalMensajeSize,
-        transModalAliasPadding,
-        transModalAliasLabelSize,
-        transModalAliasTextoSize,
-        transModalCbuPadding,
-        transModalCbuLabelSize,
-        transModalCbuTextoSize,
-        transModalMontoPadding,
-        transModalMontoLabelSize,
-        transModalMontoTextoSize,
-        transModalPedidoIdSize,
-        transModalBotonPaddingV,
-        transModalBotonRadius,
-        transModalBotonTextSize,
-        transModalBotonIconSize,
+        paddingHorizontal, headerTopPadding, headerBottomPadding, tituloSize, backIconSize,
+        stepSize, stepLineWidth, stepLabelSize,
+        sectionIconSize, sectionIconContainer, sectionTitleSize, sectionSubtitleSize,
+        sectionMarginTop, sectionAccentWidth, sectionAccentHeight,
+        cardPadding, cardRadius, cardMarginBottom,
+        inputSize, inputPaddingH, inputPaddingV, inputIconSize, inputMinHeight, inputRadius, inputLabelSize,
+        optionPadding, optionRadius, optionIconSize, optionTextSize, optionPriceSize,
+        direccionPadding, direccionRadius, direccionLabelSize, direccionTextSize, direccionBadgeSize,
+        infoEnvioPadding, infoEnvioRadius, infoEnvioTextSize, infoEnvioIconSize,
+        efectivoPadding, efectivoRadius, efectivoTitleSize, efectivoSubtitleSize,
+        efectivoInputSize, efectivoInputPaddingV,
+        vueltoPadding, vueltoRadius, vueltoLabelSize, vueltoMontoSize, vueltoIconSize,
+        resumenTextSize, resumenValorSize, totalTextSize, totalPriceSize,
+        botonPaddingV, botonRadius, botonTextSize, botonIconSize,
+        productoTextSize, productoPrecioSize,
+        modalPadding, modalRadius, modalIconSize, modalTitleSize, modalTextSize, modalSubtextSize, modalDotSize,
+        transModalWidth, transModalRadius, transModalHeaderPaddingV, transModalHeaderIconSize, transModalHeaderTitleSize,
+        transModalBodyPadding, transModalMensajeSize, transModalAliasPadding, transModalAliasLabelSize,
+        transModalAliasTextoSize, transModalCbuPadding, transModalCbuLabelSize, transModalCbuTextoSize,
+        transModalMontoPadding, transModalMontoLabelSize, transModalMontoTextoSize, transModalPedidoIdSize,
+        transModalBotonPaddingV, transModalBotonRadius, transModalBotonTextSize, transModalBotonIconSize,
         transModalFooterSize,
-        beneficiosPadding,
-        beneficiosRadius,
-        beneficiosIconSize,
-        beneficiosEmojiSize,
-        beneficiosTitleSize,
-        beneficiosDescSize,
-        beneficioTagTextSize,
-        beneficioTagIconSize,
-        beneficioTagPaddingH,
-        beneficioTagPaddingV,
-        beneficioTagRadius,
+        beneficiosPadding, beneficiosRadius, beneficiosIconSize, beneficiosEmojiSize,
+        beneficiosTitleSize, beneficiosDescSize,
+        beneficioTagTextSize, beneficioTagIconSize, beneficioTagPaddingH, beneficioTagPaddingV, beneficioTagRadius,
     };
 };
 
@@ -404,35 +339,290 @@ const obtenerDireccionDesdeCoordenadas = async (lat: number, lng: number): Promi
 };
 
 // ============================================================
-// 🎨 COLORES SEMÁNTICOS DEL CHECKOUT
+// 🎨 COLORES SEMÁNTICOS (dinámicos)
 // ============================================================
-const C = {
-    bg: DISENO.colors.fondo,
-    card: DISENO.colors.surface,
-    cardBorder: DISENO.colors.border,
-    text: DISENO.colors.text,
-    textSec: DISENO.colors.textSecondary,
-    textTer: DISENO.colors.textTertiary,
-    accent: DISENO.colors.accent,
-    accentSoft: DISENO.colors.accent + '12',
-    accentBorder: DISENO.colors.accent + '25',
-    accentSecondary: DISENO.colors.accentSecondary || DISENO.colors.accent,
-    success: DISENO.colors.success,
-    successSoft: DISENO.colors.success + '12',
-    successBorder: DISENO.colors.success + '25',
-    info: DISENO.colors.info,
-    infoSoft: DISENO.colors.info + '12',
-    infoBorder: DISENO.colors.info + '25',
-    warning: DISENO.colors.warning,
-    danger: DISENO.colors.danger,
+const construirColores = (colores: PaletaTema) => ({
+    bg: colores.fondo,
+    card: colores.surface,
+    cardBorder: colores.border,
+    text: colores.text,
+    textSec: colores.textSecondary,
+    textTer: colores.textTertiary,
+    accent: colores.accent,
+    accentSoft: colores.accent + '12',
+    accentBorder: colores.accent + '25',
+    accentSecondary: colores.accentSecondary || colores.accent,
+    success: colores.success,
+    successSoft: colores.success + '12',
+    successBorder: colores.success + '25',
+    info: colores.info,
+    infoSoft: colores.info + '12',
+    infoBorder: colores.info + '25',
+    warning: colores.warning,
+    danger: colores.danger,
+});
+
+type SemanticColors = ReturnType<typeof construirColores>;
+
+// ============================================================
+// 🎊 CONFETI CON SKIA (LAZY LOAD)
+// ============================================================
+interface ConfetiParticle {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    size: number;
+    color: string;
+    rotation: number;
+    rotationSpeed: number;
+}
+
+const ConfetiSkia: React.FC<{ activo: boolean }> = ({ activo }) => {
+    const [Skia, setSkia] = useState<any>(null);
+    const [particulas, setParticulas] = useState<ConfetiParticle[]>([]);
+    const frameRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!activo || Skia) return;
+        let mounted = true;
+        import('@shopify/react-native-skia')
+            .then((mod) => {
+                if (mounted) setSkia(mod);
+            })
+            .catch(() => { });
+        return () => {
+            mounted = false;
+        };
+    }, [activo, Skia]);
+
+    useEffect(() => {
+        if (!activo || !Skia) {
+            setParticulas([]);
+            return;
+        }
+
+        const coloresConfeti = ['#E53935', '#F5C518', '#43A047', '#1E88E5', '#FF6F00', '#8E24AA'];
+        const iniciales: ConfetiParticle[] = Array.from({ length: 40 }).map(() => ({
+            x: Math.random() * 300,
+            y: -20 - Math.random() * 100,
+            vx: (Math.random() - 0.5) * 4,
+            vy: 2 + Math.random() * 4,
+            size: 4 + Math.random() * 6,
+            color: coloresConfeti[Math.floor(Math.random() * coloresConfeti.length)],
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.3,
+        }));
+
+        setParticulas(iniciales);
+
+        let lastTime = Date.now();
+        const tick = () => {
+            const now = Date.now();
+            const dt = (now - lastTime) / 16;
+            lastTime = now;
+
+            setParticulas((prev) =>
+                prev
+                    .map((p) => ({
+                        ...p,
+                        x: p.x + p.vx * dt,
+                        y: p.y + p.vy * dt,
+                        rotation: p.rotation + p.rotationSpeed * dt,
+                        vy: p.vy + 0.15 * dt,
+                    }))
+                    .filter((p) => p.y < 400)
+            );
+
+            frameRef.current = requestAnimationFrame(tick);
+        };
+
+        frameRef.current = requestAnimationFrame(tick);
+
+        return () => {
+            if (frameRef.current) cancelAnimationFrame(frameRef.current);
+        };
+    }, [activo, Skia]);
+
+    if (!activo || !Skia || particulas.length === 0) return null;
+
+    const { Canvas, Group, Rect } = Skia;
+
+    return (
+        <Canvas style={{ position: 'absolute', width: 300, height: 400 }} pointerEvents="none">
+            <Group>
+                {particulas.map((p: ConfetiParticle, i: number) => (
+                    <Rect
+                        key={i}
+                        x={p.x}
+                        y={p.y}
+                        width={p.size}
+                        height={p.size * 0.6}
+                        color={p.color}
+                        transform={[{ rotate: p.rotation }]}
+                        origin={{ x: p.x + p.size / 2, y: p.y + p.size * 0.3 }}
+                    />
+                ))}
+            </Group>
+        </Canvas>
+    );
 };
 
 // ============================================================
-// 🏠 COMPONENTE
+// 🚀 STEPS VISUALES
+// ============================================================
+const StepsBar: React.FC<{
+    pasoActual: 0 | 1 | 2;
+    tamanos: TamanosCheckout;
+    C: SemanticColors;
+}> = ({ pasoActual, tamanos, C }) => {
+    const pasos = ['Carrito', 'Checkout', 'Listo'];
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            {pasos.map((paso, i) => {
+                const activo = i <= pasoActual;
+                const esActual = i === pasoActual;
+                return (
+                    <React.Fragment key={paso}>
+                        <View style={{ alignItems: 'center' }}>
+                            <View
+                                style={{
+                                    width: tamanos.stepSize,
+                                    height: tamanos.stepSize,
+                                    borderRadius: tamanos.stepSize / 2,
+                                    backgroundColor: activo ? C.accent : C.bg,
+                                    borderWidth: 2,
+                                    borderColor: activo ? C.accent : C.cardBorder,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                {i < pasoActual ? (
+                                    <Ionicons name="checkmark" size={tamanos.stepSize * 0.55} color="#FFF" />
+                                ) : (
+                                    <Text
+                                        style={{
+                                            fontFamily: FUENTES.display,
+                                            color: activo ? '#FFF' : C.textTer,
+                                            fontSize: tamanos.stepSize * 0.42,
+                                            includeFontPadding: false,
+                                        }}
+                                        allowFontScaling={false}
+                                    >
+                                        {i + 1}
+                                    </Text>
+                                )}
+                            </View>
+                            <Text
+                                style={{
+                                    fontFamily: FUENTES.display,
+                                    fontSize: tamanos.stepLabelSize,
+                                    color: esActual ? C.accent : C.textTer,
+                                    marginTop: 4,
+                                    includeFontPadding: false,
+                                }}
+                                allowFontScaling={false}
+                            >
+                                {paso}
+                            </Text>
+                        </View>
+                        {i < pasos.length - 1 && (
+                            <View
+                                style={{
+                                    width: tamanos.stepLineWidth,
+                                    height: 2,
+                                    backgroundColor: i < pasoActual ? C.accent : C.cardBorder,
+                                    marginHorizontal: 6,
+                                    marginBottom: 16,
+                                }}
+                            />
+                        )}
+                    </React.Fragment>
+                );
+            })}
+        </View>
+    );
+};
+
+// ============================================================
+// 🎨 HEADER DE SECCIÓN
+// ============================================================
+const SectionHeader: React.FC<{
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    subtitle?: string;
+    color: string;
+    tamanos: TamanosCheckout;
+    C: SemanticColors;
+}> = ({ icon, title, subtitle, color, tamanos, C }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View
+            style={{
+                width: tamanos.sectionAccentWidth,
+                height: tamanos.sectionAccentHeight,
+                borderRadius: tamanos.sectionAccentWidth / 2,
+                backgroundColor: color,
+                marginRight: 12,
+            }}
+        />
+        <View
+            style={{
+                width: tamanos.sectionIconContainer,
+                height: tamanos.sectionIconContainer,
+                borderRadius: tamanos.sectionIconContainer / 2,
+                backgroundColor: color + '15',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 12,
+            }}
+        >
+            <Ionicons name={icon} size={tamanos.sectionIconSize} color={color} />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text
+                style={{
+                    fontFamily: FUENTES.display,
+                    fontSize: tamanos.sectionTitleSize,
+                    fontWeight: '700',
+                    color: C.text,
+                    letterSpacing: -0.3,
+                    lineHeight: tamanos.sectionTitleSize * 1.2,
+                    includeFontPadding: false,
+                }}
+                allowFontScaling={false}
+            >
+                {title}
+            </Text>
+            {subtitle && (
+                <Text
+                    style={{
+                        fontFamily: FUENTES.regular,
+                        fontSize: tamanos.sectionSubtitleSize,
+                        color: C.textTer,
+                        marginTop: 2,
+                        includeFontPadding: false,
+                        lineHeight: tamanos.sectionSubtitleSize * 1.3,
+                    }}
+                    allowFontScaling={false}
+                >
+                    {subtitle}
+                </Text>
+            )}
+        </View>
+    </View>
+);
+
+// ============================================================
+// 🏠 COMPONENTE PRINCIPAL
 // ============================================================
 export default function PantallaCheckout(props: any) {
     const insets = useSafeAreaInsets();
     const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+    // ✅ TEMA
+    const colores = useColores();
+    const estilos = useMemo(() => crearEstilos(colores), [colores]);
+    const C = useMemo(() => construirColores(colores), [colores]);
 
     const isTablet = screenWidth >= 768;
     const isDesktop = screenWidth >= 1024;
@@ -532,6 +722,11 @@ export default function PantallaCheckout(props: any) {
     const dot2Anim = useRef(new Animated.Value(0)).current;
     const dot3Anim = useRef(new Animated.Value(0)).current;
 
+    const shineX = useSharedValue(-1);
+    const shineStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: shineX.value * 350 }],
+    }));
+
     const ultimaUbicacionCalculada = useRef<string>('');
 
     const precioUnitario = (precio: any) => (typeof precio === 'number' ? precio : Number(precio));
@@ -573,6 +768,10 @@ export default function PantallaCheckout(props: any) {
             setMostrarModalTransferencia(true);
         }
     }, [pedidoIdTransferencia]);
+
+    useEffect(() => {
+        shineX.value = withRepeat(withTiming(1, { duration: 2200 }), -1, false);
+    }, []);
 
     useEffect(() => {
         if (!sesion) return;
@@ -721,7 +920,8 @@ export default function PantallaCheckout(props: any) {
             if (camposManuales.ciudad) datosActualizados.direccion_ciudad = camposManuales.ciudad;
             if (camposManuales.codigoPostal) datosActualizados.direccion_codigo_postal = camposManuales.codigoPostal;
             if (Object.keys(datosActualizados).length > 0) await actualizarPerfil(datosActualizados);
-        } catch (error) { } finally {
+        } catch (error) {
+        } finally {
             setGuardandoPerfil(false);
         }
     };
@@ -1049,6 +1249,7 @@ export default function PantallaCheckout(props: any) {
 
     const copiarAlias = async () => {
         await Clipboard.setStringAsync(ALIAS_TRANSFERENCIA);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         toast.exito('¡Alias copiado!');
     };
 
@@ -1091,9 +1292,9 @@ export default function PantallaCheckout(props: any) {
                         text: 'Activar ahora',
                         onPress: async () => {
                             await solicitarPermisosCompletosApp(perfil.id);
-                        }
-                    }
-                ]
+                        },
+                    },
+                ],
             );
             return;
         }
@@ -1239,10 +1440,11 @@ export default function PantallaCheckout(props: any) {
 
         setCargando(false);
         setMostrarModalExito(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
         setTimeout(() => {
             setMostrarModalExito(false);
             props.navigation.replace('Seguimiento', { pedidoId });
-        }, 2500);
+        }, 2800);
     };
 
     const cerrarModalTransferencia = () => {
@@ -1306,7 +1508,7 @@ export default function PantallaCheckout(props: any) {
 
     if (cargandoAuth || !sesion) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[estilos.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color={C.accent} />
                 <Text
                     style={{
@@ -1325,181 +1527,251 @@ export default function PantallaCheckout(props: any) {
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.backgroundGradient} />
+        <View style={estilos.container}>
+            <LinearGradient
+                colors={[colores.fondo, colores.surface, colores.fondo]}
+                style={estilos.backgroundGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            />
 
-            {/* ─── HEADER ─── */}
+
+
+            {/* 🎯 HEADER FLOTANTE (encima del scroll) */}
+            <View
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    elevation: 10,
+                }}
+                pointerEvents="box-none"
+            >
+                {/* Gradiente del header */}
+                <LinearGradient
+                    colors={[C.accent, C.accentSecondary]}
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.top + tamanos.headerTopPadding + 180,
+                        borderBottomLeftRadius: 28,
+                        borderBottomRightRadius: 28,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 12,
+                    }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                />
+
+                {/* Fila del header */}
+                <View
+                    style={[
+                        estilos.header,
+                        {
+                            paddingTop: insets.top + tamanos.headerTopPadding,
+                            paddingHorizontal: tamanos.paddingHorizontal,
+                            paddingBottom: tamanos.headerBottomPadding,
+                        },
+                    ]}
+                >
+                    <TouchableOpacity
+                        style={estilos.backButtonGlass}
+                        onPress={handleVolverAlCarrito}
+                        activeOpacity={0.7}
+                        hitSlop={8}
+                    >
+                        <Ionicons name="arrow-back" size={tamanos.backIconSize} color="#FFF" />
+                    </TouchableOpacity>
+                    <Text
+                        style={[estilos.title, { fontSize: tamanos.tituloSize, color: '#FFF' }]}
+                        allowFontScaling={false}
+                        numberOfLines={1}
+                    >
+                        Confirmar Pedido
+                    </Text>
+                    <View style={{ width: tamanos.backIconSize + 16 }} />
+                </View>
+
+                {/* STEPS (dentro del header flotante) */}
+                <View
+                    style={[
+                        estilos.stepsContainer,
+                        {
+                            paddingHorizontal: tamanos.paddingHorizontal,
+                            paddingTop: 12,
+                            paddingBottom: 20,
+                        },
+                    ]}
+                >
+                    <StepsBar pasoActual={1} tamanos={tamanos} C={C} />
+                </View>
+            </View>
+
             <View
                 style={[
-                    styles.header,
+                    estilos.stepsContainer,
                     {
-                        paddingTop: insets.top + tamanos.headerTopPadding,
                         paddingHorizontal: tamanos.paddingHorizontal,
-                        paddingBottom: tamanos.headerBottomPadding,
+                        paddingTop: 12,
+                        paddingBottom: 20,
                     },
                 ]}
             >
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={handleVolverAlCarrito}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                    <Ionicons name="arrow-back" size={tamanos.backIconSize} color={C.text} />
-                </TouchableOpacity>
-                <Text
-                    style={[styles.title, { fontSize: tamanos.tituloSize }]}
-                    allowFontScaling={false}
-                    numberOfLines={1}
-                >
-                    Confirmar Pedido
-                </Text>
-                <View style={{ width: tamanos.backIconSize }} />
+                <StepsBar pasoActual={1} tamanos={tamanos} C={C} />
             </View>
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
+                style={{ flex: 1 }}
                 contentContainerStyle={[
-                    styles.scroll,
+                    estilos.scroll,
                     {
                         paddingHorizontal: tamanos.paddingHorizontal,
                         paddingBottom: insets.bottom + 120,
-                        paddingTop: tamanos.sectionMarginTop,
+                        // 🎯 paddingTop = altura del header flotante + un margen extra
+                        paddingTop: insets.top + tamanos.headerTopPadding + 100 + tamanos.headerBottomPadding + 20,
                     },
                 ]}
             >
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 🎁 BENEFICIOS DE NIVEL                          */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 🎁 BENEFICIOS DE NIVEL */}
                 {perfil && beneficios && (nivel || beneficios.descuento > 0 || beneficios.envioGratis) && (
                     <Animated.View
                         style={{
                             opacity: fadeAnim,
                             transform: [{ translateY: slideUpAnim }],
                             marginBottom: tamanos.cardMarginBottom,
+                            marginTop: tamanos.sectionMarginTop,
                         }}
                     >
-                        <View
-                            style={{
-                                padding: tamanos.beneficiosPadding,
-                                borderRadius: tamanos.beneficiosRadius,
-                                backgroundColor: C.accentSoft,
-                                borderWidth: 1,
-                                borderColor: C.accentBorder,
-                            }}
-                        >
-                            <View style={styles.beneficiosHeader}>
-                                <View
-                                    style={{
-                                        width: tamanos.beneficiosIconSize,
-                                        height: tamanos.beneficiosIconSize,
-                                        borderRadius: tamanos.beneficiosIconSize / 2,
-                                        backgroundColor: C.accent + '20',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                    }}
-                                >
-                                    <Text style={{ fontSize: tamanos.beneficiosEmojiSize }} allowFontScaling={false}>
-                                        {nivel?.icono || '⭐'}
-                                    </Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text
-                                        style={{
-                                            fontFamily: FUENTES.display,
-                                            fontSize: tamanos.beneficiosTitleSize,
-                                            color: C.accent,
-                                            includeFontPadding: false,
-                                        }}
-                                        allowFontScaling={false}
-                                    >
-                                        {nivel?.nombre || 'Cliente'}
-                                    </Text>
-                                    <Text
-                                        style={{
-                                            fontFamily: FUENTES.regular,
-                                            fontSize: tamanos.beneficiosDescSize,
-                                            color: C.textSec,
-                                            includeFontPadding: false,
-                                            marginTop: 2,
-                                        }}
-                                        allowFontScaling={false}
-                                        numberOfLines={2}
-                                    >
-                                        {descripcionBeneficios || 'Acumulá puntos para subir de nivel'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.beneficiosList}>
-                                {beneficios.descuento > 0 && (
+                        <View style={{ borderRadius: tamanos.beneficiosRadius, overflow: 'hidden' }}>
+                            <LinearGradient
+                                colors={[C.accent + '18', C.accentSecondary + '08']}
+                                style={StyleSheet.absoluteFill}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            />
+                            <View
+                                style={{
+                                    padding: tamanos.beneficiosPadding,
+                                    borderWidth: 1,
+                                    borderColor: C.accentBorder,
+                                    borderRadius: tamanos.beneficiosRadius,
+                                }}
+                            >
+                                <View style={estilos.beneficiosHeader}>
                                     <View
-                                        style={[
-                                            styles.beneficioTag,
-                                            {
-                                                paddingHorizontal: tamanos.beneficioTagPaddingH,
-                                                paddingVertical: tamanos.beneficioTagPaddingV,
-                                                borderRadius: tamanos.beneficioTagRadius,
-                                            },
-                                        ]}
+                                        style={{
+                                            width: tamanos.beneficiosIconSize,
+                                            height: tamanos.beneficiosIconSize,
+                                            borderRadius: tamanos.beneficiosIconSize / 2,
+                                            backgroundColor: C.accent + '20',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                        }}
                                     >
-                                        <Ionicons
-                                            name="pricetag-outline"
-                                            size={tamanos.beneficioTagIconSize}
-                                            color={C.accent}
-                                        />
+                                        <Text style={{ fontSize: tamanos.beneficiosEmojiSize }} allowFontScaling={false}>
+                                            {nivel?.icono || '⭐'}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
                                         <Text
                                             style={{
-                                                fontFamily: FUENTES.regular,
-                                                fontSize: tamanos.beneficioTagTextSize,
+                                                fontFamily: FUENTES.display,
+                                                fontSize: tamanos.beneficiosTitleSize,
                                                 color: C.accent,
-                                                fontWeight: '600',
+                                                fontWeight: '700',
                                                 includeFontPadding: false,
                                             }}
                                             allowFontScaling={false}
                                         >
-                                            {beneficios.descuento}% OFF
+                                            {nivel?.nombre || 'Cliente'}
                                         </Text>
-                                    </View>
-                                )}
-                                {beneficios.envioGratis && (
-                                    <View
-                                        style={[
-                                            styles.beneficioTag,
-                                            {
-                                                paddingHorizontal: tamanos.beneficioTagPaddingH,
-                                                paddingVertical: tamanos.beneficioTagPaddingV,
-                                                borderRadius: tamanos.beneficioTagRadius,
-                                            },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name="bicycle-outline"
-                                            size={tamanos.beneficioTagIconSize}
-                                            color={C.success}
-                                        />
                                         <Text
                                             style={{
                                                 fontFamily: FUENTES.regular,
-                                                fontSize: tamanos.beneficioTagTextSize,
-                                                color: C.success,
-                                                fontWeight: '600',
+                                                fontSize: tamanos.beneficiosDescSize,
+                                                color: C.textSec,
                                                 includeFontPadding: false,
+                                                marginTop: 2,
                                             }}
                                             allowFontScaling={false}
+                                            numberOfLines={2}
                                         >
-                                            Envío gratis
+                                            {descripcionBeneficios || 'Acumulá puntos para subir de nivel'}
                                         </Text>
                                     </View>
-                                )}
+                                </View>
+
+                                <View style={estilos.beneficiosList}>
+                                    {beneficios.descuento > 0 && (
+                                        <View
+                                            style={[
+                                                estilos.beneficioTag,
+                                                {
+                                                    paddingHorizontal: tamanos.beneficioTagPaddingH,
+                                                    paddingVertical: tamanos.beneficioTagPaddingV,
+                                                    borderRadius: tamanos.beneficioTagRadius,
+                                                    backgroundColor: colores.surface,
+                                                    borderColor: colores.border,
+                                                },
+                                            ]}
+                                        >
+                                            <Ionicons name="pricetag-outline" size={tamanos.beneficioTagIconSize} color={C.accent} />
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.regular,
+                                                    fontSize: tamanos.beneficioTagTextSize,
+                                                    color: C.accent,
+                                                    fontWeight: '600',
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {beneficios.descuento}% OFF
+                                            </Text>
+                                        </View>
+                                    )}
+                                    {beneficios.envioGratis && (
+                                        <View
+                                            style={[
+                                                estilos.beneficioTag,
+                                                {
+                                                    paddingHorizontal: tamanos.beneficioTagPaddingH,
+                                                    paddingVertical: tamanos.beneficioTagPaddingV,
+                                                    borderRadius: tamanos.beneficioTagRadius,
+                                                    backgroundColor: colores.surface,
+                                                    borderColor: colores.border,
+                                                },
+                                            ]}
+                                        >
+                                            <Ionicons name="bicycle-outline" size={tamanos.beneficioTagIconSize} color={C.success} />
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.regular,
+                                                    fontSize: tamanos.beneficioTagTextSize,
+                                                    color: C.success,
+                                                    fontWeight: '600',
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                Envío gratis
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
                             </View>
                         </View>
                     </Animated.View>
                 )}
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 📞 SECCIÓN: DATOS DE CONTACTO                   */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 📞 CONTACTO */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -1513,36 +1785,36 @@ export default function PantallaCheckout(props: any) {
                         subtitle="¿A qué número te avisamos?"
                         color={C.accent}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View
                         style={[
-                            styles.card,
+                            estilos.card,
                             {
                                 padding: tamanos.cardPadding,
                                 borderRadius: tamanos.cardRadius,
                                 marginTop: 12,
+                                backgroundColor: colores.surface,
+                                borderColor: colores.border,
                             },
                         ]}
                     >
                         <Text
-                            style={[
-                                styles.inputLabel,
-                                { fontSize: tamanos.inputLabelSize, marginBottom: 6 },
-                            ]}
+                            style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, marginBottom: 6, color: colores.textSecondary }]}
                             allowFontScaling={false}
                         >
                             Teléfono / WhatsApp
                         </Text>
                         <View
                             style={[
-                                styles.inputWrap,
+                                estilos.inputWrap,
                                 {
                                     borderRadius: tamanos.inputRadius,
                                     minHeight: tamanos.inputMinHeight,
                                     paddingHorizontal: tamanos.inputPaddingH,
-                                    borderColor: telefono ? C.successBorder : C.cardBorder,
-                                    backgroundColor: telefono ? C.successSoft : C.bg,
+                                    borderColor: telefono ? C.successBorder : colores.border,
+                                    backgroundColor: telefono ? C.successSoft : colores.fondo,
                                 },
                             ]}
                         >
@@ -1588,9 +1860,7 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 🚚 SECCIÓN: TIPO DE ENTREGA                     */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 🚚 TIPO DE ENTREGA */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -1604,99 +1874,99 @@ export default function PantallaCheckout(props: any) {
                         subtitle="¿Cómo lo querés recibir?"
                         color={C.accent}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View style={{ gap: isTablet ? 10 : 8, marginTop: 12 }}>
                         {tiposEntrega.map((t) => {
                             const isSelected = tipoEntrega === t.id;
                             return (
-                                <TouchableOpacity
+                                <TouchableRipple
                                     key={t.id}
+                                    onPress={() => {
+                                        Haptics.selectionAsync().catch(() => { });
+                                        setTipoEntrega(t.id);
+                                    }}
+                                    borderless
+                                    rippleColor={C.accent + '15'}
                                     style={[
-                                        styles.optionCard,
+                                        estilos.optionCard,
                                         {
                                             padding: tamanos.optionPadding,
                                             borderRadius: tamanos.optionRadius,
-                                            backgroundColor: isSelected ? C.accentSoft : C.card,
-                                            borderColor: isSelected ? C.accent : C.cardBorder,
+                                            backgroundColor: isSelected ? C.accentSoft : colores.surface,
+                                            borderColor: isSelected ? C.accent : colores.border,
                                             borderWidth: isSelected ? 1.5 : 1,
                                         },
                                     ]}
-                                    onPress={() => setTipoEntrega(t.id)}
-                                    activeOpacity={0.75}
                                 >
-                                    <View
-                                        style={[
-                                            styles.optionIconWrap,
-                                            {
-                                                width: tamanos.optionIconSize + 16,
-                                                height: tamanos.optionIconSize + 16,
-                                                borderRadius: (tamanos.optionIconSize + 16) / 2,
-                                                backgroundColor: isSelected ? C.accent + '20' : C.bg,
-                                            },
-                                        ]}
-                                    >
-                                        <Ionicons
-                                            name={t.icono as any}
-                                            size={tamanos.optionIconSize}
-                                            color={isSelected ? C.accent : C.textSec}
-                                        />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 12 }}>
-                                        <Text
-                                            style={{
-                                                fontFamily: FUENTES.display,
-                                                fontSize: tamanos.optionTextSize,
-                                                color: isSelected ? C.text : C.textSec,
-                                                includeFontPadding: false,
-                                            }}
-                                            allowFontScaling={false}
+                                    <View style={estilos.optionInner}>
+                                        <View
+                                            style={[
+                                                estilos.optionIconWrap,
+                                                {
+                                                    width: tamanos.optionIconSize + 16,
+                                                    height: tamanos.optionIconSize + 16,
+                                                    borderRadius: (tamanos.optionIconSize + 16) / 2,
+                                                    backgroundColor: isSelected ? C.accent + '20' : colores.fondo,
+                                                },
+                                            ]}
                                         >
-                                            {t.label}
-                                        </Text>
-                                        <Text
-                                            style={{
-                                                fontFamily: FUENTES.regular,
-                                                fontSize: tamanos.sectionSubtitleSize,
-                                                color: C.textTer,
-                                                marginTop: 2,
-                                                includeFontPadding: false,
-                                            }}
-                                            allowFontScaling={false}
-                                        >
-                                            {t.subtitle}
-                                        </Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text
-                                            style={{
-                                                fontFamily: FUENTES.display,
-                                                fontSize: tamanos.optionPriceSize,
-                                                color: isSelected ? C.accent : C.textTer,
-                                                includeFontPadding: false,
-                                            }}
-                                            allowFontScaling={false}
-                                        >
-                                            {t.costo === 0 ? 'GRATIS' : formatearPrecio(t.costo)}
-                                        </Text>
-                                        {isSelected && (
                                             <Ionicons
-                                                name="checkmark-circle"
-                                                size={16}
-                                                color={C.accent}
-                                                style={{ marginTop: 4 }}
+                                                name={t.icono as any}
+                                                size={tamanos.optionIconSize}
+                                                color={isSelected ? C.accent : C.textSec}
                                             />
-                                        )}
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.display,
+                                                    fontSize: tamanos.optionTextSize,
+                                                    color: isSelected ? C.text : C.textSec,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {t.label}
+                                            </Text>
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.regular,
+                                                    fontSize: tamanos.sectionSubtitleSize,
+                                                    color: C.textTer,
+                                                    marginTop: 2,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {t.subtitle}
+                                            </Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.display,
+                                                    fontSize: tamanos.optionPriceSize,
+                                                    color: isSelected ? C.accent : C.textTer,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {t.costo === 0 ? 'GRATIS' : formatearPrecio(t.costo)}
+                                            </Text>
+                                            {isSelected && (
+                                                <Ionicons name="checkmark-circle" size={16} color={C.accent} style={{ marginTop: 4 }} />
+                                            )}
+                                        </View>
                                     </View>
-                                </TouchableOpacity>
+                                </TouchableRipple>
                             );
                         })}
                     </View>
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 📍 SECCIÓN: DIRECCIÓN DE ENTREGA                */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 📍 DIRECCIÓN */}
                 {tipoEntrega === 'domicilio' && (
                     <Animated.View
                         style={{
@@ -1711,6 +1981,7 @@ export default function PantallaCheckout(props: any) {
                             subtitle="¿Dónde te lo llevamos?"
                             color={C.info}
                             tamanos={tamanos}
+                            C={C}
                         />
 
                         {modoDireccion === 'vista' && (
@@ -1725,16 +1996,16 @@ export default function PantallaCheckout(props: any) {
 
                                 <View
                                     style={[
-                                        styles.card,
+                                        estilos.card,
                                         {
                                             padding: tamanos.cardPadding,
                                             borderRadius: tamanos.cardRadius,
-                                            borderColor: direccionDelPerfil ? C.successBorder : C.cardBorder,
-                                            backgroundColor: direccionDelPerfil ? C.successSoft : C.card,
+                                            borderColor: direccionDelPerfil ? C.successBorder : colores.border,
+                                            backgroundColor: direccionDelPerfil ? C.successSoft : colores.surface,
                                         },
                                     ]}
                                 >
-                                    <View style={styles.direccionHeader}>
+                                    <View style={estilos.direccionHeader}>
                                         <Ionicons
                                             name={direccionDelPerfil ? 'checkmark-circle' : 'location'}
                                             size={tamanos.direccionBadgeSize + 6}
@@ -1769,11 +2040,11 @@ export default function PantallaCheckout(props: any) {
                                         {direccion || 'No hay dirección cargada'}
                                     </Text>
 
-                                    <View style={styles.direccionActions}>
+                                    <View style={estilos.direccionActions}>
                                         <TouchableOpacity
                                             onPress={abrirEdicionDireccion}
                                             style={[
-                                                styles.smallButton,
+                                                estilos.smallButton,
                                                 {
                                                     backgroundColor: C.accentSoft,
                                                     paddingHorizontal: 12,
@@ -1808,7 +2079,7 @@ export default function PantallaCheckout(props: any) {
                                                 setMostrarMapa(true);
                                             }}
                                             style={[
-                                                styles.smallButton,
+                                                estilos.smallButton,
                                                 {
                                                     backgroundColor: C.infoSoft,
                                                     paddingHorizontal: 12,
@@ -1838,18 +2109,18 @@ export default function PantallaCheckout(props: any) {
                                 {ubicacionSeleccionada && !calculandoEnvio && tipoEntrega === 'domicilio' && (
                                     <View
                                         style={[
-                                            styles.infoEnvioBox,
+                                            estilos.infoEnvioBox,
                                             {
                                                 padding: tamanos.infoEnvioPadding,
                                                 borderRadius: tamanos.infoEnvioRadius,
                                                 marginTop: 10,
-                                                borderColor: C.cardBorder,
-                                                backgroundColor: C.card,
+                                                borderColor: colores.border,
+                                                backgroundColor: colores.surface,
                                             },
                                         ]}
                                     >
                                         {distanciaFormateada ? (
-                                            <View style={styles.infoEnvioRow}>
+                                            <View style={estilos.infoEnvioRow}>
                                                 <Ionicons name="navigate" size={tamanos.infoEnvioIconSize} color={C.info} />
                                                 <Text
                                                     style={{
@@ -1861,13 +2132,14 @@ export default function PantallaCheckout(props: any) {
                                                     }}
                                                     allowFontScaling={false}
                                                 >
-                                                    Distancia: <Text style={{ color: C.text, fontWeight: '600' }}>{distanciaFormateada}</Text>
+                                                    Distancia:{' '}
+                                                    <Text style={{ color: C.text, fontWeight: '600' }}>{distanciaFormateada}</Text>
                                                 </Text>
                                             </View>
                                         ) : null}
                                         {envioDisponible ? (
                                             <>
-                                                <View style={styles.infoEnvioRow}>
+                                                <View style={estilos.infoEnvioRow}>
                                                     <Ionicons
                                                         name="cash-outline"
                                                         size={tamanos.infoEnvioIconSize}
@@ -1884,13 +2156,18 @@ export default function PantallaCheckout(props: any) {
                                                         allowFontScaling={false}
                                                     >
                                                         Envío:{' '}
-                                                        <Text style={{ color: envioGratisAplicado ? C.success : C.text, fontWeight: '600' }}>
+                                                        <Text
+                                                            style={{
+                                                                color: envioGratisAplicado ? C.success : C.text,
+                                                                fontWeight: '600',
+                                                            }}
+                                                        >
                                                             {envioGratisAplicado ? 'GRATIS' : formatearPrecio(costoEnvioCalculado)}
                                                         </Text>
                                                     </Text>
                                                 </View>
                                                 {tiempoEstimado > 0 && (
-                                                    <View style={styles.infoEnvioRow}>
+                                                    <View style={estilos.infoEnvioRow}>
                                                         <Ionicons name="time-outline" size={tamanos.infoEnvioIconSize} color={C.textSec} />
                                                         <Text
                                                             style={{
@@ -1902,13 +2179,14 @@ export default function PantallaCheckout(props: any) {
                                                             }}
                                                             allowFontScaling={false}
                                                         >
-                                                            Llega en <Text style={{ color: C.text, fontWeight: '600' }}>{tiempoEstimado} min</Text>
+                                                            Llega en{' '}
+                                                            <Text style={{ color: C.text, fontWeight: '600' }}>{tiempoEstimado} min</Text>
                                                         </Text>
                                                     </View>
                                                 )}
                                             </>
                                         ) : (
-                                            <View style={styles.infoEnvioRow}>
+                                            <View style={estilos.infoEnvioRow}>
                                                 <Ionicons name="warning-outline" size={tamanos.infoEnvioIconSize} color={C.warning} />
                                                 <Text
                                                     style={{
@@ -1931,17 +2209,17 @@ export default function PantallaCheckout(props: any) {
                                 {calculandoEnvio && tipoEntrega === 'domicilio' && (
                                     <View
                                         style={[
-                                            styles.infoEnvioBox,
+                                            estilos.infoEnvioBox,
                                             {
                                                 padding: tamanos.infoEnvioPadding,
                                                 borderRadius: tamanos.infoEnvioRadius,
                                                 marginTop: 10,
-                                                borderColor: C.cardBorder,
-                                                backgroundColor: C.card,
+                                                borderColor: colores.border,
+                                                backgroundColor: colores.surface,
                                             },
                                         ]}
                                     >
-                                        <View style={styles.infoEnvioRow}>
+                                        <View style={estilos.infoEnvioRow}>
                                             <ActivityIndicator size="small" color={C.accent} />
                                             <Text
                                                 style={{
@@ -1964,17 +2242,18 @@ export default function PantallaCheckout(props: any) {
                         {modoDireccion === 'texto' && (
                             <View
                                 style={[
-                                    styles.card,
+                                    estilos.card,
                                     {
                                         padding: tamanos.cardPadding,
                                         borderRadius: tamanos.cardRadius,
                                         marginTop: 12,
                                         borderColor: C.accent,
                                         borderWidth: 1.5,
+                                        backgroundColor: colores.surface,
                                     },
                                 ]}
                             >
-                                <View style={styles.direccionHeader}>
+                                <View style={estilos.direccionHeader}>
                                     <Ionicons name="pencil" size={tamanos.direccionBadgeSize + 6} color={C.accent} />
                                     <Text
                                         style={{
@@ -1992,13 +2271,16 @@ export default function PantallaCheckout(props: any) {
 
                                 <TextInput
                                     style={[
-                                        styles.textArea,
+                                        estilos.textArea,
                                         {
                                             fontSize: tamanos.inputSize,
                                             paddingHorizontal: tamanos.inputPaddingH,
                                             paddingVertical: tamanos.inputPaddingV,
                                             borderRadius: tamanos.inputRadius,
                                             marginTop: 10,
+                                            color: colores.text,
+                                            backgroundColor: colores.fondo,
+                                            borderColor: colores.border,
                                         },
                                     ]}
                                     value={direccionInput}
@@ -2012,7 +2294,7 @@ export default function PantallaCheckout(props: any) {
                                 />
 
                                 {errorDireccion && (
-                                    <View style={styles.errorRow}>
+                                    <View style={estilos.errorRow}>
                                         <Ionicons name="alert-circle" size={14} color={C.danger} />
                                         <Text
                                             style={{
@@ -2030,17 +2312,18 @@ export default function PantallaCheckout(props: any) {
                                     </View>
                                 )}
 
-                                <View style={styles.direccionActions}>
+                                <View style={estilos.direccionActions}>
                                     <TouchableOpacity
                                         onPress={verificarDireccionTexto}
                                         disabled={verificandoDireccion}
                                         style={[
-                                            styles.actionButtonPrimary,
+                                            estilos.actionButtonPrimary,
                                             {
                                                 paddingVertical: 10,
                                                 paddingHorizontal: 16,
                                                 borderRadius: 10,
                                                 opacity: verificandoDireccion ? 0.6 : 1,
+                                                backgroundColor: C.accent,
                                             },
                                         ]}
                                         activeOpacity={0.8}
@@ -2067,11 +2350,13 @@ export default function PantallaCheckout(props: any) {
                                     <TouchableOpacity
                                         onPress={cancelarEdicionDireccion}
                                         style={[
-                                            styles.actionButtonSecondary,
+                                            estilos.actionButtonSecondary,
                                             {
                                                 paddingVertical: 10,
                                                 paddingHorizontal: 14,
                                                 borderRadius: 10,
+                                                backgroundColor: colores.fondo,
+                                                borderColor: colores.border,
                                             },
                                         ]}
                                         activeOpacity={0.7}
@@ -2097,17 +2382,18 @@ export default function PantallaCheckout(props: any) {
                         {modoDireccion === 'formulario' && (
                             <View
                                 style={[
-                                    styles.card,
+                                    estilos.card,
                                     {
                                         padding: tamanos.cardPadding,
                                         borderRadius: tamanos.cardRadius,
                                         marginTop: 12,
                                         borderColor: C.warning,
                                         borderWidth: 1.5,
+                                        backgroundColor: colores.surface,
                                     },
                                 ]}
                             >
-                                <View style={styles.direccionHeader}>
+                                <View style={estilos.direccionHeader}>
                                     <Ionicons name="warning" size={tamanos.direccionBadgeSize + 6} color={C.warning} />
                                     <Text
                                         style={{
@@ -2125,18 +2411,24 @@ export default function PantallaCheckout(props: any) {
                                 </View>
 
                                 <View style={{ marginTop: 12 }}>
-                                    <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                    <Text
+                                        style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                        allowFontScaling={false}
+                                    >
                                         Calle *
                                     </Text>
                                     <TextInput
                                         style={[
-                                            styles.textInput,
+                                            estilos.textInput,
                                             {
                                                 fontSize: tamanos.inputSize,
                                                 paddingHorizontal: tamanos.inputPaddingH,
                                                 paddingVertical: tamanos.inputPaddingV,
                                                 borderRadius: tamanos.inputRadius,
                                                 marginTop: 4,
+                                                color: colores.text,
+                                                backgroundColor: colores.fondo,
+                                                borderColor: colores.border,
                                             },
                                         ]}
                                         value={camposManuales.calle}
@@ -2149,18 +2441,24 @@ export default function PantallaCheckout(props: any) {
                                 </View>
 
                                 <View style={{ marginTop: 10 }}>
-                                    <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                    <Text
+                                        style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                        allowFontScaling={false}
+                                    >
                                         Número *
                                     </Text>
                                     <TextInput
                                         style={[
-                                            styles.textInput,
+                                            estilos.textInput,
                                             {
                                                 fontSize: tamanos.inputSize,
                                                 paddingHorizontal: tamanos.inputPaddingH,
                                                 paddingVertical: tamanos.inputPaddingV,
                                                 borderRadius: tamanos.inputRadius,
                                                 marginTop: 4,
+                                                color: colores.text,
+                                                backgroundColor: colores.fondo,
+                                                borderColor: colores.border,
                                             },
                                         ]}
                                         value={camposManuales.numero}
@@ -2175,18 +2473,24 @@ export default function PantallaCheckout(props: any) {
 
                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                        <Text
+                                            style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                            allowFontScaling={false}
+                                        >
                                             Piso
                                         </Text>
                                         <TextInput
                                             style={[
-                                                styles.textInput,
+                                                estilos.textInput,
                                                 {
                                                     fontSize: tamanos.inputSize,
                                                     paddingHorizontal: tamanos.inputPaddingH,
                                                     paddingVertical: tamanos.inputPaddingV,
                                                     borderRadius: tamanos.inputRadius,
                                                     marginTop: 4,
+                                                    color: colores.text,
+                                                    backgroundColor: colores.fondo,
+                                                    borderColor: colores.border,
                                                 },
                                             ]}
                                             value={camposManuales.piso}
@@ -2198,18 +2502,24 @@ export default function PantallaCheckout(props: any) {
                                         />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                        <Text
+                                            style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                            allowFontScaling={false}
+                                        >
                                             Depto
                                         </Text>
                                         <TextInput
                                             style={[
-                                                styles.textInput,
+                                                estilos.textInput,
                                                 {
                                                     fontSize: tamanos.inputSize,
                                                     paddingHorizontal: tamanos.inputPaddingH,
                                                     paddingVertical: tamanos.inputPaddingV,
                                                     borderRadius: tamanos.inputRadius,
                                                     marginTop: 4,
+                                                    color: colores.text,
+                                                    backgroundColor: colores.fondo,
+                                                    borderColor: colores.border,
                                                 },
                                             ]}
                                             value={camposManuales.departamento}
@@ -2223,18 +2533,24 @@ export default function PantallaCheckout(props: any) {
                                 </View>
 
                                 <View style={{ marginTop: 10 }}>
-                                    <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                    <Text
+                                        style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                        allowFontScaling={false}
+                                    >
                                         Barrio
                                     </Text>
                                     <TextInput
                                         style={[
-                                            styles.textInput,
+                                            estilos.textInput,
                                             {
                                                 fontSize: tamanos.inputSize,
                                                 paddingHorizontal: tamanos.inputPaddingH,
                                                 paddingVertical: tamanos.inputPaddingV,
                                                 borderRadius: tamanos.inputRadius,
                                                 marginTop: 4,
+                                                color: colores.text,
+                                                backgroundColor: colores.fondo,
+                                                borderColor: colores.border,
                                             },
                                         ]}
                                         value={camposManuales.barrio}
@@ -2248,18 +2564,24 @@ export default function PantallaCheckout(props: any) {
 
                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                                     <View style={{ flex: 2 }}>
-                                        <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                        <Text
+                                            style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                            allowFontScaling={false}
+                                        >
                                             Ciudad
                                         </Text>
                                         <TextInput
                                             style={[
-                                                styles.textInput,
+                                                estilos.textInput,
                                                 {
                                                     fontSize: tamanos.inputSize,
                                                     paddingHorizontal: tamanos.inputPaddingH,
                                                     paddingVertical: tamanos.inputPaddingV,
                                                     borderRadius: tamanos.inputRadius,
                                                     marginTop: 4,
+                                                    color: colores.text,
+                                                    backgroundColor: colores.fondo,
+                                                    borderColor: colores.border,
                                                 },
                                             ]}
                                             value={camposManuales.ciudad}
@@ -2271,18 +2593,24 @@ export default function PantallaCheckout(props: any) {
                                         />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize }]} allowFontScaling={false}>
+                                        <Text
+                                            style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, color: colores.textSecondary }]}
+                                            allowFontScaling={false}
+                                        >
                                             CP
                                         </Text>
                                         <TextInput
                                             style={[
-                                                styles.textInput,
+                                                estilos.textInput,
                                                 {
                                                     fontSize: tamanos.inputSize,
                                                     paddingHorizontal: tamanos.inputPaddingH,
                                                     paddingVertical: tamanos.inputPaddingV,
                                                     borderRadius: tamanos.inputRadius,
                                                     marginTop: 4,
+                                                    color: colores.text,
+                                                    backgroundColor: colores.fondo,
+                                                    borderColor: colores.border,
                                                 },
                                             ]}
                                             value={camposManuales.codigoPostal}
@@ -2296,17 +2624,18 @@ export default function PantallaCheckout(props: any) {
                                     </View>
                                 </View>
 
-                                <View style={[styles.direccionActions, { marginTop: 14 }]}>
+                                <View style={[estilos.direccionActions, { marginTop: 14 }]}>
                                     <TouchableOpacity
                                         onPress={aplicarDireccionManual}
                                         disabled={verificandoDireccion}
                                         style={[
-                                            styles.actionButtonPrimary,
+                                            estilos.actionButtonPrimary,
                                             {
                                                 paddingVertical: 10,
                                                 paddingHorizontal: 16,
                                                 borderRadius: 10,
                                                 opacity: verificandoDireccion ? 0.6 : 1,
+                                                backgroundColor: C.accent,
                                             },
                                         ]}
                                         activeOpacity={0.8}
@@ -2333,11 +2662,13 @@ export default function PantallaCheckout(props: any) {
                                     <TouchableOpacity
                                         onPress={volverAlModoTexto}
                                         style={[
-                                            styles.actionButtonSecondary,
+                                            estilos.actionButtonSecondary,
                                             {
                                                 paddingVertical: 10,
                                                 paddingHorizontal: 14,
                                                 borderRadius: 10,
+                                                backgroundColor: colores.fondo,
+                                                borderColor: colores.border,
                                             },
                                         ]}
                                         activeOpacity={0.7}
@@ -2362,18 +2693,20 @@ export default function PantallaCheckout(props: any) {
                     </Animated.View>
                 )}
 
-                <MapaSelector
-                    visible={mostrarMapa}
-                    onClose={() => setMostrarMapa(false)}
-                    onConfirmar={handleConfirmarUbicacion}
-                    ubicacionInicial={ubicacionSeleccionada || undefined}
-                    direccionInicial={direccion}
-                    titulo="📍 Seleccioná tu ubicación"
-                />
+                {mostrarMapa && (
+                    <Suspense fallback={null}>
+                        <MapaSelector
+                            visible={mostrarMapa}
+                            onClose={() => setMostrarMapa(false)}
+                            onConfirmar={handleConfirmarUbicacion}
+                            ubicacionInicial={ubicacionSeleccionada || undefined}
+                            direccionInicial={direccion}
+                            titulo="📍 Seleccioná tu ubicación"
+                        />
+                    </Suspense>
+                )}
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 💳 SECCIÓN: MÉTODO DE PAGO                      */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 💳 MÉTODO DE PAGO */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -2387,25 +2720,17 @@ export default function PantallaCheckout(props: any) {
                         subtitle="¿Cómo vas a pagar?"
                         color={C.accent}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                         {metodosPago.map((m) => {
                             const isSelected = metodoPago === m.id;
                             return (
-                                <TouchableOpacity
+                                <TouchableRipple
                                     key={m.id}
-                                    style={[
-                                        styles.payMethodCard,
-                                        {
-                                            padding: tamanos.optionPadding,
-                                            borderRadius: tamanos.optionRadius,
-                                            backgroundColor: isSelected ? C.accentSoft : C.card,
-                                            borderColor: isSelected ? C.accent : C.cardBorder,
-                                            borderWidth: isSelected ? 1.5 : 1,
-                                        },
-                                    ]}
                                     onPress={() => {
+                                        Haptics.selectionAsync().catch(() => { });
                                         setMetodoPago(m.id);
                                         if (m.id !== 'efectivo') {
                                             setMontoConQuePaga('');
@@ -2413,26 +2738,39 @@ export default function PantallaCheckout(props: any) {
                                             setMostrarVuelto(false);
                                         }
                                     }}
-                                    activeOpacity={0.75}
+                                    borderless
+                                    rippleColor={C.accent + '15'}
+                                    style={[
+                                        estilos.payMethodCard,
+                                        {
+                                            padding: tamanos.optionPadding,
+                                            borderRadius: tamanos.optionRadius,
+                                            backgroundColor: isSelected ? C.accentSoft : colores.surface,
+                                            borderColor: isSelected ? C.accent : colores.border,
+                                            borderWidth: isSelected ? 1.5 : 1,
+                                        },
+                                    ]}
                                 >
-                                    <Ionicons
-                                        name={m.icono as any}
-                                        size={tamanos.optionIconSize}
-                                        color={isSelected ? C.accent : C.textSec}
-                                    />
-                                    <Text
-                                        style={{
-                                            fontFamily: FUENTES.display,
-                                            fontSize: tamanos.optionTextSize,
-                                            color: isSelected ? C.text : C.textSec,
-                                            marginTop: 6,
-                                            includeFontPadding: false,
-                                        }}
-                                        allowFontScaling={false}
-                                    >
-                                        {m.label}
-                                    </Text>
-                                </TouchableOpacity>
+                                    <View style={estilos.payMethodInner}>
+                                        <Ionicons
+                                            name={m.icono as any}
+                                            size={tamanos.optionIconSize}
+                                            color={isSelected ? C.accent : C.textSec}
+                                        />
+                                        <Text
+                                            style={{
+                                                fontFamily: FUENTES.display,
+                                                fontSize: tamanos.optionTextSize,
+                                                color: isSelected ? C.text : C.textSec,
+                                                marginTop: 6,
+                                                includeFontPadding: false,
+                                            }}
+                                            allowFontScaling={false}
+                                        >
+                                            {m.label}
+                                        </Text>
+                                    </View>
+                                </TouchableRipple>
                             );
                         })}
                     </View>
@@ -2440,11 +2778,13 @@ export default function PantallaCheckout(props: any) {
                     {metodoPago === 'efectivo' && (
                         <View
                             style={[
-                                styles.card,
+                                estilos.card,
                                 {
                                     padding: tamanos.efectivoPadding,
                                     borderRadius: tamanos.efectivoRadius,
                                     marginTop: 10,
+                                    backgroundColor: colores.surface,
+                                    borderColor: colores.border,
                                 },
                             ]}
                         >
@@ -2458,24 +2798,33 @@ export default function PantallaCheckout(props: any) {
                                 allowFontScaling={false}
                             >
                                 Total a pagar:{' '}
-                                <Text style={{ fontFamily: FUENTES.display, color: C.accent, fontSize: tamanos.efectivoTitleSize }}>
+                                <Text
+                                    style={{
+                                        fontFamily: FUENTES.display,
+                                        color: C.accent,
+                                        fontSize: tamanos.efectivoTitleSize,
+                                    }}
+                                >
                                     {formatearPrecio(totalFinal)}
                                 </Text>
                             </Text>
 
-                            <Text style={[styles.inputLabel, { fontSize: tamanos.inputLabelSize, marginTop: 10 }]} allowFontScaling={false}>
+                            <Text
+                                style={[estilos.inputLabel, { fontSize: tamanos.inputLabelSize, marginTop: 10, color: colores.textSecondary }]}
+                                allowFontScaling={false}
+                            >
                                 ¿Con cuánto vas a pagar?
                             </Text>
                             <View
                                 style={[
-                                    styles.inputWrap,
+                                    estilos.inputWrap,
                                     {
                                         borderRadius: tamanos.inputRadius,
                                         minHeight: tamanos.inputMinHeight,
                                         paddingHorizontal: tamanos.inputPaddingH,
                                         marginTop: 6,
-                                        borderColor: mostrarVuelto ? C.successBorder : C.cardBorder,
-                                        backgroundColor: mostrarVuelto ? C.successSoft : C.bg,
+                                        borderColor: mostrarVuelto ? C.successBorder : colores.border,
+                                        backgroundColor: mostrarVuelto ? C.successSoft : colores.fondo,
                                     },
                                 ]}
                             >
@@ -2517,11 +2866,13 @@ export default function PantallaCheckout(props: any) {
                             {mostrarVuelto && vueltoCalculado > 0 && (
                                 <View
                                     style={[
-                                        styles.vueltoBox,
+                                        estilos.vueltoBox,
                                         {
                                             padding: tamanos.vueltoPadding,
                                             borderRadius: tamanos.vueltoRadius,
                                             marginTop: 10,
+                                            backgroundColor: C.successSoft,
+                                            borderColor: C.successBorder,
                                         },
                                     ]}
                                 >
@@ -2555,7 +2906,7 @@ export default function PantallaCheckout(props: any) {
                             )}
 
                             {montoConQuePaga && !mostrarVuelto && parseFloat(montoConQuePaga) > 0 && (
-                                <View style={[styles.errorRow, { marginTop: 10 }]}>
+                                <View style={[estilos.errorRow, { marginTop: 10 }]}>
                                     <Ionicons name="alert-circle" size={14} color={C.warning} />
                                     <Text
                                         style={{
@@ -2607,9 +2958,7 @@ export default function PantallaCheckout(props: any) {
                     )}
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 📝 SECCIÓN: NOTAS                               */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 📝 NOTAS */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -2623,27 +2972,33 @@ export default function PantallaCheckout(props: any) {
                         subtitle="¿Algo que debamos saber? (opcional)"
                         color={C.textSec}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View
                         style={[
-                            styles.card,
+                            estilos.card,
                             {
                                 padding: tamanos.cardPadding,
                                 borderRadius: tamanos.cardRadius,
                                 marginTop: 12,
+                                backgroundColor: colores.surface,
+                                borderColor: colores.border,
                             },
                         ]}
                     >
                         <TextInput
                             style={[
-                                styles.textArea,
+                                estilos.textArea,
                                 {
                                     fontSize: tamanos.inputSize,
                                     paddingHorizontal: tamanos.inputPaddingH,
                                     paddingVertical: tamanos.inputPaddingV,
                                     borderRadius: tamanos.inputRadius,
                                     minHeight: 80,
+                                    color: colores.text,
+                                    backgroundColor: colores.fondo,
+                                    borderColor: colores.border,
                                 },
                             ]}
                             value={notas}
@@ -2658,9 +3013,7 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 🛒 SECCIÓN: PRODUCTOS                           */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 🛒 PRODUCTOS */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -2674,15 +3027,18 @@ export default function PantallaCheckout(props: any) {
                         subtitle="Productos en el carrito"
                         color={C.accent}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View
                         style={[
-                            styles.card,
+                            estilos.card,
                             {
                                 padding: tamanos.cardPadding,
                                 borderRadius: tamanos.cardRadius,
                                 marginTop: 12,
+                                backgroundColor: colores.surface,
+                                borderColor: colores.border,
                             },
                         ]}
                     >
@@ -2690,19 +3046,21 @@ export default function PantallaCheckout(props: any) {
                             <View
                                 key={i}
                                 style={[
-                                    styles.productRow,
+                                    estilos.productRow,
                                     {
                                         paddingVertical: 10,
                                         borderBottomWidth: i < elementos.length - 1 ? 1 : 0,
+                                        borderBottomColor: colores.border,
                                     },
                                 ]}
                             >
-                                <View style={styles.productQty}>
+                                <View style={[estilos.productQty, { backgroundColor: C.accentSoft }]}>
                                     <Text
                                         style={{
                                             fontFamily: FUENTES.display,
                                             fontSize: 12,
                                             color: C.accent,
+                                            fontWeight: '700',
                                             includeFontPadding: false,
                                         }}
                                         allowFontScaling={false}
@@ -2729,6 +3087,7 @@ export default function PantallaCheckout(props: any) {
                                         fontFamily: FUENTES.display,
                                         fontSize: tamanos.productoPrecioSize,
                                         color: C.text,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -2740,9 +3099,7 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* 📊 SECCIÓN: RESUMEN                             */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* 📊 RESUMEN */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -2756,19 +3113,22 @@ export default function PantallaCheckout(props: any) {
                         subtitle="Detalle de tu pedido"
                         color={C.accent}
                         tamanos={tamanos}
+                        C={C}
                     />
 
                     <View
                         style={[
-                            styles.card,
+                            estilos.card,
                             {
                                 padding: tamanos.cardPadding,
                                 borderRadius: tamanos.cardRadius,
                                 marginTop: 12,
+                                backgroundColor: colores.surface,
+                                borderColor: colores.border,
                             },
                         ]}
                     >
-                        <View style={styles.summaryRow}>
+                        <View style={estilos.summaryRow}>
                             <Text
                                 style={{
                                     fontFamily: FUENTES.regular,
@@ -2785,6 +3145,7 @@ export default function PantallaCheckout(props: any) {
                                     fontFamily: FUENTES.display,
                                     fontSize: tamanos.resumenValorSize,
                                     color: C.text,
+                                    fontWeight: '600',
                                     includeFontPadding: false,
                                 }}
                                 allowFontScaling={false}
@@ -2794,7 +3155,7 @@ export default function PantallaCheckout(props: any) {
                         </View>
 
                         {descuentoNivelAplicado > 0 && (
-                            <View style={[styles.summaryRow, { marginTop: 6 }]}>
+                            <View style={[estilos.summaryRow, { marginTop: 6 }]}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Ionicons name="pricetag-outline" size={14} color={C.success} />
                                     <Text
@@ -2815,6 +3176,7 @@ export default function PantallaCheckout(props: any) {
                                         fontFamily: FUENTES.display,
                                         fontSize: tamanos.resumenValorSize,
                                         color: C.success,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -2825,7 +3187,7 @@ export default function PantallaCheckout(props: any) {
                         )}
 
                         {descuentoPuntos > 0 && (
-                            <View style={[styles.summaryRow, { marginTop: 6 }]}>
+                            <View style={[estilos.summaryRow, { marginTop: 6 }]}>
                                 <Text
                                     style={{
                                         fontFamily: FUENTES.regular,
@@ -2842,6 +3204,7 @@ export default function PantallaCheckout(props: any) {
                                         fontFamily: FUENTES.display,
                                         fontSize: tamanos.resumenValorSize,
                                         color: C.success,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -2852,7 +3215,7 @@ export default function PantallaCheckout(props: any) {
                         )}
 
                         {descuentoCuponUI > 0 && (
-                            <View style={[styles.summaryRow, { marginTop: 6 }]}>
+                            <View style={[estilos.summaryRow, { marginTop: 6 }]}>
                                 <Text
                                     style={{
                                         fontFamily: FUENTES.regular,
@@ -2869,6 +3232,7 @@ export default function PantallaCheckout(props: any) {
                                         fontFamily: FUENTES.display,
                                         fontSize: tamanos.resumenValorSize,
                                         color: C.success,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -2878,7 +3242,7 @@ export default function PantallaCheckout(props: any) {
                             </View>
                         )}
 
-                        <View style={[styles.summaryRow, { marginTop: 6 }]}>
+                        <View style={[estilos.summaryRow, { marginTop: 6 }]}>
                             <Text
                                 style={{
                                     fontFamily: FUENTES.regular,
@@ -2895,6 +3259,7 @@ export default function PantallaCheckout(props: any) {
                                     fontFamily: FUENTES.display,
                                     fontSize: tamanos.resumenValorSize,
                                     color: tipoEntrega === 'retiro' || envioGratisAplicado ? C.success : C.text,
+                                    fontWeight: '600',
                                     includeFontPadding: false,
                                 }}
                                 allowFontScaling={false}
@@ -2915,9 +3280,9 @@ export default function PantallaCheckout(props: any) {
 
                         <View
                             style={[
-                                styles.summaryRow,
-                                styles.summaryTotal,
-                                { marginTop: 12, paddingTop: 12 },
+                                estilos.summaryRow,
+                                estilos.summaryTotal,
+                                { marginTop: 12, paddingTop: 12, borderTopColor: colores.border },
                             ]}
                         >
                             <Text
@@ -2925,6 +3290,7 @@ export default function PantallaCheckout(props: any) {
                                     fontFamily: FUENTES.display,
                                     fontSize: tamanos.totalTextSize,
                                     color: C.text,
+                                    fontWeight: '700',
                                     includeFontPadding: false,
                                 }}
                                 allowFontScaling={false}
@@ -2936,6 +3302,7 @@ export default function PantallaCheckout(props: any) {
                                     fontFamily: FUENTES.display,
                                     fontSize: tamanos.totalPriceSize,
                                     color: C.accent,
+                                    fontWeight: '700',
                                     includeFontPadding: false,
                                 }}
                                 allowFontScaling={false}
@@ -2946,9 +3313,7 @@ export default function PantallaCheckout(props: any) {
                     </View>
                 </Animated.View>
 
-                {/* ═══════════════════════════════════════════════ */}
-                {/* ✅ BOTÓN CONFIRMAR                              */}
-                {/* ═══════════════════════════════════════════════ */}
+                {/* ✅ CONFIRMAR */}
                 <Animated.View
                     style={{
                         opacity: fadeAnim,
@@ -2958,10 +3323,11 @@ export default function PantallaCheckout(props: any) {
                 >
                     <TouchableOpacity
                         style={[
-                            styles.confirmButton,
+                            estilos.confirmButton,
                             {
                                 borderRadius: tamanos.botonRadius,
                                 opacity: cargando ? 0.6 : 1,
+                                shadowColor: C.accent,
                             },
                         ]}
                         onPress={confirmarPedido}
@@ -2971,12 +3337,27 @@ export default function PantallaCheckout(props: any) {
                         <LinearGradient
                             colors={[C.accent, C.accentSecondary]}
                             style={[
-                                styles.confirmButtonGradient,
+                                estilos.confirmButtonGradient,
                                 { paddingVertical: tamanos.botonPaddingV },
                             ]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
+                            <Animated2.View
+                                style={[
+                                    {
+                                        position: 'absolute',
+                                        top: 0,
+                                        bottom: 0,
+                                        width: 100,
+                                        backgroundColor: 'rgba(255,255,255,0.25)',
+                                        transform: [{ skewX: '-20deg' }],
+                                    },
+                                    shineStyle,
+                                ]}
+                                pointerEvents="none"
+                            />
+
                             {cargando ? (
                                 <ActivityIndicator color="#FFF" size="small" />
                             ) : (
@@ -2989,6 +3370,7 @@ export default function PantallaCheckout(props: any) {
                                             color: '#FFF',
                                             marginLeft: 8,
                                             letterSpacing: 0.3,
+                                            fontWeight: '700',
                                             includeFontPadding: false,
                                         }}
                                         allowFontScaling={false}
@@ -3004,24 +3386,30 @@ export default function PantallaCheckout(props: any) {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* MODALES */}
+            {/* MODAL ÉXITO CON CONFETI */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
+                <View style={estilos.modalOverlay}>
                     <View
                         style={[
-                            styles.modal,
+                            estilos.modal,
                             {
                                 padding: tamanos.modalPadding,
                                 borderRadius: tamanos.modalRadius,
                                 borderColor: C.successBorder,
                                 borderWidth: 1,
                                 backgroundColor: C.card,
+                                overflow: 'hidden',
                             },
                         ]}
                     >
-                        <Text style={{ fontSize: tamanos.modalIconSize, marginBottom: 12 }} allowFontScaling={false}>
-                            ✅
-                        </Text>
+                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+                            <ConfetiSkia activo={mostrarModalExito} />
+                        </View>
+
+                        <View style={[estilos.modalIconCircle, { backgroundColor: colores.success + '20', borderColor: colores.success + '40' }]}>
+                            <Ionicons name="checkmark" size={tamanos.modalIconSize * 0.5} color={C.success} />
+                        </View>
+
                         <Text
                             style={{
                                 fontFamily: FUENTES.display,
@@ -3029,6 +3417,7 @@ export default function PantallaCheckout(props: any) {
                                 color: C.success,
                                 marginBottom: 8,
                                 textAlign: 'center',
+                                fontWeight: '700',
                                 includeFontPadding: false,
                             }}
                             allowFontScaling={false}
@@ -3046,9 +3435,7 @@ export default function PantallaCheckout(props: any) {
                             allowFontScaling={false}
                         >
                             {metodoPago === 'efectivo' && mostrarVuelto
-                                ? `Pagás con ${formatearPrecio(
-                                    parseFloat(montoConQuePaga.replace(',', '.')),
-                                )}. Tu vuelto es ${formatearPrecio(vueltoCalculado)}`
+                                ? `Pagás con ${formatearPrecio(parseFloat(montoConQuePaga.replace(',', '.')))}. Tu vuelto es ${formatearPrecio(vueltoCalculado)}`
                                 : 'Tu pedido está siendo preparado'}
                         </Text>
                         <Text
@@ -3063,20 +3450,19 @@ export default function PantallaCheckout(props: any) {
                         >
                             Redirigiendo al seguimiento...
                         </Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-                            {renderLoaderDots()}
-                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>{renderLoaderDots()}</View>
                     </View>
                 </View>
             </Modal>
 
+            {/* MODAL TRANSFERENCIA */}
             <Modal
                 visible={mostrarModalTransferencia}
                 transparent={true}
                 animationType="fade"
                 statusBarTranslucent={true}
             >
-                <View style={styles.modalTransferenciaOverlay}>
+                <View style={estilos.modalTransferenciaOverlay}>
                     <View
                         style={{
                             width: tamanos.transModalWidth,
@@ -3102,7 +3488,7 @@ export default function PantallaCheckout(props: any) {
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                         >
-                            <View style={styles.modalTransferenciaHeaderContent}>
+                            <View style={estilos.modalTransferenciaHeaderContent}>
                                 <View
                                     style={{
                                         width: tamanos.transModalHeaderIconSize,
@@ -3126,6 +3512,7 @@ export default function PantallaCheckout(props: any) {
                                         color: '#FFF',
                                         letterSpacing: 0.3,
                                         marginLeft: 10,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -3168,7 +3555,7 @@ export default function PantallaCheckout(props: any) {
                                     marginBottom: 12,
                                 }}
                             >
-                                <View style={styles.modalTransferenciaAliasHeader}>
+                                <View style={estilos.modalTransferenciaAliasHeader}>
                                     <Ionicons name="cash-outline" size={16} color={C.accent} />
                                     <Text
                                         style={{
@@ -3186,7 +3573,7 @@ export default function PantallaCheckout(props: any) {
                                         Alias
                                     </Text>
                                 </View>
-                                <View style={styles.modalTransferenciaAliasRow}>
+                                <View style={estilos.modalTransferenciaAliasRow}>
                                     <Text
                                         style={{
                                             fontFamily: FUENTES.display,
@@ -3222,6 +3609,7 @@ export default function PantallaCheckout(props: any) {
                                                 fontFamily: FUENTES.display,
                                                 fontSize: 12,
                                                 color: C.accent,
+                                                fontWeight: '600',
                                                 includeFontPadding: false,
                                             }}
                                             allowFontScaling={false}
@@ -3301,6 +3689,7 @@ export default function PantallaCheckout(props: any) {
                                         fontFamily: FUENTES.display,
                                         fontSize: tamanos.transModalMontoTextoSize,
                                         color: C.accent,
+                                        fontWeight: '700',
                                         includeFontPadding: false,
                                     }}
                                     allowFontScaling={false}
@@ -3426,287 +3815,260 @@ export default function PantallaCheckout(props: any) {
 }
 
 // ============================================================
-// 🧩 SUB-COMPONENTE: SectionHeader MEJORADO
+// 🎨 ESTILOS DINÁMICOS
 // ============================================================
-const SectionHeader: React.FC<{
-    icon: keyof typeof Ionicons.glyphMap;
-    title: string;
-    subtitle?: string;
-    color: string;
-    tamanos: TamanosCheckout;
-}> = ({ icon, title, subtitle, color, tamanos }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {/* Barra de acento vertical */}
-        <View
-            style={{
-                width: tamanos.sectionAccentWidth,
-                height: tamanos.sectionAccentHeight,
-                borderRadius: tamanos.sectionAccentWidth / 2,
-                backgroundColor: color,
-                marginRight: 12,
-            }}
-        />
+const crearEstilos = (colores: PaletaTema) =>
+    StyleSheet.create({
+        container: { flex: 1, backgroundColor: colores.fondo },
+        backgroundGradient: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+        },
 
-        {/* Ícono en círculo */}
-        <View
-            style={{
-                width: tamanos.sectionIconContainer,
-                height: tamanos.sectionIconContainer,
-                borderRadius: tamanos.sectionIconContainer / 2,
-                backgroundColor: color + '15',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginRight: 12,
-            }}
-        >
-            <Ionicons name={icon} size={tamanos.sectionIconSize} color={color} />
-        </View>
-
-        {/* Título + subtítulo */}
-        <View style={{ flex: 1 }}>
-            <Text
-                style={{
-                    fontFamily: FUENTES.display,
-                    fontSize: tamanos.sectionTitleSize,
-                    fontWeight: '700',
-                    color: DISENO.colors.text,
-                    letterSpacing: -0.3,
-                    lineHeight: tamanos.sectionTitleSize * 1.2,
-                    includeFontPadding: false,
-                }}
-                allowFontScaling={false}
-            >
-                {title}
-            </Text>
-            {subtitle && (
-                <Text
-                    style={{
-                        fontFamily: FUENTES.regular,
-                        fontSize: tamanos.sectionSubtitleSize,
-                        color: DISENO.colors.textTertiary,
-                        marginTop: 2,
-                        includeFontPadding: false,
-                        lineHeight: tamanos.sectionSubtitleSize * 1.3,
-                    }}
-                    allowFontScaling={false}
-                >
-                    {subtitle}
-                </Text>
-            )}
-        </View>
-    </View>
-);
-
-// ============================================================
-// 🎨 ESTILOS
-// ============================================================
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: DISENO.colors.fondo },
-    backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: DISENO.colors.fondo },
-
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    backButton: {
-        padding: 8,
-        borderRadius: 12,
-        backgroundColor: DISENO.colors.surface,
-    },
-    title: {
-        fontFamily: FUENTES.display,
-        fontWeight: '400',
-        letterSpacing: 0.5,
-        color: DISENO.colors.text,
-        includeFontPadding: false,
-        flex: 1,
-        textAlign: 'center',
-    },
-
-    scroll: { flexGrow: 1 },
-
-    card: {
-        backgroundColor: DISENO.colors.surface,
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-    },
-
-    inputWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-        backgroundColor: DISENO.colors.fondo,
-    },
-    textInput: {
-        fontFamily: FUENTES.regular,
-        color: DISENO.colors.text,
-        backgroundColor: DISENO.colors.fondo,
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-        includeFontPadding: false,
-    },
-    textArea: {
-        fontFamily: FUENTES.regular,
-        color: DISENO.colors.text,
-        backgroundColor: DISENO.colors.fondo,
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-        textAlignVertical: 'top',
-        includeFontPadding: false,
-    },
-    inputLabel: {
-        fontFamily: FUENTES.regular,
-        color: DISENO.colors.textSecondary,
-        includeFontPadding: false,
-    },
-
-    optionCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    optionIconWrap: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    payMethodCard: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    direccionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    direccionActions: {
-        flexDirection: 'row',
-        gap: 8,
-        marginTop: 12,
-        flexWrap: 'wrap',
-    },
-    smallButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    actionButtonPrimary: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: DISENO.colors.accent,
-    },
-    actionButtonSecondary: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: DISENO.colors.fondo,
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-    },
-    errorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 8,
-    },
-
-    infoEnvioBox: {
-        borderWidth: 1,
-    },
-    infoEnvioRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 3,
-    },
-
-    vueltoBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: DISENO.colors.success + '12',
-        borderWidth: 1,
-        borderColor: DISENO.colors.success + '25',
-    },
-
-    productRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderBottomColor: DISENO.colors.border,
-    },
-    productQty: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: DISENO.colors.accent + '12',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-
-    summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    summaryTotal: {
-        borderTopWidth: 1,
-        borderTopColor: DISENO.colors.border,
-    },
-
-    confirmButton: {
-        overflow: 'hidden',
-    },
-    confirmButtonGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 24,
-    },
-
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modal: {
-        width: '90%',
-        maxWidth: 400,
-        alignItems: 'center',
-    },
-    modalTransferenciaOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-    },
-    modalTransferenciaHeaderContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        flexShrink: 1,
-    },
-    modalTransferenciaAliasHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    modalTransferenciaAliasRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-    },
-
-    beneficiosHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-    beneficiosList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    beneficioTag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: DISENO.colors.surface,
-        borderWidth: 1,
-        borderColor: DISENO.colors.border,
-    },
-});
+        headerGradient: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 6,
+        },
+        header: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+        },
+        backButtonGlass: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(255,255,255,0.20)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.35)',
+        },
+        title: {
+            fontFamily: FUENTES.display,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+            includeFontPadding: false,
+            flex: 1,
+            textAlign: 'center',
+        },
+        stepsContainer: {
+            alignItems: 'center',
+        },
+        scroll: { flexGrow: 1 },
+        card: {
+            backgroundColor: colores.surface,
+            borderWidth: 1,
+            borderColor: colores.border,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.06,
+            shadowRadius: 12,
+            elevation: 2,
+        },
+        inputWrap: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: colores.border,
+            backgroundColor: colores.fondo,
+        },
+        textInput: {
+            fontFamily: FUENTES.regular,
+            color: colores.text,
+            backgroundColor: colores.fondo,
+            borderWidth: 1,
+            borderColor: colores.border,
+            includeFontPadding: false,
+        },
+        textArea: {
+            fontFamily: FUENTES.regular,
+            color: colores.text,
+            backgroundColor: colores.fondo,
+            borderWidth: 1,
+            borderColor: colores.border,
+            textAlignVertical: 'top',
+            includeFontPadding: false,
+        },
+        inputLabel: {
+            fontFamily: FUENTES.regular,
+            color: colores.textSecondary,
+            includeFontPadding: false,
+        },
+        optionCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            overflow: 'hidden',
+        },
+        optionIconWrap: {
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        optionInner: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flex: 1,
+        },
+        payMethodInner: {
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        payMethodCard: {
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+        },
+        direccionHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        direccionActions: {
+            flexDirection: 'row',
+            gap: 8,
+            marginTop: 12,
+            flexWrap: 'wrap',
+        },
+        smallButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        actionButtonPrimary: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colores.accent,
+        },
+        actionButtonSecondary: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colores.fondo,
+            borderWidth: 1,
+            borderColor: colores.border,
+        },
+        errorRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 8,
+        },
+        infoEnvioBox: {
+            borderWidth: 1,
+        },
+        infoEnvioRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 3,
+        },
+        vueltoBox: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: colores.success + '12',
+            borderWidth: 1,
+            borderColor: colores.success + '25',
+        },
+        productRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderBottomColor: colores.border,
+        },
+        productQty: {
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        summaryRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+        },
+        summaryTotal: {
+            borderTopWidth: 1,
+            borderTopColor: colores.border,
+        },
+        confirmButton: {
+            overflow: 'hidden',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.35,
+            shadowRadius: 14,
+            elevation: 6,
+        },
+        confirmButtonGradient: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 24,
+            overflow: 'hidden',
+        },
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+        modal: {
+            width: '90%',
+            maxWidth: 400,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 20 },
+            shadowOpacity: 0.25,
+            shadowRadius: 40,
+            elevation: 20,
+        },
+        modalIconCircle: {
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 16,
+            borderWidth: 2,
+        },
+        modalTransferenciaOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 16,
+        },
+        modalTransferenciaHeaderContent: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            flexShrink: 1,
+        },
+        modalTransferenciaAliasHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 6,
+        },
+        modalTransferenciaAliasRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+        },
+        beneficiosHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+        beneficiosList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+        beneficioTag: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            borderWidth: 1,
+        },
+    });

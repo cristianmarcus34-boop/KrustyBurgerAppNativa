@@ -1,4 +1,4 @@
-// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES + NOTIFICAR ADMINS + CLIENTES
+// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES + NOTIFICAR ADMINS + CLIENTES + PROBLEMAS
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
@@ -166,6 +166,30 @@ export const notificacionService = {
                 console.warn('⚠️ Error actualizando perfiles.fcm_token:', errorPerfil);
             }
 
+            // ✅ NUEVO: Sincronizar push_subscriptions.is_active = true
+            // Así garantizamos que la fila quede activa cuando el token se registra,
+            // sin depender de que el usuario toque "Activar" manualmente.
+            try {
+                const { error: errorSub } = await supabase
+                    .from('push_subscriptions')
+                    .upsert(
+                        {
+                            usuario_id: usuarioId,
+                            is_active: true,
+                            updated_at: new Date().toISOString(),
+                        },
+                        { onConflict: 'usuario_id' }
+                    );
+
+                if (errorSub) {
+                    console.error('❌ Error upsert push_subscriptions (desde registrarToken):', errorSub);
+                } else {
+                    console.log('✅ push_subscriptions activado desde registrarToken para', usuarioId);
+                }
+            } catch (errorSub) {
+                console.error('❌ Excepción upsert push_subscriptions:', errorSub);
+            }
+
             console.log('✅ Token registrado:', token.data);
             return true;
         } catch (error) {
@@ -298,6 +322,19 @@ export const notificacionService = {
                 importance: Notifications.AndroidImportance.MAX,
                 vibrationPattern: [0, 500, 200, 500],
                 lightColor: '#E53935',
+                enableVibrate: true,
+                enableLights: true,
+                bypassDnd: true,
+                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                sound: 'saxolisa.wav',
+            });
+
+            // 🆕 Canal específico para problemas reportados por repartidores
+            await Notifications.setNotificationChannelAsync('problemas_repartidor', {
+                name: '⚠️ Problemas reportados',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 500, 200, 500, 200, 500],
+                lightColor: '#FF6F00',
                 enableVibrate: true,
                 enableLights: true,
                 bypassDnd: true,
@@ -458,7 +495,12 @@ export const notificacionService = {
                 } else if (data?.tipo === 'recompensa') {
                     channelId = 'recompensa';
                 } else if (data?.tipo === 'pedido') {
-                    channelId = data?.esParaAdmin ? 'pedidos_admin' : 'pedidos';
+                    // 🆕 Si es un problema reportado por repartidor, va al canal específico
+                    if (data?.problema) {
+                        channelId = 'problemas_repartidor';
+                    } else {
+                        channelId = data?.esParaAdmin ? 'pedidos_admin' : 'pedidos';
+                    }
                 } else if (data?.tipo === 'sistema') {
                     channelId = 'sistema';
                 }
@@ -733,6 +775,74 @@ export const notificacionService = {
 
         } catch (error: any) {
             console.error('❌ [Notif] Error notificando admins:', error);
+            return { success: false, error: error?.message };
+        }
+    },
+
+    // ============================================================
+    // ⚠️ NOTIFICAR A ADMINS SOBRE PROBLEMA REPORTADO POR REPARTIDOR
+    // ============================================================
+    async notificarAdminsProblemaPedido(opts: {
+        pedidoId: number;
+        motivo: 'cliente_ausente' | 'direccion_incorrecta' | 'cliente_rechazo' | 'otro';
+        detalle?: string;
+        repartidorNombre?: string;
+    }) {
+        try {
+            const { pedidoId, motivo, detalle, repartidorNombre } = opts;
+
+            console.log('⚠️ [Notif] Reportando problema en pedido #', pedidoId, '→', motivo);
+
+            const MOTIVOS_TEXTO: Record<string, string> = {
+                cliente_ausente: 'Cliente ausente',
+                direccion_incorrecta: 'Dirección incorrecta',
+                cliente_rechazo: 'Cliente rechazó el pedido',
+                otro: 'Otro problema',
+            };
+
+            const motivoTexto = MOTIVOS_TEXTO[motivo] || 'Problema reportado';
+
+            const { data: admins, error } = await supabase
+                .from('perfiles')
+                .select('id, nombre_cliente, fcm_token')
+                .eq('rol', 'admin')
+                .not('fcm_token', 'is', null);
+
+            if (error) {
+                console.error('❌ [Notif] Error buscando admins:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (!admins || admins.length === 0) {
+                console.log('ℹ️ [Notif] No hay admins con token registrado');
+                return { success: true, enviados: 0 };
+            }
+
+            const tokensValidos = admins
+                .map((a) => a.fcm_token)
+                .filter((t): t is string => !!t && t.startsWith('ExponentPushToken['));
+
+            if (tokensValidos.length === 0) {
+                return { success: true, enviados: 0 };
+            }
+
+            const titulo = `⚠️ Problema en pedido #${pedidoId}`;
+            const cuerpoPartes = [
+                motivoTexto,
+                repartidorNombre ? `Repartidor: ${repartidorNombre}` : null,
+                detalle ? `"${detalle}"` : null,
+            ].filter(Boolean);
+            const cuerpo = cuerpoPartes.join(' · ');
+
+            return await this.enviarNotificacionesMasivas(tokensValidos, titulo, cuerpo, {
+                tipo: 'pedido',
+                pedidoId,
+                esParaAdmin: true,
+                problema: motivo,
+                screen: 'GestionPedidos',
+            });
+        } catch (error: any) {
+            console.error('❌ [Notif] Error notificando problema:', error);
             return { success: false, error: error?.message };
         }
     },

@@ -1,4 +1,4 @@
-// screens/admin/PantallaGestionPedidos.tsx - REDISEÑO KRUSTY + FILTROS + BÚSQUEDA + SWIPE + NOTIFICACIONES + RESPONSIVE + WHATSAPP
+// screens/admin/PantallaGestionPedidos.tsx - V2 KRUSTY + MODO OSCURO + REPORTES DE PROBLEMA
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
@@ -22,23 +22,24 @@ import { Swipeable } from 'react-native-gesture-handler';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../../lib/supabase';
 import { Pedido } from '../../lib/tipos';
-import { DISENO, useResponsive } from '../../lib/colores';
+import { useResponsive } from '../../lib/colores';
+import { useColores, type PaletaTema } from '../../lib/theme';
 import { FUENTES } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
 import { notificacionService } from '../../services/notificacionService';
 import { useToast, Toast } from '../../components/Toast';
 
 // ============================================================
-// 🎨 ESTADOS DE PEDIDO
+// 🎨 ESTADOS DE PEDIDO (colores dinámicos, se calculan en el componente)
 // ============================================================
-const ESTADOS_PEDIDO: Record<string, { label: string; color: string; icono: string; siguiente?: string }> = {
-  pendiente: { label: 'Pendiente', color: DISENO.colors.accentSecondary, icono: 'time-outline', siguiente: 'confirmado' },
-  confirmado: { label: 'Confirmado', color: DISENO.colors.info, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
-  preparando: { label: 'Preparando', color: DISENO.colors.naranja, icono: 'restaurant-outline', siguiente: 'listo' },
-  listo: { label: 'Listo', color: DISENO.colors.verde, icono: 'checkmark-done-outline' },
-  en_camino: { label: 'En camino', color: DISENO.colors.morado, icono: 'bicycle-outline' },
-  entregado: { label: 'Entregado', color: DISENO.colors.success, icono: 'checkmark-done-circle-outline' },
-  cancelado: { label: 'Cancelado', color: DISENO.colors.danger, icono: 'close-circle-outline' },
+const ESTADOS_LABELS: Record<string, { label: string; icono: string; siguiente?: string }> = {
+  pendiente: { label: 'Pendiente', icono: 'time-outline', siguiente: 'confirmado' },
+  confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', siguiente: 'preparando' },
+  preparando: { label: 'Preparando', icono: 'restaurant-outline', siguiente: 'listo' },
+  listo: { label: 'Listo', icono: 'checkmark-done-outline' },
+  en_camino: { label: 'En camino', icono: 'bicycle-outline' },
+  entregado: { label: 'Entregado', icono: 'checkmark-done-circle-outline' },
+  cancelado: { label: 'Cancelado', icono: 'close-circle-outline' },
 };
 
 const ESTADOS_FINALIZADOS = ['entregado', 'cancelado'];
@@ -46,6 +47,23 @@ const ESTADOS_ACTIVOS = ['pendiente', 'confirmado', 'preparando', 'listo', 'en_c
 const MINUTOS_URGENTE = 15;
 
 const COLOR_WHATSAPP = '#25D366';
+
+// ============================================================
+// 🆕 MOTIVOS DE PROBLEMA (texto legible)
+// ============================================================
+const MOTIVOS_PROBLEMA_TEXTO: Record<string, string> = {
+  cliente_ausente: 'Cliente ausente',
+  direccion_incorrecta: 'Dirección incorrecta',
+  cliente_rechazo: 'Cliente rechazó el pedido',
+  otro: 'Otro problema',
+};
+
+const MOTIVOS_PROBLEMA_ICONO: Record<string, string> = {
+  cliente_ausente: 'person-remove-outline',
+  direccion_incorrecta: 'location-outline',
+  cliente_rechazo: 'close-circle-outline',
+  otro: 'alert-circle-outline',
+};
 
 // ============================================================
 // 🆕 INTERFAZ
@@ -56,6 +74,13 @@ interface PedidoConCliente extends Pedido {
   cliente_telefono?: string;
   cliente_direccion?: string;
   items_nombres?: string[];
+  // Reporte de problema
+  problema_repartidor?: string | null;
+  problema_detalle?: string | null;
+  reportado_en?: string | null;
+  problema_repartidor_id?: string | null;
+  // Repartidor info (para mostrar quién reportó)
+  repartidor_nombre?: string | null;
 }
 
 // ============================================================
@@ -82,48 +107,32 @@ const esPedidoUrgente = (fecha: string, estado: string): boolean => {
   return minutos >= MINUTOS_URGENTE;
 };
 
-/**
- * ✅ Normaliza el teléfono argentino para WhatsApp.
- * Casos soportados:
- *  - "+54 9 11 1234-5678" → "5491112345678"
- *  - "011 15-1234-5678"   → "5491112345678"
- *  - "11 1234-5678"       → "5491112345678"
- *  - "5491112345678"      → "5491112345678" (sin cambios)
- */
 const normalizarTelefonoParaWhatsApp = (telefono: string): string | null => {
   if (!telefono) return null;
 
-  // Dejar solo dígitos
   let numero = telefono.replace(/\D/g, '');
 
   if (!numero || numero.length < 8) return null;
 
-  // Si ya empieza con 549 → listo
   if (numero.startsWith('549')) return numero;
 
-  // Si empieza con 54 (pero no 549) → agregar el 9
   if (numero.startsWith('54')) {
     return `549${numero.slice(2)}`;
   }
 
-  // Sacar el 0 inicial (ej: "011..." → "11...")
   if (numero.startsWith('0')) {
     numero = numero.slice(1);
   }
 
-  // Sacar el 15 después del código de área (ej: "11 15 1234..." → "11 1234...")
-  // El 15 suele estar entre el código de área (2-4 dígitos) y el número
   const match15 = numero.match(/^(\d{2,4})15(\d{6,8})$/);
   if (match15) {
     numero = `${match15[1]}${match15[2]}`;
   }
 
-  // Si tiene 10 dígitos (ej: "11 1234 5678") → agregar 549
   if (numero.length === 10) {
     return `549${numero}`;
   }
 
-  // Fallback: agregar 54
   return `54${numero}`;
 };
 
@@ -135,6 +144,22 @@ export default function PantallaGestionPedidos(props: any) {
   const insets = useSafeAreaInsets();
   const toast = useToast();
 
+  // ✅ TEMA
+  const colores = useColores();
+  const estilos = useMemo(() => crearEstilos(colores), [colores]);
+  const ESTADOS_PEDIDO = useMemo(
+    () => ({
+      pendiente: { label: 'Pendiente', color: colores.accentSecondary, icono: 'time-outline', siguiente: 'confirmado' },
+      confirmado: { label: 'Confirmado', color: colores.info, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
+      preparando: { label: 'Preparando', color: colores.naranja, icono: 'restaurant-outline', siguiente: 'listo' },
+      listo: { label: 'Listo', color: colores.verde, icono: 'checkmark-done-outline' },
+      en_camino: { label: 'En camino', color: colores.morado, icono: 'bicycle-outline' },
+      entregado: { label: 'Entregado', color: colores.success, icono: 'checkmark-done-circle-outline' },
+      cancelado: { label: 'Cancelado', color: colores.danger, icono: 'close-circle-outline' },
+    }) as Record<string, { label: string; color: string; icono: string; siguiente?: string }>,
+    [colores]
+  );
+
   const [pedidos, setPedidos] = useState<PedidoConCliente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -143,6 +168,10 @@ export default function PantallaGestionPedidos(props: any) {
   const [tipoLimpieza, setTipoLimpieza] = useState<'todos' | 'finalizados' | null>(null);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<PedidoConCliente | null>(null);
   const [mostrarModalDetalle, setMostrarModalDetalle] = useState(false);
+
+  // 🆕 Estados para reporte de problema
+  const [mostrarModalProblema, setMostrarModalProblema] = useState(false);
+  const [resolviendoProblema, setResolviendoProblema] = useState(false);
 
   // ✅ Filtros y búsqueda
   const [filtroEstado, setFiltroEstado] = useState<string>('activos');
@@ -194,6 +223,28 @@ export default function PantallaGestionPedidos(props: any) {
         }
       }
 
+      // 🆕 Cargar nombres de repartidores que reportaron problemas
+      const repartidoresIds = [...new Set(
+        pedidosData
+          .map(p => p.problema_repartidor_id)
+          .filter(Boolean)
+      )] as string[];
+
+      let repartidoresMap: Record<string, string> = {};
+      if (repartidoresIds.length > 0) {
+        const { data: repartidoresData } = await supabase
+          .from('perfiles')
+          .select('id, nombre_cliente')
+          .in('id', repartidoresIds);
+
+        if (repartidoresData) {
+          repartidoresMap = repartidoresData.reduce((acc, r) => {
+            acc[r.id] = r.nombre_cliente || 'Repartidor';
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      }
+
       const pedidosConCliente: PedidoConCliente[] = pedidosData.map(pedido => {
         const perfil = perfilesMap[pedido.id_de_usuario || ''] || {};
 
@@ -222,6 +273,10 @@ export default function PantallaGestionPedidos(props: any) {
           itemsNombres = ['Ver detalles del pedido'];
         }
 
+        const repartidorNombre = pedido.problema_repartidor_id
+          ? repartidoresMap[pedido.problema_repartidor_id] || null
+          : null;
+
         return {
           ...pedido,
           cliente_nombre_completo: perfil.nombre_cliente || pedido.cliente_nombre || 'Cliente',
@@ -229,6 +284,7 @@ export default function PantallaGestionPedidos(props: any) {
           cliente_telefono: perfil.telefono || pedido.telefono || 'Sin teléfono',
           cliente_direccion: direccionCompleta,
           items_nombres: itemsNombres,
+          repartidor_nombre: repartidorNombre,
         };
       });
 
@@ -250,6 +306,7 @@ export default function PantallaGestionPedidos(props: any) {
     const activos = pedidos.filter(p => ESTADOS_ACTIVOS.includes(p.estado)).length;
     const finalizados = pedidos.filter(p => ESTADOS_FINALIZADOS.includes(p.estado)).length;
     const urgentes = pedidos.filter(p => esPedidoUrgente(p.creado_en, p.estado)).length;
+    const conProblema = pedidos.filter(p => !!p.problema_repartidor).length;
 
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -258,7 +315,7 @@ export default function PantallaGestionPedidos(props: any) {
       .filter(p => p.estado !== 'cancelado')
       .reduce((sum, p) => sum + (p.total || 0), 0);
 
-    return { total, activos, finalizados, urgentes, vendidoHoy };
+    return { total, activos, finalizados, urgentes, vendidoHoy, conProblema };
   }, [pedidos]);
 
   // ============================================================
@@ -271,6 +328,8 @@ export default function PantallaGestionPedidos(props: any) {
       resultado = resultado.filter(p => ESTADOS_ACTIVOS.includes(p.estado));
     } else if (filtroEstado === 'finalizados') {
       resultado = resultado.filter(p => ESTADOS_FINALIZADOS.includes(p.estado));
+    } else if (filtroEstado === 'con_problema') {
+      resultado = resultado.filter(p => !!p.problema_repartidor);
     } else if (filtroEstado !== 'todos') {
       resultado = resultado.filter(p => p.estado === filtroEstado);
     }
@@ -374,6 +433,47 @@ export default function PantallaGestionPedidos(props: any) {
   };
 
   // ============================================================
+  // 🆕 MARCAR PROBLEMA COMO RESUELTO
+  // ============================================================
+  const marcarProblemaResuelto = async (pedido: PedidoConCliente) => {
+    Alert.alert(
+      '¿Marcar como resuelto?',
+      `El reporte "${MOTIVOS_PROBLEMA_TEXTO[pedido.problema_repartidor || ''] || 'reporte'}" del pedido #${pedido.id} se va a eliminar.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sí, resolver',
+          onPress: async () => {
+            setResolviendoProblema(true);
+            try {
+              const { error } = await supabase
+                .from('pedidos')
+                .update({
+                  problema_repartidor: null,
+                  problema_detalle: null,
+                  reportado_en: null,
+                  problema_repartidor_id: null,
+                })
+                .eq('id', pedido.id);
+
+              if (error) throw error;
+
+              toast.exito('✅ Reporte marcado como resuelto');
+              setMostrarModalProblema(false);
+              await cargarPedidos();
+            } catch (e: any) {
+              console.error('Error resolviendo problema:', e);
+              toast.error('No se pudo resolver el reporte');
+            } finally {
+              setResolviendoProblema(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ============================================================
   // 📞 LLAMAR CLIENTE
   // ============================================================
   const llamarCliente = (telefono: string) => {
@@ -407,7 +507,6 @@ export default function PantallaGestionPedidos(props: any) {
       return;
     }
 
-    // ✅ Mensaje contextual según el estado
     const nombreCorto = (nombre || '').split(' ')[0] || '';
     let mensaje = '';
 
@@ -457,6 +556,12 @@ export default function PantallaGestionPedidos(props: any) {
     setMostrarModalDetalle(true);
   };
 
+  // 🆕 Abrir modal de problema
+  const abrirModalProblema = (pedido: PedidoConCliente) => {
+    setPedidoSeleccionado(pedido);
+    setMostrarModalProblema(true);
+  };
+
   const manejarRefresh = useCallback(() => {
     setRefrescando(true);
     cargarPedidos();
@@ -470,6 +575,7 @@ export default function PantallaGestionPedidos(props: any) {
     const isTerminado = ESTADOS_FINALIZADOS.includes(item.estado);
     const esUrgente = esPedidoUrgente(item.creado_en, item.estado);
     const esEfectivo = item.metodo_pago === 'efectivo';
+    const tieneProblema = !!item.problema_repartidor;
 
     // ✅ Tamaños responsive
     const cardPadding = responsive.getValor({ tablet: 16, normal: 12, small: 10 });
@@ -486,6 +592,7 @@ export default function PantallaGestionPedidos(props: any) {
     const badgeUrgenteSize = responsive.getValor({ tablet: 10, normal: 9, small: 8 });
     const iconoContactoSize = responsive.getValor({ tablet: 18, normal: 16, small: 14 });
     const botonContactoPad = responsive.getValor({ tablet: 8, normal: 7, small: 6 });
+    const badgeProblemaSize = responsive.getValor({ tablet: 12, normal: 11, small: 10 });
 
     const renderRightActions = () => {
       if (isTerminado || !estadoInfo.siguiente) return null;
@@ -537,12 +644,37 @@ export default function PantallaGestionPedidos(props: any) {
             style={[
               estilos.tarjeta,
               {
-                borderLeftColor: estadoInfo.color,
+                borderLeftColor: tieneProblema ? colores.danger : estadoInfo.color,
                 padding: cardPadding,
               },
             ]}
           >
-            {/* ENCABEZADO: ID + URGENTE inline + ESTADO */}
+            {/* 🆕 BANNER DE PROBLEMA */}
+            {tieneProblema && (
+              <TouchableOpacity
+                style={[
+                  estilos.bannerProblema,
+                  { backgroundColor: colores.danger + '15', borderColor: colores.danger + '40' },
+                ]}
+                onPress={() => abrirModalProblema(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="warning" size={badgeProblemaSize} color={colores.danger} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[estilos.bannerProblemaTitulo, { color: colores.danger }]}>
+                    ⚠️ {MOTIVOS_PROBLEMA_TEXTO[item.problema_repartidor || ''] || 'Problema reportado'}
+                  </Text>
+                  {item.repartidor_nombre && (
+                    <Text style={[estilos.bannerProblemaSub, { color: colores.danger }]}>
+                      Reportado por {item.repartidor_nombre}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colores.danger} />
+              </TouchableOpacity>
+            )}
+
+            {/* ENCABEZADO */}
             <View style={estilos.encabezado}>
               <View style={estilos.encabezadoIzq}>
                 <View style={estilos.pedidoIdRow}>
@@ -591,12 +723,12 @@ export default function PantallaGestionPedidos(props: any) {
               </View>
             </View>
 
-            {/* CLIENTE + BOTONES DE CONTACTO */}
+            {/* CLIENTE + CONTACTO */}
             <View style={estilos.clienteRow}>
               <Ionicons
                 name="person-circle-outline"
                 size={responsive.getValor({ tablet: 20, normal: 18, small: 16 })}
-                color={DISENO.colors.accent}
+                color={colores.accent}
               />
               <Text
                 style={[estilos.clienteNombre, { fontSize: clienteNombreSize }]}
@@ -605,13 +737,12 @@ export default function PantallaGestionPedidos(props: any) {
                 {item.cliente_nombre_completo}
               </Text>
 
-              {/* Botón llamada */}
               <TouchableOpacity
                 onPress={() => llamarCliente(item.cliente_telefono || '')}
                 style={[
                   estilos.botonContacto,
                   {
-                    backgroundColor: DISENO.colors.success + '15',
+                    backgroundColor: colores.success + '15',
                     padding: botonContactoPad,
                   },
                 ]}
@@ -620,11 +751,10 @@ export default function PantallaGestionPedidos(props: any) {
                 <Ionicons
                   name="call"
                   size={iconoContactoSize}
-                  color={DISENO.colors.success}
+                  color={colores.success}
                 />
               </TouchableOpacity>
 
-              {/* Botón WhatsApp */}
               <TouchableOpacity
                 onPress={() =>
                   abrirWhatsApp(
@@ -657,7 +787,7 @@ export default function PantallaGestionPedidos(props: any) {
                 <Ionicons
                   name="location-outline"
                   size={responsive.getValor({ tablet: 14, normal: 12, small: 11 })}
-                  color={DISENO.colors.textSecondary}
+                  color={colores.textSecondary}
                 />
                 <Text style={[estilos.infoText, { fontSize: infoTextSize }]} numberOfLines={1}>
                   {item.cliente_direccion}
@@ -671,7 +801,7 @@ export default function PantallaGestionPedidos(props: any) {
                 <Ionicons
                   name="fast-food-outline"
                   size={responsive.getValor({ tablet: 14, normal: 12, small: 11 })}
-                  color={DISENO.colors.textSecondary}
+                  color={colores.textSecondary}
                 />
                 <Text style={[estilos.infoText, { fontSize: infoTextSize }]} numberOfLines={1}>
                   {item.items_nombres.slice(0, 2).join(' · ')}
@@ -694,7 +824,7 @@ export default function PantallaGestionPedidos(props: any) {
                   <Ionicons
                     name="cash-outline"
                     size={responsive.getValor({ tablet: 14, normal: 12, small: 10 })}
-                    color={DISENO.colors.success}
+                    color={colores.success}
                   />
                   <Text
                     style={[
@@ -706,17 +836,17 @@ export default function PantallaGestionPedidos(props: any) {
                   </Text>
                 </View>
               ) : (
-                <View style={[estilos.pagoBadge, { backgroundColor: DISENO.colors.info + '15' }]}>
+                <View style={[estilos.pagoBadge, { backgroundColor: colores.info + '15' }]}>
                   <Ionicons
                     name="card-outline"
                     size={responsive.getValor({ tablet: 14, normal: 12, small: 10 })}
-                    color={DISENO.colors.info}
+                    color={colores.info}
                   />
                   <Text
                     style={[
                       estilos.pagoBadgeText,
                       {
-                        color: DISENO.colors.info,
+                        color: colores.info,
                         fontSize: responsive.getValor({ tablet: 11, normal: 10, small: 9 }),
                       },
                     ]}
@@ -778,7 +908,7 @@ export default function PantallaGestionPedidos(props: any) {
                   <Ionicons
                     name="close-circle-outline"
                     size={responsive.getValor({ tablet: 20, normal: 18, small: 15 })}
-                    color={DISENO.colors.danger}
+                    color={colores.danger}
                   />
                 </TouchableOpacity>
               </View>
@@ -794,6 +924,7 @@ export default function PantallaGestionPedidos(props: any) {
   // ============================================================
   const chipsFiltro = [
     { id: 'activos', label: '🔥 Activos', count: metricas.activos },
+    { id: 'con_problema', label: '⚠️ Reportes', count: metricas.conProblema },
     { id: 'pendiente', label: '⏳ Pendientes', count: pedidos.filter(p => p.estado === 'pendiente').length },
     { id: 'preparando', label: '🍔 Preparando', count: pedidos.filter(p => p.estado === 'preparando').length },
     { id: 'en_camino', label: '🛵 En camino', count: pedidos.filter(p => p.estado === 'en_camino').length },
@@ -807,8 +938,10 @@ export default function PantallaGestionPedidos(props: any) {
   if (cargando) {
     return (
       <View style={[estilos.contenedor, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={DISENO.colors.accent} />
-        <Text style={estilos.cargandoText}>Cargando pedidos...</Text>
+        <ActivityIndicator size="large" color={colores.accent} />
+        <Text style={[estilos.cargandoText, { color: colores.textSecondary }]}>
+          Cargando pedidos...
+        </Text>
       </View>
     );
   }
@@ -817,7 +950,7 @@ export default function PantallaGestionPedidos(props: any) {
     <>
       <View style={estilos.contenedor}>
         <LinearGradient
-          colors={[DISENO.colors.fondo, DISENO.colors.surface]}
+          colors={[colores.fondo, colores.surface]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -837,13 +970,21 @@ export default function PantallaGestionPedidos(props: any) {
             onPress={() => props.navigation.goBack()}
             style={estilos.botonHeader}
           >
-            <Ionicons name="arrow-back" size={22} color={DISENO.colors.text} />
+            <Ionicons name="arrow-back" size={22} color={colores.text} />
           </TouchableOpacity>
 
           <View style={estilos.headerCentro}>
-            <Text style={estilos.titulo}>📋 Pedidos</Text>
-            {metricas.urgentes > 0 && (
-              <View style={estilos.alertaUrgentes}>
+            <Text style={[estilos.titulo, { color: colores.text }]}>📋 Pedidos</Text>
+            {metricas.conProblema > 0 && (
+              <View style={[estilos.alertaUrgentes, { backgroundColor: colores.danger }]}>
+                <Ionicons name="warning" size={12} color="#FFF" />
+                <Text style={estilos.alertaUrgentesText}>
+                  {metricas.conProblema} reporte{metricas.conProblema > 1 ? 's' : ''}
+                </Text>
+              </View>
+            )}
+            {metricas.conProblema === 0 && metricas.urgentes > 0 && (
+              <View style={[estilos.alertaUrgentes, { backgroundColor: colores.danger }]}>
                 <Ionicons name="alert-circle" size={12} color="#FFF" />
                 <Text style={estilos.alertaUrgentesText}>
                   {metricas.urgentes} urgente{metricas.urgentes > 1 ? 's' : ''}
@@ -860,7 +1001,7 @@ export default function PantallaGestionPedidos(props: any) {
             <Ionicons
               name="trash-outline"
               size={22}
-              color={pedidos.length === 0 ? DISENO.colors.textTertiary : DISENO.colors.danger}
+              color={pedidos.length === 0 ? colores.textTertiary : colores.danger}
             />
           </TouchableOpacity>
         </View>
@@ -873,20 +1014,24 @@ export default function PantallaGestionPedidos(props: any) {
           ]}
         >
           <View style={estilos.resumenItem}>
-            <Text style={estilos.resumenLabel}>Vendido hoy</Text>
-            <Text style={estilos.resumenValor}>{formatearPrecio(metricas.vendidoHoy)}</Text>
+            <Text style={[estilos.resumenLabel, { color: colores.textSecondary }]}>Vendido hoy</Text>
+            <Text style={[estilos.resumenValor, { color: colores.text }]}>
+              {formatearPrecio(metricas.vendidoHoy)}
+            </Text>
           </View>
-          <View style={estilos.resumenDivider} />
+          <View style={[estilos.resumenDivider, { backgroundColor: colores.border }]} />
           <View style={estilos.resumenItem}>
-            <Text style={estilos.resumenLabel}>Activos</Text>
-            <Text style={[estilos.resumenValor, { color: DISENO.colors.accent }]}>
+            <Text style={[estilos.resumenLabel, { color: colores.textSecondary }]}>Activos</Text>
+            <Text style={[estilos.resumenValor, { color: colores.accent }]}>
               {metricas.activos}
             </Text>
           </View>
-          <View style={estilos.resumenDivider} />
+          <View style={[estilos.resumenDivider, { backgroundColor: colores.border }]} />
           <View style={estilos.resumenItem}>
-            <Text style={estilos.resumenLabel}>Total</Text>
-            <Text style={estilos.resumenValor}>{metricas.total}</Text>
+            <Text style={[estilos.resumenLabel, { color: colores.textSecondary }]}>Total</Text>
+            <Text style={[estilos.resumenValor, { color: colores.text }]}>
+              {metricas.total}
+            </Text>
           </View>
         </View>
 
@@ -897,28 +1042,28 @@ export default function PantallaGestionPedidos(props: any) {
             { marginHorizontal: responsive.getEspaciado('LG') },
           ]}
         >
-          <Ionicons name="search" size={18} color={DISENO.colors.textSecondary} />
+          <Ionicons name="search" size={18} color={colores.textSecondary} />
           <TextInput
-            style={estilos.buscadorInput}
+            style={[estilos.buscadorInput, { color: colores.text }]}
             value={busqueda}
             onChangeText={setBusqueda}
             placeholder="Buscar por ID, cliente o teléfono..."
-            placeholderTextColor={DISENO.colors.textTertiary}
-            selectionColor={DISENO.colors.accent}
+            placeholderTextColor={colores.textTertiary}
+            selectionColor={colores.accent}
           />
           {busqueda.length > 0 && (
             <TouchableOpacity onPress={() => setBusqueda('')}>
-              <Ionicons name="close-circle" size={18} color={DISENO.colors.textTertiary} />
+              <Ionicons name="close-circle" size={18} color={colores.textTertiary} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={estilos.botonOrden}
+            style={[estilos.botonOrden, { backgroundColor: colores.accent + '15' }]}
             onPress={() => setOrden(orden === 'recientes' ? 'antiguos' : 'recientes')}
           >
             <Ionicons
               name={orden === 'recientes' ? 'arrow-down' : 'arrow-up'}
               size={16}
-              color={DISENO.colors.accent}
+              color={colores.accent}
             />
           </TouchableOpacity>
         </View>
@@ -934,19 +1079,39 @@ export default function PantallaGestionPedidos(props: any) {
         >
           {chipsFiltro.map(chip => {
             const activo = filtroEstado === chip.id;
+            const esReportes = chip.id === 'con_problema';
             return (
               <TouchableOpacity
                 key={chip.id}
-                style={[estilos.chip, activo && estilos.chipActivo]}
+                style={[
+                  estilos.chip,
+                  { borderColor: colores.border },
+                  activo && {
+                    backgroundColor: esReportes ? colores.danger : colores.accent,
+                    borderColor: esReportes ? colores.danger : colores.accent,
+                  },
+                ]}
                 onPress={() => setFiltroEstado(chip.id)}
                 activeOpacity={0.7}
               >
-                <Text style={[estilos.chipText, activo && estilos.chipTextActivo]}>
+                <Text
+                  style={[
+                    estilos.chipText,
+                    { color: colores.textSecondary },
+                    activo && { color: '#FFF' },
+                  ]}
+                >
                   {chip.label}
                 </Text>
                 {chip.count > 0 && (
-                  <View style={[estilos.chipBadge, activo && estilos.chipBadgeActivo]}>
-                    <Text style={[estilos.chipBadgeText, activo && estilos.chipBadgeTextActivo]}>
+                  <View
+                    style={[
+                      estilos.chipBadge,
+                      { backgroundColor: esReportes && chip.count > 0 ? colores.danger : colores.textTertiary },
+                      activo && { backgroundColor: 'rgba(255,255,255,0.3)' },
+                    ]}
+                  >
+                    <Text style={[estilos.chipBadgeText]}>
                       {chip.count}
                     </Text>
                   </View>
@@ -971,12 +1136,12 @@ export default function PantallaGestionPedidos(props: any) {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={estilos.vacio}>
-              <Ionicons name="receipt-outline" size={60} color={DISENO.colors.textTertiary} />
-              <Text style={estilos.vacioTexto}>
-                {busqueda ? 'Sin resultados' : 'No hay pedidos'}
+              <Ionicons name="receipt-outline" size={60} color={colores.textTertiary} />
+              <Text style={[estilos.vacioTexto, { color: colores.text }]}>
+                {busqueda ? 'Sin resultados' : filtroEstado === 'con_problema' ? 'Sin reportes' : 'No hay pedidos'}
               </Text>
-              <Text style={estilos.vacioSubtexto}>
-                {busqueda ? 'Probá con otra búsqueda' : 'Los pedidos aparecerán acá'}
+              <Text style={[estilos.vacioSubtexto, { color: colores.textSecondary }]}>
+                {busqueda ? 'Probá con otra búsqueda' : filtroEstado === 'con_problema' ? 'Todo en orden ✅' : 'Los pedidos aparecerán acá'}
               </Text>
             </View>
           }
@@ -984,8 +1149,8 @@ export default function PantallaGestionPedidos(props: any) {
             <RefreshControl
               refreshing={refrescando}
               onRefresh={manejarRefresh}
-              tintColor={DISENO.colors.accent}
-              colors={[DISENO.colors.accent]}
+              tintColor={colores.accent}
+              colors={[colores.accent]}
             />
           }
         />
@@ -1001,26 +1166,26 @@ export default function PantallaGestionPedidos(props: any) {
       >
         <View style={estilos.modalOverlay}>
           <View style={estilos.modalContainer}>
-            <View style={[estilos.modalIcono, { backgroundColor: DISENO.colors.danger + '15' }]}>
-              <Ionicons name="trash" size={40} color={DISENO.colors.danger} />
+            <View style={[estilos.modalIcono, { backgroundColor: colores.danger + '15' }]}>
+              <Ionicons name="trash" size={40} color={colores.danger} />
             </View>
-            <Text style={estilos.modalTitulo}>Limpiar pedidos</Text>
-            <Text style={estilos.modalDescripcion}>
+            <Text style={[estilos.modalTitulo, { color: colores.text }]}>Limpiar pedidos</Text>
+            <Text style={[estilos.modalDescripcion, { color: colores.textSecondary }]}>
               Esta acción elimina pedidos de forma permanente.
               {metricas.finalizados > 0 && `\n\nHay ${metricas.finalizados} pedidos finalizados.`}
             </Text>
 
             <View style={estilos.modalBotones}>
               <TouchableOpacity
-                style={[estilos.modalBoton, estilos.modalBotonSecundario]}
+                style={[estilos.modalBoton, { backgroundColor: colores.surfaceHover }]}
                 onPress={() => setMostrarModalLimpieza(false)}
               >
-                <Text style={estilos.modalBotonTextoSecundario}>Cancelar</Text>
+                <Text style={[estilos.modalBotonTextoSecundario, { color: colores.text }]}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   estilos.modalBoton,
-                  estilos.modalBotonPeligro,
+                  { backgroundColor: colores.danger },
                   { opacity: metricas.finalizados === 0 ? 0.5 : 1 },
                 ]}
                 onPress={() => limpiarPedidos('finalizados')}
@@ -1038,7 +1203,7 @@ export default function PantallaGestionPedidos(props: any) {
 
             {metricas.total > 0 && (
               <TouchableOpacity
-                style={estilos.modalBotonTodos}
+                style={[estilos.modalBotonTodos, { borderColor: colores.danger + '30' }]}
                 onPress={() => {
                   Alert.alert(
                     '⚠️ Eliminar TODOS',
@@ -1056,9 +1221,9 @@ export default function PantallaGestionPedidos(props: any) {
                 disabled={limpiando}
               >
                 {limpiando && tipoLimpieza === 'todos' ? (
-                  <ActivityIndicator size="small" color={DISENO.colors.danger} />
+                  <ActivityIndicator size="small" color={colores.danger} />
                 ) : (
-                  <Text style={estilos.modalBotonTodosTexto}>
+                  <Text style={[estilos.modalBotonTodosTexto, { color: colores.danger }]}>
                     ⚠️ Eliminar TODOS ({metricas.total})
                   </Text>
                 )}
@@ -1078,12 +1243,12 @@ export default function PantallaGestionPedidos(props: any) {
       >
         <View style={estilos.modalDetalleOverlay}>
           <View style={estilos.modalDetalleContainer}>
-            <View style={estilos.modalDetalleHeader}>
-              <Text style={estilos.modalDetalleTitulo}>
+            <View style={[estilos.modalDetalleHeader, { borderBottomColor: colores.border }]}>
+              <Text style={[estilos.modalDetalleTitulo, { color: colores.text }]}>
                 Pedido #{pedidoSeleccionado?.id}
               </Text>
               <TouchableOpacity onPress={() => setMostrarModalDetalle(false)}>
-                <Ionicons name="close" size={24} color={DISENO.colors.text} />
+                <Ionicons name="close" size={24} color={colores.text} />
               </TouchableOpacity>
             </View>
 
@@ -1092,31 +1257,77 @@ export default function PantallaGestionPedidos(props: any) {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={estilos.modalDetalleScroll}
               >
+                {/* 🆕 PROBLEMA REPORTADO */}
+                {pedidoSeleccionado.problema_repartidor && (
+                  <View
+                    style={[
+                      estilos.seccionProblema,
+                      { backgroundColor: colores.danger + '10', borderColor: colores.danger + '40' },
+                    ]}
+                  >
+                    <Text style={[estilos.seccionTitulo, { color: colores.danger }]}>
+                      ⚠️ Problema reportado
+                    </Text>
+                    <Text style={[estilos.seccionTexto, { color: colores.text }]}>
+                      {MOTIVOS_PROBLEMA_TEXTO[pedidoSeleccionado.problema_repartidor] || 'Problema'}
+                    </Text>
+                    {pedidoSeleccionado.problema_detalle && (
+                      <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary, fontStyle: 'italic' }]}>
+                        "{pedidoSeleccionado.problema_detalle}"
+                      </Text>
+                    )}
+                    {pedidoSeleccionado.repartidor_nombre && (
+                      <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
+                        Reportado por: {pedidoSeleccionado.repartidor_nombre}
+                      </Text>
+                    )}
+                    {pedidoSeleccionado.reportado_en && (
+                      <Text style={[estilos.seccionTextoChico, { color: colores.textTertiary }]}>
+                        {formatearTiempoTranscurrido(pedidoSeleccionado.reportado_en)}
+                      </Text>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        estilos.botonResolver,
+                        { backgroundColor: colores.success },
+                        resolviendoProblema && { opacity: 0.6 },
+                      ]}
+                      onPress={() => marcarProblemaResuelto(pedidoSeleccionado)}
+                      disabled={resolviendoProblema}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                      <Text style={estilos.botonResolverTexto}>
+                        {resolviendoProblema ? 'Resolviendo...' : 'Marcar como resuelto'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* CLIENTE */}
                 <View style={estilos.seccion}>
-                  <Text style={estilos.seccionTitulo}>👤 Cliente</Text>
-                  <Text style={estilos.seccionTexto}>
+                  <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>👤 Cliente</Text>
+                  <Text style={[estilos.seccionTexto, { color: colores.text }]}>
                     {pedidoSeleccionado.cliente_nombre_completo}
                   </Text>
-                  <Text style={estilos.seccionTextoChico}>
+                  <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
                     📧 {pedidoSeleccionado.cliente_email}
                   </Text>
-                  <Text style={estilos.seccionTextoChico}>
+                  <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
                     📞 {pedidoSeleccionado.cliente_telefono}
                   </Text>
 
-                  {/* ✅ BOTONES DE CONTACTO EN EL MODAL */}
                   <View style={estilos.modalContactoRow}>
                     <TouchableOpacity
                       style={[
                         estilos.modalContactoBoton,
-                        { backgroundColor: DISENO.colors.success + '15' },
+                        { backgroundColor: colores.success + '15' },
                       ]}
                       onPress={() => llamarCliente(pedidoSeleccionado.cliente_telefono || '')}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="call" size={16} color={DISENO.colors.success} />
-                      <Text style={[estilos.modalContactoTexto, { color: DISENO.colors.success }]}>
+                      <Ionicons name="call" size={16} color={colores.success} />
+                      <Text style={[estilos.modalContactoTexto, { color: colores.success }]}>
                         Llamar
                       </Text>
                     </TouchableOpacity>
@@ -1145,13 +1356,13 @@ export default function PantallaGestionPedidos(props: any) {
                     <TouchableOpacity
                       style={[
                         estilos.modalContactoBoton,
-                        { backgroundColor: DISENO.colors.info + '15' },
+                        { backgroundColor: colores.info + '15' },
                       ]}
                       onPress={() => copiarTelefono(pedidoSeleccionado.cliente_telefono || '')}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="copy-outline" size={16} color={DISENO.colors.info} />
-                      <Text style={[estilos.modalContactoTexto, { color: DISENO.colors.info }]}>
+                      <Ionicons name="copy-outline" size={16} color={colores.info} />
+                      <Text style={[estilos.modalContactoTexto, { color: colores.info }]}>
                         Copiar
                       </Text>
                     </TouchableOpacity>
@@ -1161,8 +1372,8 @@ export default function PantallaGestionPedidos(props: any) {
                 {/* DIRECCIÓN */}
                 {pedidoSeleccionado.tipo_entrega === 'domicilio' && (
                   <View style={estilos.seccion}>
-                    <Text style={estilos.seccionTitulo}>📍 Dirección</Text>
-                    <Text style={estilos.seccionTexto}>
+                    <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>📍 Dirección</Text>
+                    <Text style={[estilos.seccionTexto, { color: colores.text }]}>
                       {pedidoSeleccionado.cliente_direccion}
                     </Text>
                   </View>
@@ -1170,9 +1381,9 @@ export default function PantallaGestionPedidos(props: any) {
 
                 {/* PRODUCTOS */}
                 <View style={estilos.seccion}>
-                  <Text style={estilos.seccionTitulo}>🛒 Productos</Text>
+                  <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>🛒 Productos</Text>
                   {pedidoSeleccionado.items_nombres?.map((item, idx) => (
-                    <Text key={idx} style={estilos.seccionTextoChico}>
+                    <Text key={idx} style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
                       • {item}
                     </Text>
                   ))}
@@ -1180,18 +1391,18 @@ export default function PantallaGestionPedidos(props: any) {
 
                 {/* RESUMEN */}
                 <View style={estilos.seccion}>
-                  <Text style={estilos.seccionTitulo}>📊 Resumen</Text>
+                  <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>📊 Resumen</Text>
 
                   <View style={estilos.filaResumen}>
-                    <Text style={estilos.labelResumen}>Subtotal</Text>
-                    <Text style={estilos.valorResumen}>
+                    <Text style={[estilos.labelResumen, { color: colores.textSecondary }]}>Subtotal</Text>
+                    <Text style={[estilos.valorResumen, { color: colores.text }]}>
                       {formatearPrecio(pedidoSeleccionado.total_parcial || 0)}
                     </Text>
                   </View>
 
                   <View style={estilos.filaResumen}>
-                    <Text style={estilos.labelResumen}>Envío</Text>
-                    <Text style={estilos.valorResumen}>
+                    <Text style={[estilos.labelResumen, { color: colores.textSecondary }]}>Envío</Text>
+                    <Text style={[estilos.valorResumen, { color: colores.text }]}>
                       {formatearPrecio(pedidoSeleccionado.costo_envio || 0)}
                     </Text>
                   </View>
@@ -1200,58 +1411,176 @@ export default function PantallaGestionPedidos(props: any) {
                     pedidoSeleccionado.monto_pago && (
                       <>
                         <View style={estilos.filaResumen}>
-                          <Text
-                            style={[
-                              estilos.labelResumen,
-                              { color: DISENO.colors.accent },
-                            ]}
-                          >
+                          <Text style={[estilos.labelResumen, { color: colores.accent }]}>
                             💰 Pagó con
                           </Text>
-                          <Text
-                            style={[
-                              estilos.valorResumen,
-                              { color: DISENO.colors.accent },
-                            ]}
-                          >
+                          <Text style={[estilos.valorResumen, { color: colores.accent }]}>
                             {formatearPrecio(pedidoSeleccionado.monto_pago)}
                           </Text>
                         </View>
                         <View style={estilos.filaResumen}>
-                          <Text
-                            style={[
-                              estilos.labelResumen,
-                              { color: DISENO.colors.success },
-                            ]}
-                          >
+                          <Text style={[estilos.labelResumen, { color: colores.success }]}>
                             💵 Vuelto
                           </Text>
-                          <Text
-                            style={[
-                              estilos.valorResumen,
-                              { color: DISENO.colors.success },
-                            ]}
-                          >
+                          <Text style={[estilos.valorResumen, { color: colores.success }]}>
                             {formatearPrecio(pedidoSeleccionado.vuelto || 0)}
                           </Text>
                         </View>
                       </>
                     )}
 
-                  <View style={[estilos.filaResumen, estilos.filaTotal]}>
-                    <Text style={estilos.totalLabelModal}>TOTAL</Text>
-                    <Text style={estilos.totalValorGrandeModal}>
+                  <View style={[estilos.filaResumen, { borderTopWidth: 1, borderTopColor: colores.border, paddingTop: 8, marginTop: 6 }]}>
+                    <Text style={[estilos.totalLabelModal, { color: colores.text }]}>TOTAL</Text>
+                    <Text style={[estilos.totalValorGrandeModal, { color: colores.accent }]}>
                       {formatearPrecio(pedidoSeleccionado.total || 0)}
                     </Text>
                   </View>
                 </View>
 
-                {/* BOTÓN CERRAR */}
                 <TouchableOpacity
-                  style={estilos.botonCerrarModal}
+                  style={[estilos.botonCerrarModal, { backgroundColor: colores.accent }]}
                   onPress={() => setMostrarModalDetalle(false)}
                 >
                   <Text style={estilos.botonCerrarModalText}>Cerrar</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🆕 MODAL DE PROBLEMA */}
+      <Modal
+        visible={mostrarModalProblema}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setMostrarModalProblema(false)}
+      >
+        <View style={estilos.modalDetalleOverlay}>
+          <View style={estilos.modalDetalleContainer}>
+            <View style={[estilos.modalDetalleHeader, { borderBottomColor: colores.border }]}>
+              <Text style={[estilos.modalDetalleTitulo, { color: colores.danger }]}>
+                ⚠️ Reporte del pedido #{pedidoSeleccionado?.id}
+              </Text>
+              <TouchableOpacity onPress={() => setMostrarModalProblema(false)}>
+                <Ionicons name="close" size={24} color={colores.text} />
+              </TouchableOpacity>
+            </View>
+
+            {pedidoSeleccionado && (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={estilos.modalDetalleScroll}
+              >
+                {/* Motivo */}
+                <View
+                  style={[
+                    estilos.cardProblema,
+                    { backgroundColor: colores.danger + '10', borderColor: colores.danger + '40' },
+                  ]}
+                >
+                  <View style={[estilos.iconoProblemaWrap, { backgroundColor: colores.danger + '20' }]}>
+                    <Ionicons
+                      name={(MOTIVOS_PROBLEMA_ICONO[pedidoSeleccionado.problema_repartidor || 'otro'] || 'alert-circle-outline') as any}
+                      size={32}
+                      color={colores.danger}
+                    />
+                  </View>
+                  <Text style={[estilos.tituloProblema, { color: colores.danger }]}>
+                    {MOTIVOS_PROBLEMA_TEXTO[pedidoSeleccionado.problema_repartidor || ''] || 'Problema reportado'}
+                  </Text>
+                </View>
+
+                {/* Detalle */}
+                {pedidoSeleccionado.problema_detalle && (
+                  <View style={estilos.seccion}>
+                    <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>💬 Detalle</Text>
+                    <Text style={[estilos.seccionTexto, { color: colores.text, fontStyle: 'italic' }]}>
+                      "{pedidoSeleccionado.problema_detalle}"
+                    </Text>
+                  </View>
+                )}
+
+                {/* Quién y cuándo */}
+                <View style={estilos.seccion}>
+                  <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>📋 Información</Text>
+                  {pedidoSeleccionado.repartidor_nombre && (
+                    <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
+                      🛵 Reportado por: {pedidoSeleccionado.repartidor_nombre}
+                    </Text>
+                  )}
+                  {pedidoSeleccionado.reportado_en && (
+                    <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
+                      🕐 Cuándo: {new Date(pedidoSeleccionado.reportado_en).toLocaleString('es-AR')}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Cliente */}
+                <View style={estilos.seccion}>
+                  <Text style={[estilos.seccionTitulo, { color: colores.accent }]}>👤 Cliente</Text>
+                  <Text style={[estilos.seccionTexto, { color: colores.text }]}>
+                    {pedidoSeleccionado.cliente_nombre_completo}
+                  </Text>
+                  <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
+                    📞 {pedidoSeleccionado.cliente_telefono}
+                  </Text>
+                  {pedidoSeleccionado.cliente_direccion && pedidoSeleccionado.tipo_entrega === 'domicilio' && (
+                    <Text style={[estilos.seccionTextoChico, { color: colores.textSecondary }]}>
+                      📍 {pedidoSeleccionado.cliente_direccion}
+                    </Text>
+                  )}
+
+                  <View style={estilos.modalContactoRow}>
+                    <TouchableOpacity
+                      style={[estilos.modalContactoBoton, { backgroundColor: colores.success + '15' }]}
+                      onPress={() => llamarCliente(pedidoSeleccionado.cliente_telefono || '')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="call" size={16} color={colores.success} />
+                      <Text style={[estilos.modalContactoTexto, { color: colores.success }]}>Llamar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[estilos.modalContactoBoton, { backgroundColor: COLOR_WHATSAPP + '15' }]}
+                      onPress={() =>
+                        abrirWhatsApp(
+                          pedidoSeleccionado.cliente_telefono || '',
+                          pedidoSeleccionado.cliente_nombre_completo,
+                          pedidoSeleccionado.id,
+                          pedidoSeleccionado.estado
+                        )
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="logo-whatsapp" size={16} color={COLOR_WHATSAPP} />
+                      <Text style={[estilos.modalContactoTexto, { color: COLOR_WHATSAPP }]}>WhatsApp</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Botón resolver */}
+                <TouchableOpacity
+                  style={[
+                    estilos.botonResolver,
+                    { backgroundColor: colores.success },
+                    resolviendoProblema && { opacity: 0.6 },
+                  ]}
+                  onPress={() => marcarProblemaResuelto(pedidoSeleccionado)}
+                  disabled={resolviendoProblema}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                  <Text style={estilos.botonResolverTexto}>
+                    {resolviendoProblema ? 'Resolviendo...' : 'Marcar como resuelto'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[estilos.botonCerrarModal, { backgroundColor: colores.surfaceHover, marginTop: 8 }]}
+                  onPress={() => setMostrarModalProblema(false)}
+                >
+                  <Text style={[estilos.botonCerrarModalText, { color: colores.text }]}>Cerrar</Text>
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -1270,570 +1599,593 @@ export default function PantallaGestionPedidos(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS
+// 🎨 ESTILOS DINÁMICOS
 // ============================================================
-const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: DISENO.colors.fondo,
-  },
-  cargandoText: {
-    fontFamily: FUENTES.display,
-    marginTop: 16,
-    color: DISENO.colors.textSecondary,
-    fontSize: 14,
-  },
+const crearEstilos = (colores: PaletaTema) =>
+  StyleSheet.create({
+    contenedor: {
+      flex: 1,
+      backgroundColor: colores.fondo,
+    },
+    cargandoText: {
+      fontFamily: FUENTES.display,
+      marginTop: 16,
+      fontSize: 14,
+    },
 
-  // HEADER
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-  },
-  botonHeader: {
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: DISENO.colors.surface,
-    ...DISENO.shadow.sm,
-  },
-  headerCentro: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  titulo: {
-    fontFamily: FUENTES.display,
-    fontSize: 20,
-    color: DISENO.colors.text,
-  },
-  alertaUrgentes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: DISENO.colors.danger,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  alertaUrgentesText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: 12,
+    },
+    botonHeader: {
+      padding: 8,
+      borderRadius: 10,
+      backgroundColor: colores.surface,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    headerCentro: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    titulo: {
+      fontFamily: FUENTES.display,
+      fontSize: 20,
+    },
+    alertaUrgentes: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 10,
+      marginTop: 2,
+    },
+    alertaUrgentesText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#FFF',
+    },
 
-  // RESUMEN
-  resumenHoy: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: DISENO.colors.surface,
-    borderRadius: DISENO.radius.lg,
-    padding: 14,
-    marginBottom: 12,
-    ...DISENO.shadow.sm,
-  },
-  resumenItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  resumenLabel: {
-    fontFamily: FUENTES.regular,
-    fontSize: 11,
-    color: DISENO.colors.textSecondary,
-    marginBottom: 2,
-  },
-  resumenValor: {
-    fontFamily: FUENTES.display,
-    fontSize: 18,
-    color: DISENO.colors.text,
-  },
-  resumenDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: DISENO.colors.border,
-  },
+    resumenHoy: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colores.surface,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    resumenItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    resumenLabel: {
+      fontFamily: FUENTES.regular,
+      fontSize: 11,
+      marginBottom: 2,
+    },
+    resumenValor: {
+      fontFamily: FUENTES.display,
+      fontSize: 18,
+    },
+    resumenDivider: {
+      width: 1,
+      height: 30,
+    },
 
-  // BUSCADOR
-  buscadorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: DISENO.colors.surface,
-    borderRadius: DISENO.radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 10,
-    ...DISENO.shadow.sm,
-  },
-  buscadorInput: {
-    flex: 1,
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    color: DISENO.colors.text,
-    paddingVertical: 4,
-  },
-  botonOrden: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: DISENO.colors.accent + '15',
-  },
+    buscadorContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colores.surface,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    buscadorInput: {
+      flex: 1,
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      paddingVertical: 4,
+    },
+    botonOrden: {
+      padding: 6,
+      borderRadius: 8,
+    },
 
-  // CHIPS
-  chipsScroll: {
-    gap: 8,
-    paddingBottom: 12,
-    paddingVertical: 2,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: DISENO.colors.surface,
-    borderWidth: 1,
-    borderColor: DISENO.colors.border,
-  },
-  chipActivo: {
-    backgroundColor: DISENO.colors.accent,
-    borderColor: DISENO.colors.accent,
-  },
-  chipText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    fontWeight: '600',
-    color: DISENO.colors.textSecondary,
-  },
-  chipTextActivo: {
-    color: '#FFF',
-  },
-  chipBadge: {
-    backgroundColor: DISENO.colors.textTertiary,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-    minWidth: 18,
-    alignItems: 'center',
-  },
-  chipBadgeActivo: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  chipBadgeText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  chipBadgeTextActivo: {
-    color: '#FFF',
-  },
+    chipsScroll: {
+      gap: 8,
+      paddingBottom: 12,
+      paddingVertical: 2,
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+    },
+    chipText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    chipBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 8,
+      minWidth: 18,
+      alignItems: 'center',
+    },
+    chipBadgeText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#FFF',
+    },
 
-  // LISTA
-  lista: {
-    flexGrow: 1,
-  },
-  vacio: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  vacioTexto: {
-    fontFamily: FUENTES.display,
-    fontSize: 16,
-    color: DISENO.colors.text,
-    marginTop: 12,
-  },
-  vacioSubtexto: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    color: DISENO.colors.textSecondary,
-    marginTop: 4,
-  },
+    lista: {
+      flexGrow: 1,
+    },
+    vacio: {
+      alignItems: 'center',
+      paddingVertical: 60,
+    },
+    vacioTexto: {
+      fontFamily: FUENTES.display,
+      fontSize: 16,
+      marginTop: 12,
+    },
+    vacioSubtexto: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      marginTop: 4,
+    },
 
-  // ============================================================
-  // ✅ TARJETA (RESPONSIVE)
-  // ============================================================
-  tarjeta: {
-    backgroundColor: DISENO.colors.surface,
-    borderRadius: DISENO.radius.lg,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    ...DISENO.shadow.sm,
-  },
-  encabezado: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-    gap: 8,
-  },
-  encabezadoIzq: {
-    flex: 1,
-    minWidth: 0,
-  },
-  pedidoIdRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  pedidoId: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-  },
-  pedidoFecha: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    marginTop: 2,
-  },
-  badgeUrgenteInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: DISENO.colors.danger,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  badgeUrgenteInlineText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '800',
-    color: '#FFF',
-    letterSpacing: 0.3,
-  },
-  estadoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  estadoBadgeText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
+    // 🆕 Banner de problema en la card
+    bannerProblema: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      marginBottom: 10,
+    },
+    bannerProblemaTitulo: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    bannerProblemaSub: {
+      fontFamily: FUENTES.regular,
+      fontSize: 10,
+      marginTop: 1,
+      opacity: 0.85,
+    },
 
-  clienteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  clienteNombre: {
-    flex: 1,
-    fontFamily: FUENTES.regular,
-    fontWeight: '600',
-    color: DISENO.colors.text,
-  },
-  // ✅ Botón de contacto (llamada / WhatsApp)
-  botonContacto: {
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
+    tarjeta: {
+      backgroundColor: colores.surface,
+      borderRadius: 16,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    encabezado: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 8,
+      gap: 8,
+    },
+    encabezadoIzq: {
+      flex: 1,
+      minWidth: 0,
+    },
+    pedidoIdRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexWrap: 'wrap',
+    },
+    pedidoId: {
+      fontFamily: FUENTES.display,
+      color: colores.text,
+    },
+    pedidoFecha: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      marginTop: 2,
+    },
+    badgeUrgenteInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colores.danger,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    badgeUrgenteInlineText: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '800',
+      color: '#FFF',
+      letterSpacing: 0.3,
+    },
+    estadoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: 10,
+      borderWidth: 1,
+      flexShrink: 0,
+    },
+    estadoBadgeText: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+    },
 
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  infoText: {
-    flex: 1,
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-  },
+    clienteRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    clienteNombre: {
+      flex: 1,
+      fontFamily: FUENTES.regular,
+      fontWeight: '600',
+      color: colores.text,
+    },
+    botonContacto: {
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
 
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: DISENO.colors.border,
-    gap: 8,
-  },
-  totalIzq: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    flexShrink: 1,
-  },
-  totalLabel: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    textTransform: 'uppercase',
-  },
-  totalValor: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.accent,
-  },
-  pagoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: DISENO.colors.success + '15',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    flexShrink: 0,
-  },
-  pagoBadgeText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '600',
-    color: DISENO.colors.success,
-  },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 4,
+    },
+    infoText: {
+      flex: 1,
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+    },
 
-  botonesRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  botonAvanzar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 10,
-    minWidth: 0,
-  },
-  botonAvanzarText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '700',
-    color: '#FFF',
-    flexShrink: 1,
-  },
-  botonCancelar: {
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: DISENO.colors.danger + '30',
-    backgroundColor: DISENO.colors.danger + '08',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingTop: 10,
+      marginTop: 6,
+      borderTopWidth: 1,
+      borderTopColor: colores.border,
+      gap: 8,
+    },
+    totalIzq: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 6,
+      flexShrink: 1,
+    },
+    totalLabel: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      textTransform: 'uppercase',
+    },
+    totalValor: {
+      fontFamily: FUENTES.display,
+      color: colores.accent,
+    },
+    pagoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colores.success + '15',
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      flexShrink: 0,
+    },
+    pagoBadgeText: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '600',
+      color: colores.success,
+    },
 
-  // SWIPE
-  swipeAction: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderTopRightRadius: DISENO.radius.lg,
-    borderBottomRightRadius: DISENO.radius.lg,
-    gap: 4,
-  },
-  swipeActionText: {
-    fontFamily: FUENTES.regular,
-    fontWeight: '700',
-    color: '#FFF',
-  },
+    botonesRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 10,
+    },
+    botonAvanzar: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      borderRadius: 10,
+      minWidth: 0,
+    },
+    botonAvanzarText: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '700',
+      color: '#FFF',
+      flexShrink: 1,
+    },
+    botonCancelar: {
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: colores.danger + '30',
+      backgroundColor: colores.danger + '08',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
 
-  // MODAL LIMPIEZA
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContainer: {
-    backgroundColor: DISENO.colors.surface,
-    borderRadius: DISENO.radius.xl,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-    ...DISENO.shadow.lg,
-  },
-  modalIcono: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitulo: {
-    fontFamily: FUENTES.display,
-    fontSize: 20,
-    color: DISENO.colors.text,
-    marginBottom: 8,
-  },
-  modalDescripcion: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    color: DISENO.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  modalBotones: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  modalBoton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBotonSecundario: {
-    backgroundColor: DISENO.colors.surfaceHover,
-  },
-  modalBotonPeligro: {
-    backgroundColor: DISENO.colors.danger,
-  },
-  modalBotonTextoSecundario: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    fontWeight: '600',
-    color: DISENO.colors.text,
-  },
-  modalBotonTextoPeligro: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  modalBotonTodos: {
-    marginTop: 12,
-    paddingVertical: 10,
-    width: '100%',
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: DISENO.colors.danger + '30',
-  },
-  modalBotonTodosTexto: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    fontWeight: '600',
-    color: DISENO.colors.danger,
-  },
+    swipeAction: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 12,
+      borderTopRightRadius: 16,
+      borderBottomRightRadius: 16,
+      gap: 4,
+    },
+    swipeActionText: {
+      fontFamily: FUENTES.regular,
+      fontWeight: '700',
+      color: '#FFF',
+    },
 
-  // MODAL DETALLE
-  modalDetalleOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalDetalleContainer: {
-    backgroundColor: DISENO.colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalDetalleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: DISENO.colors.border,
-    marginBottom: 16,
-  },
-  modalDetalleTitulo: {
-    fontFamily: FUENTES.display,
-    fontSize: 20,
-    color: DISENO.colors.text,
-  },
-  modalDetalleScroll: {
-    paddingBottom: 8,
-  },
-  seccion: {
-    marginBottom: 16,
-  },
-  seccionTitulo: {
-    fontFamily: FUENTES.display,
-    fontSize: 14,
-    color: DISENO.colors.accent,
-    marginBottom: 6,
-  },
-  seccionTexto: {
-    fontFamily: FUENTES.regular,
-    fontSize: 14,
-    color: DISENO.colors.text,
-    paddingVertical: 2,
-  },
-  seccionTextoChico: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    color: DISENO.colors.textSecondary,
-    paddingVertical: 2,
-  },
-  // ✅ Botones de contacto del modal
-  modalContactoRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  modalContactoBoton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  modalContactoTexto: {
-    fontFamily: FUENTES.regular,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  filaResumen: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  labelResumen: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    color: DISENO.colors.textSecondary,
-  },
-  valorResumen: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    fontWeight: '600',
-    color: DISENO.colors.text,
-  },
-  filaTotal: {
-    borderTopWidth: 1,
-    borderTopColor: DISENO.colors.border,
-    paddingTop: 8,
-    marginTop: 6,
-  },
-  totalLabelModal: {
-    fontFamily: FUENTES.display,
-    fontSize: 16,
-    color: DISENO.colors.text,
-  },
-  totalValorGrandeModal: {
-    fontFamily: FUENTES.display,
-    fontSize: 22,
-    color: DISENO.colors.accent,
-  },
-  botonCerrarModal: {
-    backgroundColor: DISENO.colors.accent,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  botonCerrarModalText: {
-    fontFamily: FUENTES.display,
-    fontSize: 15,
-    color: '#FFF',
-  },
-});
+    // MODAL LIMPIEZA
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContainer: {
+      backgroundColor: colores.surface,
+      borderRadius: 24,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    modalIcono: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalTitulo: {
+      fontFamily: FUENTES.display,
+      fontSize: 20,
+      marginBottom: 8,
+    },
+    modalDescripcion: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 20,
+    },
+    modalBotones: {
+      flexDirection: 'row',
+      gap: 10,
+      width: '100%',
+    },
+    modalBoton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalBotonTextoSecundario: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    modalBotonTextoPeligro: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#FFF',
+    },
+    modalBotonTodos: {
+      marginTop: 12,
+      paddingVertical: 10,
+      width: '100%',
+      alignItems: 'center',
+      borderRadius: 10,
+      borderWidth: 1,
+    },
+    modalBotonTodosTexto: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    // MODAL DETALLE / PROBLEMA
+    modalDetalleOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'flex-end',
+    },
+    modalDetalleContainer: {
+      backgroundColor: colores.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      maxHeight: '90%',
+    },
+    modalDetalleHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      marginBottom: 16,
+    },
+    modalDetalleTitulo: {
+      fontFamily: FUENTES.display,
+      fontSize: 20,
+    },
+    modalDetalleScroll: {
+      paddingBottom: 8,
+    },
+    seccion: {
+      marginBottom: 16,
+    },
+    seccionProblema: {
+      marginBottom: 16,
+      padding: 14,
+      borderRadius: 14,
+      borderWidth: 1,
+    },
+    seccionTitulo: {
+      fontFamily: FUENTES.display,
+      fontSize: 14,
+      marginBottom: 6,
+    },
+    seccionTexto: {
+      fontFamily: FUENTES.regular,
+      fontSize: 14,
+      paddingVertical: 2,
+    },
+    seccionTextoChico: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      paddingVertical: 2,
+    },
+    modalContactoRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+    },
+    modalContactoBoton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 10,
+    },
+    modalContactoTexto: {
+      fontFamily: FUENTES.regular,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    filaResumen: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+    },
+    labelResumen: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+    },
+    valorResumen: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    totalLabelModal: {
+      fontFamily: FUENTES.display,
+      fontSize: 16,
+    },
+    totalValorGrandeModal: {
+      fontFamily: FUENTES.display,
+      fontSize: 22,
+    },
+    botonCerrarModal: {
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+      marginTop: 10,
+    },
+    botonCerrarModalText: {
+      fontFamily: FUENTES.display,
+      fontSize: 15,
+      color: '#FFF',
+    },
+
+    // 🆕 Modal de problema
+    cardProblema: {
+      alignItems: 'center',
+      padding: 20,
+      borderRadius: 16,
+      borderWidth: 1,
+      marginBottom: 20,
+    },
+    iconoProblemaWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    tituloProblema: {
+      fontFamily: FUENTES.display,
+      fontSize: 18,
+      textAlign: 'center',
+    },
+    botonResolver: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 12,
+      marginTop: 10,
+    },
+    botonResolverTexto: {
+      fontFamily: FUENTES.display,
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#FFF',
+    },
+  });

@@ -1,8 +1,8 @@
-// screens/cliente/PantallaRecompensas.tsx - CON SIMPSONFONT Y TEMA CLARO
-import React, { useEffect, useState, useCallback } from 'react';
+// screens/cliente/PantallaRecompensas.tsx - V2 CON BENEFICIOS POR NIVEL
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    Modal, ActivityIndicator, Alert, useWindowDimensions
+    Modal, ActivityIndicator, Alert, useWindowDimensions, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,8 @@ import { supabase } from '../../lib/supabase';
 import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { DISENO } from '../../lib/colores';
 import { FUENTES } from '../../lib/fuentes';
+import { obtenerNivel, NIVELES } from '../../lib/tipos';
+import { formatearPrecio } from '../../lib/formateador';
 
 // ============================================================
 // 🎯 HOOK RESPONSIVE
@@ -41,11 +43,81 @@ interface Recompensa {
     activa: boolean;
 }
 
+// ============================================================
+// 📊 CONFIGURACIÓN DE BENEFICIOS POR NIVEL
+// (Debe reflejar la lógica de servicios/beneficiosService.ts)
+// ============================================================
+interface BeneficioNivel {
+    key: 'BRONCE' | 'PLATA' | 'ORO' | 'PLATINO';
+    puntos: number;
+    icono: string;
+    nombre: string;
+    color: string;
+    beneficios: string[];
+}
+
+const NIVELES_CONFIG: BeneficioNivel[] = [
+    {
+        key: 'BRONCE',
+        puntos: 0,
+        icono: '🥉',
+        nombre: 'Bronce',
+        color: '#A1887F',
+        beneficios: [
+            'Acumulá 1 punto por cada $100 de compra',
+            'Acceso a promociones generales',
+            'Envío estándar con costo',
+        ],
+    },
+    {
+        key: 'PLATA',
+        puntos: 500,
+        icono: '🥈',
+        nombre: 'Plata',
+        color: '#BDBDBD',
+        beneficios: [
+            'Todo lo de Bronce',
+            '5% de descuento en todos los pedidos',
+            'Envío gratis en compras > $5.000',
+            'Promociones exclusivas',
+        ],
+    },
+    {
+        key: 'ORO',
+        puntos: 1500,
+        icono: '👑',
+        nombre: 'Oro',
+        color: '#F9A825',
+        beneficios: [
+            'Todo lo de Plata',
+            '10% de descuento en todos los pedidos',
+            'Envío gratis sin mínimo',
+            'Prioridad en el despacho',
+            'Acceso anticipado a ofertas',
+        ],
+    },
+    {
+        key: 'PLATINO',
+        puntos: 5000,
+        icono: '💎',
+        nombre: 'Platino',
+        color: '#78909C',
+        beneficios: [
+            'Todo lo de Oro',
+            '15% de descuento en todos los pedidos',
+            'Envío gratis sin mínimo',
+            'Soporte prioritario',
+            'Regalo sorpresa de cumpleaños',
+            'Acceso VIP a eventos Krusty',
+        ],
+    },
+];
+
 export default function PantallaRecompensas(props: any) {
-    // ✅ NUEVO: sesion, cargandoAuth y actualizarPerfil
     const { perfil, sesion, cargando: cargandoAuth, actualizarPerfil } = tiendaAutenticacion();
     const responsive = useResponsive();
     const insets = useSafeAreaInsets();
+
     const [recompensas, setRecompensas] = useState<Recompensa[]>([]);
     const [cargando, setCargando] = useState(true);
     const [mostrarModalExito, setMostrarModalExito] = useState(false);
@@ -57,7 +129,7 @@ export default function PantallaRecompensas(props: any) {
     const isTablet = responsive.isTablet;
     const isSmallPhone = responsive.isSmallPhone;
 
-    // ✅ Tamaños (Simpsonfont reducido)
+    // ✅ Tamaños
     const paddingHorizontal = isTablet ? 40 : isSmallPhone ? 12 : 16;
     const paddingTop = insets.top + (isTablet ? 30 : 20);
     const paddingBottom = insets.bottom + 20;
@@ -77,6 +149,16 @@ export default function PantallaRecompensas(props: any) {
     const modalPadding = isTablet ? 36 : isSmallPhone ? 20 : 24;
     const modalTituloSize = isTablet ? 20 : isSmallPhone ? 16 : 18;
     const modalTextSize = isTablet ? 14 : isSmallPhone ? 12 : 13;
+
+    // 🎯 Datos del nivel actual
+    const puntosActuales = perfil?.puntos_acumulados || 0;
+    const nivelActual = useMemo(() => obtenerNivel(puntosActuales), [puntosActuales]);
+    const nivelActualKey = useMemo(() => {
+        if (puntosActuales >= 5000) return 'PLATINO';
+        if (puntosActuales >= 1500) return 'ORO';
+        if (puntosActuales >= 500) return 'PLATA';
+        return 'BRONCE';
+    }, [puntosActuales]);
 
     // ============================================================
     // 🔒 GUARD DE SESIÓN
@@ -108,7 +190,6 @@ export default function PantallaRecompensas(props: any) {
         }
     }, [sesion, cargandoAuth]);
 
-    // ✅ Solo carga si hay sesión
     useEffect(() => {
         if (sesion) {
             cargarRecompensas();
@@ -137,9 +218,7 @@ export default function PantallaRecompensas(props: any) {
     };
 
     const confirmarCanje = (recompensa: Recompensa) => {
-        // ✅ FIX: usamos puntos_acumulados (no puntos_disponibles)
-        const puntos = perfil?.puntos_acumulados || 0;
-        if (puntos < recompensa.puntos_necesarios) {
+        if (puntosActuales < recompensa.puntos_necesarios) {
             mostrarExito('❌ Puntos insuficientes');
             return;
         }
@@ -180,7 +259,6 @@ export default function PantallaRecompensas(props: any) {
                 return;
             }
 
-            // ✅ FIX: usamos actualizarPerfil en vez de setState directo
             const { data: perfilActualizado, error: errorPerfil } = await supabase
                 .from('perfiles')
                 .select('*')
@@ -230,10 +308,9 @@ export default function PantallaRecompensas(props: any) {
     };
 
     const renderRecompensa = ({ item }: { item: Recompensa }) => {
-        // ✅ FIX: puntos_acumulados
-        const puntosDisponibles = perfil?.puntos_acumulados || 0;
-        const disponible = puntosDisponibles >= item.puntos_necesarios;
+        const disponible = puntosActuales >= item.puntos_necesarios;
         const tipoColor = getColorPorTipo(item.tipo);
+        const faltantes = Math.max(0, item.puntos_necesarios - puntosActuales);
 
         return (
             <View style={[
@@ -244,6 +321,7 @@ export default function PantallaRecompensas(props: any) {
                     borderColor: disponible ? tipoColor + '50' : DISENO.colors.border,
                     borderWidth: disponible ? 1.5 : 1,
                     backgroundColor: DISENO.colors.surface,
+                    opacity: disponible ? 1 : 0.85,
                     ...DISENO.shadow.sm,
                 }
             ]}>
@@ -328,17 +406,32 @@ export default function PantallaRecompensas(props: any) {
                                     color: disponible ? DISENO.colors.text : DISENO.colors.textTertiary,
                                 }
                             ]}>
-                                {canjeando ? '⏳ Canjeando...' : disponible ? '🔓 Canjear' : '🔒 Bloqueado'}
+                                {canjeando ? '⏳' : disponible ? '🔓 Canjear' : '🔒 Bloqueado'}
                             </Text>
                         </TouchableOpacity>
                     </View>
+
+                    {/* ✅ NUEVO: Texto "Faltan X pts" si no está disponible */}
+                    {!disponible && (
+                        <Text
+                            style={{
+                                fontFamily: FUENTES.regular,
+                                fontSize: isSmallPhone ? 10 : 11,
+                                color: DISENO.colors.textTertiary,
+                                marginTop: 6,
+                                includeFontPadding: false,
+                            }}
+                            allowFontScaling={false}
+                        >
+                            Te faltan {faltantes} pts para canjear
+                        </Text>
+                    )}
                 </View>
             </View>
         );
     };
 
-    // ✅ FIX: puntos_acumulados
-    const tieneRecompensasDisponibles = recompensas.some(r => (perfil?.puntos_acumulados || 0) >= r.puntos_necesarios);
+    const tieneRecompensasDisponibles = recompensas.some(r => puntosActuales >= r.puntos_necesarios);
 
     // ============================================================
     // 🔒 RENDER TEMPRANO: invitado o cargando auth → spinner
@@ -364,7 +457,6 @@ export default function PantallaRecompensas(props: any) {
 
     return (
         <View style={styles.container}>
-            {/* ✅ FONDO TEMA CLARO */}
             <LinearGradient
                 colors={[DISENO.colors.fondo, DISENO.colors.surface, DISENO.colors.fondo]}
                 style={styles.backgroundGradient}
@@ -407,99 +499,484 @@ export default function PantallaRecompensas(props: any) {
                 ]}>
                     <Text style={[styles.pointsIcon, { fontSize: isTablet ? 16 : isSmallPhone ? 12 : 14 }]}>⭐</Text>
                     <Text style={[styles.pointsText, { fontSize: puntosSize, color: DISENO.colors.accentSecondary }]}>
-                        {perfil?.puntos_acumulados || 0}
+                        {puntosActuales}
                     </Text>
                 </View>
             </View>
 
-            {/* ✅ BANNER INFORMATIVO */}
-            <View style={[
-                styles.infoBanner,
-                {
-                    marginHorizontal: paddingHorizontal,
-                    marginTop: 12,
-                    marginBottom: 8,
-                    padding: isTablet ? 16 : isSmallPhone ? 10 : 12,
-                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                    backgroundColor: DISENO.colors.surface,
-                    borderColor: DISENO.colors.accentSecondary + '30',
-                    borderWidth: 1,
-                    ...DISENO.shadow.sm,
-                }
-            ]}>
-                <View style={styles.infoBannerContent}>
-                    <View style={[
-                        styles.infoBannerIcon,
-                        {
-                            width: isTablet ? 44 : isSmallPhone ? 32 : 36,
-                            height: isTablet ? 44 : isSmallPhone ? 32 : 36,
-                            borderRadius: isTablet ? 22 : isSmallPhone ? 16 : 18,
-                            backgroundColor: DISENO.colors.accentSecondary + '20',
-                            marginRight: 12,
-                        }
-                    ]}>
-                        <Ionicons name="cart-outline" size={isTablet ? 22 : isSmallPhone ? 16 : 20} color={DISENO.colors.accentSecondary} />
-                    </View>
-                    <View style={styles.infoBannerTextContainer}>
-                        <Text style={[
-                            styles.infoBannerTitle,
-                            {
-                                fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12,
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                    paddingHorizontal: paddingHorizontal,
+                    paddingBottom: paddingBottom + 20,
+                }}
+            >
+                {/* ═══════════════════════════════════════════════════ */}
+                {/* 🏆 SECCIÓN: TU NIVEL ACTUAL (CARD DESTACADA)       */}
+                {/* ═══════════════════════════════════════════════════ */}
+                <View
+                    style={{
+                        marginTop: 8,
+                        marginBottom: 16,
+                        borderRadius: isTablet ? 20 : 16,
+                        overflow: 'hidden',
+                        ...DISENO.shadow.sm,
+                    }}
+                >
+                    <LinearGradient
+                        colors={[nivelActual.color + '25', nivelActual.color + '08']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                            padding: isTablet ? 20 : 16,
+                            borderWidth: 1,
+                            borderColor: nivelActual.color + '30',
+                            borderRadius: isTablet ? 20 : 16,
+                        }}
+                    >
+                        {/* Fila: ícono + datos nivel */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                            <View
+                                style={{
+                                    width: isTablet ? 64 : 54,
+                                    height: isTablet ? 64 : 54,
+                                    borderRadius: (isTablet ? 64 : 54) / 2,
+                                    backgroundColor: nivelActual.color + '20',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    marginRight: 12,
+                                    borderWidth: 2,
+                                    borderColor: nivelActual.color + '40',
+                                }}
+                            >
+                                <Text style={{ fontSize: isTablet ? 32 : 26 }} allowFontScaling={false}>
+                                    {nivelActual.icono}
+                                </Text>
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                                <Text
+                                    style={{
+                                        fontFamily: FUENTES.display,
+                                        fontSize: isTablet ? 18 : 16,
+                                        color: nivelActual.color,
+                                        includeFontPadding: false,
+                                    }}
+                                    allowFontScaling={false}
+                                >
+                                    Nivel {nivelActual.nombre}
+                                </Text>
+                                <Text
+                                    style={{
+                                        fontFamily: FUENTES.regular,
+                                        fontSize: isTablet ? 13 : 12,
+                                        color: DISENO.colors.textSecondary,
+                                        marginTop: 2,
+                                        includeFontPadding: false,
+                                    }}
+                                    allowFontScaling={false}
+                                >
+                                    {puntosActuales} pts acumulados
+                                </Text>
+                            </View>
+
+                            {nivelActual.siguiente !== '—' && (
+                                <View
+                                    style={{
+                                        alignItems: 'flex-end',
+                                        paddingLeft: 10,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontFamily: FUENTES.regular,
+                                            fontSize: 10,
+                                            color: DISENO.colors.textTertiary,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 1,
+                                            includeFontPadding: false,
+                                        }}
+                                        allowFontScaling={false}
+                                    >
+                                        Siguiente
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontFamily: FUENTES.display,
+                                            fontSize: isTablet ? 14 : 12,
+                                            color: DISENO.colors.text,
+                                            marginTop: 2,
+                                            includeFontPadding: false,
+                                        }}
+                                        allowFontScaling={false}
+                                    >
+                                        {nivelActual.siguiente}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Progreso al siguiente nivel */}
+                        {nivelActual.siguiente !== '—' ? (
+                            <>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <Text
+                                        style={{
+                                            fontFamily: FUENTES.regular,
+                                            fontSize: 11,
+                                            color: DISENO.colors.textSecondary,
+                                            includeFontPadding: false,
+                                        }}
+                                        allowFontScaling={false}
+                                    >
+                                        Progreso al siguiente nivel
+                                    </Text>
+                                    <Text
+                                        style={{
+                                            fontFamily: FUENTES.display,
+                                            fontSize: 11,
+                                            color: nivelActual.color,
+                                            fontWeight: '600',
+                                            includeFontPadding: false,
+                                        }}
+                                        allowFontScaling={false}
+                                    >
+                                        {Math.round(nivelActual.progreso)}%
+                                    </Text>
+                                </View>
+
+                                <View
+                                    style={{
+                                        height: 8,
+                                        borderRadius: 4,
+                                        backgroundColor: DISENO.colors.surface + '80',
+                                        overflow: 'hidden',
+                                        marginBottom: 8,
+                                    }}
+                                >
+                                    <LinearGradient
+                                        colors={[nivelActual.color, nivelActual.color + '80']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={{
+                                            width: `${nivelActual.progreso}%`,
+                                            height: '100%',
+                                            borderRadius: 4,
+                                        }}
+                                    />
+                                </View>
+
+                                <Text
+                                    style={{
+                                        fontFamily: FUENTES.regular,
+                                        fontSize: 11,
+                                        color: DISENO.colors.textSecondary,
+                                        textAlign: 'center',
+                                        includeFontPadding: false,
+                                    }}
+                                    allowFontScaling={false}
+                                >
+                                    Te faltan{' '}
+                                    <Text style={{ fontWeight: '600', color: nivelActual.color }}>
+                                        {Math.max(0, nivelActual.puntos_requeridos - puntosActuales)} pts
+                                    </Text>
+                                    {' '}para {nivelActual.siguiente}
+                                </Text>
+                            </>
+                        ) : (
+                            <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                                <Text
+                                    style={{
+                                        fontFamily: FUENTES.display,
+                                        fontSize: 14,
+                                        color: nivelActual.color,
+                                        includeFontPadding: false,
+                                    }}
+                                    allowFontScaling={false}
+                                >
+                                    🎉 ¡Alcanzaste el nivel máximo!
+                                </Text>
+                            </View>
+                        )}
+                    </LinearGradient>
+                </View>
+
+                {/* ═══════════════════════════════════════════════════ */}
+                {/* 💎 SECCIÓN: BENEFICIOS POR NIVEL                   */}
+                {/* ═══════════════════════════════════════════════════ */}
+                <View style={{ marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                        <Ionicons name="trophy-outline" size={20} color={DISENO.colors.accent} />
+                        <Text
+                            style={{
+                                fontFamily: FUENTES.display,
+                                fontSize: isTablet ? 18 : 16,
                                 color: DISENO.colors.text,
-                            }
-                        ]}>
-                            💡 Canjeá tus puntos en el carrito
-                        </Text>
-                        <Text style={[
-                            styles.infoBannerText,
-                            {
-                                fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
-                                color: DISENO.colors.textSecondary,
-                            }
-                        ]}>
-                            Tus puntos acumulados se pueden canjear como descuento directo en el total de tu compra.
-                            Agregá productos al carrito y aplicá tus puntos al finalizar.
+                                includeFontPadding: false,
+                            }}
+                            allowFontScaling={false}
+                        >
+                            Beneficios por nivel
                         </Text>
                     </View>
-                </View>
-            </View>
 
-            {/* ✅ CONTENIDO */}
-            {cargando ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={DISENO.colors.accent} />
-                    <Text style={[styles.loadingText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>
-                        Cargando recompensas...
-                    </Text>
+                    {NIVELES_CONFIG.map((nivel) => {
+                        const esActual = nivel.key === nivelActualKey;
+                        const esFuturo = nivel.puntos > puntosActuales;
+                        const esPasado = !esActual && !esFuturo;
+
+                        return (
+                            <View
+                                key={nivel.key}
+                                style={{
+                                    marginBottom: 10,
+                                    borderRadius: isTablet ? 16 : 14,
+                                    borderWidth: esActual ? 2 : 1,
+                                    borderColor: esActual
+                                        ? nivel.color + '80'
+                                        : DISENO.colors.border,
+                                    backgroundColor: esActual
+                                        ? nivel.color + '10'
+                                        : DISENO.colors.surface,
+                                    overflow: 'hidden',
+                                    opacity: esFuturo ? 0.85 : 1,
+                                    ...(esActual ? DISENO.shadow.sm : {}),
+                                }}
+                            >
+                                {/* Header del nivel */}
+                                <View
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        padding: isTablet ? 14 : 12,
+                                        paddingBottom: isTablet ? 10 : 8,
+                                    }}
+                                >
+                                    <View
+                                        style={{
+                                            width: isTablet ? 44 : 38,
+                                            height: isTablet ? 44 : 38,
+                                            borderRadius: (isTablet ? 44 : 38) / 2,
+                                            backgroundColor: esFuturo
+                                                ? DISENO.colors.surfaceHover
+                                                : nivel.color + '20',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            marginRight: 10,
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: isTablet ? 22 : 18 }} allowFontScaling={false}>
+                                            {nivel.icono}
+                                        </Text>
+                                    </View>
+
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.display,
+                                                    fontSize: isTablet ? 15 : 14,
+                                                    color: esFuturo ? DISENO.colors.textSecondary : DISENO.colors.text,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {nivel.nombre}
+                                            </Text>
+                                            {esActual && (
+                                                <View
+                                                    style={{
+                                                        paddingHorizontal: 8,
+                                                        paddingVertical: 2,
+                                                        borderRadius: 8,
+                                                        backgroundColor: nivel.color,
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: FUENTES.display,
+                                                            fontSize: 9,
+                                                            color: '#FFFFFF',
+                                                            includeFontPadding: false,
+                                                        }}
+                                                        allowFontScaling={false}
+                                                    >
+                                                        TU NIVEL
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {esPasado && (
+                                                <Ionicons name="checkmark-circle" size={14} color={DISENO.colors.success} />
+                                            )}
+                                        </View>
+                                        <Text
+                                            style={{
+                                                fontFamily: FUENTES.regular,
+                                                fontSize: isTablet ? 12 : 11,
+                                                color: DISENO.colors.textTertiary,
+                                                marginTop: 2,
+                                                includeFontPadding: false,
+                                            }}
+                                            allowFontScaling={false}
+                                        >
+                                            {nivel.puntos === 0
+                                                ? 'Desde 0 pts'
+                                                : `${nivel.puntos} pts`}
+                                        </Text>
+                                    </View>
+
+                                    {esFuturo && (
+                                        <View
+                                            style={{
+                                                paddingHorizontal: 10,
+                                                paddingVertical: 4,
+                                                borderRadius: 8,
+                                                backgroundColor: DISENO.colors.surfaceHover,
+                                            }}
+                                        >
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.regular,
+                                                    fontSize: 10,
+                                                    color: DISENO.colors.textTertiary,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                Faltan {nivel.puntos - puntosActuales} pts
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Lista de beneficios */}
+                                <View
+                                    style={{
+                                        paddingHorizontal: isTablet ? 14 : 12,
+                                        paddingBottom: isTablet ? 14 : 12,
+                                        paddingTop: 4,
+                                        borderTopWidth: 1,
+                                        borderTopColor: DISENO.colors.border + '60',
+                                    }}
+                                >
+                                    {nivel.beneficios.map((beneficio, idx) => (
+                                        <View
+                                            key={idx}
+                                            style={{
+                                                flexDirection: 'row',
+                                                alignItems: 'flex-start',
+                                                marginTop: 8,
+                                                gap: 8,
+                                            }}
+                                        >
+                                            <Ionicons
+                                                name={esFuturo ? 'lock-closed' : 'checkmark-circle'}
+                                                size={14}
+                                                color={esFuturo ? DISENO.colors.textTertiary : DISENO.colors.success}
+                                                style={{ marginTop: 2 }}
+                                            />
+                                            <Text
+                                                style={{
+                                                    fontFamily: FUENTES.regular,
+                                                    fontSize: isTablet ? 13 : 12,
+                                                    color: esFuturo ? DISENO.colors.textTertiary : DISENO.colors.text,
+                                                    flex: 1,
+                                                    lineHeight: 18,
+                                                    includeFontPadding: false,
+                                                }}
+                                                allowFontScaling={false}
+                                            >
+                                                {beneficio}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        );
+                    })}
                 </View>
-            ) : (
-                <FlatList
-                    data={recompensas}
-                    keyExtractor={item => item.id.toString()}
-                    renderItem={renderRecompensa}
-                    contentContainerStyle={[
-                        styles.list,
-                        {
-                            paddingHorizontal: paddingHorizontal,
-                            paddingBottom: paddingBottom + 20,
-                            paddingTop: isTablet ? 12 : 8,
-                        }
-                    ]}
-                    showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={
+
+                {/* ═══════════════════════════════════════════════════ */}
+                {/* 🎁 SECCIÓN: RECOMPENSAS CANJEABLES                 */}
+                {/* ═══════════════════════════════════════════════════ */}
+                <View style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                        <Ionicons name="gift-outline" size={20} color={DISENO.colors.accent} />
+                        <Text
+                            style={{
+                                fontFamily: FUENTES.display,
+                                fontSize: isTablet ? 18 : 16,
+                                color: DISENO.colors.text,
+                                includeFontPadding: false,
+                            }}
+                            allowFontScaling={false}
+                        >
+                            Canjeá tus puntos
+                        </Text>
+                    </View>
+
+                    <Text
+                        style={{
+                            fontFamily: FUENTES.regular,
+                            fontSize: isTablet ? 13 : 12,
+                            color: DISENO.colors.textSecondary,
+                            marginBottom: 12,
+                            lineHeight: 18,
+                            includeFontPadding: false,
+                        }}
+                        allowFontScaling={false}
+                    >
+                        También podés canjear tus puntos como descuento directo en el carrito al finalizar tu compra.
+                    </Text>
+
+                    {cargando ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={DISENO.colors.accent} />
+                        </View>
+                    ) : recompensas.length === 0 ? (
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="gift-outline" size={isTablet ? 80 : 60} color={DISENO.colors.textTertiary + '40'} />
-                            <Text style={[styles.emptyText, { fontSize: isTablet ? 17 : isSmallPhone ? 14 : 15, color: DISENO.colors.text }]}>
+                            <Ionicons
+                                name="gift-outline"
+                                size={isTablet ? 80 : 60}
+                                color={DISENO.colors.textTertiary + '40'}
+                            />
+                            <Text
+                                style={[
+                                    styles.emptyText,
+                                    {
+                                        fontSize: isTablet ? 17 : isSmallPhone ? 14 : 15,
+                                        color: DISENO.colors.text,
+                                    },
+                                ]}
+                                allowFontScaling={false}
+                            >
                                 No hay recompensas disponibles
                             </Text>
-                            <Text style={[styles.emptySubtext, { fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12, color: DISENO.colors.textSecondary }]}>
+                            <Text
+                                style={[
+                                    styles.emptySubtext,
+                                    {
+                                        fontSize: isTablet ? 13 : isSmallPhone ? 11 : 12,
+                                        color: DISENO.colors.textSecondary,
+                                    },
+                                ]}
+                                allowFontScaling={false}
+                            >
                                 Pronto tendremos nuevas recompensas para vos 🎉
                             </Text>
                         </View>
-                    }
-                    ListFooterComponent={
-                        (perfil?.puntos_acumulados || 0) > 0 && !tieneRecompensasDisponibles && recompensas.length > 0 ? (
-                            <View style={[
+                    ) : (
+                        recompensas.map((item) => (
+                            <React.Fragment key={item.id}>
+                                {renderRecompensa({ item })}
+                            </React.Fragment>
+                        ))
+                    )}
+
+                    {/* Mensaje si no hay recompensas disponibles pero tiene puntos */}
+                    {!cargando && recompensas.length > 0 && !tieneRecompensasDisponibles && puntosActuales > 0 && (
+                        <View
+                            style={[
                                 styles.helpMessage,
                                 {
                                     padding: isTablet ? 16 : isSmallPhone ? 12 : 14,
@@ -510,77 +987,116 @@ export default function PantallaRecompensas(props: any) {
                                     marginTop: 8,
                                     marginBottom: 16,
                                     ...DISENO.shadow.sm,
-                                }
-                            ]}>
-                                <Ionicons name="bulb-outline" size={isTablet ? 26 : isSmallPhone ? 20 : 24} color={DISENO.colors.accent} />
-                                <View style={styles.helpMessageTextContainer}>
-                                    <Text style={[styles.helpMessageTitle, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DISENO.colors.text }]}>
-                                        💡 ¿Sabías que podés usar tus puntos?
-                                    </Text>
-                                    <Text style={[styles.helpMessageText, { fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11, color: DISENO.colors.textSecondary }]}>
-                                        Aunque no haya recompensas disponibles ahora, podés usar tus {perfil?.puntos_acumulados || 0} puntos como descuento en tu próximo pedido.
-                                        Simplemente agregá productos al carrito y aplicá tus puntos en el checkout.
-                                    </Text>
-                                </View>
+                                },
+                            ]}
+                        >
+                            <Ionicons
+                                name="bulb-outline"
+                                size={isTablet ? 26 : isSmallPhone ? 20 : 24}
+                                color={DISENO.colors.accent}
+                            />
+                            <View style={styles.helpMessageTextContainer}>
+                                <Text
+                                    style={[
+                                        styles.helpMessageTitle,
+                                        { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12, color: DISENO.colors.text },
+                                    ]}
+                                    allowFontScaling={false}
+                                >
+                                    💡 ¿Sabías que podés usar tus puntos?
+                                </Text>
+                                <Text
+                                    style={[
+                                        styles.helpMessageText,
+                                        {
+                                            fontSize: isTablet ? 12 : isSmallPhone ? 10 : 11,
+                                            color: DISENO.colors.textSecondary,
+                                        },
+                                    ]}
+                                    allowFontScaling={false}
+                                >
+                                    Aunque no haya recompensas disponibles ahora, podés usar tus {puntosActuales} puntos
+                                    como descuento en tu próximo pedido. Simplemente agregá productos al carrito y
+                                    aplicá tus puntos en el checkout.
+                                </Text>
                             </View>
-                        ) : null
-                    }
-                />
-            )}
+                        </View>
+                    )}
+                </View>
+            </ScrollView>
 
             {/* ✅ MODAL CONFIRMAR */}
             <Modal visible={mostrarModalConfirmar} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <View style={[
-                        styles.modal,
-                        {
-                            padding: modalPadding,
-                            borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
-                            width: modalWidth,
-                            borderColor: DISENO.colors.border,
-                            borderWidth: 1,
-                            backgroundColor: DISENO.colors.surface,
-                            ...DISENO.shadow.lg,
-                        }
-                    ]}>
+                    <View
+                        style={[
+                            styles.modal,
+                            {
+                                padding: modalPadding,
+                                borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
+                                width: modalWidth,
+                                borderColor: DISENO.colors.border,
+                                borderWidth: 1,
+                                backgroundColor: DISENO.colors.surface,
+                                ...DISENO.shadow.lg,
+                            },
+                        ]}
+                    >
                         <Text style={[styles.modalIcon, { fontSize: isTablet ? 72 : 56 }]}>🎁</Text>
                         <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DISENO.colors.text }]}>
                             Confirmar Canje
                         </Text>
                         <Text style={[styles.modalText, { fontSize: modalTextSize, color: DISENO.colors.textSecondary }]}>
-                            Usar <Text style={[styles.modalTextHighlight, { color: DISENO.colors.accent }]}>{recompensaSeleccionada?.puntos_necesarios} pts</Text> por:
-                            {"\n"}
-                            <Text style={[styles.modalTextReward, { color: DISENO.colors.text }]}>"{recompensaSeleccionada?.nombre}"</Text>
+                            Usar{' '}
+                            <Text style={[styles.modalTextHighlight, { color: DISENO.colors.accent }]}>
+                                {recompensaSeleccionada?.puntos_necesarios} pts
+                            </Text>{' '}
+                            por:{'\n'}
+                            <Text style={[styles.modalTextReward, { color: DISENO.colors.text }]}>
+                                "{recompensaSeleccionada?.nombre}"
+                            </Text>
                         </Text>
 
                         <View style={[styles.modalButtons, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12 }]}>
                             <TouchableOpacity
-                                style={[styles.modalButton, {
-                                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    backgroundColor: DISENO.colors.surfaceHover,
-                                    borderColor: DISENO.colors.border,
-                                    borderWidth: 1,
-                                }]}
+                                style={[
+                                    styles.modalButton,
+                                    {
+                                        paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                        backgroundColor: DISENO.colors.surfaceHover,
+                                        borderColor: DISENO.colors.border,
+                                        borderWidth: 1,
+                                    },
+                                ]}
                                 onPress={() => setMostrarModalConfirmar(false)}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.modalCancelText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary }]}>
+                                <Text
+                                    style={[
+                                        styles.modalCancelText,
+                                        { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.textSecondary },
+                                    ]}
+                                    allowFontScaling={false}
+                                >
                                     Cancelar
                                 </Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.modalButton, {
-                                    paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
-                                    borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
-                                    backgroundColor: DISENO.colors.accentSecondary,
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 6,
-                                    ...DISENO.shadow.sm,
-                                }]}
+                                style={[
+                                    styles.modalButton,
+                                    {
+                                        paddingVertical: isTablet ? 16 : isSmallPhone ? 10 : 14,
+                                        borderRadius: isTablet ? 14 : isSmallPhone ? 10 : 12,
+                                        backgroundColor: DISENO.colors.accentSecondary,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 6,
+                                        ...DISENO.shadow.sm,
+                                    },
+                                ]}
                                 onPress={canjear}
                                 disabled={canjeando}
                                 activeOpacity={0.7}
@@ -589,8 +1105,18 @@ export default function PantallaRecompensas(props: any) {
                                     <ActivityIndicator size="small" color={DISENO.colors.text} />
                                 ) : (
                                     <>
-                                        <Ionicons name="checkmark-circle" size={isTablet ? 20 : isSmallPhone ? 16 : 18} color={DISENO.colors.text} />
-                                        <Text style={[styles.modalConfirmText, { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.text }]}>
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={isTablet ? 20 : isSmallPhone ? 16 : 18}
+                                            color={DISENO.colors.text}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.modalConfirmText,
+                                                { fontSize: isTablet ? 14 : isSmallPhone ? 12 : 13, color: DISENO.colors.text },
+                                            ]}
+                                            allowFontScaling={false}
+                                        >
                                             Canjear
                                         </Text>
                                     </>
@@ -604,18 +1130,20 @@ export default function PantallaRecompensas(props: any) {
             {/* ✅ MODAL ÉXITO */}
             <Modal visible={mostrarModalExito} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <View style={[
-                        styles.modal,
-                        {
-                            padding: modalPadding,
-                            borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
-                            width: modalWidth,
-                            borderColor: DISENO.colors.success + '40',
-                            borderWidth: 1,
-                            backgroundColor: DISENO.colors.surface,
-                            ...DISENO.shadow.lg,
-                        }
-                    ]}>
+                    <View
+                        style={[
+                            styles.modal,
+                            {
+                                padding: modalPadding,
+                                borderRadius: isTablet ? 24 : isSmallPhone ? 18 : 20,
+                                width: modalWidth,
+                                borderColor: DISENO.colors.success + '40',
+                                borderWidth: 1,
+                                backgroundColor: DISENO.colors.surface,
+                                ...DISENO.shadow.lg,
+                            },
+                        ]}
+                    >
                         <Text style={[styles.modalIcon, { fontSize: isTablet ? 72 : 56 }]}>✅</Text>
                         <Text style={[styles.modalTitle, { fontSize: modalTituloSize, color: DISENO.colors.success }]}>
                             {mensajeExito}
@@ -628,7 +1156,7 @@ export default function PantallaRecompensas(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - TEMA CLARO CON SIMPSONFONT
+// 🎨 ESTILOS
 // ============================================================
 const styles = StyleSheet.create({
     container: {
@@ -659,6 +1187,7 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         flex: 1,
         textAlign: 'center',
+        color: DISENO.colors.text,
     },
     pointsBadge: {
         flexDirection: 'row',
@@ -670,62 +1199,17 @@ const styles = StyleSheet.create({
         fontFamily: FUENTES.display,
         fontWeight: '400',
     },
-    infoBanner: {
-        borderWidth: 1,
-    },
-    infoBannerContent: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-    },
-    infoBannerIcon: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexShrink: 0,
-    },
-    infoBannerTextContainer: {
-        flex: 1,
-    },
-    infoBannerTitle: {
-        fontFamily: FUENTES.display,
-        fontWeight: '400',
-        marginBottom: 2,
-    },
-    infoBannerText: {
-        fontFamily: FUENTES.regular,
-        lineHeight: 16,
-        opacity: 0.85,
-    },
-    helpMessage: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 12,
-    },
-    helpMessageTextContainer: {
-        flex: 1,
-    },
-    helpMessageTitle: {
-        fontFamily: FUENTES.display,
-        fontWeight: '400',
-        marginBottom: 2,
-    },
-    helpMessageText: {
-        fontFamily: FUENTES.regular,
-        lineHeight: 16,
-        opacity: 0.85,
-    },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 16,
+        paddingVertical: 40,
     },
     loadingText: {
         fontFamily: FUENTES.regular,
         fontWeight: '400',
         opacity: 0.7,
-    },
-    list: {
-        flexGrow: 1,
     },
     card: {
         flexDirection: 'row',
@@ -797,10 +1281,9 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
     emptyContainer: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: 80,
+        paddingVertical: 40,
     },
     emptyText: {
         fontFamily: FUENTES.display,
@@ -813,6 +1296,24 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 4,
         opacity: 0.7,
+    },
+    helpMessage: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    helpMessageTextContainer: {
+        flex: 1,
+    },
+    helpMessageTitle: {
+        fontFamily: FUENTES.display,
+        fontWeight: '400',
+        marginBottom: 2,
+    },
+    helpMessageText: {
+        fontFamily: FUENTES.regular,
+        lineHeight: 16,
+        opacity: 0.85,
     },
     modalOverlay: {
         flex: 1,

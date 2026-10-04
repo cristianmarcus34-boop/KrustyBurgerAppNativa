@@ -1,4 +1,4 @@
-// stores/tiendaAutenticacion.ts - ACTUALIZADO SIN LLAMADOS DUPLICADOS DE FCM
+// stores/tiendaAutenticacion.ts
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Perfil, UbicacionGuardada } from '../lib/tipos';
@@ -9,6 +9,7 @@ import { servicioEliminacionCuenta } from '../services/servicioEliminacionCuenta
 
 const STORAGE_UBICACION_KEY = '@ubicacion_seleccionada';
 const STORAGE_ULTIMO_USUARIO = '@ultimo_usuario_id';
+const STORAGE_TEMA_PREFERIDO = '@tema_preferido'; // 🆕
 
 let notificacionService: any = null;
 
@@ -314,11 +315,32 @@ export const tiendaAutenticacion = create<EstadoAutenticacion>((set, get) => ({
       }
 
       try {
-        const keysToKeep = [STORAGE_ULTIMO_USUARIO, 'carrito_krusty', STORAGE_UBICACION_KEY];
+        // ✅ Claves base que SIEMPRE preservamos (¡importante incluir el tema!)
+        const keysToKeep = [
+          STORAGE_ULTIMO_USUARIO,
+          'carrito_krusty',
+          STORAGE_UBICACION_KEY,
+          STORAGE_TEMA_PREFERIDO, // 🆕 PRESERVAR EL TEMA ELEGIDO
+        ];
+
+        // 🆕 Preservar claves de onboarding y permisos POR USUARIO
+        // (para que los modales no reaparezcan al volver a entrar)
         const allKeys = await AsyncStorage.getAllKeys();
+        const onboardingKeys = allKeys.filter(
+          (k) =>
+            k.startsWith('@krusty_permisos_onboarding_v1_') ||
+            k.startsWith('@krusty_onboarding_v1_')
+        );
+        keysToKeep.push(...onboardingKeys);
+
         const keysToRemove = allKeys.filter((k) => !keysToKeep.includes(k));
         if (keysToRemove.length > 0) {
           await AsyncStorage.multiRemove(keysToRemove);
+        }
+
+        if (__DEV__) {
+          console.log('🚪 [Logout] Claves preservadas:', keysToKeep.length);
+          console.log('🚪 [Logout] Claves borradas:', keysToRemove.length);
         }
       } catch (e) {
         console.warn('⚠️ Error limpiando AsyncStorage:', e);

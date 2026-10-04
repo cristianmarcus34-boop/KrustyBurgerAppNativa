@@ -278,7 +278,7 @@ export type ColorKey = keyof typeof Colores;
 export type EstadoColor = keyof typeof Colores.estado;
 
 // ============================================================
-// 📐 ESCALAS RESPONSIVE (antes estaba mal llamado DISEÑO)
+// 📐 ESCALAS RESPONSIVE
 // ============================================================
 export const ESCALAS_RESPONSIVE = {
   BREAKPOINTS: { TABLET: 768, DESKTOP: 1024, SMALL_PHONE: 375 },
@@ -306,7 +306,7 @@ export const ESCALAS_RESPONSIVE = {
 };
 
 // ============================================================
-// ✅ OBJETO DE DISEÑO UNIFICADO (AHORA UNO SOLO)
+// ✅ OBJETO DE DISEÑO UNIFICADO (LEGACY - se mantiene por compatibilidad)
 // ============================================================
 export const DISENO = {
   colors: {
@@ -379,7 +379,6 @@ export const DISENO = {
   shadow: Shadows.light,
   typography: Typography,
 
-  // ✅ Escalas responsive accesibles desde DISENO
   TIPOGRAFIA: ESCALAS_RESPONSIVE.TIPOGRAFIA,
   ESPACIADO: ESCALAS_RESPONSIVE.ESPACIADO,
   RADIO: ESCALAS_RESPONSIVE.RADIO,
@@ -390,7 +389,6 @@ export const DISENO = {
   screenWidth: Sizes.screen.width,
   screenHeight: Sizes.screen.height,
 
-  // Funciones helper
   getValor: (valores: { tablet: any; normal: any; small: any }) => {
     if (Sizes.screen.isTablet) return valores.tablet;
     if (Sizes.screen.isSmallPhone) return valores.small;
@@ -417,7 +415,7 @@ export const DISENO = {
 };
 
 // ============================================================
-// 🎯 HOOK RESPONSIVE CENTRALIZADO (UNO SOLO)
+// 🎯 HOOK RESPONSIVE
 // ============================================================
 export const useResponsive = () => {
   const { width, height } = useWindowDimensions();
@@ -475,5 +473,21 @@ export function responsiveSize(
   if (isSmallPhone) return base * smallMultiplier;
   return base;
 }
+
+// ============================================================
+// 🌓 RE-EXPORT DE TIPOS DE TEMA (solo tipos, SIN hooks ni Provider)
+// ============================================================
+export type { Tema, PaletaTema, ModoTema } from './theme';
+export {
+  TEMA_CLARO,
+  TEMA_OSCURO,
+  PALETA_CLARA,
+  PALETA_OSCURA,
+} from './theme';
+
+// ⚠️ IMPORTANTE:
+// Los hooks (useTema, useColores) y ThemeProvider NO se re-exportan acá
+// para evitar circularidad entre colores.ts y theme.tsx.
+// Importalos directo:  import { useColores } from '../lib/theme';
 
 export default Colores;

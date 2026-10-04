@@ -1,3 +1,4 @@
+// components/Toast.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
@@ -7,7 +8,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colores } from '../lib/colores';
+import { useColores } from '../lib/theme';
 
 // ✅ Tipo definido correctamente
 export type TipoToast = 'exito' | 'error' | 'advertencia' | 'info';
@@ -52,6 +53,7 @@ interface ToastProps {
 // ✅ Componente con tipos correctos
 export const Toast = ({ visible, mensaje, tipo, ocultar }: ToastProps) => {
     const translateY = useRef(new Animated.Value(-80)).current;
+    const colores = useColores();
 
     useEffect(() => {
         Animated.spring(translateY, {
@@ -71,16 +73,16 @@ export const Toast = ({ visible, mensaje, tipo, ocultar }: ToastProps) => {
         info: 'information-circle',
     };
 
-    const colores: Record<TipoToast, string> = {
-        exito: '#4CAF50',
-        error: '#FF5252',
-        advertencia: '#FFA726',
-        info: Colores.frinkAzul,
+    const coloresToast: Record<TipoToast, string> = {
+        exito: colores.success,
+        error: colores.danger,
+        advertencia: colores.warning,
+        info: colores.info,
     };
 
     // ✅ Acceso seguro con el tipo correcto
     const icono = iconos[tipo];
-    const color = colores[tipo];
+    const color = coloresToast[tipo];
 
     return (
         <Animated.View
@@ -89,11 +91,20 @@ export const Toast = ({ visible, mensaje, tipo, ocultar }: ToastProps) => {
                 { transform: [{ translateY }] },
             ]}
         >
-            <View style={[styles.toast, { borderLeftColor: color }]}>
+            <View
+                style={[
+                    styles.toast,
+                    {
+                        backgroundColor: colores.surface,
+                        borderLeftColor: color,
+                        shadowColor: colores.negro,
+                    },
+                ]}
+            >
                 <Ionicons name={icono} size={22} color={color} />
-                <Text style={styles.texto}>{mensaje}</Text>
+                <Text style={[styles.texto, { color: colores.text }]}>{mensaje}</Text>
                 <TouchableOpacity onPress={ocultar}>
-                    <Ionicons name="close" size={18} color={Colores.frinkGris} />
+                    <Ionicons name="close" size={18} color={colores.textTertiary} />
                 </TouchableOpacity>
             </View>
         </Animated.View>
@@ -111,11 +122,9 @@ const styles = StyleSheet.create({
     toast: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
         padding: 14,
         borderRadius: 12,
         borderLeftWidth: 5,
-        shadowColor: '#000',
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.15,
         shadowRadius: 6,
@@ -125,7 +134,6 @@ const styles = StyleSheet.create({
     texto: {
         flex: 1,
         fontSize: 14,
-        color: Colores.frinkAzul,
         fontWeight: '500',
     },
 });

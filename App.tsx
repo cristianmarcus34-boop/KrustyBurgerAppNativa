@@ -22,6 +22,8 @@ console.error = (...args: any[]) => {
       'Text string',
       'react-native-paper',
       'Paper',
+      'TouchableRipple',
+      'MD3',
       'LogBox'
     ];
 
@@ -36,16 +38,19 @@ console.error = (...args: any[]) => {
 // ============================================================
 // 📦 IMPORTACIONES DE REACT Y NAVEGACIÓN
 // ============================================================
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   NavigationContainer,
   NavigationContainerRef,
   DefaultTheme,
+  DarkTheme,
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { AppState, View, Platform, StyleSheet, Alert } from 'react-native';
+import { AppState, View, Platform, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 // ============================================================
 // 📦 IMPORTACIONES DE EXPO Y LIBRERÍAS NATIVAS
@@ -54,7 +59,6 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as Linking from 'expo-linking';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-
 
 // ============================================================
 // 📦 COMPONENTES PROPIOS
@@ -77,6 +81,11 @@ import {
   HEADER_OPTIONS,
   HEADER_LEGAL_OPTIONS
 } from './config/tema';
+
+// ============================================================
+// 📦 TEMA (nuevo sistema claro/oscuro)
+// ============================================================
+import { ThemeProvider, useTema } from './lib/theme';
 
 // ============================================================
 // 📦 PANTALLAS - AUTENTICACIÓN
@@ -124,6 +133,9 @@ import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEn
 import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
 import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
 
+// 🆕 NUEVA PANTALLA DE REPARTIDORES
+import PantallaRepartidores from './screens/admin/PantallaRepartidores';
+
 // ============================================================
 // 📦 PANTALLAS - CUPONES (ADMIN)
 // ============================================================
@@ -139,20 +151,12 @@ import * as Sentry from '@sentry/react-native';
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
 
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
   sendDefaultPii: true,
-
-  // Enable Logs
   enableLogs: true,
 
-  // Configure Session Replay
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1,
   integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
 });
 
 // ============================================================
@@ -161,17 +165,6 @@ Sentry.init({
 const SPLASH_MIN_DURATION = 2000;
 const SPLASH_MAX_DURATION = 3000;
 const SPLASH_LOGO_FADE_DURATION = 400;
-
-// ============================================================
-// 🎨 THEME DE NAVEGACIÓN CON FONDO BLANCO
-// ============================================================
-const themeAppKrusty = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: '#FFFFFF',
-  },
-};
 
 // ============================================================
 // 🏗️ CREACIÓN DE NAVEGADORES
@@ -267,10 +260,15 @@ function PestanasCliente() {
 }
 
 // ============================================================
-// 🚀 COMPONENTE PRINCIPAL DE LA APP
+// 🚀 COMPONENTE INTERNO (dentro de ThemeProvider)
 // ============================================================
-export default Sentry.wrap(function App() {
+function AppInterna() {
   console.log('🟩 [App] Componente App renderizó');
+
+  // ============================================================
+  // 🎨 TEMA (claro/oscuro/sistema)
+  // ============================================================
+  const { tema, esOscuro } = useTema();
 
   // ============================================================
   // 🎨 CARGA DE FUENTES PERSONALIZADAS
@@ -315,9 +313,90 @@ export default Sentry.wrap(function App() {
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const yaOcultoSplashNativo = useRef(false);
-
-  // ✅ FIX: ref para evitar resets fantasma al cerrar sesión
   const yaReseteoPorLogout = useRef(false);
+
+  // ============================================================
+  // 🎨 TEMAS DE NAVEGACIÓN Y PAPER
+  // ============================================================
+  const themeAppKrusty = esOscuro
+    ? {
+      ...DarkTheme,
+      colors: {
+        ...DarkTheme.colors,
+        background: tema.colors.fondo,
+        card: tema.colors.surface,
+        text: tema.colors.text,
+        border: tema.colors.border,
+        primary: tema.colors.accent,
+        notification: tema.colors.accent,
+      },
+    }
+    : {
+      ...DefaultTheme,
+      colors: {
+        ...DefaultTheme.colors,
+        background: tema.colors.fondo,
+        card: tema.colors.surface,
+        text: tema.colors.text,
+        border: tema.colors.border,
+        primary: tema.colors.accent,
+        notification: tema.colors.accent,
+      },
+    };
+
+  const paperThemeKrusty = esOscuro
+    ? {
+      ...MD3DarkTheme,
+      colors: {
+        ...MD3DarkTheme.colors,
+        primary: tema.colors.accent,
+        onPrimary: '#FFFFFF',
+        primaryContainer: '#4A1A1A',
+        onPrimaryContainer: '#FFDAD6',
+        secondary: tema.colors.accentSecondary,
+        onSecondary: '#1A1A1A',
+        secondaryContainer: '#4A3A00',
+        onSecondaryContainer: '#FFE082',
+        background: tema.colors.fondo,
+        onBackground: tema.colors.text,
+        surface: tema.colors.surface,
+        onSurface: tema.colors.text,
+        surfaceVariant: tema.colors.surfaceHover,
+        onSurfaceVariant: tema.colors.textSecondary,
+        outline: tema.colors.border,
+        outlineVariant: tema.colors.borderLight,
+        error: tema.colors.danger,
+        onError: '#FFFFFF',
+        errorContainer: '#4A1A1A',
+        onErrorContainer: '#FFDAD6',
+      },
+    }
+    : {
+      ...MD3LightTheme,
+      colors: {
+        ...MD3LightTheme.colors,
+        primary: tema.colors.accent,
+        onPrimary: '#FFFFFF',
+        primaryContainer: '#FFE5E5',
+        onPrimaryContainer: '#B71C1C',
+        secondary: tema.colors.accentSecondary,
+        onSecondary: '#1A1A1A',
+        secondaryContainer: '#FFF6CC',
+        onSecondaryContainer: '#7A5C00',
+        background: tema.colors.fondo,
+        onBackground: tema.colors.text,
+        surface: tema.colors.surface,
+        onSurface: tema.colors.text,
+        surfaceVariant: tema.colors.surfaceHover,
+        onSurfaceVariant: tema.colors.textSecondary,
+        outline: tema.colors.border,
+        outlineVariant: tema.colors.borderLight,
+        error: tema.colors.danger,
+        onError: '#FFFFFF',
+        errorContainer: '#FFE5E5',
+        onErrorContainer: '#B71C1C',
+      },
+    };
 
   // ============================================================
   // ⏱️ TIMER MÍNIMO DEL SPLASH
@@ -382,7 +461,7 @@ export default Sentry.wrap(function App() {
   }, [tiempoMinimoCumplido, fontsLoaded, fontError, cargando, splashTerminado]);
 
   // ============================================================
-  // ✅ OCULTAR EL SPLASH NATIVO DESPUÉS DE LA ANIMACIÓN DEL CUSTOM
+  // ✅ OCULTAR EL SPLASH NATIVO
   // ============================================================
   useEffect(() => {
     if (yaOcultoSplashNativo.current) return;
@@ -399,30 +478,38 @@ export default Sentry.wrap(function App() {
   }, [splashTerminado]);
 
   // ============================================================
-  // 🚀 INICIALIZACIÓN (sesión + carrito + navigation bar)
+  // 🚀 INICIALIZACIÓN
   // ============================================================
   useEffect(() => {
-    const setupNavigationBar = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          const navBar = NavigationBar as any;
+    inicializarSesion();
+    cargarCarrito();
+  }, []);
 
-          if (typeof navBar.setBackgroundColorAsync === 'function') {
-            await navBar.setBackgroundColorAsync(temaApp.fondo);
-            await navBar.setButtonStyleAsync('light');
-          } else if (typeof navBar.setStyle === 'function') {
-            await navBar.setStyle('dark');
-          }
-        } catch (error) {
-          console.warn('⚠️ Error configurando barra de navegación:', error);
+  // ============================================================
+  // 🎨 BARRA DE NAVEGACIÓN ANDROID
+  // ============================================================
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const setupNavigationBar = async () => {
+      try {
+        const navBar = NavigationBar as any;
+
+        if (typeof navBar.setBackgroundColorAsync === 'function') {
+          await navBar.setBackgroundColorAsync(tema.colors.surface);
         }
+        if (typeof navBar.setButtonStyleAsync === 'function') {
+          await navBar.setButtonStyleAsync(esOscuro ? 'light' : 'dark');
+        } else if (typeof navBar.setStyle === 'function') {
+          await navBar.setStyle(esOscuro ? 'light' : 'dark');
+        }
+      } catch (error) {
+        console.warn('⚠️ Error configurando barra de navegación:', error);
       }
     };
 
     setupNavigationBar();
-    inicializarSesion();
-    cargarCarrito();
-  }, []);
+  }, [tema.colors.surface, esOscuro]);
 
   // ============================================================
   // 🔔 CONFIGURAR NAVIGATION REF
@@ -447,7 +534,7 @@ export default Sentry.wrap(function App() {
   }, []);
 
   // ============================================================
-  // 🔔 REGISTRO DEL TOKEN SI LOS PERMISOS YA ESTÁN CONCEDIDOS
+  // 🔔 REGISTRO DEL TOKEN
   // ============================================================
   useEffect(() => {
     if (sesion && perfil?.id) {
@@ -496,8 +583,6 @@ export default Sentry.wrap(function App() {
 
   // ============================================================
   // 🔄 REDIRECCIÓN AUTOMÁTICA AL CERRAR SESIÓN
-  // ✅ FIX: usar ref para evitar resets fantasma cuando
-  //    la app arranca sin sesión o cuando cargando cambia.
   // ============================================================
   useEffect(() => {
     if (!sesion && !cargando && navigationRef.current && splashTerminado) {
@@ -510,14 +595,13 @@ export default Sentry.wrap(function App() {
         });
       }
     }
-    // Resetear el flag cuando el usuario vuelve a tener sesión
     if (sesion) {
       yaReseteoPorLogout.current = false;
     }
   }, [sesion, cargando, splashTerminado]);
 
   // ============================================================
-  // 🔗 MANEJAR DEEP LINKING (CUPONES Y RECUPERACIÓN)
+  // 🔗 MANEJAR DEEP LINKING
   // ============================================================
   useEffect(() => {
     const handleDeepLink = async (event: any) => {
@@ -584,132 +668,145 @@ export default Sentry.wrap(function App() {
   });
 
   // ============================================================
-  // 🚀 RENDER: app + splash superpuesto
+  // 🚀 RENDER
   // ============================================================
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.root}>
-        {/* ================================================== */}
-        {/* 1️⃣ LA APP DE FONDO (siempre montada) */}
-        {/* ================================================== */}
-        <NavigationContainer
-          ref={navigationRef}
-          linking={linking}
-          theme={themeAppKrusty}
-          fallback={<View style={{ flex: 1, backgroundColor: '#FFFFFF' }} />}
-        >
-          <Stack.Navigator
-            screenOptions={{ headerShown: false }}
-            initialRouteName={
-              !sesion ? 'Bienvenida'
-                : esAdministrador ? 'PanelAdmin'
-                  : esRepartidor ? 'Transmision'
-                    : 'Principal'
-            }
+    <PaperProvider theme={paperThemeKrusty}>
+      <BottomSheetModalProvider>
+        <View style={[styles.root, { backgroundColor: tema.colors.fondo }]}>
+          <NavigationContainer
+            ref={navigationRef}
+            linking={linking}
+            theme={themeAppKrusty}
+            fallback={<View style={{ flex: 1, backgroundColor: tema.colors.fondo }} />}
           >
+            <Stack.Navigator
+              screenOptions={{ headerShown: false }}
+              initialRouteName={
+                !sesion ? 'Bienvenida'
+                  : esAdministrador ? 'PanelAdmin'
+                    : esRepartidor ? 'Transmision'
+                      : 'Principal'
+              }
+            >
 
-            {/* 👤 USUARIO NO AUTENTICADO (INVITADO) */}
-            {!sesion ? (
-              <Stack.Group>
-                <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
-                <Stack.Screen name="Login" component={PantallaLogin} />
-                <Stack.Screen name="Registro" component={PantallaRegistro} />
-                <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
-                <Stack.Screen
-                  name="NuevaContrasena"
-                  component={PantallaNuevaContrasena}
-                  initialParams={{ token: null }}
-                />
+              {/* 👤 USUARIO NO AUTENTICADO */}
+              {!sesion ? (
+                <Stack.Group>
+                  <Stack.Screen name="Bienvenida" component={PantallaBienvenida} />
+                  <Stack.Screen name="Login" component={PantallaLogin} />
+                  <Stack.Screen name="Registro" component={PantallaRegistro} />
+                  <Stack.Screen name="ResetPassword" component={PantallaResetPassword} />
+                  <Stack.Screen
+                    name="NuevaContrasena"
+                    component={PantallaNuevaContrasena}
+                    initialParams={{ token: null }}
+                  />
 
-                <Stack.Screen name="Principal" component={PestanasCliente} />
-                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-              </Stack.Group>
+                  <Stack.Screen name="Principal" component={PestanasCliente} />
+                  <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                  <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                  <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                  <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+                </Stack.Group>
 
-            ) : esAdministrador ? (
+              ) : esAdministrador ? (
 
-              // 👑 ADMINISTRADOR
-              <Stack.Group>
-                <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
-                <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
-                <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
-                <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
-                <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
-                <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
-                <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
-                <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
-                <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
-                <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
-                <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
-                <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+                // 👑 ADMINISTRADOR
+                <Stack.Group>
+                  <Stack.Screen name="PanelAdmin" component={PantallaPanelAdmin} />
+                  <Stack.Screen name="GestionPedidos" component={PantallaGestionPedidos} />
+                  <Stack.Screen name="GestionMenu" component={PantallaGestionMenu} />
+                  <Stack.Screen name="GestionClientes" component={PantallaGestionClientes} />
+                  <Stack.Screen name="Estadisticas" component={PantallaEstadisticas} />
+                  <Stack.Screen name="GestionOfertas" component={PantallaGestionOfertas} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="ConfiguracionEnvios" component={PantallaConfiguracionEnvios} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="GestionRecompensas" component={PantallaGestionRecompensas} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="NotificacionesAdmin" component={PantallaNotificacionesAdmin} options={{ headerShown: false }} />
+                  <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
+                  <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+                  <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
 
-                <Stack.Screen name="Principal" component={PestanasCliente} />
-                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-                <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
-                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-                <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
-                <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-                <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
-                <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
-                <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
-                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-              </Stack.Group>
+                  {/* 🆕 NUEVA PANTALLA DE REPARTIDORES */}
+                  <Stack.Screen name="Repartidores" component={PantallaRepartidores} options={{ headerShown: false }} />
 
-            ) : esRepartidor ? (
+                  <Stack.Screen name="Principal" component={PestanasCliente} />
+                  <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                  <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                  <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+                  <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+                  <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+                  <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+                  <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+                  <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                  <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+                </Stack.Group>
 
-              // 🛵 REPARTIDOR
-              <Stack.Group>
-                <Stack.Screen name="Transmision" component={PantallaTransmision} />
-                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-              </Stack.Group>
+              ) : esRepartidor ? (
 
-            ) : (
+                // 🛵 REPARTIDOR
+                <Stack.Group>
+                  <Stack.Screen name="Transmision" component={PantallaTransmision} />
+                  <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                  <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+                </Stack.Group>
 
-              // 👤 CLIENTE AUTENTICADO
-              <Stack.Group>
-                <Stack.Screen name="Principal" component={PestanasCliente} />
-                <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
-                <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
-                <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
-                <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
-                <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
-                <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
-                <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
-                <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
-                <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
-                <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
-                <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
-                <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
-              </Stack.Group>
-            )}
+              ) : (
 
-          </Stack.Navigator>
-        </NavigationContainer>
+                // 👤 CLIENTE AUTENTICADO
+                <Stack.Group>
+                  <Stack.Screen name="Principal" component={PestanasCliente} />
+                  <Stack.Screen name="Carrito" component={PantallaCarrito} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="Ofertas" component={PantallaOfertas} options={{ headerShown: false }} />
+                  <Stack.Screen name="Seguimiento" component={PantallaSeguimiento} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="DetalleProducto" component={PantallaDetalleProducto} options={HEADER_OPTIONS} />
+                  <Stack.Screen name="DetalleOferta" component={PantallaDetalleOferta} options={{ headerShown: false }} />
+                  <Stack.Screen name="Recompensas" component={PantallaRecompensas} options={{ headerShown: false }} />
+                  <Stack.Screen name="Checkout" component={PantallaCheckout} options={{ headerShown: false }} />
+                  <Stack.Screen name="NotificacionesUsuario" component={PantallaNotificacionesUsuario} options={{ headerShown: false }} />
+                  <Stack.Screen name="MisCupones" component={PantallaMisCupones} options={{ headerShown: false }} />
+                  <Stack.Screen name="CanjearCupon" component={PantallaCanjearCupon} options={{ headerShown: false }} />
+                  <Stack.Screen name="Terminos" component={PantallaTerminos} options={HEADER_LEGAL_OPTIONS} />
+                  <Stack.Screen name="Privacidad" component={PantallaPrivacidad} options={HEADER_LEGAL_OPTIONS} />
+                </Stack.Group>
+              )}
 
-        {/* ================================================== */}
-        {/* 2️⃣ SPLASH SUPERPUESTO (encima de la app) */}
-        {/* ================================================== */}
-        {debeMostrarSplash && (
-          <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-            <SplashScreen
-              onFinish={() => {
-                if (tiempoMinimoCumplido && appLista) {
-                  setSplashTerminado(true);
-                }
-              }}
-              duration={SPLASH_MAX_DURATION}
-            />
-          </View>
-        )}
-      </View>
+            </Stack.Navigator>
+          </NavigationContainer>
+
+          {debeMostrarSplash && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+              <SplashScreen
+                onFinish={() => {
+                  if (tiempoMinimoCumplido && appLista) {
+                    setSplashTerminado(true);
+                  }
+                }}
+                duration={SPLASH_MAX_DURATION}
+              />
+            </View>
+          )}
+        </View>
+      </BottomSheetModalProvider>
+    </PaperProvider>
+  );
+}
+
+// ============================================================
+// 🚀 EXPORT PRINCIPAL
+// ============================================================
+export default Sentry.wrap(function App() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+
+        <AppInterna />
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 });
@@ -720,6 +817,5 @@ export default Sentry.wrap(function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
 });

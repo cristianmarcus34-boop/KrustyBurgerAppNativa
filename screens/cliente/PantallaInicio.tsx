@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx - V10 (Con Modal Amigable de Permisos + Onboarding Progresivo)
+﻿// screens/cliente/PantallaInicio.tsx - V14 (Modo oscuro + Onboarding fix + timing fix)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -10,6 +10,7 @@ import {
   RefreshControl,
   FlatList,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +25,8 @@ import Animated, {
   withRepeat,
   withTiming,
   FadeInDown,
+  FadeIn,
+  ZoomIn,
 } from 'react-native-reanimated';
 import { Shadow } from 'react-native-shadow-2';
 import * as Haptics from 'expo-haptics';
@@ -33,7 +36,8 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { tiendaCarrito } from '../../stores/tiendaCarrito';
 import { tiendaFavoritos } from '../../stores/tiendaFavoritos';
 import { supabase } from '../../lib/supabase';
-import { DISENO, useResponsive } from '../../lib/colores';
+import { useResponsive } from '../../lib/colores';
+import { useColores, type PaletaTema } from '../../lib/theme';
 import { FUENTES } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
 
@@ -92,6 +96,7 @@ interface Tamanos {
   sectionTitleSize: number;
   seeAllSize: number;
   fondoOffset: number;
+  ringSize: number;
 }
 
 const calcularTamanos = (
@@ -169,6 +174,8 @@ const calcularTamanos = (
 
   const fondoOffset = isDesktop ? -380 : isTablet ? -300 : isSmall ? -140 : -220;
 
+  const ringSize = categoriaSize + 10;
+
   return {
     padding,
     logoSize,
@@ -198,6 +205,7 @@ const calcularTamanos = (
     sectionTitleSize,
     seeAllSize,
     fondoOffset,
+    ringSize,
   };
 };
 
@@ -226,12 +234,12 @@ interface FavoritoConOrigen {
   origen: 'manual' | 'ranking';
 }
 
-const CATEGORIAS: CategoriaData[] = [
-  { id: 'ofertas', nombre: 'Ofertas', imagen: ofertasImg, color: DISENO.colors.danger, descripcion: 'Descuentos', icono: 'flame', esOferta: true },
-  { id: 'burgers', nombre: 'Burgers', imagen: hamburguesasImg, color: DISENO.colors.danger, descripcion: 'Premium', icono: 'fast-food' },
-  { id: 'acompanantes', nombre: 'Extras', imagen: acompanantesImg, color: DISENO.colors.warning, descripcion: 'Papas y más', icono: 'pizza' },
-  { id: 'bebidas', nombre: 'Bebidas', imagen: bebidasImg, color: DISENO.colors.info, descripcion: 'Refrescos', icono: 'beer' },
-  { id: 'postres', nombre: 'Postres', imagen: postresImg, color: DISENO.colors.rosa, descripcion: 'Dulces', icono: 'ice-cream' },
+const construirCategorias = (colores: PaletaTema): CategoriaData[] => [
+  { id: 'ofertas', nombre: 'Ofertas', imagen: ofertasImg, color: colores.danger, descripcion: 'Descuentos', icono: 'flame', esOferta: true },
+  { id: 'burgers', nombre: 'Burgers', imagen: hamburguesasImg, color: colores.danger, descripcion: 'Premium', icono: 'fast-food' },
+  { id: 'acompanantes', nombre: 'Extras', imagen: acompanantesImg, color: colores.warning, descripcion: 'Papas y más', icono: 'pizza' },
+  { id: 'bebidas', nombre: 'Bebidas', imagen: bebidasImg, color: colores.info, descripcion: 'Refrescos', icono: 'beer' },
+  { id: 'postres', nombre: 'Postres', imagen: postresImg, color: colores.rosa, descripcion: 'Dulces', icono: 'ice-cream' },
 ];
 
 const unificarFavoritos = (
@@ -256,14 +264,28 @@ const unificarFavoritos = (
   return resultado;
 };
 
-const AddButton: React.FC<{ onPress: () => void; size?: number; nombre?: string }> = ({
-  onPress,
-  size = 32,
-  nombre,
-}) => {
+// ============================================================
+// 🔘 BOTÓN AÑADIR
+// ============================================================
+const AddButton: React.FC<{
+  onPress: () => void;
+  size?: number;
+  nombre?: string;
+  colores: PaletaTema;
+  estilos: any;
+}> = ({ onPress, size = 32, nombre, colores, estilos }) => {
   const [added, setAdded] = useState(false);
   const scale = useSharedValue(1);
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const glow = useSharedValue(0);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glow.value,
+    transform: [{ scale: 1 + glow.value * 0.6 }],
+  }));
 
   const handle = () => {
     if (added) return;
@@ -271,6 +293,10 @@ const AddButton: React.FC<{ onPress: () => void; size?: number; nombre?: string 
     scale.value = withSequence(
       withSpring(0.82, { damping: 12, stiffness: 300 }),
       withSpring(1, { damping: 10, stiffness: 200 }),
+    );
+    glow.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withTiming(0, { duration: 400 }),
     );
     setAdded(true);
     onPress();
@@ -285,58 +311,111 @@ const AddButton: React.FC<{ onPress: () => void; size?: number; nombre?: string 
   };
 
   return (
-    <Animated.View style={animStyle}>
-      <TouchableOpacity
-        onPress={handle}
-        activeOpacity={0.85}
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        pointerEvents="none"
         style={[
-          styles.addButton,
           {
+            position: 'absolute',
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: added ? DISENO.colors.success : DISENO.colors.accent,
+            backgroundColor: colores.success,
           },
+          glowStyle,
         ]}
-        accessibilityRole="button"
-        accessibilityLabel={added ? 'Agregado' : 'Agregar al carrito'}
-      >
-        <Ionicons name={added ? 'checkmark' : 'add'} size={size * 0.55} color="#fff" />
-      </TouchableOpacity>
+      />
+      <Animated.View style={animStyle}>
+        <TouchableOpacity
+          onPress={handle}
+          activeOpacity={0.85}
+          style={[
+            estilos.addButton,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: added ? colores.success : colores.accent,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={added ? 'Agregado' : 'Agregar al carrito'}
+        >
+          <Ionicons name={added ? 'checkmark' : 'add'} size={size * 0.55} color="#fff" />
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
+// ============================================================
+// 💀 SKELETON
+// ============================================================
+const SkeletonCard: React.FC<{
+  width: number;
+  height: number;
+  radius?: number;
+  colores: PaletaTema;
+}> = ({ width, height, radius = 16, colores }) => {
+  const opacity = useSharedValue(0.35);
+  const translateX = useSharedValue(-1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(0.75, { duration: 900 }), -1, true);
+    translateX.value = withRepeat(withTiming(1, { duration: 1400 }), -1, false);
+  }, [opacity, translateX]);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value * width }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width,
+          height,
+          borderRadius: radius,
+          backgroundColor: colores.surfaceHover,
+          overflow: 'hidden',
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: width * 0.4,
+            height: '100%',
+            backgroundColor: colores.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.45)',
+          },
+          shimmerStyle,
+        ]}
+      />
     </Animated.View>
   );
 };
 
-const SkeletonCard: React.FC<{ width: number; height: number }> = ({ width, height }) => {
-  const opacity = useSharedValue(0.4);
-  useEffect(() => {
-    opacity.value = withRepeat(withTiming(0.8, { duration: 800 }), -1, true);
-  }, [opacity]);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return (
-    <Animated.View
-      style={[
-        { width, height, borderRadius: 16, backgroundColor: DISENO.colors.surfaceHover },
-        style,
-      ]}
-    />
-  );
-};
-
+// ============================================================
+// 🔗 BOTÓN VER
+// ============================================================
 const BotonVer: React.FC<{
   texto: string;
   onPress: () => void;
   fontSize: number;
-}> = ({ texto, onPress, fontSize }) => (
+  colores: PaletaTema;
+  estilos: any;
+}> = ({ texto, onPress, fontSize, colores, estilos }) => (
   <TouchableOpacity
-    style={styles.botonVer}
+    style={estilos.botonVer}
     onPress={onPress}
     activeOpacity={0.7}
     accessibilityRole="button"
     accessibilityLabel={texto}
   >
     <Text
-      style={[styles.botonVerTexto, { fontSize }]}
+      style={[estilos.botonVerTexto, { fontSize }]}
       numberOfLines={1}
       allowFontScaling={false}
     >
@@ -345,10 +424,56 @@ const BotonVer: React.FC<{
     <Ionicons
       name="chevron-forward"
       size={14}
-      color={DISENO.colors.accent}
+      color={colores.accent}
       style={{ marginLeft: 2 }}
     />
   </TouchableOpacity>
+);
+
+// ============================================================
+// 📝 SECTION HEADER
+// ============================================================
+const SectionHeader: React.FC<{
+  titulo: string;
+  fontSize: number;
+  padding: number;
+  onVerTodo?: () => void;
+  verTodoTexto?: string;
+  seeAllSize: number;
+  icono?: keyof typeof Ionicons.glyphMap;
+  iconoColor?: string;
+  colores: PaletaTema;
+  estilos: any;
+}> = ({ titulo, fontSize, padding, onVerTodo, verTodoTexto, seeAllSize, icono, iconoColor, colores, estilos }) => (
+  <View style={[estilos.sectionHeading, { paddingHorizontal: padding }]}>
+    <View style={estilos.sectionTitleWrap}>
+      <View style={estilos.sectionAccentBar} />
+      <Text
+        style={[estilos.sectionTitle, { fontSize }]}
+        numberOfLines={1}
+        allowFontScaling={false}
+      >
+        {titulo}
+      </Text>
+      {icono && (
+        <Ionicons
+          name={icono}
+          size={fontSize * 0.75}
+          color={iconoColor || '#F4A261'}
+          style={{ marginLeft: 6 }}
+        />
+      )}
+    </View>
+    {onVerTodo && verTodoTexto && (
+      <BotonVer
+        texto={verTodoTexto}
+        onPress={onVerTodo}
+        fontSize={seeAllSize}
+        colores={colores}
+        estilos={estilos}
+      />
+    )}
+  </View>
 );
 
 export default function PantallaInicio(props: any) {
@@ -365,6 +490,11 @@ export default function PantallaInicio(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
+  // ✅ TEMA
+  const colores = useColores();
+  const estilos = useMemo(() => crearEstilos(colores), [colores]);
+  const CATEGORIAS = useMemo(() => construirCategorias(colores), [colores]);
 
   const tamanos = useMemo(
     () =>
@@ -395,6 +525,10 @@ export default function PantallaInicio(props: any) {
     direccionOfrecida: false,
     cumpleanosOfrecido: false,
   });
+
+  // 🆕 NUEVO: flag para saber si ya terminó de cargar el estado desde AsyncStorage
+  const [estadoOnboardingCargado, setEstadoOnboardingCargado] = useState(false);
+
   const [datoFaltanteActual, setDatoFaltanteActual] = useState<TipoDatoFaltante | null>(null);
 
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -402,9 +536,19 @@ export default function PantallaInicio(props: any) {
   const logoScale = useRef(new RNAnimated.Value(0.85)).current;
   const logoOpacity = useRef(new RNAnimated.Value(0)).current;
 
+  const headerOpacity = useSharedValue(0);
+  const headerTranslate = useSharedValue(-10);
+
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
+  });
+
+  const headerStyle = useAnimatedStyle(() => {
+    const progress = Math.min(Math.max(scrollY.value / 120, 0), 1);
+    return {
+      opacity: 1 - progress * 0.15,
+    };
   });
 
   // ============================================================
@@ -412,8 +556,9 @@ export default function PantallaInicio(props: any) {
   // ============================================================
   useEffect(() => {
     const verificarPermisosOnboarding = async () => {
-      if (sesion?.user?.id) {
-        const yaVisto = await yaVioModalPermisos();
+      const userId = sesion?.user?.id;
+      if (userId) {
+        const yaVisto = await yaVioModalPermisos(userId);
         if (!yaVisto) {
           setMostrarModalPermisos(true);
         }
@@ -423,43 +568,72 @@ export default function PantallaInicio(props: any) {
   }, [sesion]);
 
   const handleAceptarModalPermisos = async () => {
+    const userId = sesion?.user?.id;
+    if (!userId) return;
+
     setMostrarModalPermisos(false);
-    await marcarModalPermisosVisto();
-    if (sesion?.user?.id) {
-      await solicitarPermisosCompletosApp(sesion.user.id);
+    await marcarModalPermisosVisto(userId);
+
+    try {
+      await solicitarPermisosCompletosApp(userId);
+      const resultado = await actualizarPerfil({ acepta_promociones: true });
+
+      if (resultado.success) {
+        console.log('✅ [Onboarding] Permisos y promociones activados');
+      } else {
+        console.warn('⚠️ [Onboarding] No se pudo activar promociones:', resultado.error);
+      }
+    } catch (error) {
+      console.error('❌ [Onboarding] Error activando permisos:', error);
     }
   };
 
   const handleOmitirModalPermisos = async () => {
+    const userId = sesion?.user?.id;
+    if (!userId) return;
+
     setMostrarModalPermisos(false);
-    await marcarModalPermisosVisto();
+    await marcarModalPermisosVisto(userId);
   };
 
   // ============================================================
-  // 🎯 ONBOARDING DE DATOS (teléfono, cumpleaños, etc.)
+  // 🎯 ONBOARDING DE DATOS
   // ============================================================
   useEffect(() => {
     const cargar = async () => {
       const userId = sesion?.user?.id;
-      if (!userId) return;
+      if (!userId) {
+        setEstadoOnboardingCargado(true);  // no hay usuario → ya está "cargado"
+        return;
+      }
       const estado = await leerEstadoOnboarding(userId);
       setEstadoOnboarding(estado);
+      setEstadoOnboardingCargado(true);  // ← marcamos como cargado
     };
+    setEstadoOnboardingCargado(false);  // al cambiar de usuario, resetear
     cargar();
   }, [sesion?.user?.id]);
 
   useEffect(() => {
     const userId = sesion?.user?.id;
     if (!userId || !perfil) return;
-    if (mostrarModalPermisos) return; // no competir con el de permisos
-    if (datoFaltanteActual) return; // ya hay uno abierto
+    if (!estadoOnboardingCargado) return;  // 🆕 NO EVALUAR HASTA QUE CARGUE
+    if (mostrarModalPermisos) return;
+    if (datoFaltanteActual) return;
 
     const siguiente = siguienteDatoFaltante(perfil, estadoOnboarding, 'onboarding');
     if (siguiente) {
       const timer = setTimeout(() => setDatoFaltanteActual(siguiente), 800);
       return () => clearTimeout(timer);
     }
-  }, [sesion?.user?.id, perfil, estadoOnboarding, mostrarModalPermisos, datoFaltanteActual]);
+  }, [
+    sesion?.user?.id,
+    perfil,
+    estadoOnboarding,
+    estadoOnboardingCargado,  // 🆕 AGREGAR A LAS DEPS
+    mostrarModalPermisos,
+    datoFaltanteActual,
+  ]);
 
   const handleGuardarDatoFaltante = async (valor: string) => {
     const userId = sesion?.user?.id;
@@ -572,7 +746,10 @@ export default function PantallaInicio(props: any) {
       RNAnimated.spring(logoScale, { toValue: 1, friction: 8, tension: 50, useNativeDriver: true }),
       RNAnimated.timing(logoOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]).start();
-  }, [cargarOfertas, cargarCantidadProductos, fadeAnim, slideAnim, logoScale, logoOpacity]);
+
+    headerOpacity.value = withTiming(1, { duration: 500 });
+    headerTranslate.value = withSpring(0, { damping: 14, stiffness: 120 });
+  }, [cargarOfertas, cargarCantidadProductos, fadeAnim, slideAnim, logoScale, logoOpacity, headerOpacity, headerTranslate]);
 
   const onRefresh = useCallback(async () => {
     setRefrescando(true);
@@ -601,13 +778,16 @@ export default function PantallaInicio(props: any) {
     props.navigation.navigate('Principal', { screen: 'Perfil' });
   };
 
+  // ============================================================
+  // 🎨 RENDER CATEGORÍA
+  // ============================================================
   const renderCategoria = useCallback(
     ({ item, index }: { item: CategoriaData; index: number }) => {
       const count = cantidadProductos[item.id] || 0;
       return (
-        <Animated.View entering={FadeInDown.delay(index * 50).springify()}>
+        <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
           <TouchableOpacity
-            style={styles.categoriaItem}
+            style={estilos.categoriaItem}
             onPress={() => {
               Haptics.selectionAsync().catch(() => { });
               if (item.esOferta) props.navigation.navigate('Ofertas');
@@ -617,48 +797,85 @@ export default function PantallaInicio(props: any) {
             accessibilityRole="button"
             accessibilityLabel={`${item.nombre}, ${count} productos`}
           >
-            <View style={styles.categoriaImageWrap}>
-              <Image
-                source={item.imagen}
-                style={{
-                  width: tamanos.categoriaSize,
-                  height: tamanos.categoriaSize,
-                  borderRadius: tamanos.categoriaSize / 2,
-                  backgroundColor: DISENO.colors.surfaceHover,
-                }}
-                resizeMode="cover"
-              />
+            <View
+              style={[
+                estilos.categoriaRing,
+                {
+                  width: tamanos.ringSize,
+                  height: tamanos.ringSize,
+                  borderRadius: tamanos.ringSize / 2,
+                  borderColor: item.color + '30',
+                },
+              ]}
+            >
               <View
                 style={[
-                  styles.categoriaIconBadge,
-                  { backgroundColor: item.color },
+                  estilos.categoriaImageWrap,
+                  {
+                    width: tamanos.categoriaSize,
+                    height: tamanos.categoriaSize,
+                    borderRadius: tamanos.categoriaSize / 2,
+                    borderColor: item.color + '55',
+                  },
+                ]}
+              >
+                <Image
+                  source={item.imagen}
+                  style={{
+                    width: tamanos.categoriaSize,
+                    height: tamanos.categoriaSize,
+                    borderRadius: tamanos.categoriaSize / 2,
+                    backgroundColor: colores.surfaceHover,
+                  }}
+                  resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.25)']}
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { borderRadius: tamanos.categoriaSize / 2 },
+                  ]}
+                />
+              </View>
+              <View
+                style={[
+                  estilos.categoriaIconBadge,
+                  {
+                    backgroundColor: item.color,
+                    shadowColor: item.color,
+                  },
                 ]}
               >
                 <Ionicons name={item.icono} size={tamanos.categoriaIconSize} color="#fff" />
               </View>
             </View>
             <Text
-              style={[styles.categoriaNombre, { fontSize: tamanos.categoriaNombreSize }]}
+              style={[estilos.categoriaNombre, { fontSize: tamanos.categoriaNombreSize }]}
               numberOfLines={1}
               allowFontScaling={false}
             >
               {item.nombre}
             </Text>
             {count > 0 && (
-              <Text
-                style={[styles.categoriaCount, { fontSize: tamanos.categoriaCountSize }]}
-                allowFontScaling={false}
-              >
-                {count} items
-              </Text>
+              <View style={estilos.categoriaCountBadge}>
+                <Text
+                  style={[estilos.categoriaCount, { fontSize: tamanos.categoriaCountSize }]}
+                  allowFontScaling={false}
+                >
+                  {count} items
+                </Text>
+              </View>
             )}
           </TouchableOpacity>
         </Animated.View>
       );
     },
-    [cantidadProductos, tamanos, props.navigation],
+    [cantidadProductos, tamanos, props.navigation, colores, estilos],
   );
 
+  // ============================================================
+  // 🎨 RENDER FAVORITO
+  // ============================================================
   const renderFavorito = useCallback(
     ({ item, index }: { item: FavoritoConOrigen; index: number }) => {
       const producto = item.producto;
@@ -667,34 +884,38 @@ export default function PantallaInicio(props: any) {
       return (
         <Animated.View entering={FadeInDown.delay(index * 40).springify()}>
           <Shadow
-            distance={6}
-            startColor="rgba(0,0,0,0.06)"
-            offset={[0, 3]}
-            style={{ borderRadius: DISENO.radius.md, marginRight: 12 }}
+            distance={8}
+            startColor={colores.isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.07)'}
+            offset={[0, 4]}
+            style={{ borderRadius: 16, marginRight: 14 }}
           >
             <TouchableOpacity
               style={[
-                styles.favoritoItem,
-                { width: tamanos.favoritoWidth, backgroundColor: DISENO.colors.surface },
+                estilos.favoritoItem,
+                { width: tamanos.favoritoWidth, backgroundColor: colores.surface },
               ]}
               onPress={() => props.navigation.navigate('DetalleProducto', { producto })}
-              activeOpacity={0.9}
+              activeOpacity={0.92}
             >
               <View
                 style={[
-                  styles.favoritoImageContainer,
+                  estilos.favoritoImageContainer,
                   { height: tamanos.favoritoImageHeight },
                 ]}
               >
                 <Image
                   source={{ uri: producto.imagen || 'https://via.placeholder.com/300' }}
-                  style={styles.favoritoImagen}
+                  style={estilos.favoritoImagen}
                   resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.35)']}
+                  style={StyleSheet.absoluteFill}
                 />
                 <View
                   style={[
-                    styles.favoritoBadge,
-                    esManual ? styles.badgeManual : styles.badgeRanking,
+                    estilos.favoritoBadge,
+                    esManual ? estilos.badgeManual : estilos.badgeRanking,
                   ]}
                 >
                   <Ionicons
@@ -702,19 +923,28 @@ export default function PantallaInicio(props: any) {
                     size={12}
                     color={esManual ? '#E63946' : '#FF6B00'}
                   />
+                  <Text
+                    style={[
+                      estilos.favoritoBadgeText,
+                      { color: esManual ? '#E63946' : '#FF6B00' },
+                    ]}
+                    allowFontScaling={false}
+                  >
+                    {esManual ? 'Favorito' : 'Top'}
+                  </Text>
                 </View>
               </View>
-              <View style={styles.favoritoInfo}>
+              <View style={estilos.favoritoInfo}>
                 <Text
-                  style={[styles.favoritoNombre, { fontSize: tamanos.favoritoNombreSize }]}
+                  style={[estilos.favoritoNombre, { fontSize: tamanos.favoritoNombreSize }]}
                   numberOfLines={1}
                   allowFontScaling={false}
                 >
                   {producto.nombre}
                 </Text>
-                <View style={styles.favoritoFooter}>
+                <View style={estilos.favoritoFooter}>
                   <Text
-                    style={[styles.favoritoPrecio, { fontSize: tamanos.favoritoPrecioSize }]}
+                    style={[estilos.favoritoPrecio, { fontSize: tamanos.favoritoPrecioSize }]}
                     allowFontScaling={false}
                   >
                     {formatearPrecio(producto.precio)}
@@ -723,6 +953,8 @@ export default function PantallaInicio(props: any) {
                     onPress={() => agregarProducto(producto)}
                     size={30}
                     nombre={producto.nombre}
+                    colores={colores}
+                    estilos={estilos}
                   />
                 </View>
               </View>
@@ -731,14 +963,17 @@ export default function PantallaInicio(props: any) {
         </Animated.View>
       );
     },
-    [tamanos, props.navigation, agregarProducto],
+    [tamanos, props.navigation, agregarProducto, colores, estilos],
   );
 
+  // ============================================================
+  // 🎨 RENDER OFERTA
+  // ============================================================
   const renderOferta = useCallback(
     ({ item }: { item: OfertaInicio }) => (
       <TouchableOpacity
         style={[
-          styles.ofertaCard,
+          estilos.ofertaCard,
           {
             width: tamanos.ofertaCardWidth,
             minHeight: tamanos.ofertaCardHeight,
@@ -748,70 +983,113 @@ export default function PantallaInicio(props: any) {
           Haptics.selectionAsync().catch(() => { });
           props.navigation.navigate('DetalleOferta', { oferta: item });
         }}
-        activeOpacity={0.85}
+        activeOpacity={0.88}
       >
+        <LinearGradient
+          colors={[colores.accent + '08', colores.accent + '02']}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
         {item.imagen ? (
-          <Image
-            source={{ uri: item.imagen }}
-            style={[
-              styles.ofertaImagen,
-              { width: tamanos.ofertaImageSize, height: tamanos.ofertaImageSize },
-            ]}
-            resizeMode="cover"
-          />
+          <View style={estilos.ofertaImageWrap}>
+            <Image
+              source={{ uri: item.imagen }}
+              style={[
+                estilos.ofertaImagen,
+                { width: tamanos.ofertaImageSize, height: tamanos.ofertaImageSize },
+              ]}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.2)']}
+              style={[
+                StyleSheet.absoluteFill,
+                { borderRadius: 12 },
+              ]}
+            />
+          </View>
         ) : (
-          <View
+          <LinearGradient
+            colors={[colores.accent + '22', colores.accent + '10']}
             style={[
-              styles.ofertaImagenFallback,
+              estilos.ofertaImagenFallback,
               { width: tamanos.ofertaImageSize, height: tamanos.ofertaImageSize },
             ]}
           >
-            <Ionicons name="fast-food-outline" size={30} color={DISENO.colors.accent} />
-          </View>
+            <Ionicons name="fast-food-outline" size={32} color={colores.accent} />
+          </LinearGradient>
         )}
-        <View style={styles.ofertaInfo}>
+        <View style={estilos.ofertaInfo}>
           {!!item.descuento && (
-            <Text style={styles.ofertaDescuento} numberOfLines={1} allowFontScaling={false}>
-              {item.descuento}
-            </Text>
+            <View style={estilos.ofertaDescuentoBadge}>
+              <Ionicons name="pricetag" size={10} color="#fff" />
+              <Text style={estilos.ofertaDescuentoText} numberOfLines={1} allowFontScaling={false}>
+                {item.descuento}
+              </Text>
+            </View>
           )}
           <Text
-            style={[styles.ofertaTitulo, { fontSize: tamanos.ofertaTituloSize }]}
+            style={[estilos.ofertaTitulo, { fontSize: tamanos.ofertaTituloSize }]}
             numberOfLines={2}
             allowFontScaling={false}
           >
             {item.titulo}
           </Text>
-          <View style={styles.ofertaPrecioRow}>
+          <View style={estilos.ofertaPrecioRow}>
             <Text
-              style={[styles.ofertaPrecio, { fontSize: tamanos.ofertaPrecioSize }]}
+              style={[estilos.ofertaPrecio, { fontSize: tamanos.ofertaPrecioSize }]}
               allowFontScaling={false}
             >
               {item.precio_oferta != null && Number.isFinite(Number(item.precio_oferta))
                 ? formatearPrecio(Number(item.precio_oferta))
                 : 'Ver oferta'}
             </Text>
-            <Ionicons name="arrow-forward-circle" size={23} color={DISENO.colors.accent} />
+            <View style={estilos.ofertaArrowCircle}>
+              <Ionicons name="arrow-forward" size={14} color="#fff" />
+            </View>
           </View>
         </View>
       </TouchableOpacity>
     ),
-    [tamanos, props.navigation],
+    [tamanos, props.navigation, colores, estilos],
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.backgroundGradient}>
+    <View style={estilos.container}>
+      {/* 🌄 FONDO MULTICAPA */}
+      <View style={estilos.backgroundGradient}>
         <Image
           source={springfieldFondo}
           style={[StyleSheet.absoluteFill, { top: tamanos.fondoOffset }]}
           resizeMode="cover"
         />
         <LinearGradient
-          colors={['rgba(245,242,237,0.90)', 'rgba(255,255,255,0.82)', 'rgba(245,242,237,0.90)']}
+          colors={
+            colores.isDark
+              ? [
+                'rgba(13,13,13,0.94)',
+                'rgba(26,26,26,0.86)',
+                'rgba(13,13,13,0.94)',
+              ]
+              : [
+                'rgba(245,242,237,0.94)',
+                'rgba(255,255,255,0.86)',
+                'rgba(245,242,237,0.94)',
+              ]
+          }
+          locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
+        />
+        <LinearGradient
+          colors={
+            colores.isDark
+              ? ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0)']
+              : ['rgba(255,255,255,0.65)', 'rgba(255,255,255,0)']
+          }
+          style={[StyleSheet.absoluteFill, { height: 220 }]}
         />
       </View>
 
@@ -820,7 +1098,7 @@ export default function PantallaInicio(props: any) {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={[
-          styles.scrollContent,
+          estilos.scrollContent,
           {
             paddingTop: insets.top + 12,
             paddingBottom: insets.bottom + 100,
@@ -830,189 +1108,246 @@ export default function PantallaInicio(props: any) {
           <RefreshControl
             refreshing={refrescando}
             onRefresh={onRefresh}
-            tintColor={DISENO.colors.accent}
-            colors={[DISENO.colors.accent]}
+            tintColor={colores.accent}
+            colors={[colores.accent]}
           />
         }
       >
-        <RNAnimated.View
+        {/* ============ HEADER ============ */}
+        <Animated.View
           style={[
-            styles.header,
             {
-              paddingHorizontal: padding,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
+              opacity: headerOpacity,
+              transform: [{ translateY: headerTranslate }],
             },
           ]}
         >
-          {esAdministrador && (
-            <View style={styles.headerActionsTop}>
-              <TouchableOpacity
-                style={[
-                  styles.headerButtonAdmin,
-                  {
-                    width: tamanos.adminButtonSize,
-                    height: tamanos.adminButtonSize,
-                    borderRadius: tamanos.adminButtonSize / 2,
-                  },
-                ]}
-                onPress={() => props.navigation.navigate('PanelAdmin')}
-                accessibilityRole="button"
-                accessibilityLabel="Panel de administración"
-              >
-                <LinearGradient
-                  colors={[DISENO.colors.success, DISENO.colors.accentSecondary]}
+          <RNAnimated.View
+            style={[
+              estilos.header,
+              {
+                paddingHorizontal: padding,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            {esAdministrador && (
+              <View style={estilos.headerActionsTop}>
+                <TouchableOpacity
                   style={[
-                    styles.headerButtonAdminGradient,
+                    estilos.headerButtonAdmin,
                     {
                       width: tamanos.adminButtonSize,
                       height: tamanos.adminButtonSize,
                       borderRadius: tamanos.adminButtonSize / 2,
                     },
                   ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                  onPress={() => props.navigation.navigate('PanelAdmin')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Panel de administración"
                 >
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={tamanos.adminButtonSize * 0.45}
-                    color={DISENO.colors.text}
-                  />
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <RNAnimated.Image
-            source={logoKrusty}
-            style={{
-              width: tamanos.logoSize,
-              height: tamanos.logoSize,
-              alignSelf: 'center',
-              marginVertical: tamanos.logoHorizontalMargin,
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-              backgroundColor: 'transparent',
-            }}
-            resizeMode="contain"
-          />
-
-          <View style={styles.greetingRow}>
-            <View style={styles.greetingTextBlock}>
-              <Text
-                style={[styles.headerGreeting, { fontSize: tamanos.greetingSize }]}
-                allowFontScaling={false}
-              >
-                Hola, {nombreMostrar} 👋
-              </Text>
-              <Text
-                style={[styles.headerPrompt, { fontSize: tamanos.promptSize }]}
-                allowFontScaling={false}
-              >
-                ¿Qué se te antoja hoy?
-              </Text>
-            </View>
-
-            {sesion ? (
-              <TouchableOpacity
-                onPress={handlePressAvatar}
-                activeOpacity={0.75}
-                disabled={!perfil?.id}
-                style={{ marginLeft: 12 }}
-              >
-                {avatarUrl ? (
-                  <Image
-                    source={{ uri: avatarUrl }}
+                  <LinearGradient
+                    colors={[colores.success, colores.accentSecondary]}
                     style={[
-                      styles.avatar,
+                      estilos.headerButtonAdminGradient,
                       {
-                        width: tamanos.avatarSize,
-                        height: tamanos.avatarSize,
-                        borderRadius: tamanos.avatarSize / 2,
+                        width: tamanos.adminButtonSize,
+                        height: tamanos.adminButtonSize,
+                        borderRadius: tamanos.adminButtonSize / 2,
                       },
                     ]}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.avatarFallback,
-                      {
-                        width: tamanos.avatarSize,
-                        height: tamanos.avatarSize,
-                        borderRadius: tamanos.avatarSize / 2,
-                      },
-                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                   >
-                    <Text
-                      style={[
-                        styles.avatarInicial,
-                        { fontSize: tamanos.avatarSize * 0.45 },
-                      ]}
-                      allowFontScaling={false}
-                    >
-                      {nombreMostrar.trim().charAt(0).toUpperCase() || '?'}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={() => props.navigation.navigate('Login')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="person-outline" size={16} color={DISENO.colors.accent} />
-                <Text style={styles.loginButtonText} allowFontScaling={false}>
-                  Entrar
-                </Text>
-              </TouchableOpacity>
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={tamanos.adminButtonSize * 0.45}
+                      color={colores.text}
+                    />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
-        </RNAnimated.View>
 
-        <Animated.View
-          entering={FadeInDown.duration(500).springify()}
-          style={[styles.heroWrap, { paddingHorizontal: padding }]}
-        >
-          <Shadow
-            distance={0}
-            startColor="rgba(0,0,0,0)"
-            offset={[0, 0]}
-            style={{ borderRadius: 0, width: '100%' }}
-          >
-            <View style={[styles.heroCard, { height: tamanos.heroHeight, backgroundColor: 'transparent' }]}>
+            <View style={estilos.logoWrap}>
               <View
                 style={[
-                  styles.heroImage,
+                  estilos.logoGlow,
                   {
-                    backgroundColor: 'transparent',
+                    width: tamanos.logoSize * 0.85,
+                    height: tamanos.logoSize * 0.85,
+                    borderRadius: tamanos.logoSize * 0.85,
                   },
                 ]}
               />
-              <LinearGradient
-                colors={['rgba(255,255,255,0.00)', 'rgba(255,255,255,0.00)', 'rgba(255,255,255,0.00)']}
-                locations={[0, 0.5, 1]}
-                style={StyleSheet.absoluteFill}
+              <RNAnimated.Image
+                source={logoKrusty}
+                style={{
+                  width: tamanos.logoSize,
+                  height: tamanos.logoSize,
+                  alignSelf: 'center',
+                  marginVertical: tamanos.logoHorizontalMargin,
+                  opacity: logoOpacity,
+                  transform: [{ scale: logoScale }],
+                  backgroundColor: 'transparent',
+                }}
+                resizeMode="contain"
               />
-              <View style={styles.heroContent}>
+            </View>
+
+            <View style={estilos.greetingRow}>
+              <View style={estilos.greetingTextBlock}>
+                <View style={estilos.greetingChip}>
+                  <Text style={estilos.greetingChipEmoji} allowFontScaling={false}>
+                    👋
+                  </Text>
+                  <Text
+                    style={[estilos.headerGreeting, { fontSize: tamanos.greetingSize }]}
+                    numberOfLines={1}
+                    allowFontScaling={false}
+                  >
+                    Hola, {nombreMostrar}
+                  </Text>
+                </View>
+                <Text
+                  style={[estilos.headerPrompt, { fontSize: tamanos.promptSize }]}
+                  allowFontScaling={false}
+                >
+                  ¿Qué se te antoja hoy?
+                </Text>
+              </View>
+
+              {sesion ? (
+                <TouchableOpacity
+                  onPress={handlePressAvatar}
+                  activeOpacity={0.75}
+                  disabled={!perfil?.id}
+                  style={estilos.avatarTouchable}
+                >
+                  <View style={estilos.avatarRing}>
+                    {avatarUrl ? (
+                      <Image
+                        source={{ uri: avatarUrl }}
+                        style={[
+                          estilos.avatar,
+                          {
+                            width: tamanos.avatarSize,
+                            height: tamanos.avatarSize,
+                            borderRadius: tamanos.avatarSize / 2,
+                          },
+                        ]}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          estilos.avatarFallback,
+                          {
+                            width: tamanos.avatarSize,
+                            height: tamanos.avatarSize,
+                            borderRadius: tamanos.avatarSize / 2,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            estilos.avatarInicial,
+                            { fontSize: tamanos.avatarSize * 0.45 },
+                          ]}
+                          allowFontScaling={false}
+                        >
+                          {nombreMostrar.trim().charAt(0).toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={estilos.avatarOnlineDot} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={estilos.loginButton}
+                  onPress={() => props.navigation.navigate('Login')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="person-outline" size={16} color={colores.accent} />
+                  <Text style={estilos.loginButtonText} allowFontScaling={false}>
+                    Entrar
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </RNAnimated.View>
+        </Animated.View>
+
+        {/* ============ HERO ============ */}
+        <Animated.View
+          entering={FadeInDown.duration(600).springify()}
+          style={[estilos.heroWrap, { paddingHorizontal: padding }]}
+        >
+          <Shadow
+            distance={12}
+            startColor={colores.isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.10)'}
+            offset={[0, 6]}
+            style={{ borderRadius: 20, width: '100%' }}
+          >
+            <View
+              style={[
+                estilos.heroCard,
+                { height: tamanos.heroHeight, backgroundColor: colores.surface },
+              ]}
+            >
+              <Image
+                source={springfieldFondo}
+                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+                resizeMode="cover"
+              />
+              <LinearGradient
+                colors={
+                  colores.isDark
+                    ? [
+                      'rgba(13,13,13,0.65)',
+                      'rgba(13,13,13,0.40)',
+                      'rgba(13,13,13,0.90)',
+                    ]
+                    : [
+                      'rgba(255,255,255,0.55)',
+                      'rgba(255,255,255,0.20)',
+                      'rgba(255,255,255,0.85)',
+                    ]
+                }
+                locations={[0, 0.45, 1]}
+                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+              />
+              <LinearGradient
+                colors={
+                  colores.isDark
+                    ? ['rgba(229,57,53,0.20)', 'transparent']
+                    : ['rgba(230,57,70,0.12)', 'transparent']
+                }
+                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+
+              <View style={estilos.heroContent}>
                 {ofertaHero?.descuento && (
-                  <View style={styles.heroBadge}>
+                  <View style={estilos.heroBadge}>
                     <Ionicons name="flame" size={11} color="#fff" />
-                    <Text style={styles.heroBadgeText} allowFontScaling={false}>
+                    <Text style={estilos.heroBadgeText} allowFontScaling={false}>
                       {ofertaHero.descuento}
                     </Text>
                   </View>
                 )}
                 <Text
-                  style={[styles.heroTitle, { fontSize: tamanos.heroTitleSize }]}
+                  style={[estilos.heroTitle, { fontSize: tamanos.heroTitleSize }]}
                   numberOfLines={2}
                   allowFontScaling={false}
                 >
                   {ofertaHero?.titulo || '¡Bienvenido a Krusty Burgers!'}
                 </Text>
                 <Text
-                  style={[styles.heroSubtitle, { fontSize: tamanos.heroSubtitleSize }]}
+                  style={[estilos.heroSubtitle, { fontSize: tamanos.heroSubtitleSize }]}
                   numberOfLines={2}
                   allowFontScaling={false}
                 >
@@ -1020,22 +1355,15 @@ export default function PantallaInicio(props: any) {
                 </Text>
                 {ofertaHero && (
                   <TouchableOpacity
-                    style={[
-                      styles.heroCta,
-                      {
-                        paddingHorizontal: 0,
-                        paddingVertical: 0,
-                        backgroundColor: 'transparent',
-                        borderWidth: 0,
-                      },
-                    ]}
+                    style={estilos.heroCta}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
                       props.navigation.navigate('DetalleOferta', { oferta: ofertaHero });
                     }}
                     activeOpacity={0.9}
                   >
-                    <Text style={[styles.heroCtaText, { color: DISENO.colors.accent, textDecorationLine: 'underline' }]} allowFontScaling={false}>
+                    <Ionicons name="flash" size={14} color="#fff" />
+                    <Text style={estilos.heroCtaText} allowFontScaling={false}>
                       Ver oferta
                     </Text>
                   </TouchableOpacity>
@@ -1045,104 +1373,104 @@ export default function PantallaInicio(props: any) {
           </Shadow>
         </Animated.View>
 
-        <View style={styles.seccionContainer}>
-          <View style={[styles.sectionHeading, { paddingHorizontal: padding }]}>
-            <Text
-              style={[styles.sectionTitle, { fontSize: tamanos.sectionTitleSize }]}
-              numberOfLines={1}
-              allowFontScaling={false}
-            >
-              Categorías
-            </Text>
-            <BotonVer
-              texto="Ver menú"
-              onPress={() => props.navigation.navigate('Menu')}
-              fontSize={tamanos.seeAllSize}
-            />
-          </View>
+        {/* ============ CATEGORÍAS ============ */}
+        <View style={estilos.seccionContainer}>
+          <SectionHeader
+            titulo="Categorías"
+            fontSize={tamanos.sectionTitleSize}
+            padding={padding}
+            onVerTodo={() => props.navigation.navigate('Menu')}
+            verTodoTexto="Ver menú"
+            seeAllSize={tamanos.seeAllSize}
+            colores={colores}
+            estilos={estilos}
+          />
           <FlatList
             horizontal
             data={CATEGORIAS}
             keyExtractor={(i) => i.id}
             renderItem={renderCategoria}
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.horizontalList, { paddingHorizontal: padding }]}
+            contentContainerStyle={[estilos.horizontalList, { paddingHorizontal: padding }]}
           />
         </View>
 
+        {/* ============ FAVORITOS ============ */}
         {cargandoFavoritos && sesion && (
-          <View style={[styles.seccionContainer, { paddingHorizontal: padding }]}>
-            <View style={styles.horizontalList}>
+          <View style={[estilos.seccionContainer, { paddingHorizontal: padding }]}>
+            <View style={estilos.horizontalList}>
               <SkeletonCard
                 width={tamanos.favoritoWidth}
                 height={tamanos.favoritoImageHeight + 60}
+                radius={16}
+                colores={colores}
               />
             </View>
           </View>
         )}
 
         {!cargandoFavoritos && tieneFavoritos && (
-          <View style={styles.seccionContainer}>
-            <View style={[styles.sectionHeading, { paddingHorizontal: padding }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                <Text
-                  style={[styles.sectionTitle, { fontSize: tamanos.sectionTitleSize }]}
-                  numberOfLines={1}
-                  allowFontScaling={false}
-                >
-                  {todosSonManuales ? 'Tus Favoritos' : 'Favoritos y top'}
-                </Text>
-                <Ionicons name="star" size={15} color="#F4A261" />
-              </View>
-            </View>
+          <View style={estilos.seccionContainer}>
+            <SectionHeader
+              titulo={todosSonManuales ? 'Tus Favoritos' : 'Favoritos y top'}
+              fontSize={tamanos.sectionTitleSize}
+              padding={padding}
+              seeAllSize={tamanos.seeAllSize}
+              icono="star"
+              iconoColor="#F4A261"
+              colores={colores}
+              estilos={estilos}
+            />
             <FlatList
               horizontal
               data={favoritosUnificados}
               keyExtractor={(item, index) => item.producto?.id?.toString() || `fav-${index}`}
               renderItem={renderFavorito}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.horizontalList, { paddingHorizontal: padding }]}
-              snapToInterval={tamanos.favoritoWidth + 12}
+              contentContainerStyle={[estilos.horizontalList, { paddingHorizontal: padding }]}
+              snapToInterval={tamanos.favoritoWidth + 14}
               decelerationRate="fast"
             />
           </View>
         )}
 
-        <View style={styles.seccionContainer}>
-          <View style={[styles.sectionHeading, { paddingHorizontal: padding }]}>
-            <Text
-              style={[styles.sectionTitle, { fontSize: tamanos.sectionTitleSize }]}
-              numberOfLines={1}
-              allowFontScaling={false}
-            >
-              Hoy te conviene
-            </Text>
-            <BotonVer
-              texto="Ver todas"
-              onPress={() => props.navigation.navigate('Ofertas')}
-              fontSize={tamanos.seeAllSize}
-            />
-          </View>
+        {/* ============ OFERTAS ============ */}
+        <View style={estilos.seccionContainer}>
+          <SectionHeader
+            titulo="Hoy te conviene"
+            fontSize={tamanos.sectionTitleSize}
+            padding={padding}
+            onVerTodo={() => props.navigation.navigate('Ofertas')}
+            verTodoTexto="Ver todas"
+            seeAllSize={tamanos.seeAllSize}
+            icono="flame"
+            iconoColor="#E63946"
+            colores={colores}
+            estilos={estilos}
+          />
 
           {cargandoOfertas ? (
             <View
               style={[
-                styles.horizontalList,
+                estilos.horizontalList,
                 { paddingHorizontal: padding, flexDirection: 'row', gap: 12 },
               ]}
             >
               <SkeletonCard
                 width={tamanos.ofertaCardWidth}
                 height={tamanos.ofertaCardHeight}
+                radius={16}
+                colores={colores}
               />
             </View>
           ) : errorOfertas ? (
-            <View style={[styles.offerStatus, { marginHorizontal: padding }]}>
-              <Text style={styles.offerStatusText} allowFontScaling={false}>
+            <View style={[estilos.offerStatus, { marginHorizontal: padding }]}>
+              <Ionicons name="cloud-offline-outline" size={20} color={colores.textSecondary} />
+              <Text style={estilos.offerStatusText} allowFontScaling={false}>
                 No pudimos cargar las ofertas.
               </Text>
-              <TouchableOpacity onPress={cargarOfertas} style={styles.retryButton}>
-                <Text style={styles.retryButtonText} allowFontScaling={false}>
+              <TouchableOpacity onPress={cargarOfertas} style={estilos.retryButton}>
+                <Text style={estilos.retryButtonText} allowFontScaling={false}>
                   Reintentar
                 </Text>
               </TouchableOpacity>
@@ -1155,7 +1483,7 @@ export default function PantallaInicio(props: any) {
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={renderOferta}
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.horizontalList, { paddingHorizontal: padding }]}
+                contentContainerStyle={[estilos.horizontalList, { paddingHorizontal: padding }]}
                 snapToInterval={tamanos.ofertaCardWidth + 12}
                 decelerationRate="fast"
                 onMomentumScrollEnd={(e) => {
@@ -1166,27 +1494,27 @@ export default function PantallaInicio(props: any) {
                 }}
               />
               {ofertas.length > 1 && (
-                <View style={styles.dotsContainer}>
+                <View style={estilos.dotsContainer}>
                   {ofertas.slice(0, 6).map((_, i) => (
                     <View
                       key={i}
-                      style={[styles.dot, i === ofertaActiva && styles.dotActive]}
+                      style={[estilos.dot, i === ofertaActiva && estilos.dotActive]}
                     />
                   ))}
                 </View>
               )}
             </>
           ) : (
-            <View style={[styles.emptyOffers, { marginHorizontal: padding }]}>
-              <Ionicons name="pricetag-outline" size={20} color={DISENO.colors.textSecondary} />
-              <Text style={styles.emptyOffersText} allowFontScaling={false}>
+            <View style={[estilos.emptyOffers, { marginHorizontal: padding }]}>
+              <Ionicons name="pricetag-outline" size={20} color={colores.textSecondary} />
+              <Text style={estilos.emptyOffersText} allowFontScaling={false}>
                 Por ahora no hay ofertas activas.
               </Text>
             </View>
           )}
         </View>
 
-        <View style={styles.footerSpacing} />
+        <View style={estilos.footerSpacing} />
       </Animated.ScrollView>
 
       {/* 🚀 MODAL AMIGABLE GLOBAL DE PERMISOS */}
@@ -1196,7 +1524,7 @@ export default function PantallaInicio(props: any) {
         onOmitir={handleOmitirModalPermisos}
       />
 
-      {/* 🎯 MODAL DE DATOS FALTANTES (onboarding progresivo) */}
+      {/* 🎯 MODAL DE DATOS FALTANTES */}
       {datoFaltanteActual && (
         <ModalDatoFaltante
           visible={!!datoFaltanteActual}
@@ -1212,337 +1540,525 @@ export default function PantallaInicio(props: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: DISENO.colors.fondo },
-  backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  scrollContent: { flexGrow: 1 },
+// ============================================================
+// 🎨 ESTILOS DINÁMICOS
+// ============================================================
+const crearEstilos = (colores: PaletaTema) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colores.fondo },
+    backgroundGradient: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+    scrollContent: { flexGrow: 1 },
 
-  header: { marginBottom: 20, position: 'relative' },
-  headerActionsTop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    zIndex: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  greetingTextBlock: { flex: 1, minWidth: 0 },
-  headerGreeting: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 22,
-  },
-  headerPrompt: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-    lineHeight: 36,
-    marginTop: 2,
-  },
-  avatar: {
-    backgroundColor: DISENO.colors.surfaceHover,
-    borderWidth: 2,
-    borderColor: DISENO.colors.accent + '30',
-    ...DISENO.shadow.sm,
-  },
-  avatarFallback: {
-    backgroundColor: DISENO.colors.surfaceHover,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: DISENO.colors.accent + '50',
-    borderStyle: 'dashed',
-    ...DISENO.shadow.sm,
-  },
-  avatarInicial: {
-    fontFamily: FUENTES.display,
-    fontWeight: '400',
-    color: DISENO.colors.accent,
-    textAlign: 'center',
-  },
-  loginButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: DISENO.radius.full,
-    backgroundColor: DISENO.colors.surface,
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '35',
-    marginLeft: 12,
-  },
-  loginButtonText: { fontFamily: FUENTES.display, fontSize: 14, color: DISENO.colors.accent },
-  headerButtonAdmin: { overflow: 'hidden', ...DISENO.shadow.md },
-  headerButtonAdminGradient: { alignItems: 'center', justifyContent: 'center' },
+    header: { marginBottom: 20, position: 'relative' },
+    headerActionsTop: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      zIndex: 5,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    logoWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    logoGlow: {
+      position: 'absolute',
+      backgroundColor: colores.accent + '12',
+      alignSelf: 'center',
+    },
+    greetingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    greetingTextBlock: { flex: 1, minWidth: 0 },
+    greetingChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colores.accent + '18',
+      gap: 6,
+      marginBottom: 6,
+    },
+    greetingChipEmoji: { fontSize: 14 },
+    headerGreeting: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      lineHeight: 20,
+    },
+    headerPrompt: {
+      fontFamily: FUENTES.display,
+      color: colores.text,
+      lineHeight: 38,
+      marginTop: 2,
+      letterSpacing: -0.4,
+    },
+    avatarTouchable: { position: 'relative', marginLeft: 12 },
+    avatarRing: {
+      padding: 3,
+      borderRadius: 999,
+      borderWidth: 2,
+      borderColor: colores.accent + '55',
+      backgroundColor: colores.surface,
+    },
+    avatar: {
+      backgroundColor: colores.surfaceHover,
+      borderWidth: 1,
+      borderColor: colores.surface,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    avatarFallback: {
+      backgroundColor: colores.surfaceHover,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colores.accent + '30',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    avatarInicial: {
+      fontFamily: FUENTES.display,
+      fontWeight: '400',
+      color: colores.accent,
+      textAlign: 'center',
+    },
+    avatarOnlineDot: {
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: colores.success,
+      borderWidth: 2,
+      borderColor: colores.surface,
+    },
+    loginButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.85)',
+      borderWidth: 1.5,
+      borderColor: colores.accent + '40',
+      marginLeft: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    loginButtonText: {
+      fontFamily: FUENTES.display,
+      fontSize: 14,
+      color: colores.accent,
+    },
+    headerButtonAdmin: {
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    headerButtonAdminGradient: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  heroWrap: { marginBottom: 16 },
-  heroCard: {
-    width: '100%',
-    borderRadius: 0,
-    overflow: 'visible',
-    backgroundColor: 'transparent',
-    elevation: 0,
-    shadowOpacity: 0,
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 0,
-  },
-  heroImage: { width: '100%', height: '100%', backgroundColor: 'transparent' },
-  heroContent: { position: 'absolute', bottom: 18, left: 18, right: 18 },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: DISENO.radius.full,
-    backgroundColor: '#E63946',
-    marginBottom: 10,
-  },
-  heroBadgeText: { color: '#fff', fontFamily: FUENTES.display, fontSize: 11 },
-  heroTitle: { fontFamily: FUENTES.display, color: DISENO.colors.text, lineHeight: 32 },
-  heroSubtitle: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: DISENO.radius.full,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '25',
-  },
-  heroCtaText: { fontFamily: FUENTES.display, fontSize: 13, color: DISENO.colors.accent },
+    heroWrap: { marginBottom: 20 },
+    heroCard: {
+      width: '100%',
+      borderRadius: 20,
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    heroContent: {
+      position: 'absolute',
+      bottom: 20,
+      left: 20,
+      right: 20,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: '#E63946',
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    heroBadgeText: {
+      color: '#fff',
+      fontFamily: FUENTES.display,
+      fontSize: 11,
+      letterSpacing: 0.3,
+    },
+    heroTitle: {
+      fontFamily: FUENTES.display,
+      color: colores.text,
+      lineHeight: 34,
+      letterSpacing: -0.5,
+    },
+    heroSubtitle: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      marginTop: 6,
+      lineHeight: 19,
+    },
+    heroCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      alignSelf: 'flex-start',
+      backgroundColor: colores.accent,
+      borderRadius: 999,
+      marginTop: 16,
+      paddingHorizontal: 18,
+      paddingVertical: 11,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    heroCtaText: {
+      fontFamily: FUENTES.display,
+      fontSize: 13,
+      color: '#fff',
+      letterSpacing: 0.2,
+    },
 
-  seccionContainer: { marginVertical: 10 },
-  sectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    minHeight: 32,
-  },
-  sectionTitle: {
-    fontFamily: FUENTES.display,
-    fontWeight: '700',
-    color: DISENO.colors.text,
-    letterSpacing: -0.3,
-    lineHeight: 28,
-    includeFontPadding: false,
-    flexShrink: 1,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
+    seccionContainer: { marginVertical: 12 },
+    sectionHeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+      minHeight: 32,
+    },
+    sectionTitleWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      minWidth: 0,
+    },
+    sectionAccentBar: {
+      width: 4,
+      height: 20,
+      borderRadius: 2,
+      backgroundColor: colores.accent,
+      marginRight: 10,
+    },
+    sectionTitle: {
+      fontFamily: FUENTES.display,
+      fontWeight: '700',
+      color: colores.text,
+      letterSpacing: -0.4,
+      lineHeight: 28,
+      includeFontPadding: false,
+      flexShrink: 1,
+    },
 
-  botonVer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: DISENO.colors.accent + '10',
-    flexShrink: 0,
-    minHeight: 30,
-    marginLeft: 8,
-  },
-  botonVerTexto: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.accent,
-    lineHeight: 20,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    paddingBottom: 1,
-  },
+    botonVer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      backgroundColor: colores.accent + '10',
+      borderWidth: 1,
+      borderColor: colores.accent + '18',
+      flexShrink: 0,
+      minHeight: 30,
+      marginLeft: 8,
+    },
+    botonVerTexto: {
+      fontFamily: FUENTES.display,
+      color: colores.accent,
+      lineHeight: 20,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+      paddingBottom: 1,
+    },
 
-  categoriaItem: { alignItems: 'center', marginRight: 18 },
-  categoriaImageWrap: { position: 'relative' },
-  categoriaIconBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    padding: 7,
-    borderRadius: 999,
-    borderWidth: 2,
-    borderColor: DISENO.colors.fondo,
-  },
-  categoriaNombre: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-    marginTop: 10,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  categoriaCount: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 16,
-  },
+    categoriaItem: { alignItems: 'center', marginRight: 20 },
+    categoriaRing: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      position: 'relative',
+    },
+    categoriaImageWrap: {
+      position: 'relative',
+      overflow: 'hidden',
+      borderWidth: 2,
+    },
+    categoriaIconBadge: {
+      position: 'absolute',
+      bottom: -2,
+      right: -2,
+      padding: 7,
+      borderRadius: 999,
+      borderWidth: 2.5,
+      borderColor: colores.surface,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.35,
+      shadowRadius: 6,
+      elevation: 5,
+    },
+    categoriaNombre: {
+      fontFamily: FUENTES.display,
+      color: colores.text,
+      marginTop: 12,
+      lineHeight: 18,
+      includeFontPadding: false,
+      letterSpacing: -0.2,
+    },
+    categoriaCountBadge: {
+      marginTop: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 1,
+      borderRadius: 999,
+      backgroundColor: colores.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)',
+    },
+    categoriaCount: {
+      fontFamily: FUENTES.regular,
+      color: colores.textSecondary,
+      lineHeight: 15,
+    },
 
-  favoritoItem: { borderRadius: DISENO.radius.md, overflow: 'hidden' },
-  favoritoImageContainer: {
-    width: '100%',
-    position: 'relative',
-    backgroundColor: DISENO.colors.surfaceHover,
-  },
-  favoritoImagen: { width: '100%', height: '100%' },
-  favoritoBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    padding: 6,
-    borderRadius: DISENO.radius.full,
-    ...DISENO.shadow.sm,
-  },
-  badgeManual: { backgroundColor: '#FFE5E7' },
-  badgeRanking: { backgroundColor: '#FFEEDD' },
-  favoritoInfo: { padding: 12 },
-  favoritoNombre: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.text,
-    marginBottom: 8,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  favoritoFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  favoritoPrecio: {
-    fontFamily: FUENTES.regular,
-    color: DISENO.colors.accent,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  addButton: { alignItems: 'center', justifyContent: 'center' },
+    favoritoItem: {
+      borderRadius: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colores.border,
+    },
+    favoritoImageContainer: {
+      width: '100%',
+      position: 'relative',
+      backgroundColor: colores.surfaceHover,
+    },
+    favoritoImagen: { width: '100%', height: '100%' },
+    favoritoBadge: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    favoritoBadgeText: {
+      fontFamily: FUENTES.display,
+      fontSize: 10,
+      letterSpacing: 0.2,
+    },
+    badgeManual: { backgroundColor: 'rgba(255,229,231,0.95)' },
+    badgeRanking: { backgroundColor: 'rgba(255,238,221,0.95)' },
+    favoritoInfo: { padding: 12 },
+    favoritoNombre: {
+      fontFamily: FUENTES.display,
+      color: colores.text,
+      marginBottom: 8,
+      lineHeight: 18,
+      includeFontPadding: false,
+    },
+    favoritoFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    favoritoPrecio: {
+      fontFamily: FUENTES.display,
+      color: colores.accent,
+      fontWeight: '600',
+      lineHeight: 18,
+    },
+    addButton: { alignItems: 'center', justifyContent: 'center' },
 
-  ofertaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: DISENO.radius.md,
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '18',
-    backgroundColor: 'rgba(255,255,255,0.65)',
-    overflow: 'hidden',
-  },
-  ofertaImagen: {
-    borderRadius: DISENO.radius.sm,
-    backgroundColor: DISENO.colors.surfaceHover,
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '18',
-  },
-  ofertaImagenFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: DISENO.radius.sm,
-    backgroundColor: DISENO.colors.accent + '12',
-    borderWidth: 1,
-    borderColor: DISENO.colors.accent + '18',
-  },
-  ofertaInfo: { flex: 1, minWidth: 0, paddingLeft: 12 },
-  ofertaDescuento: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    overflow: 'hidden',
-    borderRadius: DISENO.radius.full,
-    backgroundColor: DISENO.colors.accent + '14',
-    color: DISENO.colors.accent,
-    fontFamily: FUENTES.display,
-    fontSize: 11,
-    lineHeight: 16,
-    includeFontPadding: false,
-  },
-  ofertaTitulo: {
-    marginTop: 6,
-    fontFamily: FUENTES.display,
-    lineHeight: 20,
-    color: DISENO.colors.text,
-    includeFontPadding: false,
-  },
-  ofertaPrecioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  ofertaPrecio: {
-    fontFamily: FUENTES.display,
-    color: DISENO.colors.accent,
-    lineHeight: 22,
-    includeFontPadding: false,
-  },
+    ofertaCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colores.accent + '20',
+      backgroundColor: colores.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)',
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    ofertaImageWrap: {
+      position: 'relative',
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    ofertaImagen: {
+      borderRadius: 12,
+      backgroundColor: colores.surfaceHover,
+    },
+    ofertaImagenFallback: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 12,
+    },
+    ofertaInfo: { flex: 1, minWidth: 0, paddingLeft: 14 },
+    ofertaDescuentoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: colores.accent,
+    },
+    ofertaDescuentoText: {
+      color: '#fff',
+      fontFamily: FUENTES.display,
+      fontSize: 11,
+      lineHeight: 14,
+      includeFontPadding: false,
+    },
+    ofertaTitulo: {
+      marginTop: 8,
+      fontFamily: FUENTES.display,
+      lineHeight: 21,
+      color: colores.text,
+      includeFontPadding: false,
+      letterSpacing: -0.2,
+    },
+    ofertaPrecioRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 8,
+    },
+    ofertaPrecio: {
+      fontFamily: FUENTES.display,
+      color: colores.accent,
+      lineHeight: 22,
+      includeFontPadding: false,
+    },
+    ofertaArrowCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colores.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
 
-  dotsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: DISENO.colors.textSecondary + '40',
-  },
-  dotActive: { width: 20, backgroundColor: DISENO.colors.accent },
+    dotsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 6,
+      marginTop: 14,
+    },
+    dot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colores.textSecondary + '40',
+    },
+    dotActive: { width: 22, backgroundColor: colores.accent },
 
-  horizontalList: { paddingVertical: 4, gap: 12 },
+    horizontalList: { paddingVertical: 4, gap: 12 },
 
-  offerStatus: {
-    minHeight: 72,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    borderRadius: DISENO.radius.md,
-    backgroundColor: DISENO.colors.surface,
-  },
-  offerStatusText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 18,
-  },
-  retryButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: DISENO.radius.full,
-    backgroundColor: DISENO.colors.accent + '12',
-  },
-  retryButtonText: {
-    fontFamily: FUENTES.display,
-    fontSize: 13,
-    color: DISENO.colors.accent,
-    lineHeight: 18,
-    includeFontPadding: false,
-  },
-  emptyOffers: {
-    minHeight: 62,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: DISENO.radius.md,
-    backgroundColor: DISENO.colors.surface,
-  },
-  emptyOffersText: {
-    fontFamily: FUENTES.regular,
-    fontSize: 13,
-    color: DISENO.colors.textSecondary,
-    lineHeight: 18,
-  },
+    offerStatus: {
+      minHeight: 80,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+      borderColor: colores.border,
+    },
+    offerStatusText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      color: colores.textSecondary,
+      lineHeight: 18,
+      flexShrink: 1,
+    },
+    retryButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: colores.accent + '12',
+      borderWidth: 1,
+      borderColor: colores.accent + '25',
+    },
+    retryButtonText: {
+      fontFamily: FUENTES.display,
+      fontSize: 13,
+      color: colores.accent,
+      lineHeight: 18,
+      includeFontPadding: false,
+    },
+    emptyOffers: {
+      minHeight: 70,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+      backgroundColor: colores.surface,
+      borderWidth: 1,
+      borderColor: colores.border,
+    },
+    emptyOffersText: {
+      fontFamily: FUENTES.regular,
+      fontSize: 13,
+      color: colores.textSecondary,
+      lineHeight: 18,
+    },
 
-  footerSpacing: { height: 150 },
-});
+    footerSpacing: { height: 150 },
+  });

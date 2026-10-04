@@ -4,17 +4,38 @@ import * as Location from 'expo-location';
 import { notificacionService } from '../services/notificacionService';
 import { supabase } from '../lib/supabase';
 
-const KEY_PERMISOS_VISTOS = '@krusty_permisos_onboarding_v1';
+// ============================================================
+// 🔑 CLAVE POR USUARIO (evita que se resetee al cambiar cuenta)
+// ============================================================
+const getKeyPermisosVistos = (userId: string) =>
+    `@krusty_permisos_onboarding_v1_${userId}`;
 
-export async function yaVioModalPermisos(): Promise<boolean> {
-    const valor = await AsyncStorage.getItem(KEY_PERMISOS_VISTOS);
-    return valor === 'true';
+// ============================================================
+// ✅ LEER / MARCAR "YA VIO"
+// ============================================================
+export async function yaVioModalPermisos(userId: string): Promise<boolean> {
+    if (!userId) return false;
+    try {
+        const valor = await AsyncStorage.getItem(getKeyPermisosVistos(userId));
+        return valor === 'true';
+    } catch (error) {
+        console.error('❌ [permisosHelper] Error leyendo visto:', error);
+        return false;
+    }
 }
 
-export async function marcarModalPermisosVisto() {
-    await AsyncStorage.setItem(KEY_PERMISOS_VISTOS, 'true');
+export async function marcarModalPermisosVisto(userId: string): Promise<void> {
+    if (!userId) return;
+    try {
+        await AsyncStorage.setItem(getKeyPermisosVistos(userId), 'true');
+    } catch (error) {
+        console.error('❌ [permisosHelper] Error guardando visto:', error);
+    }
 }
 
+// ============================================================
+// 🔔 SOLICITAR PERMISOS COMPLETOS
+// ============================================================
 /**
  * Solicita permisos de notificaciones + ubicación y, si las notificaciones
  * fueron concedidas, activa al usuario en push_subscriptions.

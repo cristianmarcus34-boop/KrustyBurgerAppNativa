@@ -142,6 +142,7 @@ export interface Pedido {
     tiempo_estimado?: number | null;
     monto_pago?: number | null;
     vuelto?: number | null;
+    telefono_repartidor: string | null;
 
     // Descuentos y beneficios
     descuento_nivel?: number | null;

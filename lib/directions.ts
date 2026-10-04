@@ -86,7 +86,8 @@ export async function obtenerRuta(
         url.searchParams.append('departure_time', 'now');
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        // ✅ FIX: Timeout de 15s en vez de 10s (más margen para redes lentas)
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         let response: Response;
         try {
@@ -210,7 +211,7 @@ export async function obtenerRuta(
         };
     } catch (error: any) {
         if (error.name === 'AbortError') {
-            registrarErrorUnaVez('⚠️ Timeout al obtener la ruta (10 segundos)');
+            registrarErrorUnaVez('⚠️ Timeout al obtener la ruta (15 segundos)');
         } else {
             registrarErrorUnaVez(`⚠️ Error obteniendo ruta: ${error.message || error}`);
         }
