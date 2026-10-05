@@ -35,6 +35,7 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { obtenerRutaPedido, obtenerInfoRutaPedido } from '../../lib/directions';
 import { formatearPrecio } from '../../lib/formateador';
 import { MarcadorPersonalizado } from '../../components/Mapa/MarcadorPersonalizado';
+import { normalizarEstadoPedido } from '../../lib/estadoPedido';
 
 const marcadorCasa = require('../../assets/iconos/casa.png');
 const marcadorRepartidor = require('../../assets/icon.png');
@@ -361,12 +362,13 @@ export default function PantallaSeguimiento(props: any) {
           return;
         }
 
-        setPedido(data as Pedido);
-        extraerDireccion(data as Pedido);
-        actualizarUbicacion(data as Pedido);
-        actualizarInfoEnvio(data as Pedido);
-        actualizarPagoEfectivo(data as Pedido);
-        extraerDatosPrecios(data as Pedido);
+        const pedidoNormalizado = { ...data, estado: normalizarEstadoPedido(data.estado) } as Pedido;
+        setPedido(pedidoNormalizado);
+        extraerDireccion(pedidoNormalizado);
+        actualizarUbicacion(pedidoNormalizado);
+        actualizarInfoEnvio(pedidoNormalizado);
+        actualizarPagoEfectivo(pedidoNormalizado);
+        extraerDatosPrecios(pedidoNormalizado);
       }
     } catch (err) {
       setError('Error al cargar el pedido');
@@ -440,7 +442,10 @@ export default function PantallaSeguimiento(props: any) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'pedidos', filter: `id=eq.${id}` },
         (payload) => {
-          const nuevoPedido = payload.new as Pedido;
+          const nuevoPedido = {
+            ...payload.new,
+            estado: normalizarEstadoPedido(payload.new.estado),
+          } as Pedido;
           setPedido(nuevoPedido);
           extraerDireccion(nuevoPedido);
           actualizarUbicacion(nuevoPedido);
@@ -776,6 +781,7 @@ export default function PantallaSeguimiento(props: any) {
   // 📋 ESTADOS
   // ============================================================
   const estados = [
+    { key: 'pago_pendiente', label: 'Pago pendiente', icono: 'card-outline' },
     { key: 'pendiente', label: 'Pedido Recibido', icono: 'receipt-outline' },
     { key: 'confirmado', label: 'Confirmado', icono: 'checkmark-circle-outline' },
     { key: 'preparando', label: 'Preparando', icono: 'flame-outline' },
@@ -785,7 +791,7 @@ export default function PantallaSeguimiento(props: any) {
   ];
 
   const estadoActual = pedido?.estado || 'pendiente';
-  const indiceActual = estados.findIndex((e) => e.key === estadoActual);
+  const indiceActual = Math.max(0, estados.findIndex((e) => e.key === estadoActual));
 
   const estadoColor = (estado: string) => ESTADO_COLORES[estado] || colores.textSecondary;
 

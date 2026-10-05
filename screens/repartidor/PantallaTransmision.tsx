@@ -54,6 +54,7 @@ import {
   obtenerRutaPedido,
   obtenerInfoRutaPedido,
 } from '../../lib/directions';
+import { normalizarEstadoPedido } from '../../lib/estadoPedido';
 
 // ✅ MARCADORES
 const marcadorLocal = require('../../assets/icon.png');
@@ -494,11 +495,16 @@ export default function PantallaTransmision(props: any) {
       const { data: activos, error: errorActivos } = await supabase
         .from('pedidos')
         .select('*')
-        .in('estado', ['listo', 'en_camino'])
+        .in('estado', ['listo', 'en_camino', 'en camino'])
         .order('creado_en', { ascending: false });
 
       if (errorActivos) throw errorActivos;
-      setPedidosActivos((activos as Pedido[]) || []);
+      setPedidosActivos(
+        ((activos as Pedido[]) || []).map((pedido) => ({
+          ...pedido,
+          estado: normalizarEstadoPedido(pedido.estado),
+        }))
+      );
 
       const { data: entregados, error: errorEntregados } = await supabase
         .from('pedidos')
@@ -508,7 +514,12 @@ export default function PantallaTransmision(props: any) {
         .limit(20);
 
       if (errorEntregados) throw errorEntregados;
-      setPedidosEntregados((entregados as Pedido[]) || []);
+      setPedidosEntregados(
+        ((entregados as Pedido[]) || []).map((pedido) => ({
+          ...pedido,
+          estado: normalizarEstadoPedido(pedido.estado),
+        }))
+      );
     } catch (error) {
       console.error('❌ Error cargando pedidos:', error);
     } finally {
@@ -803,7 +814,7 @@ export default function PantallaTransmision(props: any) {
             repartidor_de_lng: longitude,
           })
           .eq('id', pedido.id)
-          .eq('estado', 'en_camino')
+          .in('estado', ['en_camino', 'en camino'])
           .eq('repartidor_id', perfil.id);
       } else {
         actualizarPedido = supabase
@@ -983,7 +994,7 @@ export default function PantallaTransmision(props: any) {
                 .from('pedidos')
                 .update({ estado: 'entregado' })
                 .eq('id', pedido.id)
-                .eq('estado', 'en_camino')
+                .in('estado', ['en_camino', 'en camino'])
                 .select('id')
                 .maybeSingle();
 

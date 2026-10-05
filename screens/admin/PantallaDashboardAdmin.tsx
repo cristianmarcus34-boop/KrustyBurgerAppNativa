@@ -89,7 +89,7 @@ export default function PantallaDashboardAdmin(props: any) {
             const { count: pedidosPendientes } = await supabase
                 .from('pedidos')
                 .select('*', { count: 'exact', head: true })
-                .in('estado', ['pendiente', 'confirmado', 'preparando']);
+                .in('estado', ['pendiente', 'pago_pendiente', 'confirmado', 'preparando', 'en cocina', 'listo', 'en_camino', 'en camino']);
 
             // 3. Ingresos de hoy
             const { data: ingresosHoyData } = await supabase

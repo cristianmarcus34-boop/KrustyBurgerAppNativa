@@ -187,7 +187,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         })
         .eq('id', seguimiento.pedidoId)
         .eq('repartidor_id', seguimiento.repartidorId)
-        .eq('estado', 'en_camino')
+        .in('estado', ['en_camino', 'en camino'])
         .select('id')
         .maybeSingle();
 
@@ -259,7 +259,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         .update({ aviso_cercania_enviado: true })
         .eq('id', seguimiento.pedidoId)
         .eq('repartidor_id', seguimiento.repartidorId)
-        .eq('estado', 'en_camino')
+        .in('estado', ['en_camino', 'en camino'])
         .eq('aviso_cercania_enviado', false)
         .select('id')
         .maybeSingle();

@@ -28,11 +28,17 @@ import { FUENTES } from '../../lib/fuentes';
 import { formatearPrecio } from '../../lib/formateador';
 import { notificacionService } from '../../services/notificacionService';
 import { useToast, Toast } from '../../components/Toast';
+import {
+  ESTADOS_ACTIVOS_PEDIDO,
+  ESTADOS_FINALIZADOS_PEDIDO,
+  normalizarEstadoPedido,
+} from '../../lib/estadoPedido';
 
 // ============================================================
 // 🎨 ESTADOS DE PEDIDO (colores dinámicos, se calculan en el componente)
 // ============================================================
 const ESTADOS_LABELS: Record<string, { label: string; icono: string; siguiente?: string }> = {
+  pago_pendiente: { label: 'Pago pendiente', icono: 'card-outline' },
   pendiente: { label: 'Pendiente', icono: 'time-outline', siguiente: 'confirmado' },
   confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', siguiente: 'preparando' },
   preparando: { label: 'Preparando', icono: 'restaurant-outline', siguiente: 'listo' },
@@ -42,8 +48,8 @@ const ESTADOS_LABELS: Record<string, { label: string; icono: string; siguiente?:
   cancelado: { label: 'Cancelado', icono: 'close-circle-outline' },
 };
 
-const ESTADOS_FINALIZADOS = ['entregado', 'cancelado'];
-const ESTADOS_ACTIVOS = ['pendiente', 'confirmado', 'preparando', 'listo', 'en_camino'];
+const ESTADOS_FINALIZADOS = ESTADOS_FINALIZADOS_PEDIDO;
+const ESTADOS_ACTIVOS = ESTADOS_ACTIVOS_PEDIDO;
 const MINUTOS_URGENTE = 15;
 
 const COLOR_WHATSAPP = '#25D366';
@@ -149,6 +155,7 @@ export default function PantallaGestionPedidos(props: any) {
   const estilos = useMemo(() => crearEstilos(colores), [colores]);
   const ESTADOS_PEDIDO = useMemo(
     () => ({
+      pago_pendiente: { label: 'Pago pendiente', color: colores.warning, icono: 'card-outline' },
       pendiente: { label: 'Pendiente', color: colores.accentSecondary, icono: 'time-outline', siguiente: 'confirmado' },
       confirmado: { label: 'Confirmado', color: colores.info, icono: 'checkmark-circle-outline', siguiente: 'preparando' },
       preparando: { label: 'Preparando', color: colores.naranja, icono: 'restaurant-outline', siguiente: 'listo' },
@@ -279,6 +286,7 @@ export default function PantallaGestionPedidos(props: any) {
 
         return {
           ...pedido,
+          estado: normalizarEstadoPedido(pedido.estado),
           cliente_nombre_completo: perfil.nombre_cliente || pedido.cliente_nombre || 'Cliente',
           cliente_email: perfil.email || 'Sin email',
           cliente_telefono: perfil.telefono || pedido.telefono || 'Sin teléfono',

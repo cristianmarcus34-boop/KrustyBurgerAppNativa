@@ -229,13 +229,13 @@ export default function PantallaEstadisticas(props: any) {
                     .lte('creado_en', hastaStr),
 
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })
-                    .eq('estado', 'pendiente').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                    .in('estado', ['pendiente', 'pago_pendiente']).gte('creado_en', desdeStr).lte('creado_en', hastaStr),
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })
                     .eq('estado', 'confirmado').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })
-                    .eq('estado', 'preparando').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                    .in('estado', ['preparando', 'en cocina']).gte('creado_en', desdeStr).lte('creado_en', hastaStr),
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })
-                    .eq('estado', 'en_camino').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
+                    .in('estado', ['en_camino', 'en camino']).gte('creado_en', desdeStr).lte('creado_en', hastaStr),
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })
                     .eq('estado', 'entregado').gte('creado_en', desdeStr).lte('creado_en', hastaStr),
                 supabase.from('pedidos').select('*', { count: 'exact', head: true })

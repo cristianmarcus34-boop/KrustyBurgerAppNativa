@@ -32,6 +32,7 @@ import { tiendaAutenticacion } from '../../stores/tiendaAutenticacion';
 import { DISENO, Sizes } from '../../lib/colores';
 import { useTema, useColores, type PaletaTema, type ModoTema } from '../../lib/theme';
 import { formatearPrecio } from '../../lib/formateador';
+import { normalizarEstadoPedido } from '../../lib/estadoPedido';
 import BarraProgreso from '../../components/BarraProgreso';
 import { servicioEliminacionCuenta } from '../../services/servicioEliminacionCuenta';
 import { useBeneficios } from '../../hooks/useBeneficios';
@@ -736,11 +737,14 @@ export default function PantallaPerfil(props: any) {
           const estadoMap: Record<string, { icono: string; texto: string; color: string }> = {
             entregado: { icono: 'checkmark-circle', texto: '✅ Entregado', color: colores.success },
             pendiente: { icono: 'time', texto: '⏳ Pendiente', color: colores.accentSecondary },
+            pago_pendiente: { icono: 'card-outline', texto: '💳 Pago pendiente', color: colores.warning },
             confirmado: { icono: 'checkmark-circle-outline', texto: '✅ Confirmado', color: colores.info },
             preparando: { icono: 'restaurant', texto: '🍔 Preparando', color: colores.warning },
+            listo: { icono: 'bag-check-outline', texto: '✅ Listo', color: colores.success },
             en_camino: { icono: 'bicycle', texto: '🚴 En camino', color: colores.azul },
+            cancelado: { icono: 'close-circle', texto: '❌ Cancelado', color: colores.danger },
           };
-          const estadoInfo = estadoMap[p.estado] || estadoMap.pendiente;
+          const estadoInfo = estadoMap[normalizarEstadoPedido(p.estado)] || estadoMap.pendiente;
           actividades.push({
             id: `pedido-${p.id}`,
             tipo: 'pedido',

@@ -24,6 +24,7 @@ import { useColores, type PaletaTema } from '../../lib/theme';
 import { FUENTES } from '../../lib/fuentes';
 import { Pedido } from '../../lib/tipos';
 import { formatearPrecio } from '../../lib/formateador';
+import { normalizarEstadoPedido } from '../../lib/estadoPedido';
 
 // ============================================================
 // 🎨 CONFIGURACIÓN DE ESTADOS (colores semánticos)
@@ -37,6 +38,7 @@ const ESTADOS_CONFIG: Record<
     progreso: number;
   }
 > = {
+  pago_pendiente: { label: 'Pago pendiente', icono: 'card-outline', color: '#FF9800', progreso: 0 },
   pendiente: { label: 'Pendiente', icono: 'time-outline', color: '#FF9800', progreso: 1 },
   confirmado: { label: 'Confirmado', icono: 'checkmark-circle-outline', color: '#2196F3', progreso: 2 },
   preparando: { label: 'Preparando', icono: 'flame-outline', color: '#9C27B0', progreso: 3 },
@@ -379,12 +381,12 @@ export default function PantallaPedidos(props: any) {
   };
 
   const getEstadoInfo = (estado: string) => {
-    return ESTADOS_CONFIG[estado] || ESTADOS_CONFIG.pendiente;
+    return ESTADOS_CONFIG[normalizarEstadoPedido(estado)] || ESTADOS_CONFIG.pendiente;
   };
 
   const renderPedido = useCallback(
     ({ item, index }: { item: Pedido; index: number }) => {
-      const estado = item.estado || 'pendiente';
+      const estado = normalizarEstadoPedido(item.estado);
       const estadoInfo = getEstadoInfo(estado);
       const mostrarInfoEnvio =
         item.distancia_km !== undefined && item.distancia_km !== null;

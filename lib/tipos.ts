@@ -1,5 +1,5 @@
 ﻿// lib/tipos.ts - COMPLETO Y ACTUALIZADO CON TODAS LAS PROPIEDADES
-export type EstadoPedido = 'pendiente' | 'confirmado' | 'preparando' | 'listo' | 'en_camino' | 'entregado' | 'cancelado';
+export type EstadoPedido = 'pendiente' | 'pago_pendiente' | 'confirmado' | 'preparando' | 'listo' | 'en_camino' | 'entregado' | 'cancelado';
 export type RolUsuario = 'cliente' | 'admin' | 'repartidor';
 
 // ============================================================

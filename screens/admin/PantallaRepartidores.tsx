@@ -144,7 +144,7 @@ export default function PantallaRepartidores(props: any) {
                 .from('pedidos')
                 .select('repartidor_id')
                 .in('repartidor_id', ids)
-                .eq('estado', 'en_camino');
+                .in('estado', ['en_camino', 'en camino']);
 
             const activosMap: Record<string, number> = {};
             (pedidosActivosData || []).forEach(p => {
