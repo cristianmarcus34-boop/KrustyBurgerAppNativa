@@ -45,8 +45,8 @@ import { FUENTES } from '../../lib/fuentes';
 import BotonUsarMiUbicacion from '../../components/BotonUsarMiUbicacion';
 import { DireccionNormalizada } from '../../utils/ubicacionHelper';
 import {
-  formatearCumpleanosDDMM,
-  parsearCumpleanosDDMM,
+  formatearCumpleanosDDMMAAAA,
+  parsearCumpleanosDDMMAAAA,
 } from '../../utils/perfilOnboardingHelper';
 
 // Habilitar LayoutAnimation en Android
@@ -665,7 +665,7 @@ export default function PantallaPerfil(props: any) {
       setDireccionCodigoPostal(perfil.direccion_codigo_postal || '');
       setPreferenciasComida(perfil.preferencias_comida || '');
       setMetodoPago(perfil.metodo_pago || '');
-      setCumpleanos(formatearCumpleanosDDMM((perfil as any)?.fecha_nacimiento));
+      setCumpleanos(formatearCumpleanosDDMMAAAA((perfil as any)?.fecha_nacimiento));
     }
   };
 
@@ -854,9 +854,9 @@ export default function PantallaPerfil(props: any) {
 
     let fechaNacimientoISO: string | null = null;
     if (cumpleanos && cumpleanos.trim().length > 0) {
-      fechaNacimientoISO = parsearCumpleanosDDMM(cumpleanos);
+      fechaNacimientoISO = parsearCumpleanosDDMMAAAA(cumpleanos);
       if (!fechaNacimientoISO) {
-        Alert.alert('⚠️ Fecha inválida', 'El cumpleaños debe tener el formato DD/MM. Por ejemplo: 14/05');
+        Alert.alert('⚠️ Fecha inválida', 'El cumpleaños debe tener el formato DD/MM/AAAA. Por ejemplo: 14/05/1990');
         return;
       }
     }
@@ -1832,18 +1832,19 @@ export default function PantallaPerfil(props: any) {
                     ]}
                     value={cumpleanos}
                     onChangeText={(text) => {
-                      const soloNumerosYBarra = text.replace(/[^0-9/]/g, '');
-                      let formateado = soloNumerosYBarra;
-                      if (soloNumerosYBarra.length === 4 && !soloNumerosYBarra.includes('/')) {
-                        formateado = `${soloNumerosYBarra.slice(0, 2)}/${soloNumerosYBarra.slice(2, 4)}`;
-                      }
+                      const digitos = text.replace(/\D/g, '').slice(0, 8);
+                      const formateado = digitos.length <= 2
+                        ? digitos
+                        : digitos.length <= 4
+                          ? `${digitos.slice(0, 2)}/${digitos.slice(2)}`
+                          : `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
                       setCumpleanos(formateado);
                     }}
-                    placeholder="DD/MM (ej: 14/05)"
+                    placeholder="DD/MM/AAAA (ej: 14/05/1990)"
                     keyboardType="numbers-and-punctuation"
                     placeholderTextColor={colores.textTertiary}
                     allowFontScaling={false}
-                    maxLength={5}
+                    maxLength={10}
                   />
                   <Text
                     style={{

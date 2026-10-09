@@ -51,7 +51,7 @@ import {
   leerEstadoOnboarding,
   siguienteDatoFaltante,
   marcarOfrecido,
-  parsearCumpleanosDDMM,
+  parsearCumpleanosDDMMAAAA,
 } from '../../utils/perfilOnboardingHelper';
 import type { EstadoOnboarding, TipoDatoFaltante } from '../../utils/perfilOnboardingHelper';
 
@@ -650,7 +650,7 @@ export default function PantallaInicio(props: any) {
           setEstadoOnboarding((prev) => ({ ...prev, telefonoOfrecido: true }));
         }
       } else if (datoFaltanteActual === 'cumpleanos') {
-        const fechaISO = parsearCumpleanosDDMM(valor);
+        const fechaISO = parsearCumpleanosDDMMAAAA(valor);
         if (fechaISO) {
           await actualizarPerfil({ fecha_nacimiento: fechaISO } as any);
         }

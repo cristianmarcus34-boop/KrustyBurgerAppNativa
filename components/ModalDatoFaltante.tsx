@@ -23,7 +23,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { DISENO } from '../lib/colores';
 import { FUENTES } from '../lib/fuentes';
-import { TipoDatoFaltante } from '../utils/perfilOnboardingHelper';
+import {
+    parsearCumpleanosDDMMAAAA,
+    type TipoDatoFaltante,
+} from '../utils/perfilOnboardingHelper';
 
 // ============================================================
 // 📋 TIPOS
@@ -56,7 +59,7 @@ const CONFIG: Record<TipoDatoFaltante, {
     keyboardType: 'default' | 'phone-pad' | 'number-pad' | 'numeric' | 'numbers-and-punctuation';
     textoGuardar: string;
     textoSaltar?: string;
-    /** Formato especial (ej: cumpleaños DD/MM) */
+    /** Formato especial (ej: cumpleaños DD/MM/AAAA) */
     formatoEspecial?: 'cumpleanos';
 }> = {
     bienvenida: {
@@ -94,7 +97,7 @@ const CONFIG: Record<TipoDatoFaltante, {
         emoji: '🎂',
         titulo: '¿Cuándo es tu cumple?',
         subtitulo: 'Ese día te mandamos una burger gratis. Palabra de Krusty.',
-        placeholder: 'DD/MM (ej: 14/05)',
+        placeholder: 'DD/MM/AAAA (ej: 14/05/1990)',
         keyboardType: 'numbers-and-punctuation',  // ✅ permite "/"
         textoGuardar: 'Guardar',
         textoSaltar: 'Saltar',
@@ -107,33 +110,20 @@ const CONFIG: Record<TipoDatoFaltante, {
 // ============================================================
 
 /**
- * Auto-formatea el input de cumpleaños:
- * - Solo permite dígitos y "/"
- * - Si el usuario escribe "1405" → lo convierte a "14/05"
+ * Auto-formatea el input de cumpleaños a DD/MM/AAAA.
  */
 const formatearInputCumpleanos = (texto: string): string => {
-    const soloNumerosYBarra = texto.replace(/[^0-9/]/g, '');
-
-    // Auto-formatear: si escribió 4 dígitos sin "/", agregamos la barra
-    if (soloNumerosYBarra.length === 4 && !soloNumerosYBarra.includes('/')) {
-        return `${soloNumerosYBarra.slice(0, 2)}/${soloNumerosYBarra.slice(2, 4)}`;
-    }
-
-    return soloNumerosYBarra;
+    const digitos = texto.replace(/\D/g, '').slice(0, 8);
+    if (digitos.length <= 2) return digitos;
+    if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+    return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
 };
 
 /**
- * Valida el formato del cumpleaños DD/MM
+ * Valida un cumpleaños DD/MM/AAAA como fecha real no futura.
  */
 const esCumpleanosValido = (valor: string): boolean => {
-    const limpio = valor.trim();
-    const match = limpio.match(/^(\d{1,2})\/(\d{1,2})$/);
-    if (!match) return false;
-
-    const dia = parseInt(match[1], 10);
-    const mes = parseInt(match[2], 10);
-
-    return dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12;
+    return parsearCumpleanosDDMMAAAA(valor) !== null;
 };
 
 // ============================================================
@@ -268,7 +258,7 @@ export default function ModalDatoFaltante({
                                     placeholderTextColor={DISENO.colors.textTertiary}
                                     keyboardType={config.keyboardType}
                                     selectionColor={DISENO.colors.accent}
-                                    maxLength={esCumpleanos ? 5 : undefined}
+                                    maxLength={esCumpleanos ? 10 : undefined}
                                     autoFocus
                                     allowFontScaling={false}
                                 />

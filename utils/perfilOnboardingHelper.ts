@@ -141,8 +141,7 @@ export function siguienteDatoFaltante(
 // ============================================================
 
 /**
- * Convierte "DD/MM" a una fecha ISO (YYYY-MM-DD) asumiendo el año 2000.
- * Si en algún momento querés pedir año completo, ampliás esto.
+ * Convierte el formato legado "DD/MM" a una fecha ISO usando el año 2000.
  */
 export function parsearCumpleanosDDMM(valor: string): string | null {
     const limpio = valor.trim();
@@ -160,6 +159,40 @@ export function parsearCumpleanosDDMM(valor: string): string | null {
 }
 
 /**
+ * Convierte "DD/MM/AAAA" a una fecha ISO (YYYY-MM-DD).
+ */
+export function parsearCumpleanosDDMMAAAA(valor: string): string | null {
+    const limpio = valor.trim();
+    const match = limpio.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const dia = parseInt(match[1], 10);
+    const mes = parseInt(match[2], 10);
+    const anio = parseInt(match[3], 10);
+    const ahora = new Date();
+
+    if (anio < 1 || anio > ahora.getFullYear() || mes < 1 || mes > 12) return null;
+
+    const diasPorMes = [
+        31,
+        anio % 4 === 0 && (anio % 100 !== 0 || anio % 400 === 0) ? 29 : 28,
+        31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+    ];
+    if (dia < 1 || dia > diasPorMes[mes - 1]) return null;
+    if (
+        anio === ahora.getFullYear()
+        && (mes > ahora.getMonth() + 1 || (mes === ahora.getMonth() + 1 && dia > ahora.getDate()))
+    ) {
+        return null;
+    }
+
+    const dd = String(dia).padStart(2, '0');
+    const mm = String(mes).padStart(2, '0');
+    const yyyy = String(anio).padStart(4, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
  * Formatea una fecha ISO (YYYY-MM-DD) a "DD/MM" para mostrar.
  */
 export function formatearCumpleanosDDMM(fechaISO: string | null | undefined): string {
@@ -167,4 +200,14 @@ export function formatearCumpleanosDDMM(fechaISO: string | null | undefined): st
     const partes = fechaISO.split('-'); // ['2000', '05', '14']
     if (partes.length < 3) return '';
     return `${partes[2]}/${partes[1]}`;
+}
+
+/**
+ * Formatea una fecha ISO (YYYY-MM-DD) a "DD/MM/AAAA".
+ */
+export function formatearCumpleanosDDMMAAAA(fechaISO: string | null | undefined): string {
+    if (!fechaISO) return '';
+    const partes = fechaISO.split('-');
+    if (partes.length !== 3) return '';
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
