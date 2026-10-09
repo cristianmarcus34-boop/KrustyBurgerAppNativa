@@ -1,4 +1,4 @@
-﻿// screens/cliente/PantallaInicio.tsx - V14 (Modo oscuro + Onboarding fix + timing fix)
+﻿// screens/cliente/PantallaInicio.tsx - V15 (Hero portada + carrusel ofertas con auto-scroll)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -26,7 +26,6 @@ import Animated, {
   withTiming,
   FadeInDown,
   FadeIn,
-  ZoomIn,
 } from 'react-native-reanimated';
 import { Shadow } from 'react-native-shadow-2';
 import * as Haptics from 'expo-haptics';
@@ -64,13 +63,17 @@ const ofertasImg = require('../../assets/imagenes/categorias/ofertas.jpg');
 const logoKrusty = require('../../assets/icon.png');
 const springfieldFondo = require('../../assets/imagenes/simpsons/springfieldbannerinicio.jpg');
 
+// ✅ Constantes para hero portada
+const HERO_ID = '00000000-0000-0000-0000-000000000001';
+const AUTO_SCROLL_MS = 3000;
+
 // ============================================================
 // 🧮 SISTEMA DE TAMAÑOS RESPONSIVE
 // ============================================================
 interface Tamanos {
   padding: number;
   logoSize: number;
-  logoHorizontalMargin: number;
+  logoMarginVertical: number;
   avatarSize: number;
   adminButtonSize: number;
   greetingSize: number;
@@ -119,13 +122,17 @@ const calcularTamanos = (
         ? Math.min(logoBase, 320)
         : Math.min(logoBase, 400);
 
-  const logoHorizontalMargin = isDesktop ? 40 : isTablet ? 32 : isSmall ? 12 : 16;
+  const logoMarginVertical = isDesktop ? 40 : isTablet ? 32 : isSmall ? 12 : 16;
   const avatarSize = isDesktop ? 64 : isTablet ? 58 : isSmall ? 44 : 50;
   const adminButtonSize = isDesktop ? 56 : isTablet ? 52 : isSmall ? 42 : 46;
   const greetingSize = isDesktop ? 18 : isTablet ? 17 : isSmall ? 14 : 16;
   const promptSize = isDesktop ? 34 : isTablet ? 30 : isSmall ? 22 : 27;
 
-  const heroHeight = isDesktop ? 360 : isTablet ? 320 : isSmall ? 260 : 300;
+  const anchoHero = width - padding * 2;
+  const heroHeight = Math.max(
+    anchoHero * 0.75,
+    isDesktop ? 480 : isTablet ? 420 : isSmall ? 320 : 380
+  );
   const heroTitleSize = isDesktop ? 30 : isTablet ? 28 : isSmall ? 22 : 25;
   const heroSubtitleSize = isDesktop ? 15 : isTablet ? 14 : isSmall ? 12 : 13;
   const heroCtaPaddingH = isDesktop ? 20 : isTablet ? 18 : isSmall ? 14 : 16;
@@ -179,7 +186,7 @@ const calcularTamanos = (
   return {
     padding,
     logoSize,
-    logoHorizontalMargin,
+    logoMarginVertical,
     avatarSize,
     adminButtonSize,
     greetingSize,
@@ -232,6 +239,12 @@ interface OfertaInicio {
 interface FavoritoConOrigen {
   producto: any;
   origen: 'manual' | 'ranking';
+}
+
+interface HeroPortada {
+  imagen_url: string | null;
+  titulo: string | null;
+  subtitulo: string | null;
 }
 
 const construirCategorias = (colores: PaletaTema): CategoriaData[] => [
@@ -515,6 +528,15 @@ export default function PantallaInicio(props: any) {
   const [cantidadProductos, setCantidadProductos] = useState<Record<string, number>>({});
   const [ofertaActiva, setOfertaActiva] = useState(0);
 
+  // 🆕 Estado para la portada del hero
+  const [portada, setPortada] = useState<HeroPortada | null>(null);
+
+  // 🆕 Estado para auto-scroll del carrusel de ofertas
+  const ofertasRef = useRef<FlatList<OfertaInicio>>(null);
+  const [autoScrollActivo, setAutoScrollActivo] = useState(true);
+  const autoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ofertaActivaRef = useRef(0);
+
   // 🚀 Estado para el Modal Amigable de Permisos
   const [mostrarModalPermisos, setMostrarModalPermisos] = useState(false);
 
@@ -526,9 +548,7 @@ export default function PantallaInicio(props: any) {
     cumpleanosOfrecido: false,
   });
 
-  // 🆕 NUEVO: flag para saber si ya terminó de cargar el estado desde AsyncStorage
   const [estadoOnboardingCargado, setEstadoOnboardingCargado] = useState(false);
-
   const [datoFaltanteActual, setDatoFaltanteActual] = useState<TipoDatoFaltante | null>(null);
 
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -603,21 +623,21 @@ export default function PantallaInicio(props: any) {
     const cargar = async () => {
       const userId = sesion?.user?.id;
       if (!userId) {
-        setEstadoOnboardingCargado(true);  // no hay usuario → ya está "cargado"
+        setEstadoOnboardingCargado(true);
         return;
       }
       const estado = await leerEstadoOnboarding(userId);
       setEstadoOnboarding(estado);
-      setEstadoOnboardingCargado(true);  // ← marcamos como cargado
+      setEstadoOnboardingCargado(true);
     };
-    setEstadoOnboardingCargado(false);  // al cambiar de usuario, resetear
+    setEstadoOnboardingCargado(false);
     cargar();
   }, [sesion?.user?.id]);
 
   useEffect(() => {
     const userId = sesion?.user?.id;
     if (!userId || !perfil) return;
-    if (!estadoOnboardingCargado) return;  // 🆕 NO EVALUAR HASTA QUE CARGUE
+    if (!estadoOnboardingCargado) return;
     if (mostrarModalPermisos) return;
     if (datoFaltanteActual) return;
 
@@ -630,7 +650,7 @@ export default function PantallaInicio(props: any) {
     sesion?.user?.id,
     perfil,
     estadoOnboarding,
-    estadoOnboardingCargado,  // 🆕 AGREGAR A LAS DEPS
+    estadoOnboardingCargado,
     mostrarModalPermisos,
     datoFaltanteActual,
   ]);
@@ -681,7 +701,7 @@ export default function PantallaInicio(props: any) {
   };
 
   // ============================================================
-  // 📦 FAVORITOS + OFERTAS + CONTEO
+  // 📦 FAVORITOS + OFERTAS + CONTEO + PORTADA
   // ============================================================
   useFocusEffect(
     useCallback(() => {
@@ -693,6 +713,21 @@ export default function PantallaInicio(props: any) {
       return () => { };
     }, [perfil?.id, cargarFavoritos, limpiarFavoritos]),
   );
+
+  const cargarPortada = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hero_portada')
+        .select('imagen_url, titulo, subtitulo')
+        .eq('id', HERO_ID)
+        .maybeSingle();
+      if (error) throw error;
+      setPortada(data || null);
+    } catch (e) {
+      console.warn('⚠️ No se pudo cargar la portada:', e);
+      setPortada(null);
+    }
+  }, []);
 
   const cargarOfertas = useCallback(async () => {
     setCargandoOfertas(true);
@@ -738,6 +773,7 @@ export default function PantallaInicio(props: any) {
   }, []);
 
   useEffect(() => {
+    cargarPortada();
     cargarOfertas();
     cargarCantidadProductos();
     RNAnimated.parallel([
@@ -749,16 +785,63 @@ export default function PantallaInicio(props: any) {
 
     headerOpacity.value = withTiming(1, { duration: 500 });
     headerTranslate.value = withSpring(0, { damping: 14, stiffness: 120 });
-  }, [cargarOfertas, cargarCantidadProductos, fadeAnim, slideAnim, logoScale, logoOpacity, headerOpacity, headerTranslate]);
+  }, [cargarPortada, cargarOfertas, cargarCantidadProductos, fadeAnim, slideAnim, logoScale, logoOpacity, headerOpacity, headerTranslate]);
+
+  // ============================================================
+  // 🔄 AUTO-SCROLL DEL CARRUSEL DE OFERTAS
+  // ============================================================
+  useEffect(() => {
+    if (autoScrollTimer.current) {
+      clearInterval(autoScrollTimer.current);
+      autoScrollTimer.current = null;
+    }
+
+    if (!autoScrollActivo || ofertas.length <= 1) return;
+
+    autoScrollTimer.current = setInterval(() => {
+      const siguiente = (ofertaActivaRef.current + 1) % Math.min(ofertas.length, 6);
+      ofertaActivaRef.current = siguiente;
+      setOfertaActiva(siguiente);
+      ofertasRef.current?.scrollToIndex({
+        index: siguiente,
+        animated: true,
+      });
+    }, AUTO_SCROLL_MS);
+
+    return () => {
+      if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
+    };
+  }, [autoScrollActivo, ofertas.length]);
+
+  // Reanudar auto-scroll cuando la pantalla vuelve a estar enfocada
+  useFocusEffect(
+    useCallback(() => {
+      setAutoScrollActivo(true);
+      return () => {
+        if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
+      };
+    }, [])
+  );
+
+  const pausarAutoScroll = () => {
+    if (!autoScrollActivo) return;
+    setAutoScrollActivo(false);
+    if (autoScrollTimer.current) clearInterval(autoScrollTimer.current);
+  };
+
+  const reanudarAutoScroll = () => {
+    Haptics.selectionAsync().catch(() => { });
+    setAutoScrollActivo(true);
+  };
 
   const onRefresh = useCallback(async () => {
     setRefrescando(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-    const promesas: Promise<any>[] = [cargarOfertas(), cargarCantidadProductos()];
+    const promesas: Promise<any>[] = [cargarPortada(), cargarOfertas(), cargarCantidadProductos()];
     if (perfil?.id) promesas.push(cargarFavoritos(perfil.id));
     await Promise.allSettled(promesas);
     setRefrescando(false);
-  }, [cargarOfertas, cargarCantidadProductos, cargarFavoritos, perfil?.id]);
+  }, [cargarPortada, cargarOfertas, cargarCantidadProductos, cargarFavoritos, perfil?.id]);
 
   const favoritosUnificados = useMemo(
     () => unificarFavoritos(favoritosManuales, topRanking, 10),
@@ -766,11 +849,16 @@ export default function PantallaInicio(props: any) {
   );
   const tieneFavoritos = favoritosUnificados.length > 0;
   const todosSonManuales = favoritosUnificados.every((f) => f.origen === 'manual');
-  const ofertaHero = ofertas[0];
 
   const padding = tamanos.padding;
   const nombreMostrar = perfil?.nombre_cliente || (sesion ? 'Cliente' : 'Invitado');
   const avatarUrl = perfil?.avatar_url;
+
+  // ✅ Datos del hero
+  const heroImagen = portada?.imagen_url || springfieldFondo;
+  const heroTitulo = portada?.titulo?.trim();
+  const heroSubtitulo = portada?.subtitulo?.trim();
+  const heroEsRemota = !!portada?.imagen_url;
 
   const handlePressAvatar = () => {
     if (!sesion || !perfil?.id) return;
@@ -1187,7 +1275,7 @@ export default function PantallaInicio(props: any) {
                   width: tamanos.logoSize,
                   height: tamanos.logoSize,
                   alignSelf: 'center',
-                  marginVertical: tamanos.logoHorizontalMargin,
+                  marginVertical: tamanos.logoMarginVertical,
                   opacity: logoOpacity,
                   transform: [{ scale: logoScale }],
                   backgroundColor: 'transparent',
@@ -1280,7 +1368,7 @@ export default function PantallaInicio(props: any) {
           </RNAnimated.View>
         </Animated.View>
 
-        {/* ============ HERO ============ */}
+        {/* ============ HERO PORTADA (nuevo) ============ */}
         <Animated.View
           entering={FadeInDown.duration(600).springify()}
           style={[estilos.heroWrap, { paddingHorizontal: padding }]}
@@ -1298,77 +1386,51 @@ export default function PantallaInicio(props: any) {
               ]}
             >
               <Image
-                source={springfieldFondo}
+                source={heroEsRemota ? { uri: heroImagen } : (heroImagen as any)}
                 style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
                 resizeMode="cover"
               />
-              <LinearGradient
-                colors={
-                  colores.isDark
-                    ? [
-                      'rgba(13,13,13,0.65)',
-                      'rgba(13,13,13,0.40)',
-                      'rgba(13,13,13,0.90)',
-                    ]
-                    : [
-                      'rgba(255,255,255,0.55)',
-                      'rgba(255,255,255,0.20)',
-                      'rgba(255,255,255,0.85)',
-                    ]
-                }
-                locations={[0, 0.45, 1]}
-                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
-              />
-              <LinearGradient
-                colors={
-                  colores.isDark
-                    ? ['rgba(229,57,53,0.20)', 'transparent']
-                    : ['rgba(230,57,70,0.12)', 'transparent']
-                }
-                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-
-              <View style={estilos.heroContent}>
-                {ofertaHero?.descuento && (
-                  <View style={estilos.heroBadge}>
-                    <Ionicons name="flame" size={11} color="#fff" />
-                    <Text style={estilos.heroBadgeText} allowFontScaling={false}>
-                      {ofertaHero.descuento}
-                    </Text>
+              {(heroTitulo || heroSubtitulo) && (
+                <>
+                  <LinearGradient
+                    colors={
+                      colores.isDark
+                        ? [
+                          'rgba(13,13,13,0.10)',
+                          'rgba(13,13,13,0.40)',
+                          'rgba(13,13,13,0.85)',
+                        ]
+                        : [
+                          'rgba(255,255,255,0.10)',
+                          'rgba(255,255,255,0.20)',
+                          'rgba(0,0,0,0.55)',
+                        ]
+                    }
+                    locations={[0, 0.5, 1]}
+                    style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+                  />
+                  <View style={estilos.heroContent}>
+                    {heroTitulo ? (
+                      <Text
+                        style={[estilos.heroTitle, { fontSize: tamanos.heroTitleSize, color: '#fff' }]}
+                        numberOfLines={2}
+                        allowFontScaling={false}
+                      >
+                        {heroTitulo}
+                      </Text>
+                    ) : null}
+                    {heroSubtitulo ? (
+                      <Text
+                        style={[estilos.heroSubtitle, { fontSize: tamanos.heroSubtitleSize, color: 'rgba(255,255,255,0.9)' }]}
+                        numberOfLines={2}
+                        allowFontScaling={false}
+                      >
+                        {heroSubtitulo}
+                      </Text>
+                    ) : null}
                   </View>
-                )}
-                <Text
-                  style={[estilos.heroTitle, { fontSize: tamanos.heroTitleSize }]}
-                  numberOfLines={2}
-                  allowFontScaling={false}
-                >
-                  {ofertaHero?.titulo || '¡Bienvenido a Krusty Burgers!'}
-                </Text>
-                <Text
-                  style={[estilos.heroSubtitle, { fontSize: tamanos.heroSubtitleSize }]}
-                  numberOfLines={2}
-                  allowFontScaling={false}
-                >
-                  {ofertaHero?.descripcion || 'Las mejores burgers de Springfield'}
-                </Text>
-                {ofertaHero && (
-                  <TouchableOpacity
-                    style={estilos.heroCta}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
-                      props.navigation.navigate('DetalleOferta', { oferta: ofertaHero });
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <Ionicons name="flash" size={14} color="#fff" />
-                    <Text style={estilos.heroCtaText} allowFontScaling={false}>
-                      Ver oferta
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                </>
+              )}
             </View>
           </Shadow>
         </Animated.View>
@@ -1434,7 +1496,7 @@ export default function PantallaInicio(props: any) {
           </View>
         )}
 
-        {/* ============ OFERTAS ============ */}
+        {/* ============ HOY TE CONVIENE — carrusel con auto-scroll ============ */}
         <View style={estilos.seccionContainer}>
           <SectionHeader
             titulo="Hoy te conviene"
@@ -1478,6 +1540,7 @@ export default function PantallaInicio(props: any) {
           ) : ofertas.length > 0 ? (
             <>
               <FlatList
+                ref={ofertasRef}
                 horizontal
                 data={ofertas.slice(0, 6)}
                 keyExtractor={(item) => item.id.toString()}
@@ -1486,12 +1549,22 @@ export default function PantallaInicio(props: any) {
                 contentContainerStyle={[estilos.horizontalList, { paddingHorizontal: padding }]}
                 snapToInterval={tamanos.ofertaCardWidth + 12}
                 decelerationRate="fast"
+                onScrollBeginDrag={() => {
+                  Haptics.selectionAsync().catch(() => { });
+                  pausarAutoScroll();
+                }}
                 onMomentumScrollEnd={(e) => {
                   const index = Math.round(
                     e.nativeEvent.contentOffset.x / (tamanos.ofertaCardWidth + 12),
                   );
+                  ofertaActivaRef.current = index;
                   setOfertaActiva(index);
                 }}
+                getItemLayout={(_, index) => ({
+                  length: tamanos.ofertaCardWidth + 12,
+                  offset: (tamanos.ofertaCardWidth + 12) * index,
+                  index,
+                })}
               />
               {ofertas.length > 1 && (
                 <View style={estilos.dotsContainer}>
@@ -1501,6 +1574,16 @@ export default function PantallaInicio(props: any) {
                       style={[estilos.dot, i === ofertaActiva && estilos.dotActive]}
                     />
                   ))}
+
+                  {!autoScrollActivo && ofertas.length > 1 && (
+                    <TouchableOpacity
+                      style={estilos.btnReanudar}
+                      onPress={reanudarAutoScroll}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="play" size={12} color="#fff" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </>
@@ -1697,61 +1780,15 @@ const crearEstilos = (colores: PaletaTema) =>
       left: 20,
       right: 20,
     },
-    heroBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      alignSelf: 'flex-start',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 999,
-      backgroundColor: '#E63946',
-      marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    heroBadgeText: {
-      color: '#fff',
-      fontFamily: FUENTES.display,
-      fontSize: 11,
-      letterSpacing: 0.3,
-    },
     heroTitle: {
       fontFamily: FUENTES.display,
-      color: colores.text,
       lineHeight: 34,
       letterSpacing: -0.5,
     },
     heroSubtitle: {
       fontFamily: FUENTES.regular,
-      color: colores.textSecondary,
       marginTop: 6,
       lineHeight: 19,
-    },
-    heroCta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 7,
-      alignSelf: 'flex-start',
-      backgroundColor: colores.accent,
-      borderRadius: 999,
-      marginTop: 16,
-      paddingHorizontal: 18,
-      paddingVertical: 11,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-    heroCtaText: {
-      fontFamily: FUENTES.display,
-      fontSize: 13,
-      color: '#fff',
-      letterSpacing: 0.2,
     },
 
     seccionContainer: { marginVertical: 12 },
@@ -1994,8 +2031,10 @@ const crearEstilos = (colores: PaletaTema) =>
     dotsContainer: {
       flexDirection: 'row',
       justifyContent: 'center',
+      alignItems: 'center',
       gap: 6,
       marginTop: 14,
+      position: 'relative',
     },
     dot: {
       width: 6,
@@ -2004,6 +2043,21 @@ const crearEstilos = (colores: PaletaTema) =>
       backgroundColor: colores.textSecondary + '40',
     },
     dotActive: { width: 22, backgroundColor: colores.accent },
+    btnReanudar: {
+      position: 'absolute',
+      right: 20,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colores.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+      elevation: 3,
+    },
 
     horizontalList: { paddingVertical: 4, gap: 12 },
 

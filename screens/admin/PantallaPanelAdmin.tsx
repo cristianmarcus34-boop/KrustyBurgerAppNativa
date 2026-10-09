@@ -257,6 +257,14 @@ export default function PantallaPanelAdmin(props: any) {
       navigate: 'GestionOfertas'
     },
     {
+      id: 'hero',
+      label: 'Hero Portada',
+      sub: 'Imagen de inicio',
+      icono: 'image-outline',   // 🆕
+      color: colores.morado,    // 🆕 (usá un color que ya tengas en PaletaTema)
+      navigate: 'GestionHero',  // 🆕
+    },
+    {
       id: 'recompensas',
       label: 'Recompensas',
       sub: 'Gestionar puntos y premios',

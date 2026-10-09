@@ -132,7 +132,7 @@ import PantallaGestionOfertas from './screens/admin/PantallaGestionOfertas';
 import PantallaConfiguracionEnvios from './screens/admin/PantallaConfiguracionEnvios';
 import PantallaGestionRecompensas from './screens/admin/PantallaGestionRecompensas';
 import PantallaNotificacionesAdmin from './screens/admin/PantallaNotificacionesAdmin';
-
+import PantallaGestionHero from './screens/admin/PantallaGestionHero';
 // 🆕 NUEVA PANTALLA DE REPARTIDORES
 import PantallaRepartidores from './screens/admin/PantallaRepartidores';
 
@@ -728,6 +728,11 @@ function AppInterna() {
                   <Stack.Screen name="ListaCupones" component={PantallaListaCupones} options={{ headerShown: false }} />
                   <Stack.Screen name="CrearCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
                   <Stack.Screen name="EditarCupon" component={PantallaCrearCupon} options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="GestionHero"
+                    component={PantallaGestionHero}
+                    options={{ headerShown: false }}
+                  />
 
                   {/* 🆕 NUEVA PANTALLA DE REPARTIDORES */}
                   <Stack.Screen name="Repartidores" component={PantallaRepartidores} options={{ headerShown: false }} />
