@@ -362,12 +362,7 @@ export default function PantallaNotificacionesAdmin(props: any) {
     // ============================================================
     const seleccionarImagen = async () => {
         try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permiso denegado', 'Necesitamos acceso a tus fotos');
-                return;
-            }
-
+            // ✅ Photo Picker del sistema: no requiere permisos en Android 13+
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
@@ -385,6 +380,8 @@ export default function PantallaNotificacionesAdmin(props: any) {
             Alert.alert('Error', 'No se pudo seleccionar la imagen');
         }
     };
+
+    // ⚠️ tomarFoto() SE QUEDA IGUAL: requestCameraPermissionsAsync() es válido
 
     const tomarFoto = async () => {
         try {

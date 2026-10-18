@@ -10,14 +10,13 @@ import {
     Share,
     Alert,
     Platform,
-    Linking,
     ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
-import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Sharing from 'expo-sharing';
 
 import { Cupon } from '../../lib/cupones/cuponTypes';
 import { formatearDescuento, colorPorTipo, iconoPorTipo } from '../../lib/cupones/cuponUtils';
@@ -40,23 +39,39 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
     // ✅ QR ahora contiene SOLO el código (sin pasar por la web)
     const datosQR = cupon.codigo;
 
-    // ✅ Deep link (por si algún día se quiere usar)
-    const urlDeepLink = `krustyburger://canjear?codigo=${cupon.codigo}`;
-
-    // ✅ Guardar QR en galería
+    // ✅ Guardar QR: captura la imagen a cache y abre el menú nativo
+    //    para que el usuario elija "Guardar en Fotos" / compartir.
+    //    SIN permisos de almacenamiento (cumple política de Google Play).
     const guardarQR = async () => {
         try {
             setGuardando(true);
-            const { status } = await MediaLibrary.requestPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permiso necesario', 'Se necesita permiso para guardar');
-                setGuardando(false);
+
+            // 1. Capturamos el QR como archivo PNG en cache
+            const uri = await captureRef(qrRef.current, {
+                format: 'png',
+                quality: 1,
+                result: 'tmpfile',
+            });
+
+            // 2. Verificamos que el sharing esté disponible en el dispositivo
+            if (!(await Sharing.isAvailableAsync())) {
+                Alert.alert(
+                    'No disponible',
+                    'Tu dispositivo no soporta el menú para guardar imágenes.'
+                );
                 return;
             }
-            const uri = await captureRef(qrRef.current, { format: 'png', quality: 1 });
-            const asset = await MediaLibrary.createAssetAsync(uri);
-            await MediaLibrary.createAlbumAsync('Krusty Burger', asset, false);
-            toast.exito('✅ QR guardado en la galería');
+
+            // 3. Abrimos el share sheet del sistema.
+            //    Desde ahí el usuario puede "Guardar en Fotos" (Android 13+
+            //    lo permite sin READ_MEDIA_IMAGES) o compartirlo donde quiera.
+            await Sharing.shareAsync(uri, {
+                mimeType: 'image/png',
+                dialogTitle: 'Guardar o compartir el cupón',
+                UTI: 'public.png', // iOS
+            });
+
+            toast.exito('✅ Elegí dónde guardarlo');
         } catch (error) {
             console.error('Error guardando QR:', error);
             toast.error('No se pudo guardar');
@@ -65,53 +80,64 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
         }
     };
 
-    // ✅ Compartir QR
+    // ✅ Compartir QR con imagen real (funciona en Android + iOS)
     const compartirQR = async () => {
         try {
             setGuardando(true);
 
-            const uri = await captureRef(qrRef.current, { format: 'png', quality: 1 });
-
-            const mensaje =
-                `🎫 *CUPÓN KRUSTY BURGER*
-
-📌 ${cupon.titulo}
-💰 ${formatearDescuento(cupon)}
-🔑 Código: ${cupon.codigo}
-📅 Válido: ${new Date(cupon.fecha_expiracion).toLocaleDateString('es-AR', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                })}
-
-🔗 Para canjear, abrí la app Krusty y escaneá el QR o ingresá el código.
-
-🍔 Krusty Burger`;
-
-            await Share.share({
-                message: mensaje,
-                url: uri,
-                title: `Cupón ${cupon.codigo}`,
+            const uri = await captureRef(qrRef.current, {
+                format: 'png',
+                quality: 1,
+                result: 'tmpfile',
             });
 
-            toast.exito('✅ QR compartido');
+            const mensaje =
+                `🎫 *CUPÓN KRUSTY BURGER*\n\n` +
+                `📌 ${cupon.titulo}\n` +
+                `💰 ${formatearDescuento(cupon)}\n` +
+                `🔑 Código: ${cupon.codigo}\n` +
+                `📅 Válido: ${new Date(cupon.fecha_expiracion).toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                })}\n\n` +
+                `🔗 Para canjear, abrí la app Krusty y escaneá el QR o ingresá el código.\n\n` +
+                `🍔 Krusty Burger`;
 
+            if (Platform.OS === 'ios') {
+                // iOS: Share.share acepta url (imagen) + message (texto) juntos
+                await Share.share({
+                    message: mensaje,
+                    url: uri,
+                    title: `Cupón ${cupon.codigo}`,
+                });
+            } else {
+                // Android: Share.share ignora `url`, así que compartimos
+                // primero el texto y luego la imagen vía expo-sharing.
+                await Share.share({ message: mensaje });
+
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(uri, {
+                        mimeType: 'image/png',
+                        dialogTitle: 'Compartir QR del cupón',
+                    });
+                }
+            }
+
+            toast.exito('✅ QR compartido');
         } catch (error) {
             console.error('Error compartiendo QR:', error);
 
+            // Fallback: compartir solo texto
             try {
                 const mensajeTexto =
-                    `🎫 CUPÓN KRUSTY BURGER
+                    `🎫 CUPÓN KRUSTY BURGER\n\n` +
+                    `📌 ${cupon.titulo}\n` +
+                    `💰 ${formatearDescuento(cupon)}\n` +
+                    `🔑 Código: ${cupon.codigo}\n\n` +
+                    `🍔 Krusty Burger`;
 
-📌 ${cupon.titulo}
-💰 ${formatearDescuento(cupon)}
-🔑 Código: ${cupon.codigo}
-
-🍔 Krusty Burger`;
-
-                await Share.share({
-                    message: mensajeTexto,
-                });
+                await Share.share({ message: mensajeTexto });
                 toast.exito('✅ Código compartido');
             } catch (e) {
                 toast.error('No se pudo compartir');
@@ -121,21 +147,17 @@ export default function CuponQRGenerator({ visible, cupon, onClose }: Props) {
         }
     };
 
-    // ✅ Compartir solo el código
+    // ✅ Compartir solo el código (texto)
     const compartirEnlace = async () => {
         try {
             const mensaje =
-                `🎫 Cupón Krusty Burger
+                `🎫 Cupón Krusty Burger\n\n` +
+                `📌 ${cupon.titulo}\n` +
+                `💰 ${formatearDescuento(cupon)}\n` +
+                `🔑 ${cupon.codigo}\n\n` +
+                `🍔 Krusty Burger`;
 
-📌 ${cupon.titulo}
-💰 ${formatearDescuento(cupon)}
-🔑 ${cupon.codigo}
-
-🍔 Krusty Burger`;
-
-            await Share.share({
-                message: mensaje,
-            });
+            await Share.share({ message: mensaje });
             toast.exito('✅ Código compartido');
         } catch (error) {
             toast.error('No se pudo compartir');

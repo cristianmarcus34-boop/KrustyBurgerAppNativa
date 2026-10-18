@@ -159,6 +159,8 @@ export default function PantallaGestionOfertas(props: any) {
     // 🎬 EFECTOS
     // ============================================================
     useEffect(() => {
+        // ✅ Ya no pedimos permisos de galería: el Photo Picker del sistema
+        //    devuelve la URI seleccionada y ya tenemos acceso a ella.
         cargarOfertas();
         Animated.parallel([
             Animated.timing(fadeAnim, {
@@ -172,10 +174,6 @@ export default function PantallaGestionOfertas(props: any) {
                 useNativeDriver: true,
             }),
         ]).start();
-
-        if (Platform.OS !== 'web') {
-            ImagePicker.requestMediaLibraryPermissionsAsync();
-        }
     }, []);
 
     // ============================================================
@@ -258,7 +256,7 @@ export default function PantallaGestionOfertas(props: any) {
     };
 
     // ============================================================
-    // 📷 SELECCIONAR IMAGEN
+    // 📷 SELECCIONAR IMAGEN (sin permisos)
     // ============================================================
     const seleccionarImagen = async () => {
         try {
@@ -556,7 +554,6 @@ export default function PantallaGestionOfertas(props: any) {
                         backgroundColor: DESIGN.colors.surface,
                     }
                 ]}>
-                    {/* IMAGEN */}
                     {item.imagen && (
                         <View style={estilos.tarjetaImagenContainer}>
                             <Image
@@ -574,7 +571,6 @@ export default function PantallaGestionOfertas(props: any) {
                         </View>
                     )}
 
-                    {/* HEADER */}
                     <View style={estilos.tarjetaHeader}>
                         <View style={estilos.tarjetaInfo}>
                             <Text style={[estilos.tarjetaTitulo, { fontSize: isTablet ? 18 : isSmallPhone ? 14 : 16 }]}>
@@ -616,7 +612,6 @@ export default function PantallaGestionOfertas(props: any) {
                         </View>
                     </View>
 
-                    {/* DETALLES */}
                     <View style={estilos.tarjetaDetalles}>
                         <Text style={[estilos.tarjetaDesc, { fontSize: isTablet ? 14 : isSmallPhone ? 11 : 12 }]}>
                             {item.descripcion || 'Sin descripción'}
@@ -679,10 +674,8 @@ export default function PantallaGestionOfertas(props: any) {
 
     return (
         <View style={estilos.contenedor}>
-            {/* Fondo blanco/crema suave */}
             <View style={estilos.background} />
 
-            {/* HEADER CON GRADIENTE SUTIL */}
             <LinearGradient
                 colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
                 style={estilos.headerGradiente}
@@ -727,7 +720,6 @@ export default function PantallaGestionOfertas(props: any) {
                 </View>
             </LinearGradient>
 
-            {/* LISTA */}
             <FlatList
                 data={ofertas}
                 keyExtractor={item => item.id.toString()}
@@ -762,9 +754,6 @@ export default function PantallaGestionOfertas(props: any) {
                 }
             />
 
-            {/* ============================================================
-            MODAL - FORMULARIO
-            ============================================================ */}
             <Modal
                 key={modalKey}
                 visible={modalVisible}
@@ -790,7 +779,6 @@ export default function PantallaGestionOfertas(props: any) {
                                 backgroundColor: DESIGN.colors.surface,
                             }
                         ]}>
-                            {/* HEADER DEL MODAL */}
                             <View style={estilos.modalHeader}>
                                 <LinearGradient
                                     colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
@@ -805,13 +793,11 @@ export default function PantallaGestionOfertas(props: any) {
                                 </LinearGradient>
                             </View>
 
-                            {/* FORMULARIO */}
                             <ScrollView
                                 style={estilos.modalScroll}
                                 showsVerticalScrollIndicator={false}
                                 contentContainerStyle={{ paddingBottom: 10 }}
                             >
-                                {/* Título */}
                                 <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13 }]}>
                                     <Ionicons name="pricetag-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Título *
                                 </Text>
@@ -824,7 +810,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     selectionColor={DESIGN.colors.accent}
                                 />
 
-                                {/* Descripción */}
                                 <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
                                     <Ionicons name="document-text-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Descripción
                                 </Text>
@@ -840,7 +825,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     selectionColor={DESIGN.colors.accent}
                                 />
 
-                                {/* Descuento */}
                                 <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
                                     <Ionicons name="flame-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Descuento *
                                 </Text>
@@ -853,7 +837,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     selectionColor={DESIGN.colors.accent}
                                 />
 
-                                {/* Precios - Fila */}
                                 <View style={estilos.filaPrecios}>
                                     <View style={estilos.filaPrecioItem}>
                                         <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
@@ -885,7 +868,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     </View>
                                 </View>
 
-                                {/* Fechas - Fila */}
                                 <View style={estilos.filaFechas}>
                                     <View style={estilos.filaFechaItem}>
                                         <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
@@ -915,7 +897,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     </View>
                                 </View>
 
-                                {/* IMAGEN */}
                                 <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginTop: 14 }]}>
                                     <Ionicons name="image-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Imagen (opcional)
                                 </Text>
@@ -945,7 +926,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     </Text>
                                 </TouchableOpacity>
 
-                                {/* PREVIEW DE IMAGEN */}
                                 {urlImagenPreview ? (
                                     <View style={estilos.previaImagen}>
                                         <Image
@@ -1004,7 +984,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     </View>
                                 )}
 
-                                {/* URL manual */}
                                 <Text style={[estilos.label, {
                                     fontSize: isTablet ? 13 : isSmallPhone ? 10 : 11,
                                     marginTop: 10,
@@ -1026,7 +1005,6 @@ export default function PantallaGestionOfertas(props: any) {
                                     selectionColor={DESIGN.colors.accent}
                                 />
 
-                                {/* SWITCH ACTIVA */}
                                 <View style={estilos.switchContainer}>
                                     <Text style={[estilos.label, { fontSize: isTablet ? 15 : isSmallPhone ? 12 : 13, marginBottom: 0 }]}>
                                         <Ionicons name="checkmark-circle-outline" size={isTablet ? 18 : isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Activa
@@ -1040,7 +1018,6 @@ export default function PantallaGestionOfertas(props: any) {
                                 </View>
                             </ScrollView>
 
-                            {/* BOTONES */}
                             <View style={[estilos.modalBotones, { gap: isTablet ? 14 : isSmallPhone ? 8 : 12, marginTop: 16 }]}>
                                 <TouchableOpacity
                                     style={[estilos.modalBoton, estilos.modalCancelar, {
@@ -1095,21 +1072,11 @@ export default function PantallaGestionOfertas(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - BLANCOS Y ELEGANTES
+// 🎨 ESTILOS
 // ============================================================
 const estilos = StyleSheet.create({
-    contenedor: {
-        flex: 1,
-        backgroundColor: DESIGN.colors.fondo,
-    },
-    background: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: DESIGN.colors.fondo,
-    },
+    contenedor: { flex: 1, backgroundColor: DESIGN.colors.fondo },
+    background: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: DESIGN.colors.fondo },
     headerGradiente: {
         borderBottomWidth: 1,
         borderBottomColor: DESIGN.colors.border,
@@ -1119,28 +1086,11 @@ const estilos = StyleSheet.create({
         shadowRadius: 12,
         elevation: 4,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    headerCentro: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    botonVolver: {
-        padding: 4,
-    },
-    titulo: {
-        fontWeight: '700',
-        color: DESIGN.colors.surface,
-        letterSpacing: -0.3,
-    },
-    contador: {
-        color: DESIGN.colors.surface + '80',
-        fontWeight: '400',
-        marginTop: 2,
-    },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    headerCentro: { flex: 1, alignItems: 'center' },
+    botonVolver: { padding: 4 },
+    titulo: { fontWeight: '700', color: DESIGN.colors.surface, letterSpacing: -0.3 },
+    contador: { color: DESIGN.colors.surface + '80', fontWeight: '400', marginTop: 2 },
     botonAgregar: {
         backgroundColor: DESIGN.colors.surface,
         borderRadius: 30,
@@ -1152,13 +1102,7 @@ const estilos = StyleSheet.create({
         shadowRadius: 8,
         elevation: 4,
     },
-    lista: {
-        flexGrow: 1,
-    },
-
-    // ============================================================
-    // TARJETA
-    // ============================================================
+    lista: { flexGrow: 1 },
     tarjeta: {
         marginBottom: 10,
         borderWidth: 1,
@@ -1169,119 +1113,29 @@ const estilos = StyleSheet.create({
         shadowRadius: 12,
         elevation: 4,
     },
-    tarjetaImagenContainer: {
-        marginBottom: 8,
-    },
-    tarjetaImagen: {
-        width: '100%',
-        backgroundColor: DESIGN.colors.surfaceHover,
-    },
-    tarjetaHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    tarjetaInfo: {
-        flex: 1,
-    },
-    tarjetaTitulo: {
-        fontWeight: '600',
-        color: DESIGN.colors.text,
-    },
-    tarjetaDescuento: {
-        color: DESIGN.colors.accentSecondary,
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    tarjetaAcciones: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    botonAccion: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    tarjetaDetalles: {
-        borderTopWidth: 1,
-        borderTopColor: DESIGN.colors.border,
-        paddingTop: 8,
-    },
-    tarjetaDesc: {
-        color: DESIGN.colors.textSecondary,
-        opacity: 0.7,
-        marginBottom: 6,
-    },
-    tarjetaPrecios: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    tarjetaPrecioOriginal: {
-        color: DESIGN.colors.textTertiary,
-        textDecorationLine: 'line-through',
-    },
-    tarjetaPrecioOferta: {
-        fontWeight: '700',
-        color: DESIGN.colors.accent,
-    },
-    tarjetaFechas: {
-        marginTop: 4,
-    },
-    tarjetaFecha: {
-        color: DESIGN.colors.textTertiary,
-    },
-    estadoBadge: {
-        alignSelf: 'flex-start',
-        marginTop: 6,
-    },
-    estadoBadgeTexto: {
-        fontWeight: '500',
-    },
-
-    // ============================================================
-    // VACÍO
-    // ============================================================
-    vacioContenedor: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 80,
-    },
-    vacio: {
-        color: DESIGN.colors.text,
-        fontWeight: '600',
-        marginTop: 16,
-        textAlign: 'center',
-    },
-    vacioSubtexto: {
-        color: DESIGN.colors.textSecondary,
-        textAlign: 'center',
-        marginTop: 4,
-        opacity: 0.6,
-    },
-
-    // ============================================================
-    // MODAL
-    // ============================================================
-    modalFondo: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modalBackdrop: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    modalKeyboard: {
-        width: '100%',
-        alignItems: 'center',
-    },
+    tarjetaImagenContainer: { marginBottom: 8 },
+    tarjetaImagen: { width: '100%', backgroundColor: DESIGN.colors.surfaceHover },
+    tarjetaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    tarjetaInfo: { flex: 1 },
+    tarjetaTitulo: { fontWeight: '600', color: DESIGN.colors.text },
+    tarjetaDescuento: { color: DESIGN.colors.accentSecondary, fontWeight: '600', marginTop: 2 },
+    tarjetaAcciones: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    botonAccion: { justifyContent: 'center', alignItems: 'center' },
+    tarjetaDetalles: { borderTopWidth: 1, borderTopColor: DESIGN.colors.border, paddingTop: 8 },
+    tarjetaDesc: { color: DESIGN.colors.textSecondary, opacity: 0.7, marginBottom: 6 },
+    tarjetaPrecios: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    tarjetaPrecioOriginal: { color: DESIGN.colors.textTertiary, textDecorationLine: 'line-through' },
+    tarjetaPrecioOferta: { fontWeight: '700', color: DESIGN.colors.accent },
+    tarjetaFechas: { marginTop: 4 },
+    tarjetaFecha: { color: DESIGN.colors.textTertiary },
+    estadoBadge: { alignSelf: 'flex-start', marginTop: 6 },
+    estadoBadgeTexto: { fontWeight: '500' },
+    vacioContenedor: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+    vacio: { color: DESIGN.colors.text, fontWeight: '600', marginTop: 16, textAlign: 'center' },
+    vacioSubtexto: { color: DESIGN.colors.textSecondary, textAlign: 'center', marginTop: 4, opacity: 0.6 },
+    modalFondo: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+    modalKeyboard: { width: '100%', alignItems: 'center' },
     modal: {
         borderWidth: 1,
         overflow: 'hidden',
@@ -1291,9 +1145,7 @@ const estilos = StyleSheet.create({
         shadowRadius: 40,
         elevation: 20,
     },
-    modalHeader: {
-        marginBottom: 16,
-    },
+    modalHeader: { marginBottom: 16 },
     modalHeaderGradiente: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1303,20 +1155,9 @@ const estilos = StyleSheet.create({
         paddingHorizontal: 20,
         borderRadius: 12,
     },
-    modalTitulo: {
-        fontWeight: '700',
-        color: DESIGN.colors.surface,
-    },
-    modalScroll: {
-        maxHeight: '70%',
-        paddingHorizontal: 4,
-    },
-    label: {
-        fontWeight: '600',
-        color: DESIGN.colors.text,
-        marginBottom: 6,
-        marginTop: 14,
-    },
+    modalTitulo: { fontWeight: '700', color: DESIGN.colors.surface },
+    modalScroll: { maxHeight: '70%', paddingHorizontal: 4 },
+    label: { fontWeight: '600', color: DESIGN.colors.text, marginBottom: 6, marginTop: 14 },
     input: {
         backgroundColor: DESIGN.colors.surfaceHover,
         borderRadius: 12,
@@ -1326,30 +1167,12 @@ const estilos = StyleSheet.create({
         borderColor: DESIGN.colors.border,
         color: DESIGN.colors.text,
     },
-    textArea: {
-        minHeight: 80,
-        textAlignVertical: 'top',
-    },
-    filaPrecios: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    filaPrecioItem: {
-        flex: 1,
-    },
-    filaFechas: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    filaFechaItem: {
-        flex: 1,
-    },
-    switchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 14,
-    },
+    textArea: { minHeight: 80, textAlignVertical: 'top' },
+    filaPrecios: { flexDirection: 'row', gap: 12 },
+    filaPrecioItem: { flex: 1 },
+    filaFechas: { flexDirection: 'row', gap: 12 },
+    filaFechaItem: { flex: 1 },
+    switchContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 },
     botonImagen: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1358,9 +1181,7 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         gap: 10,
     },
-    botonImagenTexto: {
-        fontWeight: '600',
-    },
+    botonImagenTexto: { fontWeight: '600' },
     previaImagen: {
         marginTop: 10,
         borderRadius: 12,
@@ -1370,9 +1191,7 @@ const estilos = StyleSheet.create({
         position: 'relative',
         backgroundColor: DESIGN.colors.surfaceHover,
     },
-    previaFoto: {
-        width: '100%',
-    },
+    previaFoto: { width: '100%' },
     loadingOverlay: {
         position: 'absolute',
         top: 0,
@@ -1400,13 +1219,8 @@ const estilos = StyleSheet.create({
         justifyContent: 'center',
         marginTop: 10,
     },
-    sinImagenTexto: {
-        marginTop: 6,
-    },
-    modalBotones: {
-        flexDirection: 'row',
-        marginTop: 8,
-    },
+    sinImagenTexto: { marginTop: 6 },
+    modalBotones: { flexDirection: 'row', marginTop: 8 },
     modalBoton: {
         flex: 1,
         alignItems: 'center',
@@ -1416,15 +1230,9 @@ const estilos = StyleSheet.create({
         overflow: 'hidden',
         borderWidth: 1,
     },
-    modalCancelar: {
-        borderWidth: 1,
-    },
-    modalCancelarTexto: {
-        fontWeight: '600',
-    },
-    modalGuardar: {
-        overflow: 'hidden',
-    },
+    modalCancelar: { borderWidth: 1 },
+    modalCancelarTexto: { fontWeight: '600' },
+    modalGuardar: { overflow: 'hidden' },
     modalGuardarGradient: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1435,7 +1243,5 @@ const estilos = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
-    modalGuardarTexto: {
-        fontWeight: '700',
-    },
+    modalGuardarTexto: { fontWeight: '700' },
 });

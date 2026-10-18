@@ -73,14 +73,10 @@ export default function PantallaGestionHero() {
         }
     };
 
+    // ✅ Sin pedir permisos: el Photo Picker del sistema devuelve la URI
+    //    seleccionada y ya tenemos acceso a ella.
     const elegirDeGaleria = async () => {
         try {
-            const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!permiso.granted) {
-                Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería');
-                return;
-            }
-
             const resultado = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: false,     // 👈 sin pantalla de recorte

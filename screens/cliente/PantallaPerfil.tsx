@@ -914,14 +914,9 @@ export default function PantallaPerfil(props: any) {
   // ============================================================
   // 📷 IMÁGENES
   // ============================================================
+  // ✅ Photo Picker del sistema: no requiere permisos en Android 13+
   const seleccionarImagen = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permiso denegado', 'Necesitamos acceso a tus fotos');
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,

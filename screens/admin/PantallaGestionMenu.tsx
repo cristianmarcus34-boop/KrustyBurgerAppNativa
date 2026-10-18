@@ -1,4 +1,4 @@
-// screens/admin/PantallaGestionMenu.tsx - CON EXPO-IMAGE-PICKER
+// screens/admin/PantallaGestionMenu.tsx
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -22,7 +22,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker'; // ✅ IMPORTADO
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { Producto } from '../../lib/tipos';
 import { Colores } from '../../lib/colores';
@@ -79,7 +79,6 @@ const DESIGN = {
 
 const { width, height } = Dimensions.get('window');
 
-// ✅ Etiquetas de categorías
 const ETIQUETAS_CATEGORIA: Record<string, string> = {
   burgers: '🍔 Hamburguesas',
   combos: '🍟 Combos',
@@ -90,9 +89,6 @@ const ETIQUETAS_CATEGORIA: Record<string, string> = {
 
 const CATEGORIAS_OPCIONES = ['burgers', 'combos', 'bebidas', 'postres', 'acompanantes'];
 
-// ============================================================
-// 🎯 HOOK RESPONSIVE
-// ============================================================
 const useResponsive = () => {
   const { width, height } = Dimensions.get('window');
   const isTablet = width >= 768;
@@ -118,14 +114,10 @@ const useResponsive = () => {
   };
 };
 
-// ============================================================
-// 🏠 COMPONENTE PRINCIPAL
-// ============================================================
 export default function PantallaGestionMenu(props: any) {
   const responsive = useResponsive();
   const insets = useSafeAreaInsets();
 
-  // ✅ ESTADOS
   const [productos, setProductos] = useState<Producto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -133,34 +125,22 @@ export default function PantallaGestionMenu(props: any) {
   const [productoEditando, setProductoEditando] = useState<Producto | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
 
-  // ✅ FORMULARIO
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [precio, setPrecio] = useState('');
   const [categoria, setCategoria] = useState('burgers');
   const [imagen, setImagen] = useState('');
-  const [incluyePapas, setIncluyePapas] = useState(false);   // ✅ NUEVO
+  const [incluyePapas, setIncluyePapas] = useState(false);
 
-  // ✅ ANIMACIONES
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideUpAnim = useRef(new Animated.Value(30)).current;
   const [modalKey, setModalKey] = useState(0);
 
-  // ✅ REF PARA SCROLL
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // ============================================================
-  // 🎬 EFECTOS
-  // ============================================================
   useEffect(() => {
-    // ✅ SOLICITAR PERMISOS DE GALERÍA
-    (async () => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permisos', 'Necesitamos acceso a tu galería para subir imágenes');
-      }
-    })();
-
+    // ✅ Ya no pedimos permisos de galería: el Photo Picker del sistema
+    //    devuelve la URI seleccionada y ya tenemos acceso a ella.
     cargarProductos();
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
@@ -168,9 +148,6 @@ export default function PantallaGestionMenu(props: any) {
     ]).start();
   }, []);
 
-  // ============================================================
-  // 🔄 FUNCIONES CRUD
-  // ============================================================
   const cargarProductos = async () => {
     try {
       const { data, error } = await supabase
@@ -195,18 +172,10 @@ export default function PantallaGestionMenu(props: any) {
   }, []);
 
   // ============================================================
-  // 📷 IMAGEN - CON EXPO-IMAGE-PICKER
+  // 📷 IMAGEN - SIN PERMISOS (Photo Picker del sistema)
   // ============================================================
   const seleccionarImagen = async () => {
     try {
-      // ✅ Verificar permisos
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permisos', 'Necesitamos acceso a tu galería para subir imágenes');
-        return;
-      }
-
-      // ✅ ABRIR GALERÍA
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -219,10 +188,7 @@ export default function PantallaGestionMenu(props: any) {
         const asset = result.assets[0];
         const uri = asset.uri;
 
-        // ✅ Mostrar preview inmediatamente
         setImagen(uri);
-
-        // ✅ SUBIR A SUPABASE
         setSubiendoImagen(true);
 
         try {
@@ -266,9 +232,6 @@ export default function PantallaGestionMenu(props: any) {
     }
   };
 
-  // ============================================================
-  // 📝 FORMULARIO
-  // ============================================================
   const abrirFormulario = (producto?: Producto) => {
     setNombre('');
     setDescripcion('');
@@ -284,7 +247,7 @@ export default function PantallaGestionMenu(props: any) {
         setPrecio(String(producto.precio));
         setCategoria(producto.categoria);
         setImagen(producto.imagen || '');
-        setIncluyePapas(producto.incluye_papas === true);   // ✅ NUEVO
+        setIncluyePapas(producto.incluye_papas === true);
         setModalKey(prev => prev + 1);
         setModalVisible(true);
         setTimeout(() => {
@@ -293,7 +256,7 @@ export default function PantallaGestionMenu(props: any) {
       }, 100);
     } else {
       setProductoEditando(null);
-      setIncluyePapas(false);   // ✅ NUEVO: reset al crear
+      setIncluyePapas(false);
       setModalKey(prev => prev + 1);
       setModalVisible(true);
     }
@@ -308,14 +271,11 @@ export default function PantallaGestionMenu(props: any) {
       setPrecio('');
       setCategoria('burgers');
       setImagen('');
-      setIncluyePapas(false);   // ✅ NUEVO: reset al cerrar
+      setIncluyePapas(false);
       setProductoEditando(null);
     }, 300);
   };
 
-  // ============================================================
-  // 💾 GUARDAR PRODUCTO
-  // ============================================================
   const guardarProducto = async () => {
     if (!nombre.trim()) {
       Alert.alert('Error', 'El nombre es obligatorio');
@@ -342,7 +302,7 @@ export default function PantallaGestionMenu(props: any) {
       precio: precioNum,
       categoria,
       imagen: imagen || null,
-      incluye_papas: incluyePapas,   // ✅ NUEVO
+      incluye_papas: incluyePapas,
     };
 
     try {
@@ -368,9 +328,6 @@ export default function PantallaGestionMenu(props: any) {
     }
   };
 
-  // ============================================================
-  // 🗑️ ELIMINAR PRODUCTO
-  // ============================================================
   const eliminarProducto = (id: number, nombre: string) => {
     Alert.alert(
       '🗑️ Eliminar producto',
@@ -398,9 +355,6 @@ export default function PantallaGestionMenu(props: any) {
     );
   };
 
-  // ============================================================
-  // 🖼️ RENDER DE PRODUCTO
-  // ============================================================
   const renderProducto = useCallback(({ item, index }: { item: Producto; index: number }) => {
     const itemFade = fadeAnim.interpolate({
       inputRange: [0, 1],
@@ -434,7 +388,6 @@ export default function PantallaGestionMenu(props: any) {
             elevation: 3,
           }
         ]}>
-          {/* Imagen */}
           {item.imagen ? (
             <Image
               source={{ uri: item.imagen }}
@@ -452,7 +405,6 @@ export default function PantallaGestionMenu(props: any) {
             </View>
           )}
 
-          {/* Info */}
           <View style={estilos.info}>
             <View style={[estilos.categoriaBadge, {
               backgroundColor: DESIGN.colors.accentSecondary + '15',
@@ -491,7 +443,6 @@ export default function PantallaGestionMenu(props: any) {
             </Text>
           </View>
 
-          {/* Acciones */}
           <View style={estilos.acciones}>
             <TouchableOpacity
               style={[estilos.botonAccion, {
@@ -527,17 +478,12 @@ export default function PantallaGestionMenu(props: any) {
     );
   }, [responsive, fadeAnim, slideUpAnim, abrirFormulario, eliminarProducto]);
 
-  // ============================================================
-  // 🏗️ RENDER PRINCIPAL
-  // ============================================================
   const paddingHorizontal = responsive.paddingHorizontal;
 
   return (
     <View style={estilos.contenedor}>
-      {/* Fondo blanco/crema */}
       <View style={estilos.background} />
 
-      {/* Header con gradiente */}
       <LinearGradient
         colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
         style={estilos.headerGradiente}
@@ -589,7 +535,6 @@ export default function PantallaGestionMenu(props: any) {
         </View>
       </LinearGradient>
 
-      {/* Contador */}
       <View style={[estilos.contadorContainer, {
         paddingHorizontal: paddingHorizontal,
         paddingVertical: 10,
@@ -647,9 +592,6 @@ export default function PantallaGestionMenu(props: any) {
         }
       />
 
-      {/* ============================================================ */}
-      {/* 📝 MODAL - FORMULARIO */}
-      {/* ============================================================ */}
       <Modal
         key={modalKey}
         visible={modalVisible}
@@ -679,7 +621,6 @@ export default function PantallaGestionMenu(props: any) {
               backgroundColor: DESIGN.colors.surface,
             }
           ]}>
-            {/* Header del modal */}
             <View style={estilos.modalHeader}>
               <LinearGradient
                 colors={[DESIGN.colors.gradientStart, DESIGN.colors.gradientEnd]}
@@ -715,11 +656,7 @@ export default function PantallaGestionMenu(props: any) {
               scrollEnabled={true}
               automaticallyAdjustKeyboardInsets={true}
             >
-              {/* Nombre */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                color: DESIGN.colors.text,
-              }]}>
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, color: DESIGN.colors.text }]}>
                 <Ionicons name="restaurant-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Nombre *
               </Text>
               <TextInput
@@ -736,12 +673,7 @@ export default function PantallaGestionMenu(props: any) {
                 selectionColor={DESIGN.colors.accent}
               />
 
-              {/* Descripción */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                marginTop: 14,
-                color: DESIGN.colors.text,
-              }]}>
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 14, color: DESIGN.colors.text }]}>
                 <Ionicons name="document-text-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Descripción
               </Text>
               <TextInput
@@ -762,12 +694,7 @@ export default function PantallaGestionMenu(props: any) {
                 selectionColor={DESIGN.colors.accent}
               />
 
-              {/* Precio */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                marginTop: 14,
-                color: DESIGN.colors.text,
-              }]}>
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 14, color: DESIGN.colors.text }]}>
                 <Ionicons name="cash-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Precio *
               </Text>
               <TextInput
@@ -785,12 +712,7 @@ export default function PantallaGestionMenu(props: any) {
                 selectionColor={DESIGN.colors.accent}
               />
 
-              {/* Categoría */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                marginTop: 14,
-                color: DESIGN.colors.text,
-              }]}>
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 14, color: DESIGN.colors.text }]}>
                 <Ionicons name="grid-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Categoría *
               </Text>
               <View style={[estilos.categoriasGrid, { gap: responsive.isTablet ? 10 : responsive.isSmallPhone ? 6 : 8 }]}>
@@ -829,12 +751,8 @@ export default function PantallaGestionMenu(props: any) {
                   </TouchableOpacity>
                 ))}
               </View>
-              {/* ✅ NUEVO: Incluye papas */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                marginTop: 14,
-                color: DESIGN.colors.text,
-              }]}>
+
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 14, color: DESIGN.colors.text }]}>
                 <Ionicons name="fast-food-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> ¿Incluye papas?
               </Text>
 
@@ -876,12 +794,8 @@ export default function PantallaGestionMenu(props: any) {
                   🍟 Este producto incluye papas fritas
                 </Text>
               </TouchableOpacity>
-              {/* Imagen */}
-              <Text style={[estilos.label, {
-                fontSize: responsive.labelSize,
-                marginTop: 14,
-                color: DESIGN.colors.text,
-              }]}>
+
+              <Text style={[estilos.label, { fontSize: responsive.labelSize, marginTop: 14, color: DESIGN.colors.text }]}>
                 <Ionicons name="image-outline" size={responsive.isTablet ? 18 : responsive.isSmallPhone ? 14 : 16} color={DESIGN.colors.accent} /> Imagen
               </Text>
 
@@ -912,7 +826,6 @@ export default function PantallaGestionMenu(props: any) {
                 </Text>
               </TouchableOpacity>
 
-              {/* Previa imagen */}
               {imagen ? (
                 <View style={estilos.previaImagen}>
                   <Image
@@ -938,7 +851,6 @@ export default function PantallaGestionMenu(props: any) {
                 </View>
               ) : null}
 
-              {/* URL manual */}
               <TextInput
                 style={[estilos.input, {
                   fontSize: responsive.inputSize,
@@ -956,7 +868,6 @@ export default function PantallaGestionMenu(props: any) {
               />
             </ScrollView>
 
-            {/* Botones */}
             <View style={[estilos.modalBotones, { gap: responsive.isTablet ? 14 : responsive.isSmallPhone ? 8 : 12, marginTop: 16 }]}>
               <TouchableOpacity
                 style={[estilos.modalBoton, estilos.modalCancelar, {
@@ -1013,21 +924,11 @@ export default function PantallaGestionMenu(props: any) {
 }
 
 // ============================================================
-// 🎨 ESTILOS - BLANCOS Y ELEGANTES
+// 🎨 ESTILOS
 // ============================================================
 const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: DESIGN.colors.fondo,
-  },
-  background: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: DESIGN.colors.fondo,
-  },
+  contenedor: { flex: 1, backgroundColor: DESIGN.colors.fondo },
+  background: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: DESIGN.colors.fondo },
   headerGradiente: {
     borderBottomWidth: 1,
     borderBottomColor: DESIGN.colors.border,
@@ -1037,117 +938,32 @@ const estilos = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  botonVolver: {
-    padding: 4,
-  },
-  titulo: {
-    fontWeight: '700',
-    color: DESIGN.colors.surface,
-    letterSpacing: 0.5,
-    flex: 1,
-    textAlign: 'center',
-  },
-  botonAgregar: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contadorContainer: {
-    borderBottomWidth: 1,
-  },
-  contador: {
-    fontWeight: '500',
-  },
-  lista: {
-    flexGrow: 1,
-  },
-  tarjeta: {
-    flexDirection: 'row',
-    marginBottom: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  imagen: {
-    marginRight: 12,
-  },
-  imagenPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  botonVolver: { padding: 4 },
+  titulo: { fontWeight: '700', color: DESIGN.colors.surface, letterSpacing: 0.5, flex: 1, textAlign: 'center' },
+  botonAgregar: { justifyContent: 'center', alignItems: 'center' },
+  contadorContainer: { borderBottomWidth: 1 },
+  contador: { fontWeight: '500' },
+  lista: { flexGrow: 1 },
+  tarjeta: { flexDirection: 'row', marginBottom: 10, borderWidth: 1, alignItems: 'center' },
+  imagen: { marginRight: 12 },
+  imagenPlaceholder: { justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   emoji: {},
-  info: {
-    flex: 1,
-  },
-  categoriaBadge: {
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  categoriaTexto: {
-    textTransform: 'capitalize',
-  },
-  nombre: {
-    fontWeight: '600',
-    marginBottom: 1,
-  },
-  descripcion: {
-    lineHeight: 16,
-    opacity: 0.7,
-    marginBottom: 2,
-  },
-  precio: {
-    fontWeight: '700',
-  },
-  acciones: {
-    gap: 8,
-    marginLeft: 8,
-  },
-  botonAccion: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  botonEliminar: {
-    borderWidth: 1,
-  },
-  vacioContenedor: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
-  },
-  vacio: {
-    fontWeight: '600',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  vacioSubtexto: {
-    textAlign: 'center',
-    marginTop: 4,
-    opacity: 0.6,
-  },
-  modalFondo: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalKeyboard: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
+  info: { flex: 1 },
+  categoriaBadge: { alignSelf: 'flex-start', marginBottom: 4 },
+  categoriaTexto: { textTransform: 'capitalize' },
+  nombre: { fontWeight: '600', marginBottom: 1 },
+  descripcion: { lineHeight: 16, opacity: 0.7, marginBottom: 2 },
+  precio: { fontWeight: '700' },
+  acciones: { gap: 8, marginLeft: 8 },
+  botonAccion: { justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  botonEliminar: { borderWidth: 1 },
+  vacioContenedor: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  vacio: { fontWeight: '600', marginTop: 16, textAlign: 'center' },
+  vacioSubtexto: { textAlign: 'center', marginTop: 4, opacity: 0.6 },
+  modalFondo: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', padding: 16 },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalKeyboard: { width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
   modal: {
     borderWidth: 1,
     overflow: 'hidden',
@@ -1158,9 +974,7 @@ const estilos = StyleSheet.create({
     elevation: 20,
     width: '100%',
   },
-  modalHeader: {
-    marginBottom: 16,
-  },
+  modalHeader: { marginBottom: 16 },
   modalHeaderGradiente: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1170,90 +984,24 @@ const estilos = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
   },
-  modalTitulo: {
-    fontWeight: '700',
-    color: DESIGN.colors.surface,
-  },
-  modalScroll: {
-    maxHeight: '70%',
-    paddingHorizontal: 4,
-  },
-  label: {
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 14,
-  },
-  input: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  categoriasGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  categoriaOpcion: {
-    borderWidth: 1,
-  },
-  categoriaOpcionTexto: {
-    fontWeight: '600',
-  },
-  botonImagen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    justifyContent: 'center',
-  },
-  botonImagenTexto: {
-    fontWeight: '600',
-  },
-  previaImagen: {
-    marginTop: 10,
-    borderRadius: 12,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  previaFoto: {
-    width: '100%',
-  },
-  botonQuitarImagen: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DESIGN.colors.surface,
-  },
-  modalBotones: {
-    flexDirection: 'row',
-    marginTop: 8,
-  },
-  modalBoton: {
-    flex: 1,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    overflow: 'hidden',
-  },
-  modalCancelar: {
-    borderWidth: 1,
-  },
-  modalCancelarTexto: {
-    fontWeight: '600',
-  },
-  modalGuardar: {
-    overflow: 'hidden',
-  },
+  modalTitulo: { fontWeight: '700', color: DESIGN.colors.surface },
+  modalScroll: { maxHeight: '70%', paddingHorizontal: 4 },
+  label: { fontWeight: '600', marginBottom: 6, marginTop: 14 },
+  input: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  categoriasGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  categoriaOpcion: { borderWidth: 1 },
+  categoriaOpcionTexto: { fontWeight: '600' },
+  botonImagen: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'center' },
+  botonImagenTexto: { fontWeight: '600' },
+  previaImagen: { marginTop: 10, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  previaFoto: { width: '100%' },
+  botonQuitarImagen: { position: 'absolute', top: 8, right: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: DESIGN.colors.surface },
+  modalBotones: { flexDirection: 'row', marginTop: 8 },
+  modalBoton: { flex: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, overflow: 'hidden' },
+  modalCancelar: { borderWidth: 1 },
+  modalCancelarTexto: { fontWeight: '600' },
+  modalGuardar: { overflow: 'hidden' },
   modalGuardarGradient: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1264,7 +1012,5 @@ const estilos = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  modalGuardarTexto: {
-    fontWeight: '700',
-  },
+  modalGuardarTexto: { fontWeight: '700' },
 });
