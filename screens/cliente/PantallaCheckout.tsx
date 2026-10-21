@@ -1404,6 +1404,18 @@ export default function PantallaCheckout(props: any) {
             })
             .catch((err) => console.warn('⚠️ Error notificando admins:', err));
 
+        notificacionService
+            .enviarNotificacionAUsuario(
+                perfil.id,
+                'pedido exitoso',
+                'mmm sacrileegioozo 🍩',
+                'pedido',
+                undefined,
+                undefined,
+                { pedidoId, destino: 'Pedidos' },
+            )
+            .catch((err) => console.warn('⚠️ Error notificando al cliente:', err));
+
         if (cuponAplicado?.id && perfil?.id) {
             await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
         }

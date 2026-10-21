@@ -492,7 +492,7 @@ export default function PantallaLogin(props: any) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
         setUserIdLogueado(session.user.id);
-        const yaVisto = await yaVioModalPermisos();
+        const yaVisto = await yaVioModalPermisos(session.user.id);
         if (!yaVisto) {
           setMostrarModalPermisos(true);
         } else {
@@ -530,7 +530,9 @@ export default function PantallaLogin(props: any) {
   // 🚀 Acciones del Modal Amigable de Permisos
   const handleAceptarModalPermisos = async () => {
     setMostrarModalPermisos(false);
-    await marcarModalPermisosVisto();
+    if (userIdLogueado) {
+      await marcarModalPermisosVisto(userIdLogueado);
+    }
     if (userIdLogueado) {
       await solicitarPermisosCompletosApp(userIdLogueado);
     }
@@ -539,7 +541,9 @@ export default function PantallaLogin(props: any) {
 
   const handleOmitirModalPermisos = async () => {
     setMostrarModalPermisos(false);
-    await marcarModalPermisosVisto();
+    if (userIdLogueado) {
+      await marcarModalPermisosVisto(userIdLogueado);
+    }
     navigation.navigate('Principal');
   };
 
@@ -597,7 +601,7 @@ export default function PantallaLogin(props: any) {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) {
         setUserIdLogueado(session.user.id);
-        const yaVisto = await yaVioModalPermisos();
+        const yaVisto = await yaVioModalPermisos(session.user.id);
         if (!yaVisto) {
           setMostrarModalPermisos(true);
         } else {

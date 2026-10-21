@@ -56,6 +56,10 @@ const procesarNotificacion = (data: any) => {
                 navigationRef.navigate('GestionPedidos');
                 break;
             }
+            if (data?.destino === 'Pedidos') {
+                navigationRef.navigate('Principal', { screen: 'Pedidos' });
+                break;
+            }
             if (data?.pedidoId) {
                 navigationRef.navigate('Seguimiento', { pedidoId: data.pedidoId });
             } else {
@@ -570,7 +574,8 @@ export const notificacionService = {
         mensaje: string,
         tipo: string = 'sistema',
         imagen?: string,
-        sonido?: string
+        sonido?: string,
+        datos?: Record<string, unknown>
     ) {
         try {
             // ✅ SOLO 'promocion' requiere consentimiento explícito.
@@ -615,7 +620,7 @@ export const notificacionService = {
             const tokens = dispositivos.map((d: any) => d.expo_push_token);
 
             return await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
-                tipo, imagen, sonido
+                tipo, imagen, sonido, ...datos
             });
         } catch (error) {
             console.error('❌ Error:', error);
