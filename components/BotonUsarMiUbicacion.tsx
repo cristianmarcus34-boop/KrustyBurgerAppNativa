@@ -1,11 +1,11 @@
 // components/BotonUsarMiUbicacion.tsx
 // Botón reutilizable "Usar mi ubicación actual" con estados visuales
+// y manejo amigable de errores (GPS off, sin señal, timeout, permiso).
 
 import React, { useState } from 'react';
 import {
     TouchableOpacity,
     Text,
-    View,
     StyleSheet,
     ActivityIndicator,
     Alert,
@@ -16,6 +16,9 @@ import { DISENO } from '../lib/colores';
 import { FUENTES } from '../lib/fuentes';
 import {
     obtenerUbicacionConDireccion,
+    mensajeErrorUbicacion,
+    abrirAjustesApp,
+    abrirAjustesGPS,
     DireccionNormalizada,
 } from '../utils/ubicacionHelper';
 
@@ -43,24 +46,12 @@ export default function BotonUsarMiUbicacion({
 }: Props) {
     const [estado, setEstado] = useState<Estado>('idle');
 
-    const handlePress = async () => {
-        if (estado === 'cargando' || disabled) return;
-
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-        setEstado('cargando');
-
+    const ejecutarObtencion = async () => {
         try {
             const direccion = await obtenerUbicacionConDireccion(true);
 
-            if (!direccion) {
-                setEstado('error');
-                onError?.('No pudimos obtener tu ubicación');
-                setTimeout(() => setEstado('idle'), 2500);
-                return;
-            }
-
+            // Si obtuvo dirección pero no es "real" (solo coordenadas), avisamos
             if (!direccion.tieneDireccionReal) {
-                // Tenemos coordenadas pero no dirección legible
                 Alert.alert(
                     '📍 Ubicación capturada',
                     'Obtuvimos tus coordenadas pero no pudimos detectar la dirección exacta. Podés completarla manualmente si hace falta.',
@@ -70,14 +61,56 @@ export default function BotonUsarMiUbicacion({
 
             onUbicacionObtenida(direccion);
             setEstado('ok');
-
             setTimeout(() => setEstado('idle'), 2000);
         } catch (error: any) {
             console.error('❌ [BotonUsarMiUbicacion] Error:', error);
+
             setEstado('error');
             onError?.(error?.message || 'Error inesperado');
+
+            // ✅ Convertir error técnico en mensaje amigable
+            const info = mensajeErrorUbicacion(error);
+
+            const botones: any[] = [{ text: 'Cancelar', style: 'cancel' }];
+
+            // Botón "Abrir ajustes" si corresponde
+            if (info.mostrarBotonAjustes) {
+                botones.push({
+                    text: info.tipoAjustes === 'gps' ? 'Abrir GPS' : 'Abrir ajustes',
+                    onPress: () => {
+                        if (info.tipoAjustes === 'gps') {
+                            abrirAjustesGPS();
+                        } else {
+                            abrirAjustesApp();
+                        }
+                    },
+                });
+            }
+
+            // Botón "Reintentar" para errores transitorios
+            if (info.esTimeout || error?.codigo === 'GPS_SIN_SENAL' || error?.codigo === 'GPS_ERROR') {
+                botones.push({
+                    text: 'Reintentar',
+                    onPress: () => setTimeout(() => handlePressInterno(), 300),
+                });
+            }
+
+            Alert.alert(info.titulo, info.mensaje, botones, { cancelable: true });
+
             setTimeout(() => setEstado('idle'), 2500);
         }
+    };
+
+    const handlePressInterno = async () => {
+        if (estado === 'cargando') return;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+        setEstado('cargando');
+        await ejecutarObtencion();
+    };
+
+    const handlePress = async () => {
+        if (estado === 'cargando' || disabled) return;
+        await handlePressInterno();
     };
 
     // ─── Estilos según variante ─────────────────────────────
@@ -93,7 +126,6 @@ export default function BotonUsarMiUbicacion({
         : DISENO.colors.accentSecondary;
 
     const textColor = esSecundario ? DISENO.colors.info : DISENO.colors.text;
-
     const iconColor = textColor;
 
     const contenido = () => {
@@ -124,7 +156,7 @@ export default function BotonUsarMiUbicacion({
                 <>
                     <Ionicons name="alert-circle" size={esCompacto ? 16 : 20} color={DISENO.colors.accent} />
                     <Text style={[styles.texto, { color: DISENO.colors.accent, fontSize: esCompacto ? 12 : 14 }]}>
-                        No pudimos obtenerla
+                        Reintentar
                     </Text>
                 </>
             );

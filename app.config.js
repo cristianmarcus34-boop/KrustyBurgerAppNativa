@@ -9,22 +9,70 @@ module.exports = ({ config }) => {
 
     return {
         ...config,
-        extra: {
-            ...config.extra,
-            eas: {
-                ...config.extra?.eas,
-                projectId: "b2c2267e-d1bf-42ce-b6f1-b85cc48f28ab", // ID NUEVO
-            },
-        },
+        name: 'KrustyBurger',
+        slug: 'KrustyBurger',
+        version: '1.0.4',
+        scheme: 'krustyburger',
+        orientation: 'portrait',
+        icon: './assets/icon.png',
+        userInterfaceStyle: 'automatic',
         ios: {
-            ...config.ios,
+            supportsTablet: true,
+            bundleIdentifier: 'com.agenciapowa.KrustyBurger',
+            infoPlist: {
+                NSCameraUsageDescription: 'KrustyBurger necesita acceso a la cámara para escanear códigos QR y cupones.',
+                NSPhotoLibraryUsageDescription: 'KrustyBurger necesita acceso a tus fotos para subir imágenes.',
+                NSLocationWhenInUseUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                NSLocationAlwaysUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
+            },
             config: {
                 ...config.ios?.config,
                 googleMapsApiKey: googleMapsApiKey || '',
             },
         },
         android: {
-            ...config.android,
+            adaptiveIcon: {
+                backgroundColor: '#FF6600',
+                foregroundImage: './assets/android-icon-foreground.png',
+                backgroundImage: './assets/android-icon-background.png',
+                monochromeImage: './assets/android-icon-monochrome.png',
+            },
+            versionCode: 23,
+            predictiveBackGestureEnabled: false,
+            googleServicesFile: './google-services.json',
+            package: 'com.agenciapowa.KrustyBurger',
+            blockedPermissions: [
+                'android.permission.READ_MEDIA_IMAGES',
+                'android.permission.READ_MEDIA_VIDEO',
+                'android.permission.READ_MEDIA_AUDIO',
+                'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+                'android.permission.READ_EXTERNAL_STORAGE',
+                'android.permission.WRITE_EXTERNAL_STORAGE',
+                'android.permission.RECORD_AUDIO',
+            ],
+            permissions: [
+                'android.permission.ACCESS_FINE_LOCATION',
+                'android.permission.ACCESS_COARSE_LOCATION',
+                'android.permission.CAMERA',
+                'android.permission.RECEIVE_BOOT_COMPLETED',
+                'android.permission.VIBRATE',
+                'android.permission.WAKE_LOCK',
+                'android.permission.INTERNET',
+                'android.permission.ACCESS_NETWORK_STATE',
+                'android.permission.ACCESS_WIFI_STATE',
+                'android.permission.POST_NOTIFICATIONS',
+            ],
+            intentFilters: [
+                {
+                    action: 'VIEW',
+                    data: [
+                        { scheme: 'https', host: 'www.krustyburger.com.ar' },
+                        { scheme: 'https', host: 'krustyburger.com.ar' },
+                    ],
+                    category: ['BROWSABLE', 'DEFAULT'],
+                },
+            ],
             config: {
                 ...config.android?.config,
                 googleMaps: {
@@ -33,5 +81,107 @@ module.exports = ({ config }) => {
                 },
             },
         },
+        plugins: [
+            'expo-secure-store',
+            'expo-router',
+            'expo-status-bar',
+            'expo-font',
+            'expo-updates',
+            [
+                'expo-splash-screen',
+                {
+                    image: './assets/icon.png',
+                    imageWidth: 250,
+                    resizeMode: 'contain',
+                    backgroundColor: '#FFFFFF',
+                },
+            ],
+            [
+                'expo-camera',
+                {
+                    cameraPermission: 'KrustyBurger necesita acceso a la cámara para escanear códigos QR y cupones.',
+                },
+            ],
+            [
+                'expo-image-picker',
+                {
+                    photosPermission: 'KrustyBurger necesita acceso a tus fotos para subir imágenes.',
+                    cameraPermission: 'KrustyBurger necesita acceso a la cámara para tomar fotos.',
+                },
+            ],
+            [
+                'expo-location',
+                {
+                    isIosBackgroundLocationEnabled: true,
+                    isAndroidBackgroundLocationEnabled: true,
+                    isAndroidForegroundServiceEnabled: true,
+                    locationAlwaysAndWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                    locationAlwaysPermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                    locationWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                },
+            ],
+            [
+                'expo-notifications',
+                {
+                    icon: './assets/notification-icon.png',
+                    color: '#F5C518',
+                    sounds: [
+                        './assets/sounds/krustyyotequieromucho.wav',
+                        './assets/sounds/saxolisa.wav',
+                        './assets/sounds/circopararapapa.wav',
+                    ],
+                },
+            ],
+            [
+                'expo-build-properties',
+                {
+                    android: {
+                        compileSdkVersion: 36,
+                        targetSdkVersion: 36,
+                        buildToolsVersion: '36.0.0',
+                        enableMinifyInReleaseBuilds: true,
+                        enableShrinkResourcesInReleaseBuilds: true,
+                        extraProguardRules: '-keep class expo.modules.notifications.** { *; } -dontwarn com.stripe.android.pushProvisioning.** -dontwarn com.reactnativestripesdk.pushprovisioning.**'
+                    },
+                    ios: {
+                        deploymentTarget: '16.4',
+                    },
+                },
+            ],
+            './plugins/withAndroidManifest.js',
+            './plugins/withForegroundServiceLocation.js',
+            'expo-web-browser',
+            '@react-native-community/datetimepicker',
+            'expo-sharing',
+            'expo-image',
+            '@sentry/react-native',
+            [
+                '@sentry/react-native/expo',
+                {
+                    url: 'https://sentry.io/',
+                    project: 'react-native',
+                    organization: 'powa-b6',
+                },
+            ],
+        ],
+        updates: {
+            enabled: true,
+            checkAutomatically: 'ON_LOAD',
+            fallbackToCacheTimeout: 3000,
+            url: 'https://u.expo.dev/3bb3f5cf-a572-4703-8a2a-e727bc44a0e6',
+        },
+        extra: {
+            ...config.extra,
+            router: {
+                origin: false,
+            },
+            eas: {
+                projectId: '3bb3f5cf-a572-4703-8a2a-e727bc44a0e6',
+            },
+        },
+        runtimeVersion: {
+            policy: 'appVersion',
+        },
+        owner: 'agenciadigitalpowas-team',
     };
 };

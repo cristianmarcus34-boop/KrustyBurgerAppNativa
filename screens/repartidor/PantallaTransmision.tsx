@@ -1,4 +1,4 @@
-// screens/repartidor/PantallaTransmision.tsx - V4 (Modo oscuro + Reportar problema + Pausa + Sonido)
+// screens/repartidor/PantallaTransmision.tsx - V5 (Google Play compliant background location)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
@@ -79,9 +79,6 @@ const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) =
   );
 };
 
-/**
- * Normaliza un teléfono argentino para usarlo en tel:/whatsapp:
- */
 const normalizarTelefonoAR = (tel: string): string => {
   let limpio = tel.replace(/[^\d+]/g, '');
 
@@ -106,7 +103,6 @@ const normalizarTelefonoAR = (tel: string): string => {
   return '+549' + limpio;
 };
 
-// ✅ MOTIVOS DE PROBLEMA
 const MOTIVOS_PROBLEMA = [
   { id: 'cliente_ausente', label: 'Cliente ausente', icono: 'person-remove-outline', color: '#FF6F00' },
   { id: 'direccion_incorrecta', label: 'Dirección incorrecta', icono: 'location-outline', color: '#E53935' },
@@ -120,12 +116,10 @@ export default function PantallaTransmision(props: any) {
   const responsive = useResponsive();
   const toast = useToast();
 
-  // ✅ TEMA
   const { tema, esOscuro } = useTema();
   const colores = useColores();
   const estilos = useMemo(() => crearEstilos(colores), [colores]);
 
-  // ✅ COLORES DE ESTADO (dependientes del tema)
   const COLORES_ESTADO: Record<string, string> = useMemo(
     () => ({
       listo: colores.success,
@@ -135,7 +129,6 @@ export default function PantallaTransmision(props: any) {
     [colores]
   );
 
-  // ✅ SONIDO DE PEDIDOS NUEVOS
   const player = useAudioPlayer(SONIDO_PEDIDO_NUEVO);
 
   const [pedidosActivos, setPedidosActivos] = useState<Pedido[]>([]);
@@ -161,20 +154,16 @@ export default function PantallaTransmision(props: any) {
   const [mostrarModalUbicacion, setMostrarModalUbicacion] = useState(false);
   const [pedidoPendienteTransmision, setPedidoPendienteTransmision] = useState<Pedido | null>(null);
 
-  // 🆕 Bottom sheet para contactar al cliente
   const [mostrarModalContacto, setMostrarModalContacto] = useState(false);
 
-  // 🆕 Estados de disponibilidad
   const [disponible, setDisponible] = useState<boolean>(true);
   const [guardandoDisponibilidad, setGuardandoDisponibilidad] = useState(false);
 
-  // 🆕 Estados de reportar problema
   const [mostrarModalProblema, setMostrarModalProblema] = useState(false);
   const [motivoSeleccionado, setMotivoSeleccionado] = useState<string | null>(null);
   const [detalleProblema, setDetalleProblema] = useState('');
   const [reportandoProblema, setReportandoProblema] = useState(false);
 
-  // 🆕 Último pedido visto (para no repetir sonido)
   const [ultimoPedidoVisto, setUltimoPedidoVisto] = useState<number | null>(null);
 
   const mapRef = useRef<MapView>(null);
@@ -189,7 +178,6 @@ export default function PantallaTransmision(props: any) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const liveDotScale = useSharedValue(1);
 
-  // ✅ Tamaños responsive
   const paddingHorizontal = responsive.getEspaciado('LG');
   const tituloSize = responsive.getValor({ tablet: 24, normal: 20, small: 18 });
   const subtituloSize = responsive.getValor({ tablet: 14, normal: 12, small: 11 });
@@ -205,9 +193,6 @@ export default function PantallaTransmision(props: any) {
   const marcadorCasaSize = responsive.getValor({ tablet: 48, normal: 40, small: 34 });
   const avatarSize = responsive.getValor({ tablet: 48, normal: 42, small: 38 });
 
-  // ============================================================
-  // EFECTOS
-  // ============================================================
   useEffect(() => {
     cargarPedidos();
     Animated.parallel([
@@ -220,7 +205,6 @@ export default function PantallaTransmision(props: any) {
     };
   }, []);
 
-  // ✅ Cargar disponibilidad del perfil
   useEffect(() => {
     if (!perfil?.id) return;
     (async () => {
@@ -239,7 +223,6 @@ export default function PantallaTransmision(props: any) {
     })();
   }, [perfil?.id]);
 
-  // ✅ Suscripción realtime a pedidos nuevos
   useEffect(() => {
     if (!disponible) return;
     if (!perfil?.id) return;
@@ -260,7 +243,6 @@ export default function PantallaTransmision(props: any) {
           if (ultimoPedidoVisto === pedido.id) return;
           setUltimoPedidoVisto(pedido.id);
 
-          // Verificar preferencia de sonido
           try {
             const { data: perfilData } = await supabase
               .from('perfiles')
@@ -283,7 +265,6 @@ export default function PantallaTransmision(props: any) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
           toast.info(`🛵 Pedido #${pedido.id} disponible`);
 
-          // Refrescar lista
           cargarPedidos();
         }
       )
@@ -486,9 +467,6 @@ export default function PantallaTransmision(props: any) {
     );
   }, [ubicacionActual, pedidoSeleccionado, rutaPuntos]);
 
-  // ============================================================
-  // CARGA
-  // ============================================================
   const cargarPedidos = async () => {
     setCargando(true);
     try {
@@ -554,9 +532,6 @@ export default function PantallaTransmision(props: any) {
     }, 2500);
   };
 
-  // ============================================================
-  // 🆕 TOGGLE DISPONIBILIDAD
-  // ============================================================
   const toggleDisponibilidad = async (valor: boolean) => {
     if (!perfil?.id || guardandoDisponibilidad) return;
 
@@ -582,9 +557,6 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ============================================================
-  // 🆕 REPORTAR PROBLEMA
-  // ============================================================
   const abrirModalProblema = () => {
     if (!pedidoSeleccionado) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
@@ -628,9 +600,6 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ============================================================
-  // 🆕 ABRIR NAVEGACIÓN
-  // ============================================================
   const abrirNavegacion = async (pedido: Pedido) => {
     const lat = pedido.lat_cliente;
     const lng = pedido.lng_cliente;
@@ -681,9 +650,6 @@ export default function PantallaTransmision(props: any) {
     Alert.alert('Error', 'No se pudo abrir ninguna app de navegación.');
   };
 
-  // ============================================================
-  // 🆕 CONTACTAR AL CLIENTE
-  // ============================================================
   const llamarCliente = async (telefono: string) => {
     const numero = normalizarTelefonoAR(telefono);
     try {
@@ -759,7 +725,7 @@ export default function PantallaTransmision(props: any) {
   };
 
   // ============================================================
-  // TRANSMISIÓN
+  // TRANSMISIÓN - V5 (Google Play compliant)
   // ============================================================
   const iniciarTransmision = async (pedido: Pedido, reanudar = false) => {
     if (procesandoEntrega || watchRef.current) return;
@@ -778,17 +744,15 @@ export default function PantallaTransmision(props: any) {
     let pedidoYaActualizado = false;
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Ubicación necesaria',
-          'Para iniciar el seguimiento, habilitá el permiso de ubicación mientras usás la app. El pedido no cambiará de estado hasta poder obtener tu ubicación.'
-        );
-        return;
-      }
+      // ✅ FIX #3: Verificar AMBOS permisos (foreground + background) ANTES de pedir cualquier cosa.
+      // Si falta alguno, mostrar la divulgación primero.
+      const foregroundStatus = await Location.getForegroundPermissionsAsync();
+      const backgroundStatus = await Location.getBackgroundPermissionsAsync();
 
-      const permisoSegundoPlano = await Location.getBackgroundPermissionsAsync();
-      if (permisoSegundoPlano.status !== 'granted') {
+      if (
+        foregroundStatus.status !== 'granted' ||
+        backgroundStatus.status !== 'granted'
+      ) {
         setPedidoPendienteTransmision(pedido);
         setMostrarModalUbicacion(true);
         return;
@@ -947,6 +911,7 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
+  // ✅ FIX #3b: Pedir FOREGROUND primero, después BACKGROUND
   const confirmarUbicacionBackground = async () => {
     if (!pedidoPendienteTransmision) return;
 
@@ -955,16 +920,24 @@ export default function PantallaTransmision(props: any) {
     setPedidoPendienteTransmision(null);
 
     try {
-      const permisoSolicitado = await Location.requestBackgroundPermissionsAsync();
-
-      if (permisoSolicitado.status !== 'granted') {
+      // 1. FOREGROUND primero (obligatorio por Android)
+      const foregroundStatus = await Location.requestForegroundPermissionsAsync();
+      if (foregroundStatus.status !== 'granted') {
         toast.advertencia('⚠️ Sin ubicación no se puede rastrear');
+        return;
+      }
+
+      // 2. BACKGROUND después (solo si foreground fue granted)
+      const backgroundStatus = await Location.requestBackgroundPermissionsAsync();
+      if (backgroundStatus.status !== 'granted') {
+        toast.advertencia('⚠️ Sin ubicación en segundo plano no se puede rastrear');
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       toast.exito('✅ Ubicación activada');
 
+      // Reintentar iniciar transmisión (ahora sí tiene ambos permisos)
       await iniciarTransmision(pedido);
     } catch (error) {
       console.error('❌ Error solicitando permiso de segundo plano:', error);
@@ -1095,9 +1068,6 @@ export default function PantallaTransmision(props: any) {
     transform: [{ scale: liveDotScale.value }],
   }));
 
-  // ============================================================
-  // RENDER PEDIDO
-  // ============================================================
   const renderPedido = useCallback(
     ({ item, index }: { item: Pedido; index: number }) => {
       const color = estadoColor(item.estado);
@@ -1305,7 +1275,6 @@ export default function PantallaTransmision(props: any) {
                 </View>
               </View>
 
-              {/* 🆕 BOTÓN NAVEGAR */}
               {tieneCoordenadas && (
                 <TouchableOpacity
                   style={[estilos.botonNavegar, { backgroundColor: colores.info }]}
@@ -1394,9 +1363,6 @@ export default function PantallaTransmision(props: any) {
     ]
   );
 
-  // ============================================================
-  // HEADER DEL FLATLIST
-  // ============================================================
   const renderHeader = () => (
     <>
       <View style={[estilos.stats, { marginHorizontal: paddingHorizontal }]}>
@@ -1716,7 +1682,6 @@ export default function PantallaTransmision(props: any) {
             </Text>
           </View>
 
-          {/* 🆕 BOTONES DE ACCIÓN: REPORTAR + CONTACTAR + CONFIRMAR */}
           <View style={estilos.accionesRow}>
             <TouchableOpacity
               style={[
@@ -1825,9 +1790,6 @@ export default function PantallaTransmision(props: any) {
 
   const pedidosMostrados = pestana === 'activos' ? pedidosActivos : pedidosEntregados;
 
-  // ============================================================
-  // RENDER PRINCIPAL
-  // ============================================================
   return (
     <View style={[estilos.contenedor, { backgroundColor: colores.fondo }]}>
       <LinearGradient
@@ -1876,7 +1838,6 @@ export default function PantallaTransmision(props: any) {
             {perfil?.nombre_cliente || 'Repartidor'}
           </Text>
 
-          {/* 🆕 SWITCH DE DISPONIBILIDAD */}
           <View style={estilos.disponibilidadRow}>
             <View
               style={[
@@ -1950,94 +1911,89 @@ export default function PantallaTransmision(props: any) {
         windowSize={5}
       />
 
-      {/* MODAL DIVULGACIÓN UBICACIÓN */}
+      {/* ============================================================
+          MODAL DIVULGACIÓN UBICACIÓN - GOOGLE PLAY COMPLIANT
+          FIX #1: onRequestClose bloqueado → el usuario DEBE tocar un botón
+          FIX #4: texto con "recopila, usa y comparte" + "incluso cuando la app está cerrada"
+          ============================================================ */}
       <Modal
         visible={mostrarModalUbicacion}
         transparent
         animationType="fade"
         statusBarTranslucent={true}
-        onRequestClose={cancelarUbicacionBackground}
+        onRequestClose={() => {
+          // ⚠️ INTENCIONALMENTE VACÍO:
+          // Google Play exige que la divulgación destacada NO se pueda cerrar
+          // tocando "atrás". El usuario debe tocar "Ahora no" o "Permitir ubicación".
+        }}
       >
         <View style={estilos.modalFondo}>
           <View style={[estilos.modalUbicacionContainer, { backgroundColor: colores.surface }]}>
-            <LinearGradient
-              colors={[colores.accent, colores.accentSecondary]}
-              style={estilos.modalUbicacionHeader}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
+            <View style={[estilos.modalUbicacionHeader, { backgroundColor: colores.accent }]}>
               <View style={estilos.modalUbicacionIconContainer}>
                 <Ionicons name="location" size={22} color="#FFF" />
               </View>
               <Text style={estilos.modalUbicacionTitulo} allowFontScaling={false}>
-                Ubicación durante la entrega
+                Ubicación en segundo plano
               </Text>
-            </LinearGradient>
+            </View>
 
             <View style={estilos.modalUbicacionBody}>
               <Text style={[estilos.modalUbicacionPregunta, { color: colores.text }]} allowFontScaling={false}>
-                📍 ¿Por qué necesitamos tu ubicación?
+                📍 Krusty Burger necesita acceder a tu ubicación
               </Text>
 
+              {/* ✅ FIX #4: texto con las 3 palabras clave que Google busca */}
               <Text style={[estilos.modalUbicacionExplicacion, { color: colores.textSecondary }]} allowFontScaling={false}>
-                Para que{' '}
-                <Text style={[estilos.modalUbicacionDestacado, { color: colores.accent }]}>
-                  el cliente vea el recorrido de su pedido en tiempo real
-                </Text>{' '}
-                mientras vos hacés la entrega.
+                Para que el cliente pueda ver el recorrido de su pedido en tiempo real, Krusty Burger{' '}
+                <Text style={{ fontWeight: '700', color: colores.text }}>
+                  recopila, usa y comparte tu ubicación con el cliente del pedido
+                </Text>
+                ,{' '}
+                <Text style={{ fontWeight: '700', color: colores.text }}>
+                  incluso cuando la app está cerrada o no está en uso
+                </Text>
+                . La ubicación se usa exclusivamente durante la entrega activa y se detiene al
+                confirmar la entrega del pedido.
               </Text>
 
               <View style={[estilos.modalUbicacionLista, { backgroundColor: colores.surfaceHover }]}>
                 <View style={estilos.modalUbicacionItem}>
-                  <View
-                    style={[
-                      estilos.modalUbicacionIcono,
-                      { backgroundColor: colores.success + '15' },
-                    ]}
-                  >
-                    <Ionicons name="time-outline" size={16} color={colores.success} />
-                  </View>
-                  <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Solo durante la{' '}
-                    <Text style={[estilos.modalUbicacionItemDestacado, { color: colores.text }]}>entrega activa</Text>
-                  </Text>
-                </View>
-
-                <View style={estilos.modalUbicacionItem}>
-                  <View
-                    style={[
-                      estilos.modalUbicacionIcono,
-                      { backgroundColor: colores.success + '15' },
-                    ]}
-                  >
+                  <View style={[estilos.modalUbicacionIcono, { backgroundColor: colores.success + '15' }]}>
                     <Ionicons name="eye-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
                     Solo la ve el{' '}
-                    <Text style={[estilos.modalUbicacionItemDestacado, { color: colores.text }]}>cliente del pedido</Text>
+                    <Text style={{ fontWeight: '700', color: colores.text }}>cliente del pedido</Text>
                   </Text>
                 </View>
 
                 <View style={estilos.modalUbicacionItem}>
-                  <View
-                    style={[
-                      estilos.modalUbicacionIcono,
-                      { backgroundColor: colores.success + '15' },
-                    ]}
-                  >
+                  <View style={[estilos.modalUbicacionIcono, { backgroundColor: colores.success + '15' }]}>
+                    <Ionicons name="time-outline" size={16} color={colores.success} />
+                  </View>
+                  <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
+                    Solo durante la{' '}
+                    <Text style={{ fontWeight: '700', color: colores.text }}>entrega activa</Text>
+                  </Text>
+                </View>
+
+                <View style={estilos.modalUbicacionItem}>
+                  <View style={[estilos.modalUbicacionIcono, { backgroundColor: colores.success + '15' }]}>
                     <Ionicons name="stop-circle-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Se <Text style={[estilos.modalUbicacionItemDestacado, { color: colores.text }]}>detiene al confirmar</Text>{' '}
-                    la entrega
+                    Se <Text style={{ fontWeight: '700', color: colores.text }}>detiene al confirmar</Text> la entrega
                   </Text>
                 </View>
               </View>
 
               <Text style={[estilos.modalUbicacionAviso, { color: colores.textTertiary }]} allowFontScaling={false}>
-                Vas a ver un aviso del sistema para elegir{' '}
-                <Text style={[estilos.modalUbicacionDestacado, { color: colores.accent }]}>"Permitir todo el tiempo"</Text>. Es lo
-                que permite que siga funcionando con la pantalla bloqueada.
+                Al tocar "Permitir ubicación", el sistema te va a pedir elegir{' '}
+                <Text style={{ fontWeight: '700', color: colores.accent }}>
+                  "Permitir todo el tiempo"
+                </Text>
+                . Es lo que permite que el seguimiento siga funcionando con la pantalla bloqueada.
               </Text>
             </View>
 
@@ -2060,17 +2016,12 @@ export default function PantallaTransmision(props: any) {
                 onPress={confirmarUbicacionBackground}
                 activeOpacity={0.85}
               >
-                <LinearGradient
-                  colors={[colores.accent, colores.accentSecondary]}
-                  style={estilos.modalUbicacionBotonContinuarGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Ionicons name="location" size={18} color="#FFF" />
+                <View style={[estilos.modalUbicacionBotonContinuarGradient, { backgroundColor: colores.accent }]}>
+                  <Ionicons name="checkmark-circle" size={18} color="#FFF" />
                   <Text style={estilos.modalUbicacionBotonContinuarTexto} allowFontScaling={false}>
-                    Continuar
+                    Permitir ubicación
                   </Text>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -2255,7 +2206,7 @@ export default function PantallaTransmision(props: any) {
         </View>
       </Modal>
 
-      {/* 🆕 MODAL REPORTAR PROBLEMA */}
+      {/* MODAL REPORTAR PROBLEMA */}
       <Modal
         visible={mostrarModalProblema}
         transparent
@@ -2501,9 +2452,6 @@ export default function PantallaTransmision(props: any) {
   );
 }
 
-// ============================================================
-// 🎨 ESTILOS DINÁMICOS
-// ============================================================
 const crearEstilos = (colores: PaletaTema) =>
   StyleSheet.create({
     contenedor: {
@@ -2545,7 +2493,6 @@ const crearEstilos = (colores: PaletaTema) =>
       includeFontPadding: false,
     },
 
-    // 🆕 Switch de disponibilidad
     disponibilidadRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2564,7 +2511,6 @@ const crearEstilos = (colores: PaletaTema) =>
       includeFontPadding: false,
     },
 
-    // 🆕 Banner pausado
     bannerPausado: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -3225,7 +3171,6 @@ const crearEstilos = (colores: PaletaTema) =>
       includeFontPadding: false,
     },
 
-    // MODAL UBICACIÓN
     modalUbicacionContainer: {
       borderRadius: Sizes.radius.xl,
       width: '100%',
@@ -3361,7 +3306,6 @@ const crearEstilos = (colores: PaletaTema) =>
       includeFontPadding: false,
     },
 
-    // SHEET CONTACTO / REPORTAR
     sheetRoot: {
       flex: 1,
       justifyContent: 'flex-end',
@@ -3477,7 +3421,6 @@ const crearEstilos = (colores: PaletaTema) =>
       includeFontPadding: false,
     },
 
-    // Reportar problema
     problemaDetalleInput: {
       borderRadius: 12,
       borderWidth: 1,

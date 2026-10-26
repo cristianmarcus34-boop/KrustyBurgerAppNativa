@@ -1394,18 +1394,22 @@ export default function PantallaCheckout(props: any) {
             return;
         }
 
-        notificacionService
-            .notificarAdminsNuevoPedido({
+        // ✅ Notificar admins (silencioso: nunca rompe el flujo del pedido)
+        try {
+            await notificacionService.notificarAdminsNuevoPedido({
                 id: pedidoId,
                 cliente_nombre: perfil?.nombre_cliente,
                 total: resumen.totalFinal,
                 cantidad_items: elementos.length,
                 tipo_entrega: tipoEntrega,
-            })
-            .catch((err) => console.warn('⚠️ Error notificando admins:', err));
+            });
+        } catch (err) {
+            console.warn('⚠️ Error notificando admins (no rompe el flujo):', err);
+        }
 
-        notificacionService
-            .enviarNotificacionAUsuario(
+        // ✅ Notificar al cliente (silencioso: nunca rompe el flujo del pedido)
+        try {
+            await notificacionService.enviarNotificacionAUsuario(
                 perfil.id,
                 'pedido exitoso',
                 'mmm sacrileegioozo 🍩',
@@ -1413,11 +1417,18 @@ export default function PantallaCheckout(props: any) {
                 undefined,
                 undefined,
                 { pedidoId, destino: 'Pedidos' },
-            )
-            .catch((err) => console.warn('⚠️ Error notificando al cliente:', err));
+            );
+        } catch (err) {
+            console.warn('⚠️ Error notificando al cliente (no rompe el flujo):', err);
+        }
 
+        // ✅ Finalizar cupón (silencioso: nunca rompe el flujo)
         if (cuponAplicado?.id && perfil?.id) {
-            await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
+            try {
+                await cuponService.finalizarCuponPedido(cuponAplicado.id, perfil.id, pedidoId);
+            } catch (err) {
+                console.warn('⚠️ Error finalizando cupón (no rompe el flujo):', err);
+            }
         }
 
         if (cuponPuntosAplicado?.puntos_usados > 0 && perfil?.id && pedidoId) {
@@ -1442,7 +1453,11 @@ export default function PantallaCheckout(props: any) {
         }
 
         vaciarCarrito();
-        await limpiarUbicacionTemporal();
+        try {
+            await limpiarUbicacionTemporal();
+        } catch (err) {
+            console.warn('⚠️ Error limpiando ubicación temporal (no rompe el flujo):', err);
+        }
 
         if (metodoPago === 'transferencia') {
             setCargando(false);
@@ -1457,6 +1472,7 @@ export default function PantallaCheckout(props: any) {
             setMostrarModalExito(false);
             props.navigation.replace('Seguimiento', { pedidoId });
         }, 2800);
+
     };
 
     const cerrarModalTransferencia = () => {

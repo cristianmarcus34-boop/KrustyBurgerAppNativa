@@ -206,8 +206,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         : null;
       const puntoYaReciente =
         ultimoPunto?.pedidoId === seguimiento.pedidoId &&
-        timestamp - ultimoPunto.timestamp < 30_000 &&
-        calcularDistanciaMetros(latitude, longitude, ultimoPunto.latitude, ultimoPunto.longitude) < 20;
+        timestamp - ultimoPunto.timestamp < 5_000 &&
+        calcularDistanciaMetros(latitude, longitude, ultimoPunto.latitude, ultimoPunto.longitude) < 5;
 
       if (!puntoYaReciente) {
         const { data: puntoRegistrado, error: errorRecorrido } = await supabase.rpc(

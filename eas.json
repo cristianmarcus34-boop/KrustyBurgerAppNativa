@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 21.4.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -37,10 +37,13 @@
       }
     },
     "production": {
-      "autoIncrement": true,
+      "autoIncrement": false,
       "channel": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "SENTRY_ALLOW_FAILURE": "true"
       }
     },
     "development-simulator": {

@@ -1,4 +1,4 @@
-// services/notificacionService.ts - CON SOPORTE MULTI-DISPOSITIVO + IMÁGENES + NOTIFICAR ADMINS + CLIENTES + PROBLEMAS
+// services/notificacionService.ts - V2 (multi-proyecto safe + auto-limpieza de tokens)
 import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Platform } from 'react-native';
@@ -6,7 +6,24 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatearPrecio } from '../lib/formateador';
 
-// ✅ NAVIGATION REF
+// ============================================================
+// ⚙️ CONFIG
+// ============================================================
+const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send';
+const NOTIFICACIONES_OCULTAS_KEY = '@notificaciones_ocultas';
+
+// ✅ Project ID del app.json actual (KrustyBurger / agenciadigitalpowas-team)
+const PROJECT_ID_ACTUAL = '3bb3f5cf-a572-4703-8a2a-e727bc44a0e6';
+
+// ✅ Límite de Expo Push API
+const EXPO_BATCH_SIZE = 100;
+
+// ✅ Máximo de reintentos por request
+const MAX_RETRIES = 2;
+
+// ============================================================
+// 🔗 NAVIGATION REF
+// ============================================================
 let navigationRef: any = null;
 let isAppReady = false;
 let notificacionesPendientes: any[] = [];
@@ -18,12 +35,14 @@ export const setNavigationRef = (ref: any) => {
 
     if (notificacionesPendientes.length > 0) {
         console.log(`📱 Procesando ${notificacionesPendientes.length} notificaciones pendientes...`);
-        notificacionesPendientes.forEach(notif => procesarNotificacion(notif));
+        notificacionesPendientes.forEach((notif) => procesarNotificacion(notif));
         notificacionesPendientes = [];
     }
 };
 
-// ✅ PROCESAR NOTIFICACIÓN
+// ============================================================
+// 📱 PROCESAR NOTIFICACIÓN
+// ============================================================
 const procesarNotificacion = (data: any) => {
     if (!navigationRef) {
         notificacionesPendientes.push(data);
@@ -78,7 +97,9 @@ const procesarNotificacion = (data: any) => {
     }
 };
 
-// ✅ CONFIG
+// ============================================================
+// 🔔 HANDLER GLOBAL
+// ============================================================
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowBanner: true,
@@ -88,19 +109,153 @@ Notifications.setNotificationHandler({
     }),
 });
 
-const EXPO_PUSH_API = 'https://exp.host/--/api/v2/push/send';
-const NOTIFICACIONES_OCULTAS_KEY = '@notificaciones_ocultas';
-
-// ✅ Project ID
+// ============================================================
+// 🆔 OBTENER PROJECT ID
+// ============================================================
 const getProjectId = (): string => {
-    const config = Constants.expoConfig as any;
-    return config?.extra?.eas?.projectId ||
-        config?.projectId ||
-        '709ab55b-7649-4a00-8a9c-a9dfd6aa2277';
+    try {
+        const config = Constants.expoConfig as any;
+        const fromConfig = config?.extra?.eas?.projectId || config?.projectId;
+        if (fromConfig && typeof fromConfig === 'string' && fromConfig.length > 10) {
+            return fromConfig;
+        }
+    } catch {
+        // fallback
+    }
+    return PROJECT_ID_ACTUAL;
 };
 
-export const notificacionService = {
+// ============================================================
+// 🧰 HELPERS INTERNOS
+// ============================================================
 
+/**
+ * ✅ Espera N milisegundos (para retry con backoff).
+ */
+const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * ✅ Verifica si un token de Expo es válido sintácticamente.
+ */
+const esTokenExpoValido = (token: unknown): token is string => {
+    return (
+        typeof token === 'string' &&
+        token.length > 20 &&
+        (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
+    );
+};
+
+/**
+ * ✅ Envía UN lote de hasta 100 mensajes a Expo.
+ * Nunca lanza: si falla, devuelve { ok: false, error }.
+ */
+const enviarLoteExpo = async (
+    messages: any[],
+): Promise<{ ok: boolean; data?: any[]; error?: any; detalles?: any }> => {
+    if (!messages.length) return { ok: true, data: [] };
+
+    let intento = 0;
+    let ultimoError: any = null;
+
+    while (intento <= MAX_RETRIES) {
+        try {
+            const response = await fetch(EXPO_PUSH_API, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Content-Type': 'application/json',
+                    'X-Expo-Project-Id': PROJECT_ID_ACTUAL,
+                },
+                body: JSON.stringify(messages),
+            });
+
+            const result = await response.json();
+
+            // ✅ Error global de Expo (ej: PUSH_TOO_MANY_EXPERIENCE_IDS)
+            if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
+                console.warn('⚠️ [Expo] Errores globales:', result.errors);
+                return {
+                    ok: false,
+                    error: result.errors,
+                    detalles: result.errors[0]?.details,
+                };
+            }
+
+            // ✅ Éxito: devolvemos la data (puede tener status 'ok' o 'error' por token)
+            return { ok: true, data: result.data || [] };
+        } catch (err: any) {
+            ultimoError = err;
+            intento++;
+            if (intento <= MAX_RETRIES) {
+                console.warn(`⚠️ [Expo] Error de red (intento ${intento}/${MAX_RETRIES + 1}):`, err?.message);
+                await esperar(500 * intento); // backoff
+            }
+        }
+    }
+
+    return { ok: false, error: ultimoError };
+};
+
+/**
+ * ✅ Procesa la respuesta de Expo por token:
+ *  - Cuenta éxitos/fallos
+ *  - Junta tokens con error "DeviceNotRegistered" para desactivarlos
+ */
+const procesarRespuestaExpo = (
+    mensajes: any[],
+    respuestas: any[],
+): { exitos: number; fallidos: number; tokensInvalidos: string[] } => {
+    let exitos = 0;
+    let fallidos = 0;
+    const tokensInvalidos: string[] = [];
+
+    const tokensEnviados = mensajes.map((m) => m.to);
+
+    (respuestas || []).forEach((resp: any, i: number) => {
+        if (resp?.status === 'ok') {
+            exitos++;
+            return;
+        }
+
+        fallidos++;
+        const token = tokensEnviados[i];
+        const errorCode = resp?.details?.error || resp?.message;
+
+        // ✅ Tokens que ya no existen → desactivar en la DB
+        if (errorCode === 'DeviceNotRegistered' || errorCode === 'InvalidCredentials') {
+            if (token) tokensInvalidos.push(token);
+        }
+    });
+
+    return { exitos, fallidos, tokensInvalidos };
+};
+
+/**
+ * ✅ Desactiva tokens inválidos en la DB (fire and forget, no rompe si falla).
+ */
+const desactivarTokensInvalidos = async (tokens: string[]) => {
+    if (!tokens.length) return;
+    try {
+        const { error } = await supabase
+            .from('dispositivos_push')
+            .update({ activo: false })
+            .in('expo_push_token', tokens);
+
+        if (error) {
+            console.warn('⚠️ No se pudieron desactivar tokens inválidos:', error.message);
+        } else {
+            console.log(`🧹 Desactivados ${tokens.length} tokens inválidos`);
+        }
+    } catch (err) {
+        console.warn('⚠️ Error desactivando tokens inválidos:', err);
+    }
+};
+
+// ============================================================
+// 🚀 SERVICE
+// ============================================================
+export const notificacionService = {
     // ============================================================
     // 📱 REGISTRO Y PERMISOS
     // ============================================================
@@ -115,7 +270,7 @@ export const notificacionService = {
         }
     },
 
-    async registrarToken(usuarioId: string) {
+    async registrarToken(usuarioId: string): Promise<boolean> {
         try {
             if (!(await this.tienePermisos())) {
                 console.log('🔕 No se registra el token: permisos no concedidos');
@@ -128,13 +283,15 @@ export const notificacionService = {
             try {
                 token = await Notifications.getExpoPushTokenAsync({ projectId });
             } catch (expoError: any) {
-                // 🔍 Si el error viene de Firebase/Expo por el bundle o red, lo manejamos de forma limpia
                 const mensajeError = expoError?.message || '';
-                if (mensajeError.includes('LoadBundle') || mensajeError.includes('Could not load bundle')) {
+                if (
+                    mensajeError.includes('LoadBundle') ||
+                    mensajeError.includes('Could not load bundle')
+                ) {
                     console.warn('⚠️ [Notif] Advertencia menor de Firebase (Bundle ignorado):', mensajeError);
                     return false;
                 }
-                throw expoError; // Si es otro error, que pase al catch principal
+                throw expoError;
             }
 
             if (!token?.data) return false;
@@ -151,7 +308,7 @@ export const notificacionService = {
                         activo: true,
                         ultima_actividad: new Date().toISOString(),
                     },
-                    { onConflict: 'expo_push_token' }
+                    { onConflict: 'expo_push_token' },
                 );
 
             if (errorDispositivo) {
@@ -170,9 +327,7 @@ export const notificacionService = {
                 console.warn('⚠️ Error actualizando perfiles.fcm_token:', errorPerfil);
             }
 
-            // ✅ NUEVO: Sincronizar push_subscriptions.is_active = true
-            // Así garantizamos que la fila quede activa cuando el token se registra,
-            // sin depender de que el usuario toque "Activar" manualmente.
+            // ✅ Sincronizar push_subscriptions.is_active = true
             try {
                 const { error: errorSub } = await supabase
                     .from('push_subscriptions')
@@ -182,13 +337,13 @@ export const notificacionService = {
                             is_active: true,
                             updated_at: new Date().toISOString(),
                         },
-                        { onConflict: 'usuario_id' }
+                        { onConflict: 'usuario_id' },
                     );
 
                 if (errorSub) {
-                    console.error('❌ Error upsert push_subscriptions (desde registrarToken):', errorSub);
+                    console.error('❌ Error upsert push_subscriptions:', errorSub);
                 } else {
-                    console.log('✅ push_subscriptions activado desde registrarToken para', usuarioId);
+                    console.log('✅ push_subscriptions activado para', usuarioId);
                 }
             } catch (errorSub) {
                 console.error('❌ Excepción upsert push_subscriptions:', errorSub);
@@ -266,10 +421,10 @@ export const notificacionService = {
         }
     },
 
-    // ✅ HELPER INTERNO: configura todos los canales de Android
-    // Se llama cada vez que se confirman permisos (granted), sin importar
-    // si fue recién pedido o ya estaba concedido.
-    async configurarCanalesAndroid() {
+    // ============================================================
+    // 🎛️ CANALES ANDROID
+    // ============================================================
+    async configurarCanalesAndroid(): Promise<void> {
         if (Platform.OS !== 'android') return;
 
         try {
@@ -333,7 +488,6 @@ export const notificacionService = {
                 sound: 'saxolisa.wav',
             });
 
-            // 🆕 Canal específico para problemas reportados por repartidores
             await Notifications.setNotificationChannelAsync('problemas_repartidor', {
                 name: '⚠️ Problemas reportados',
                 importance: Notifications.AndroidImportance.MAX,
@@ -396,25 +550,21 @@ export const notificacionService = {
         }
     },
 
-    async solicitarPermisos() {
+    async solicitarPermisos(): Promise<boolean> {
         try {
             let { status } = await Notifications.getPermissionsAsync();
 
-            // ✅ Ya concedido: solo aseguramos canales y salimos
             if (status === 'granted') {
                 console.log('✅ [Notif] Permisos ya concedidos');
                 await this.configurarCanalesAndroid();
                 return true;
             }
 
-            // ⚠️ Denegado permanentemente: NO se puede volver a pedir desde la app.
-            // El caller (hook o pantalla) debe mostrar un Alert con "Abrir ajustes".
             if (status === 'denied') {
                 console.log('⚠️ [Notif] Permiso denegado — requiere acción manual en ajustes');
                 return false;
             }
 
-            // status === 'undetermined' → primera vez, se puede pedir
             ({ status } = await Notifications.requestPermissionsAsync());
 
             if (status !== 'granted') {
@@ -433,13 +583,13 @@ export const notificacionService = {
     },
 
     escucharNotificaciones() {
-        const subscription = Notifications.addNotificationReceivedListener(n => {
+        const subscription = Notifications.addNotificationReceivedListener((n) => {
             console.log('📱 Notificación recibida:', n.request.content.title);
             console.log('   attachments:', (n.request.content as any).attachments);
             console.log('   data:', n.request.content.data);
         });
 
-        const responseSubscription = Notifications.addNotificationResponseReceivedListener(n => {
+        const responseSubscription = Notifications.addNotificationResponseReceivedListener((n) => {
             console.log('👆 Click en notificación:', n.notification.request.content.data);
             procesarNotificacion(n.notification.request.content.data);
         });
@@ -447,7 +597,7 @@ export const notificacionService = {
         return { subscription, responseSubscription };
     },
 
-    async procesarNotificacionInicial() {
+    async procesarNotificacionInicial(): Promise<void> {
         try {
             const response = await Notifications.getLastNotificationResponseAsync();
             if (response) {
@@ -464,30 +614,55 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // 📤 ENVÍO
+    // 📤 ENVÍO (el corazón del fix)
     // ============================================================
 
-    async enviarNotificacionesMasivas(tokens: string[], titulo: string, mensaje: string, data?: any) {
+    /**
+     * ✅ Envía notificaciones a una lista de tokens.
+     *
+     * Estrategia anti-PUSH_TOO_MANY_EXPERIENCE_IDS:
+     *  1. Filtrar tokens válidos sintácticamente
+     *  2. Intentar enviar en batch (100 por request)
+     *  3. Si Expo devuelve PUSH_TOO_MANY_EXPERIENCE_IDS (mezcla de proyectos),
+     *     caer a modo "uno por uno" — cada token se envía aislado y si
+     *     uno falla, los demás igual se envían.
+     *  4. Nunca lanzar: siempre devuelve { success, resultados, errores }
+     */
+    async enviarNotificacionesMasivas(
+        tokens: string[],
+        titulo: string,
+        mensaje: string,
+        data?: any,
+    ): Promise<{
+        success: boolean;
+        resultados?: { total: number; exitos: number; fallidos: number };
+        errores?: any[];
+    }> {
         try {
-            const tokensValidos = tokens.filter(t => t && t.length > 10);
+            const tokensValidos = (tokens || []).filter(esTokenExpoValido);
+
             if (!tokensValidos.length) {
                 return { success: false, errores: ['No hay tokens válidos'] };
             }
 
             console.log('📷 ========== ENVIANDO ==========');
-            console.log('📷 Tokens:', tokensValidos.length, '| Título:', titulo);
+            console.log('📷 Tokens válidos:', tokensValidos.length, '| Título:', titulo);
 
-            const messages = tokensValidos.map(token => {
+            // ✅ Construir los mensajes
+            const construirMensaje = (token: string) => {
                 const sonidoSeleccionado = data?.sonido;
                 const imagenUrl = data?.imagen;
 
-                const tieneImagen = !!(imagenUrl
-                    && typeof imagenUrl === 'string'
-                    && imagenUrl.startsWith('https://'));
+                const tieneImagen = !!(
+                    imagenUrl &&
+                    typeof imagenUrl === 'string' &&
+                    imagenUrl.startsWith('https://')
+                );
 
-                const hasCustomSound = !!sonidoSeleccionado
-                    && sonidoSeleccionado !== 'default'
-                    && !tieneImagen;
+                const hasCustomSound =
+                    !!sonidoSeleccionado &&
+                    sonidoSeleccionado !== 'default' &&
+                    !tieneImagen;
 
                 let channelId = 'default';
                 if (tieneImagen) {
@@ -499,7 +674,6 @@ export const notificacionService = {
                 } else if (data?.tipo === 'recompensa') {
                     channelId = 'recompensa';
                 } else if (data?.tipo === 'pedido') {
-                    // 🆕 Si es un problema reportado por repartidor, va al canal específico
                     if (data?.problema) {
                         channelId = 'problemas_repartidor';
                     } else {
@@ -509,7 +683,7 @@ export const notificacionService = {
                     channelId = 'sistema';
                 }
 
-                const message: any = {
+                const msg: any = {
                     to: token,
                     title: titulo,
                     body: mensaje,
@@ -523,51 +697,107 @@ export const notificacionService = {
                 };
 
                 if (hasCustomSound) {
-                    const soundFile = sonidoSeleccionado.endsWith('.wav')
+                    msg.sound = sonidoSeleccionado.endsWith('.wav')
                         ? sonidoSeleccionado
                         : `${sonidoSeleccionado}.wav`;
-                    message.sound = soundFile;
                 } else {
-                    message.sound = 'default';
+                    msg.sound = 'default';
                 }
 
                 if (tieneImagen) {
-                    message.richContent = { image: imagenUrl };
-                    message.image = imagenUrl;
+                    msg.richContent = { image: imagenUrl };
+                    msg.image = imagenUrl;
                 }
 
-                return message;
-            });
+                return msg;
+            };
 
-            const response = await fetch(EXPO_PUSH_API, {
-                method: 'POST',
-                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                body: JSON.stringify(messages),
-            });
+            // ✅ 1) Intentar en batch (100 por request)
+            let exitosTotales = 0;
+            let fallidosTotales = 0;
+            const todosLosErrores: any[] = [];
+            const tokensParaDesactivar: string[] = [];
 
-            const result = await response.json();
+            for (let i = 0; i < tokensValidos.length; i += EXPO_BATCH_SIZE) {
+                const batch = tokensValidos.slice(i, i + EXPO_BATCH_SIZE);
+                const messages = batch.map(construirMensaje);
 
-            if (result.errors) {
-                console.error('❌ Errores:', result.errors);
-                return { success: false, errores: result.errors };
+                const res = await enviarLoteExpo(messages);
+
+                // ❌ Si hubo error global con PUSH_TOO_MANY_EXPERIENCE_IDS → fallback 1x1
+                if (!res.ok) {
+                    const esMezclaProyectos = JSON.stringify(res.error || '').includes(
+                        'PUSH_TOO_MANY_EXPERIENCE_IDS',
+                    );
+
+                    if (esMezclaProyectos) {
+                        console.warn(
+                            '⚠️ [Expo] Detectado PUSH_TOO_MANY_EXPERIENCE_IDS → enviando token por token',
+                        );
+
+                        for (const token of batch) {
+                            const resIndividual = await enviarLoteExpo([construirMensaje(token)]);
+
+                            if (resIndividual.ok) {
+                                const { exitos, fallidos, tokensInvalidos } = procesarRespuestaExpo(
+                                    [construirMensaje(token)],
+                                    resIndividual.data || [],
+                                );
+                                exitosTotales += exitos;
+                                fallidosTotales += fallidos;
+                                tokensParaDesactivar.push(...tokensInvalidos);
+                            } else {
+                                fallidosTotales += 1;
+                            }
+                        }
+
+                        todosLosErrores.push(res.error);
+                        continue;
+                    }
+
+                    // Otro error global → registrar y seguir
+                    todosLosErrores.push(res.error);
+                    continue;
+                }
+
+                // ✅ Batch OK → procesar respuesta por token
+                const { exitos, fallidos, tokensInvalidos } = procesarRespuestaExpo(
+                    messages,
+                    res.data || [],
+                );
+                exitosTotales += exitos;
+                fallidosTotales += fallidos;
+                tokensParaDesactivar.push(...tokensInvalidos);
             }
 
-            const exitos = result.data?.filter((r: any) => r.status === 'ok').length || 0;
-            const fallidos = result.data?.filter((r: any) => r.status === 'error').length || 0;
+            // 🧹 Desactivar tokens inválidos (fire and forget)
+            if (tokensParaDesactivar.length > 0) {
+                desactivarTokensInvalidos(tokensParaDesactivar).catch(() => { });
+            }
 
-            console.log(`✅ Enviados: ${exitos}, Fallidos: ${fallidos}`);
+            console.log(
+                `✅ Enviados: ${exitosTotales} OK, ${fallidosTotales} fallidos de ${tokensValidos.length}`,
+            );
 
             return {
-                success: fallidos === 0,
-                resultados: { total: tokensValidos.length, exitos, fallidos },
-                data: result.data,
+                success: fallidosTotales === 0,
+                resultados: {
+                    total: tokensValidos.length,
+                    exitos: exitosTotales,
+                    fallidos: fallidosTotales,
+                },
+                errores: todosLosErrores.length > 0 ? todosLosErrores : undefined,
             };
         } catch (error: any) {
-            console.error('❌ Error enviando:', error);
+            console.error('❌ [Notif] Error en enviarNotificacionesMasivas:', error);
             return { success: false, errores: [error?.message || 'Error desconocido'] };
         }
     },
 
+    /**
+     * ✅ Envía notificación a un usuario específico (todos sus dispositivos).
+     * Nunca lanza: siempre devuelve { success, enviados?, error? }
+     */
     async enviarNotificacionAUsuario(
         usuarioId: string,
         titulo: string,
@@ -575,11 +805,9 @@ export const notificacionService = {
         tipo: string = 'sistema',
         imagen?: string,
         sonido?: string,
-        datos?: Record<string, unknown>
-    ) {
+        datos?: Record<string, unknown>,
+    ): Promise<{ success: boolean; enviados?: number; error?: any }> {
         try {
-            // ✅ SOLO 'promocion' requiere consentimiento explícito.
-            // 'oferta' se manda a todos (es info útil, no marketing).
             if (tipo === 'promocion') {
                 const { data: perfil, error: errorPerfil } = await supabase
                     .from('perfiles')
@@ -587,25 +815,36 @@ export const notificacionService = {
                     .eq('id', usuarioId)
                     .single();
 
-                if (errorPerfil) throw errorPerfil;
+                if (errorPerfil) {
+                    return { success: false, error: errorPerfil };
+                }
+
                 if (!perfil?.acepta_promociones) {
                     return { success: false, error: 'El usuario no aceptó recibir promociones.' };
                 }
             }
 
-            const { error: insertError } = await supabase
-                .from('notificaciones_usuarios')
-                .insert({
-                    usuario_id: usuarioId,
-                    titulo,
-                    mensaje,
-                    tipo,
-                    imagen_url: imagen || null,
-                    created_at: new Date().toISOString()
-                });
+            // Guardar en historial (silencioso si falla)
+            try {
+                const { error: insertError } = await supabase
+                    .from('notificaciones_usuarios')
+                    .insert({
+                        usuario_id: usuarioId,
+                        titulo,
+                        mensaje,
+                        tipo,
+                        imagen_url: imagen || null,
+                        created_at: new Date().toISOString(),
+                    });
 
-            if (insertError) throw insertError;
+                if (insertError) {
+                    console.warn('⚠️ [Notif] No se pudo guardar en historial:', insertError.message);
+                }
+            } catch (e) {
+                console.warn('⚠️ [Notif] Excepción guardando en historial:', e);
+            }
 
+            // Obtener tokens
             const { data: dispositivos } = await supabase
                 .from('dispositivos_push')
                 .select('expo_push_token')
@@ -617,24 +856,47 @@ export const notificacionService = {
                 return { success: true, enviados: 0 };
             }
 
-            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+            const tokens = dispositivos
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
 
-            return await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
-                tipo, imagen, sonido, ...datos
+            if (!tokens.length) {
+                return { success: true, enviados: 0 };
+            }
+
+            const resultado = await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
+                tipo,
+                imagen,
+                sonido,
+                ...datos,
             });
-        } catch (error) {
-            console.error('❌ Error:', error);
-            return { success: false, error };
+
+            return {
+                success: resultado.success,
+                enviados: resultado.resultados?.exitos ?? 0,
+                error: resultado.errores?.[0],
+            };
+        } catch (error: any) {
+            console.error('❌ [Notif] Error enviando a usuario:', error);
+            return { success: false, error: error?.message };
         }
     },
 
+    /**
+     * ✅ Envía notificación masiva a todos los usuarios alcanzables.
+     * Nunca lanza.
+     */
     async enviarNotificacionMasiva(
         titulo: string,
         mensaje: string,
         tipo: string = 'sistema',
         imagen?: string,
-        sonido?: string
-    ) {
+        sonido?: string,
+    ): Promise<{
+        success: boolean;
+        resultados?: { total: number; exitos: number; fallidos: number };
+        error?: any;
+    }> {
         try {
             const hace60dias = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -644,61 +906,42 @@ export const notificacionService = {
                 .eq('activo', true)
                 .gte('ultima_actividad', hace60dias);
 
-            // ✅ SOLO 'promocion' filtra por consentimiento.
-            // 'oferta' va a todos los que tengan permiso nativo.
             if (tipo === 'promocion') {
-                const { data: perfilesConConsentimiento, error: errorPerfiles } = await supabase
+                const { data: perfilesConConsentimiento } = await supabase
                     .from('perfiles')
                     .select('id')
                     .eq('acepta_promociones', true);
 
-                if (errorPerfiles) throw errorPerfiles;
+                const ids = perfilesConConsentimiento?.map((p) => p.id) || [];
+                if (!ids.length) return { success: true, resultados: { total: 0, exitos: 0, fallidos: 0 } };
 
-                const idsConConsentimiento = perfilesConConsentimiento?.map((perfil) => perfil.id) || [];
-                if (idsConConsentimiento.length === 0) {
-                    return { success: true, enviados: 0 };
-                }
-
-                queryDispositivos = queryDispositivos.in('usuario_actual_id', idsConConsentimiento);
+                queryDispositivos = queryDispositivos.in('usuario_actual_id', ids);
             }
 
             const { data: dispositivos, error } = await queryDispositivos;
             if (error) throw error;
-            if (!dispositivos || dispositivos.length === 0) {
-                return { success: true, enviados: 0 };
+            if (!dispositivos || !dispositivos.length) {
+                return { success: true, resultados: { total: 0, exitos: 0, fallidos: 0 } };
             }
 
-            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+            const tokens = dispositivos
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
 
-            const BATCH_SIZE = 100;
-            let exitosTotales = 0;
-            let fallidosTotales = 0;
-
-            for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
-                const batch = tokens.slice(i, i + BATCH_SIZE);
-                const resultado = await this.enviarNotificacionesMasivas(
-                    batch, titulo, mensaje, { tipo, imagen, sonido }
-                );
-
-                if (resultado.resultados) {
-                    exitosTotales += resultado.resultados.exitos;
-                    fallidosTotales += resultado.resultados.fallidos;
-                }
-            }
-
-            console.log(`✅ Masiva: ${exitosTotales} OK, ${fallidosTotales} fallidos`);
+            const resultado = await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
+                tipo,
+                imagen,
+                sonido,
+            });
 
             return {
-                success: true,
-                resultados: {
-                    total: tokens.length,
-                    exitos: exitosTotales,
-                    fallidos: fallidosTotales,
-                },
+                success: resultado.success,
+                resultados: resultado.resultados,
+                error: resultado.errores?.[0],
             };
-        } catch (error) {
-            console.error('❌ Error masiva:', error);
-            return { success: false, error };
+        } catch (error: any) {
+            console.error('❌ [Notif] Error masiva:', error);
+            return { success: false, error: error?.message };
         }
     },
 
@@ -712,42 +955,51 @@ export const notificacionService = {
         cantidad_items?: number;
         tipo_entrega?: string;
         usuarioId?: string;
-    }) {
+    }): Promise<{ success: boolean; enviados?: number; error?: any }> {
         try {
             console.log('🔔 [Notif] Notificando a admins sobre pedido #', pedido.id);
 
-            const { data: admins, error } = await supabase
+            // ✅ Tomamos tokens desde dispositivos_push (no desde perfiles.fcm_token)
+            const { data: admins, error: errorAdmins } = await supabase
                 .from('perfiles')
-                .select('id, nombre_cliente, fcm_token')
-                .eq('rol', 'admin')
-                .not('fcm_token', 'is', null);
+                .select('id, nombre_cliente')
+                .eq('rol', 'admin');
 
-            if (error) {
-                console.error('❌ [Notif] Error buscando admins:', error);
-                return { success: false, error: error.message };
+            if (errorAdmins) {
+                console.error('❌ [Notif] Error buscando admins:', errorAdmins);
+                return { success: false, error: errorAdmins.message };
             }
 
-            if (!admins || admins.length === 0) {
-                console.log('ℹ️ [Notif] No hay admins con token registrado');
+            if (!admins || !admins.length) {
+                console.log('ℹ️ [Notif] No hay admins');
                 return { success: true, enviados: 0 };
             }
 
-            // ✅ Excluir al admin que hizo el pedido (si aplica)
-            const adminsANotificar = pedido.usuarioId
-                ? admins.filter(a => a.id !== pedido.usuarioId)
-                : admins;
+            const idsAdmin = admins
+                .map((a) => a.id)
+                .filter((id) => !pedido.usuarioId || id !== pedido.usuarioId);
 
-            if (adminsANotificar.length === 0) {
-                console.log('ℹ️ [Notif] No hay admins a notificar');
+            if (!idsAdmin.length) {
                 return { success: true, enviados: 0 };
             }
 
-            const tokensValidos = adminsANotificar
-                .map(a => a.fcm_token)
-                .filter((t): t is string => !!t && t.startsWith('ExponentPushToken['));
+            const { data: dispositivos, error: errorDispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .in('usuario_actual_id', idsAdmin)
+                .eq('activo', true);
 
-            if (tokensValidos.length === 0) {
-                console.log('ℹ️ [Notif] No hay tokens Expo válidos');
+            if (errorDispositivos) {
+                console.error('❌ [Notif] Error buscando dispositivos de admins:', errorDispositivos);
+                return { success: false, error: errorDispositivos.message };
+            }
+
+            const tokens = (dispositivos || [])
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
+
+            if (!tokens.length) {
+                console.log('ℹ️ [Notif] No hay tokens Expo válidos para admins');
                 return { success: true, enviados: 0 };
             }
 
@@ -759,25 +1011,21 @@ export const notificacionService = {
             const tipo = pedido.tipo_entrega === 'retiro' ? '🏪 Retiro' : '🛵 Delivery';
 
             const titulo = `🔔 Nuevo pedido #${pedido.id}`;
-            const cuerpo = [nombre, total, cantidad, tipo]
-                .filter(Boolean)
-                .join(' · ');
+            const cuerpo = [nombre, total, cantidad, tipo].filter(Boolean).join(' · ');
 
-            const resultado = await this.enviarNotificacionesMasivas(
-                tokensValidos,
-                titulo,
-                cuerpo,
-                {
-                    tipo: 'pedido',
-                    pedidoId: pedido.id,
-                    esParaAdmin: true,
-                    screen: 'GestionPedidos',
-                }
-            );
+            const resultado = await this.enviarNotificacionesMasivas(tokens, titulo, cuerpo, {
+                tipo: 'pedido',
+                pedidoId: pedido.id,
+                esParaAdmin: true,
+                screen: 'GestionPedidos',
+            });
 
             console.log('✅ [Notif] Admins notificados:', resultado.resultados);
-            return resultado;
-
+            return {
+                success: resultado.success,
+                enviados: resultado.resultados?.exitos ?? 0,
+                error: resultado.errores?.[0],
+            };
         } catch (error: any) {
             console.error('❌ [Notif] Error notificando admins:', error);
             return { success: false, error: error?.message };
@@ -785,14 +1033,14 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // ⚠️ NOTIFICAR A ADMINS SOBRE PROBLEMA REPORTADO POR REPARTIDOR
+    // ⚠️ NOTIFICAR A ADMINS SOBRE PROBLEMA REPORTADO
     // ============================================================
     async notificarAdminsProblemaPedido(opts: {
         pedidoId: number;
         motivo: 'cliente_ausente' | 'direccion_incorrecta' | 'cliente_rechazo' | 'otro';
         detalle?: string;
         repartidorNombre?: string;
-    }) {
+    }): Promise<{ success: boolean; enviados?: number; error?: any }> {
         try {
             const { pedidoId, motivo, detalle, repartidorNombre } = opts;
 
@@ -807,27 +1055,28 @@ export const notificacionService = {
 
             const motivoTexto = MOTIVOS_TEXTO[motivo] || 'Problema reportado';
 
-            const { data: admins, error } = await supabase
+            const { data: admins } = await supabase
                 .from('perfiles')
-                .select('id, nombre_cliente, fcm_token')
-                .eq('rol', 'admin')
-                .not('fcm_token', 'is', null);
+                .select('id')
+                .eq('rol', 'admin');
 
-            if (error) {
-                console.error('❌ [Notif] Error buscando admins:', error);
-                return { success: false, error: error.message };
-            }
-
-            if (!admins || admins.length === 0) {
-                console.log('ℹ️ [Notif] No hay admins con token registrado');
+            if (!admins || !admins.length) {
                 return { success: true, enviados: 0 };
             }
 
-            const tokensValidos = admins
-                .map((a) => a.fcm_token)
-                .filter((t): t is string => !!t && t.startsWith('ExponentPushToken['));
+            const idsAdmin = admins.map((a) => a.id);
 
-            if (tokensValidos.length === 0) {
+            const { data: dispositivos } = await supabase
+                .from('dispositivos_push')
+                .select('expo_push_token')
+                .in('usuario_actual_id', idsAdmin)
+                .eq('activo', true);
+
+            const tokens = (dispositivos || [])
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
+
+            if (!tokens.length) {
                 return { success: true, enviados: 0 };
             }
 
@@ -839,13 +1088,19 @@ export const notificacionService = {
             ].filter(Boolean);
             const cuerpo = cuerpoPartes.join(' · ');
 
-            return await this.enviarNotificacionesMasivas(tokensValidos, titulo, cuerpo, {
+            const resultado = await this.enviarNotificacionesMasivas(tokens, titulo, cuerpo, {
                 tipo: 'pedido',
                 pedidoId,
                 esParaAdmin: true,
                 problema: motivo,
                 screen: 'GestionPedidos',
             });
+
+            return {
+                success: resultado.success,
+                enviados: resultado.resultados?.exitos ?? 0,
+                error: resultado.errores?.[0],
+            };
         } catch (error: any) {
             console.error('❌ [Notif] Error notificando problema:', error);
             return { success: false, error: error?.message };
@@ -858,8 +1113,8 @@ export const notificacionService = {
     async notificarClienteCambioEstado(
         clienteId: string,
         pedidoId: number,
-        nuevoEstado: string
-    ) {
+        nuevoEstado: string,
+    ): Promise<{ success: boolean; enviados?: number; error?: any }> {
         try {
             if (!clienteId) return { success: false, error: 'Sin cliente' };
 
@@ -894,7 +1149,7 @@ export const notificacionService = {
 
             const texto = textos[nuevoEstado];
             if (!texto) {
-                console.log('ℹ️ [Notif] Estado sin texto definido, no se notifica:', nuevoEstado);
+                console.log('ℹ️ [Notif] Estado sin texto definido:', nuevoEstado);
                 return { success: true, enviados: 0 };
             }
 
@@ -919,78 +1174,85 @@ export const notificacionService = {
                 .eq('usuario_actual_id', clienteId)
                 .eq('activo', true);
 
-            if (!dispositivos || dispositivos.length === 0) {
-                console.log('ℹ️ [Notif] Cliente sin dispositivos activos');
+            if (!dispositivos || !dispositivos.length) {
                 return { success: true, enviados: 0 };
             }
 
-            const tokens = dispositivos.map((d: any) => d.expo_push_token);
+            const tokens = dispositivos
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
 
             const resultado = await this.enviarNotificacionesMasivas(
                 tokens,
                 texto.titulo,
                 texto.cuerpo,
-                {
-                    tipo: 'pedido',
-                    pedidoId,
-                    screen: 'Seguimiento',
-                }
+                { tipo: 'pedido', pedidoId, screen: 'Seguimiento' },
             );
 
-            console.log('✅ [Notif] Cliente notificado:', resultado.resultados);
-            return resultado;
-
+            return {
+                success: resultado.success,
+                enviados: resultado.resultados?.exitos ?? 0,
+                error: resultado.errores?.[0],
+            };
         } catch (error: any) {
             console.error('❌ [Notif] Error notificando al cliente:', error);
             return { success: false, error: error?.message };
         }
     },
 
-    async notificarClienteCerca(clienteId: string, pedidoId: number) {
+    async notificarClienteCerca(clienteId: string, pedidoId: number): Promise<{
+        success: boolean;
+        enviados?: number;
+        error?: any;
+    }> {
         try {
             if (!clienteId) return { success: false, error: 'Sin cliente' };
 
             const titulo = '🤡 ¡Ya casi llega!';
             const mensaje = `Tu pedido #${pedidoId} está a menos de 200 metros. ¡Prepará la mesa, que Krusty no espera ni a la pausa comercial!`;
 
-            const { error: errorHistorial } = await supabase
-                .from('notificaciones_usuarios')
-                .insert({
-                    usuario_id: clienteId,
-                    titulo,
-                    mensaje,
-                    tipo: 'pedido',
-                    leida: false,
-                    created_at: new Date().toISOString(),
-                });
+            try {
+                await supabase
+                    .from('notificaciones_usuarios')
+                    .insert({
+                        usuario_id: clienteId,
+                        titulo,
+                        mensaje,
+                        tipo: 'pedido',
+                        leida: false,
+                        created_at: new Date().toISOString(),
+                    });
+            } catch (e) {
+                console.warn('⚠️ No se pudo guardar en historial (cerca):', e);
+            }
 
-            if (errorHistorial) throw errorHistorial;
-
-            const { data: dispositivos, error: errorDispositivos } = await supabase
+            const { data: dispositivos } = await supabase
                 .from('dispositivos_push')
                 .select('expo_push_token')
                 .eq('usuario_actual_id', clienteId)
                 .eq('activo', true);
 
-            if (errorDispositivos) throw errorDispositivos;
-
-            if (!dispositivos || dispositivos.length === 0) {
-                console.log('ℹ️ [Notif] Cliente sin dispositivos activos para aviso de cercanía');
+            if (!dispositivos || !dispositivos.length) {
                 return { success: true, enviados: 0 };
             }
 
-            return await this.enviarNotificacionesMasivas(
-                dispositivos.map((dispositivo: any) => dispositivo.expo_push_token),
-                titulo,
-                mensaje,
-                {
-                    tipo: 'pedido',
-                    pedidoId,
-                    screen: 'Seguimiento',
-                }
-            );
+            const tokens = dispositivos
+                .map((d: any) => d.expo_push_token)
+                .filter(esTokenExpoValido);
+
+            const resultado = await this.enviarNotificacionesMasivas(tokens, titulo, mensaje, {
+                tipo: 'pedido',
+                pedidoId,
+                screen: 'Seguimiento',
+            });
+
+            return {
+                success: resultado.success,
+                enviados: resultado.resultados?.exitos ?? 0,
+                error: resultado.errores?.[0],
+            };
         } catch (error: any) {
-            console.error('❌ [Notif] Error enviando aviso de cercanía:', error);
+            console.error('❌ [Notif] Error aviso de cercanía:', error);
             return { success: false, error: error?.message };
         }
     },
@@ -1042,7 +1304,7 @@ export const notificacionService = {
 
             if (error) throw error;
 
-            const ids = data?.map(n => n.id) || [];
+            const ids = data?.map((n) => n.id) || [];
             await this.guardarNotificacionesOcultas(usuarioId, ids);
             return true;
         } catch (error) {
@@ -1078,10 +1340,10 @@ export const notificacionService = {
         }
 
         const ocultas = await this.obtenerNotificacionesOcultas(usuarioId);
-        return data?.filter(n => !ocultas.includes(n.id)) || [];
+        return data?.filter((n) => !ocultas.includes(n.id)) || [];
     },
 
-    async marcarComoLeida(notificacionId: number) {
+    async marcarComoLeida(notificacionId: number): Promise<boolean> {
         const { error } = await supabase
             .from('notificaciones_usuarios')
             .update({ leida: true })
@@ -1089,7 +1351,7 @@ export const notificacionService = {
         return !error;
     },
 
-    async marcarTodasComoLeidas(usuarioId: string) {
+    async marcarTodasComoLeidas(usuarioId: string): Promise<boolean> {
         if (!usuarioId) return false;
         const { error } = await supabase
             .from('notificaciones_usuarios')
@@ -1103,16 +1365,21 @@ export const notificacionService = {
     // 📊 HISTORIAL (ADMIN)
     // ============================================================
 
-    async guardarNotificacionEnviada(titulo: string, mensaje: string, tipo: string, segmento: string, enviados: number) {
+    async guardarNotificacionEnviada(
+        titulo: string,
+        mensaje: string,
+        tipo: string,
+        segmento: string,
+        enviados: number,
+    ) {
         try {
-            const { data, error } = await supabase
-                .rpc('guardar_notificacion_enviada', {
-                    p_titulo: titulo,
-                    p_mensaje: mensaje,
-                    p_tipo: tipo,
-                    p_segmento: segmento,
-                    p_enviados: enviados
-                });
+            const { data, error } = await supabase.rpc('guardar_notificacion_enviada', {
+                p_titulo: titulo,
+                p_mensaje: mensaje,
+                p_tipo: tipo,
+                p_segmento: segmento,
+                p_enviados: enviados,
+            });
             return { success: !error, data };
         } catch (error) {
             console.error('❌ Error:', error);
@@ -1125,18 +1392,17 @@ export const notificacionService = {
         titulo: string,
         mensaje: string,
         tipo: string,
-        imagenUrl?: string
+        imagenUrl?: string,
     ) {
         if (!usuariosIds?.length) return { success: false, error: 'No hay usuarios' };
         try {
-            const { error } = await supabase
-                .rpc('guardar_notificaciones_multiples', {
-                    p_usuarios_ids: usuariosIds,
-                    p_titulo: titulo,
-                    p_mensaje: mensaje,
-                    p_tipo: tipo,
-                    p_imagen_url: imagenUrl || null,
-                });
+            const { error } = await supabase.rpc('guardar_notificaciones_multiples', {
+                p_usuarios_ids: usuariosIds,
+                p_titulo: titulo,
+                p_mensaje: mensaje,
+                p_tipo: tipo,
+                p_imagen_url: imagenUrl || null,
+            });
             return { success: !error, error };
         } catch (error) {
             return { success: false, error };
@@ -1172,7 +1438,7 @@ export const notificacionService = {
         return data || [];
     },
 
-    async eliminarNotificacion(notificacionId: number) {
+    async eliminarNotificacion(notificacionId: number): Promise<boolean> {
         console.warn('⚠️ eliminarNotificacion deprecado. Usar ocultarNotificacion.');
         const { error } = await supabase
             .from('notificaciones_usuarios')
@@ -1182,7 +1448,7 @@ export const notificacionService = {
     },
 
     // ============================================================
-    // 📊 CONTADORES (para el admin)
+    // 📊 CONTADORES
     // ============================================================
 
     async contarDispositivosActivos(): Promise<number> {

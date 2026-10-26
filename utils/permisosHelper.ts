@@ -4,44 +4,30 @@ import * as Location from 'expo-location';
 import { notificacionService } from '../services/notificacionService';
 import { supabase } from '../lib/supabase';
 
-// ============================================================
-// 🔑 CLAVE POR USUARIO (evita que se resetee al cambiar cuenta)
-// ============================================================
 const getKeyPermisosVistos = (userId: string) =>
     `@krusty_permisos_onboarding_v1_${userId}`;
 
-// ============================================================
-// ✅ LEER / MARCAR "YA VIO"
-// ============================================================
 export async function yaVioModalPermisos(userId: string): Promise<boolean> {
     if (!userId) return false;
     try {
         const valor = await AsyncStorage.getItem(getKeyPermisosVistos(userId));
         return valor === 'true';
     } catch (error) {
-        console.error('❌ [permisosHelper] Error leyendo visto:', error);
+        console.error('❌ [permisosHelper] Error leyendo yaVioModalPermisos:', error);
         return false;
     }
 }
 
-export async function marcarModalPermisosVisto(userId: string): Promise<void> {
-    if (!userId) return;
-    try {
-        await AsyncStorage.setItem(getKeyPermisosVistos(userId), 'true');
-    } catch (error) {
-        console.error('❌ [permisosHelper] Error guardando visto:', error);
-    }
-}
-
-// ============================================================
-// 🔔 SOLICITAR PERMISOS COMPLETOS
-// ============================================================
 /**
- * Solicita permisos de notificaciones + ubicación y, si las notificaciones
- * fueron concedidas, activa al usuario en push_subscriptions.
+ * ✅ IMPORTANTE (Google Play compliance):
+ * Este helper SOLO pide permisos de FOREGROUND (ubicación mientras la app está abierta).
  *
- * ⚠️ Si el permiso nativo está DENEGADO permanentemente (Android 13+),
- * no se puede volver a pedir desde la app: el caller debe abrir ajustes.
+ * El permiso de BACKGROUND_LOCATION se pide ÚNICAMENTE en PantallaTransmision.tsx
+ * con su propia divulgación destacada, porque solo el repartidor lo necesita
+ * (para transmitir ubicación con la pantalla bloqueada).
+ *
+ * Si este helper pidiera BACKGROUND sin divulgación, Google Play rechazaría
+ * la app por "Falta información destacada" (prominent disclosure).
  */
 export async function solicitarPermisosCompletosApp(userId: string) {
     try {
@@ -68,21 +54,27 @@ export async function solicitarPermisosCompletosApp(userId: string) {
 
             if (upsertError) {
                 console.error('❌ [permisosHelper] Error upsert push_subscriptions:', upsertError);
-            } else {
-                console.log('✅ [permisosHelper] push_subscriptions activado para', userId);
             }
-        } else if (userId) {
-            console.warn('⚠️ [permisosHelper] Notificaciones NO concedidas — no se activa en BD');
+        } else {
+            console.log('❌ [permisosHelper] Notificaciones NO concedidas — no se activa en BD');
         }
 
         // ─────────────────────────────────────────────
-        // 2. Ubicación
+        // 2. Ubicación FOREGROUND (solo mientras la app está abierta)
+        //    NO pedir BACKGROUND acá. Eso lo hace PantallaTransmision.tsx
+        //    con su propia divulgación destacada.
         // ─────────────────────────────────────────────
         const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-        if (fgStatus === 'granted') {
-            await Location.requestBackgroundPermissionsAsync();
+        console.log('📍 [permisosHelper] foreground status =', fgStatus);
+
+        if (fgStatus !== 'granted') {
+            console.log('⚠️ [permisosHelper] Foreground denegado, no se pide background');
+            return;
         }
+
+        // ⚠️ NO llamar a Location.requestBackgroundPermissionsAsync() acá.
+        //    El repartidor lo pide en PantallaTransmision.tsx con divulgación.
     } catch (error) {
-        console.error('❌ [permisosHelper] Error solicitando permisos completos:', error);
+        console.error('❌ [permisosHelper] Error solicitando permisos:', error);
     }
 }
