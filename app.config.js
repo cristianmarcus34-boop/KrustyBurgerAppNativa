@@ -168,7 +168,7 @@ module.exports = ({ config }) => {
             enabled: true,
             checkAutomatically: 'ON_LOAD',
             fallbackToCacheTimeout: 3000,
-            url: 'https://u.expo.dev/3bb3f5cf-a572-4703-8a2a-e727bc44a0e6',
+            url: 'https://u.expo.dev/709ab55b-7649-4a00-8a9c-a9dfd6aa2277',
         },
         extra: {
             ...config.extra,
