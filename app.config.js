@@ -182,6 +182,6 @@ module.exports = ({ config }) => {
         runtimeVersion: {
             policy: 'appVersion',
         },
-        owner: 'agenciapowa',,
+        owner: 'agenciapowa',
     };
 };
