@@ -1,6 +1,8 @@
+// services/seguimientoUbicacionRepartidor.ts - V2 (Google Play compliant, foreground service)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { notificacionService } from './notificacionService';
 
@@ -41,7 +43,6 @@ export const obtenerSeguimientoEntregaActivo = async (): Promise<SeguimientoEntr
 
 /**
  * Limpia cualquier tarea de ubicación que haya quedado huérfana.
- * Útil para llamar al iniciar la app o la pantalla de reparto.
  */
 export const limpiarSeguimientoHuerfano = async (): Promise<void> => {
   try {
@@ -49,7 +50,7 @@ export const limpiarSeguimientoHuerfano = async (): Promise<void> => {
     if (!tareaActiva) return;
 
     const seguimiento = await obtenerSeguimientoEntregaActivo();
-    if (seguimiento) return; // hay una entrega legítima en curso
+    if (seguimiento) return;
 
     console.warn('🧹 Detectada tarea de ubicación huérfana al iniciar, limpiando...');
     try {
@@ -77,7 +78,6 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     if (tareaYaRegistrada) {
       const seguimientoAnterior = await obtenerSeguimientoEntregaActivo();
 
-      // ✅ Caso 1: tarea huérfana (sin datos) → limpiar y seguir
       if (!seguimientoAnterior) {
         console.warn('🧹 Tarea de ubicación huérfana detectada, limpiando antes de reiniciar...');
         try {
@@ -86,16 +86,12 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
           console.warn('No se pudo detener la tarea huérfana:', limpiarError);
         }
         await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
-      }
-      // ✅ Caso 2: otra entrega activa → bloquear
-      else if (seguimientoAnterior.pedidoId !== seguimiento.pedidoId) {
+      } else if (seguimientoAnterior.pedidoId !== seguimiento.pedidoId) {
         throw new Error(
           `Ya hay una entrega activa (pedido #${seguimientoAnterior.pedidoId}). ` +
           `Detenela antes de iniciar otra.`
         );
-      }
-      // ✅ Caso 3: misma entrega → reanudar
-      else {
+      } else {
         await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
         return false;
       }
@@ -104,12 +100,19 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
     await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
 
+    // ✅ Configuración para FOREGROUND SERVICE (sin ACCESS_BACKGROUND_LOCATION)
+    // En Android, el foreground service mantiene el GPS activo con una notificación
+    // visible. En iOS, usamos allowsBackgroundLocationUpdates vía showsBackgroundLocationIndicator.
     const opciones: Location.LocationTaskOptions = {
       accuracy: Location.Accuracy.High,
       timeInterval: 5000,
       distanceInterval: 10,
       pausesUpdatesAutomatically: false,
-      showsBackgroundLocationIndicator: true,
+      // iOS: muestra el indicador azul de ubicación en background
+      showsBackgroundLocationIndicator: Platform.OS === 'ios',
+      // iOS: tipo de actividad para mejor precisión
+      activityType: Location.ActivityType.AutomotiveNavigation,
+      // Android: foreground service con notificación persistente
       foregroundService: {
         notificationTitle: 'Entrega en curso',
         notificationBody: 'KrustyBurger comparte tu ubicación mientras entregás el pedido.',
@@ -122,7 +125,6 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     tareaIniciadaAhora = true;
     return true;
   } catch (error) {
-    // ✅ Si algo falló, intentar limpiar todo
     if (tareaIniciadaAhora) {
       try {
         await Location.stopLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);

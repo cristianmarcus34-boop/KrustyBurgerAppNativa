@@ -22,12 +22,12 @@ export async function yaVioModalPermisos(userId: string): Promise<boolean> {
  * ✅ IMPORTANTE (Google Play compliance):
  * Este helper SOLO pide permisos de FOREGROUND (ubicación mientras la app está abierta).
  *
- * El permiso de BACKGROUND_LOCATION se pide ÚNICAMENTE en PantallaTransmision.tsx
- * con su propia divulgación destacada, porque solo el repartidor lo necesita
- * (para transmitir ubicación con la pantalla bloqueada).
+ * El permiso de BACKGROUND_LOCATION está BLOQUEADO en el manifest (app.config.js)
+ * y NO se pide en ningún lado de la app.
  *
- * Si este helper pidiera BACKGROUND sin divulgación, Google Play rechazaría
- * la app por "Falta información destacada" (prominent disclosure).
+ * El repartidor usa un FOREGROUND SERVICE (notificación persistente visible)
+ * para transmitir ubicación con la pantalla bloqueada, sin necesidad del
+ * permiso de "siempre".
  */
 export async function solicitarPermisosCompletosApp(userId: string) {
     try {
@@ -61,8 +61,7 @@ export async function solicitarPermisosCompletosApp(userId: string) {
 
         // ─────────────────────────────────────────────
         // 2. Ubicación FOREGROUND (solo mientras la app está abierta)
-        //    NO pedir BACKGROUND acá. Eso lo hace PantallaTransmision.tsx
-        //    con su propia divulgación destacada.
+        //    NO pedir BACKGROUND acá. El repartidor usa foreground service.
         // ─────────────────────────────────────────────
         const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
         console.log('📍 [permisosHelper] foreground status =', fgStatus);
@@ -73,7 +72,7 @@ export async function solicitarPermisosCompletosApp(userId: string) {
         }
 
         // ⚠️ NO llamar a Location.requestBackgroundPermissionsAsync() acá.
-        //    El repartidor lo pide en PantallaTransmision.tsx con divulgación.
+        //    El permiso está bloqueado en el manifest y no se usa en ningún lado.
     } catch (error) {
         console.error('❌ [permisosHelper] Error solicitando permisos:', error);
     }

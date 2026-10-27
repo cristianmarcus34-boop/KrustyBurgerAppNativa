@@ -38,7 +38,7 @@ module.exports = ({ config }) => {
                 backgroundImage: './assets/android-icon-background.png',
                 monochromeImage: './assets/android-icon-monochrome.png',
             },
-            versionCode: 23,
+            versionCode: 24,
             predictiveBackGestureEnabled: false,
             googleServicesFile: './google-services.json',
             package: 'com.agenciapowa.KrustyBurger',
@@ -50,6 +50,7 @@ module.exports = ({ config }) => {
                 'android.permission.READ_EXTERNAL_STORAGE',
                 'android.permission.WRITE_EXTERNAL_STORAGE',
                 'android.permission.RECORD_AUDIO',
+                'android.permission.ACCESS_BACKGROUND_LOCATION', // ✅ Bloqueado: Google Play no debe verlo
             ],
             permissions: [
                 'android.permission.ACCESS_FINE_LOCATION',
@@ -62,6 +63,8 @@ module.exports = ({ config }) => {
                 'android.permission.ACCESS_NETWORK_STATE',
                 'android.permission.ACCESS_WIFI_STATE',
                 'android.permission.POST_NOTIFICATIONS',
+                'android.permission.FOREGROUND_SERVICE',            // ✅ Para foreground service de ubicación
+                'android.permission.FOREGROUND_SERVICE_LOCATION',   // ✅ Para foreground service de ubicación
             ],
             intentFilters: [
                 {
@@ -113,8 +116,8 @@ module.exports = ({ config }) => {
                 'expo-location',
                 {
                     isIosBackgroundLocationEnabled: true,
-                    isAndroidBackgroundLocationEnabled: true,
-                    isAndroidForegroundServiceEnabled: true,
+                    isAndroidBackgroundLocationEnabled: false, // ✅ Desactivado en Android
+                    isAndroidForegroundServiceEnabled: true,   // ✅ Foreground service activado
                     locationAlwaysAndWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
                     locationAlwaysPermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
                     locationWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',

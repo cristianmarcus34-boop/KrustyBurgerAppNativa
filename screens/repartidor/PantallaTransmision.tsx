@@ -1,4 +1,4 @@
-// screens/repartidor/PantallaTransmision.tsx - V5 (Google Play compliant background location)
+// screens/repartidor/PantallaTransmision.tsx - V6 (Google Play compliant, sin BACKGROUND_LOCATION)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
@@ -278,7 +278,7 @@ export default function PantallaTransmision(props: any) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' || !watchRef.current) return;
-      console.log('📱 App en background — la transmisión sigue activa');
+      console.log('📱 App en background — el foreground service sigue activo');
     });
     return () => subscription.remove();
   }, []);
@@ -725,7 +725,7 @@ export default function PantallaTransmision(props: any) {
   };
 
   // ============================================================
-  // TRANSMISIÓN - V5 (Google Play compliant)
+  // TRANSMISIÓN - V6 (Google Play compliant: sin BACKGROUND_LOCATION)
   // ============================================================
   const iniciarTransmision = async (pedido: Pedido, reanudar = false) => {
     if (procesandoEntrega || watchRef.current) return;
@@ -744,15 +744,10 @@ export default function PantallaTransmision(props: any) {
     let pedidoYaActualizado = false;
 
     try {
-      // ✅ FIX #3: Verificar AMBOS permisos (foreground + background) ANTES de pedir cualquier cosa.
-      // Si falta alguno, mostrar la divulgación primero.
+      // ✅ Solo verificamos FOREGROUND. El background está bloqueado en el manifest.
       const foregroundStatus = await Location.getForegroundPermissionsAsync();
-      const backgroundStatus = await Location.getBackgroundPermissionsAsync();
 
-      if (
-        foregroundStatus.status !== 'granted' ||
-        backgroundStatus.status !== 'granted'
-      ) {
+      if (foregroundStatus.status !== 'granted') {
         setPedidoPendienteTransmision(pedido);
         setMostrarModalUbicacion(true);
         return;
@@ -799,6 +794,8 @@ export default function PantallaTransmision(props: any) {
         }
       }
 
+      // ✅ Este servicio debe usar foreground service (notificación visible),
+      //    NO requestBackgroundPermissionsAsync.
       seguimientoNuevo = await iniciarSeguimientoUbicacionEnSegundoPlano({
         pedidoId: pedido.id,
         repartidorId: perfil.id,
@@ -911,7 +908,7 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ✅ FIX #3b: Pedir FOREGROUND primero, después BACKGROUND
+  // ✅ V6: Solo pide FOREGROUND. El background está bloqueado en el manifest.
   const confirmarUbicacionBackground = async () => {
     if (!pedidoPendienteTransmision) return;
 
@@ -920,27 +917,23 @@ export default function PantallaTransmision(props: any) {
     setPedidoPendienteTransmision(null);
 
     try {
-      // 1. FOREGROUND primero (obligatorio por Android)
+      // 1. FOREGROUND (mientras la app está abierta)
       const foregroundStatus = await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus.status !== 'granted') {
         toast.advertencia('⚠️ Sin ubicación no se puede rastrear');
         return;
       }
 
-      // 2. BACKGROUND después (solo si foreground fue granted)
-      const backgroundStatus = await Location.requestBackgroundPermissionsAsync();
-      if (backgroundStatus.status !== 'granted') {
-        toast.advertencia('⚠️ Sin ubicación en segundo plano no se puede rastrear');
-        return;
-      }
+      // ⚠️ NO se pide BACKGROUND. El foreground service mantiene el GPS
+      //    activo con una notificación visible mientras la app está en background.
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       toast.exito('✅ Ubicación activada');
 
-      // Reintentar iniciar transmisión (ahora sí tiene ambos permisos)
+      // Reintentar iniciar transmisión (ahora sí tiene foreground)
       await iniciarTransmision(pedido);
     } catch (error) {
-      console.error('❌ Error solicitando permiso de segundo plano:', error);
+      console.error('❌ Error solicitando permiso de ubicación:', error);
       toast.error('No se pudo solicitar el permiso');
     }
   };
@@ -1913,8 +1906,8 @@ export default function PantallaTransmision(props: any) {
 
       {/* ============================================================
           MODAL DIVULGACIÓN UBICACIÓN - GOOGLE PLAY COMPLIANT
-          FIX #1: onRequestClose bloqueado → el usuario DEBE tocar un botón
-          FIX #4: texto con "recopila, usa y comparte" + "incluso cuando la app está cerrada"
+          V6: Solo pide FOREGROUND. El background está bloqueado en el manifest.
+          El foreground service mantiene el GPS activo con notificación visible.
           ============================================================ */}
       <Modal
         visible={mostrarModalUbicacion}
@@ -1922,9 +1915,7 @@ export default function PantallaTransmision(props: any) {
         animationType="fade"
         statusBarTranslucent={true}
         onRequestClose={() => {
-          // ⚠️ INTENCIONALMENTE VACÍO:
-          // Google Play exige que la divulgación destacada NO se pueda cerrar
-          // tocando "atrás". El usuario debe tocar "Ahora no" o "Permitir ubicación".
+          // ⚠️ INTENCIONALMENTE VACÍO: el usuario DEBE tocar un botón.
         }}
       >
         <View style={estilos.modalFondo}>
@@ -1934,7 +1925,7 @@ export default function PantallaTransmision(props: any) {
                 <Ionicons name="location" size={22} color="#FFF" />
               </View>
               <Text style={estilos.modalUbicacionTitulo} allowFontScaling={false}>
-                Ubicación en segundo plano
+                Ubicación durante la entrega
               </Text>
             </View>
 
@@ -1943,18 +1934,16 @@ export default function PantallaTransmision(props: any) {
                 📍 Krusty Burger necesita acceder a tu ubicación
               </Text>
 
-              {/* ✅ FIX #4: texto con las 3 palabras clave que Google busca */}
               <Text style={[estilos.modalUbicacionExplicacion, { color: colores.textSecondary }]} allowFontScaling={false}>
                 Para que el cliente pueda ver el recorrido de su pedido en tiempo real, Krusty Burger{' '}
                 <Text style={{ fontWeight: '700', color: colores.text }}>
                   recopila, usa y comparte tu ubicación con el cliente del pedido
-                </Text>
-                ,{' '}
+                </Text>{' '}
+                mientras la entrega está activa. El seguimiento se muestra con una{' '}
                 <Text style={{ fontWeight: '700', color: colores.text }}>
-                  incluso cuando la app está cerrada o no está en uso
-                </Text>
-                . La ubicación se usa exclusivamente durante la entrega activa y se detiene al
-                confirmar la entrega del pedido.
+                  notificación visible en tu teléfono
+                </Text>{' '}
+                y se detiene al confirmar la entrega del pedido.
               </Text>
 
               <View style={[estilos.modalUbicacionLista, { backgroundColor: colores.surfaceHover }]}>
@@ -1989,11 +1978,8 @@ export default function PantallaTransmision(props: any) {
               </View>
 
               <Text style={[estilos.modalUbicacionAviso, { color: colores.textTertiary }]} allowFontScaling={false}>
-                Al tocar "Permitir ubicación", el sistema te va a pedir elegir{' '}
-                <Text style={{ fontWeight: '700', color: colores.accent }}>
-                  "Permitir todo el tiempo"
-                </Text>
-                . Es lo que permite que el seguimiento siga funcionando con la pantalla bloqueada.
+                Al tocar "Permitir ubicación", el sistema te va a pedir permitir el acceso mientras la app está en uso.
+                El seguimiento continuará con una notificación visible aunque bloquees la pantalla.
               </Text>
             </View>
 
