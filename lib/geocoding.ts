@@ -3,8 +3,8 @@ import { supabase } from './supabase';
 
 // ✅ COORDENADAS REALES DE KRUSTY BURGER
 const UBICACION_KRUSTY = {
-    lat: -34.776484410467525,
-    lng: -58.29220250409459
+    lat: -34.77584884737912,
+    lng: -58.29228960479398
 };
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';

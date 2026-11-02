@@ -107,10 +107,10 @@ export class ServicioEnvios {
             this.localConfig = {
                 id: 0,
                 nombre: 'Krusty Burger',
-                latitud: -34.776484410467525,
-                longitud: -58.29220250409459,
-                direccion: 'Av. Principal 1234',
-                telefono: '11 1234-5678',
+                latitud: -34.77584884737912,
+                longitud: -58.29228960479398,
+                direccion: 'Calle 881 5003, San Francisco Solano, Partido de Quilmes, Buenos Aires',
+                telefono: '11-3830-5837',
             };
         }
     }

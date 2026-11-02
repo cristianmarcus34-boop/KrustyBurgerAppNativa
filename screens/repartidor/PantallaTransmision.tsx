@@ -55,6 +55,12 @@ import {
   obtenerInfoRutaPedido,
 } from '../../lib/directions';
 import { normalizarEstadoPedido } from '../../lib/estadoPedido';
+import {
+  abrirAjustesApp,
+  abrirAjustesGPS,
+  mensajeErrorUbicacion,
+  obtenerPosicionActual,
+} from '../../utils/ubicacionHelper';
 
 // ✅ MARCADORES
 const marcadorLocal = require('../../assets/icon.png');
@@ -64,7 +70,7 @@ const marcadorCasa = require('../../assets/iconos/casa.png');
 const SONIDO_PEDIDO_NUEVO = require('../../assets/sounds/saxolisa.wav');
 
 // ✅ COORDENADAS KRUSTY
-const UBICACION_KRUSTY = { latitude: -34.776484410467525, longitude: -58.29220250409459 };
+const UBICACION_KRUSTY = { latitude: -34.77584884737912, longitude: -58.29228960479398 };
 
 const validarCoordenadas = (coords: { latitude: number; longitude: number }[]) => {
   if (!coords || coords.length < 2) return false;
@@ -136,8 +142,8 @@ export default function PantallaTransmision(props: any) {
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
   const [transmitiendo, setTransmitiendo] = useState(false);
   const [ubicacionActual, setUbicacionActual] = useState({
-    lat: -34.776484410467525,
-    lng: -58.29220250409459,
+    lat: -34.77584884737912,
+    lng: -58.29228960479398,
   });
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
@@ -766,8 +772,84 @@ export default function PantallaTransmision(props: any) {
         return;
       }
 
-      const ubicacion = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = ubicacion.coords;
+      let latitude: number;
+      let longitude: number;
+      try {
+        ({ latitude, longitude } = await obtenerPosicionActual());
+      } catch (error) {
+        const codigoErrorUbicacion =
+          error && typeof error === 'object' && 'codigo' in error
+            ? error.codigo
+            : undefined;
+        if (codigoErrorUbicacion !== 'GPS_DESACTIVADO') {
+          console.error('❌ No se pudo obtener la ubicación inicial:', error);
+        }
+        const infoUbicacion = mensajeErrorUbicacion(error);
+        const botones: {
+          text: string;
+          style?: 'cancel' | 'default' | 'destructive';
+          onPress?: () => void;
+        }[] = [{ text: 'Ahora no', style: 'cancel' }];
+
+        const mensajeErrorTecnico = error instanceof Error ? error.message : '';
+        const puedeActivarProveedorAndroid =
+          Platform.OS === 'android' &&
+          (infoUbicacion.tipoAjustes === 'gps' || mensajeErrorTecnico === 'GPS_SIN_SENAL');
+
+        if (puedeActivarProveedorAndroid) {
+          botones.push({
+            text: 'Activar ubicación precisa',
+            onPress: () => {
+              void Location.enableNetworkProviderAsync()
+                .then(() => iniciarTransmision(pedido, reanudar, true))
+                .catch((errorProveedor) => {
+                  console.warn('No se pudo activar la ubicación precisa:', errorProveedor);
+                  Alert.alert(
+                    'Ubicación no activada',
+                    'Activá la ubicación desde los ajustes del dispositivo e intentá nuevamente.',
+                    [
+                      { text: 'Ahora no', style: 'cancel' },
+                      {
+                        text: 'Abrir ajustes',
+                        onPress: () => {
+                          void abrirAjustesGPS();
+                        },
+                      },
+                    ]
+                  );
+                });
+            },
+          });
+        } else if (infoUbicacion.mostrarBotonAjustes) {
+          botones.push({
+            text: 'Abrir ajustes',
+            onPress: () => {
+              if (infoUbicacion.tipoAjustes === 'gps') {
+                void abrirAjustesGPS();
+              } else {
+                void abrirAjustesApp();
+              }
+            },
+          });
+        }
+
+        if (
+          infoUbicacion.esTimeout ||
+          infoUbicacion.tipoAjustes === 'gps' ||
+          (error instanceof Error && error.message === 'GPS_SIN_SENAL')
+        ) {
+          botones.push({
+            text: 'Reintentar',
+            onPress: () => {
+              void iniciarTransmision(pedido, reanudar, true);
+            },
+          });
+        }
+
+        Alert.alert(infoUbicacion.titulo, infoUbicacion.mensaje, botones);
+        return;
+      }
+
       if (
         !Number.isFinite(latitude) ||
         !Number.isFinite(longitude) ||
@@ -906,12 +988,36 @@ export default function PantallaTransmision(props: any) {
         );
         return;
       }
-      Alert.alert(
-        'No se pudo iniciar el seguimiento',
-        error instanceof Error
-          ? error.message
-          : 'Verificá la ubicación y tu conexión e intentá nuevamente.'
-      );
+      const mensajeTecnico = error instanceof Error ? error.message.toLowerCase() : '';
+      const esErrorUbicacion =
+        Boolean(error && typeof error === 'object' && 'codigo' in error) ||
+        ['location', 'permission', 'gps', 'provider'].some((termino) =>
+          mensajeTecnico.includes(termino)
+        );
+
+      if (esErrorUbicacion) {
+        const infoUbicacion = mensajeErrorUbicacion(error);
+        const botones: {
+          text: string;
+          style?: 'cancel' | 'default' | 'destructive';
+          onPress?: () => void;
+        }[] = [{ text: 'Ahora no', style: 'cancel' }];
+        if (mensajeTecnico.includes('permission')) {
+          botones.push({
+            text: 'Abrir ajustes',
+            style: 'default' as const,
+            onPress: () => {
+              void abrirAjustesApp();
+            },
+          });
+        }
+        Alert.alert(infoUbicacion.titulo, infoUbicacion.mensaje, botones);
+      } else {
+        Alert.alert(
+          'No pudimos iniciar el seguimiento',
+          'Ocurrió un problema al iniciar la entrega. Verificá tu conexión e intentá nuevamente.'
+        );
+      }
       if (!watchRef.current) {
         setTransmitiendo(false);
         setPedidoSeleccionado(null);
@@ -935,7 +1041,19 @@ export default function PantallaTransmision(props: any) {
       // 1. FOREGROUND (mientras la app está abierta)
       const foregroundStatus = await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus.status !== 'granted') {
-        toast.advertencia('⚠️ Sin ubicación no se puede rastrear');
+        Alert.alert(
+          'Permiso de ubicación necesario',
+          'Para iniciar el seguimiento, Krusty Burger necesita permiso para acceder a tu ubicación mientras la app está en uso. Podés habilitarlo en los ajustes de la aplicación.',
+          [
+            { text: 'Ahora no', style: 'cancel' },
+            {
+              text: 'Abrir ajustes',
+              onPress: () => {
+                void abrirAjustesApp();
+              },
+            },
+          ]
+        );
         return;
       }
 
@@ -948,7 +1066,19 @@ export default function PantallaTransmision(props: any) {
       await iniciarTransmision(pedido, reanudar, true);
     } catch (error) {
       console.error('❌ Error solicitando permiso de ubicación:', error);
-      toast.error('No se pudo solicitar el permiso');
+      Alert.alert(
+        'No pudimos solicitar el permiso',
+        'No se pudo abrir la solicitud de ubicación. Revisá los permisos de Krusty Burger en los ajustes del dispositivo e intentá nuevamente.',
+        [
+          { text: 'Ahora no', style: 'cancel' },
+          {
+            text: 'Abrir ajustes',
+            onPress: () => {
+              void abrirAjustesApp();
+            },
+          },
+        ]
+      );
     }
   };
 

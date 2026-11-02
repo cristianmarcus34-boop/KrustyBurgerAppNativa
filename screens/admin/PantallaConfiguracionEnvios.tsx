@@ -508,7 +508,7 @@ export default function PantallaConfiguracionEnvios(props: any) {
                                 style={[estilos.input, { fontSize: responsive.inputSize }]}
                                 value={latitudLocal}
                                 onChangeText={setLatitudLocal}
-                                placeholder="-34.776484410467525"
+                                placeholder="-34.77584884737912"
                                 placeholderTextColor={COLORS.grisClaro + '40'}
                                 keyboardType="decimal-pad"
                                 selectionColor={COLORS.amarillo}
@@ -521,7 +521,7 @@ export default function PantallaConfiguracionEnvios(props: any) {
                                 style={[estilos.input, { fontSize: responsive.inputSize }]}
                                 value={longitudLocal}
                                 onChangeText={setLongitudLocal}
-                                placeholder="-58.29220250409459"
+                                placeholder="-58.29228960479398"
                                 placeholderTextColor={COLORS.grisClaro + '40'}
                                 keyboardType="decimal-pad"
                                 selectionColor={COLORS.amarillo}
@@ -534,7 +534,7 @@ export default function PantallaConfiguracionEnvios(props: any) {
                                 style={[estilos.input, { fontSize: responsive.inputSize }]}
                                 value={direccionLocal}
                                 onChangeText={setDireccionLocal}
-                                placeholder="Av. Principal 1234, CABA"
+                                placeholder="Calle 881 5003, San Francisco Solano, Quilmes, Buenos Aires"
                                 placeholderTextColor={COLORS.grisClaro + '40'}
                                 selectionColor={COLORS.amarillo}
                             />
@@ -546,7 +546,7 @@ export default function PantallaConfiguracionEnvios(props: any) {
                                 style={[estilos.input, { fontSize: responsive.inputSize }]}
                                 value={telefonoLocal}
                                 onChangeText={setTelefonoLocal}
-                                placeholder="11 1234-5678"
+                                placeholder="11-3830-5837"
                                 placeholderTextColor={COLORS.grisClaro + '40'}
                                 keyboardType="phone-pad"
                                 selectionColor={COLORS.amarillo}

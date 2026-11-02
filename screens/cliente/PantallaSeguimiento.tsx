@@ -41,8 +41,8 @@ const marcadorCasa = require('../../assets/iconos/casa.png');
 const marcadorRepartidor = require('../../assets/icon.png');
 
 const UBICACION_KRUSTY = {
-  latitude: -34.776484410467525,
-  longitude: -58.29220250409459,
+  latitude: -34.77584884737912,
+  longitude: -58.29228960479398,
 };
 const COLOR_RUTA_SUGERIDA = '#3978D4';
 

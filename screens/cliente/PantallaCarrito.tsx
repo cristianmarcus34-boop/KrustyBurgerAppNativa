@@ -728,8 +728,8 @@ export default function PantallaCarrito(props: any) {
 
           if (direccionCompleta) {
             const ubicacionPerfil: UbicacionGuardada = {
-              latitude: perfil.lat_cliente || -34.776484410467525,
-              longitude: perfil.lng_cliente || -58.29220250409459,
+              latitude: perfil.lat_cliente || -34.77584884737912,
+              longitude: perfil.lng_cliente || -58.29228960479398,
               direccion: direccionCompleta,
               seleccionadaPorUsuario: false,
             };
@@ -748,9 +748,9 @@ export default function PantallaCarrito(props: any) {
         }
 
         const ubicacionDefault: UbicacionGuardada = {
-          latitude: -34.776484410467525,
-          longitude: -58.29220250409459,
-          direccion: 'Local Krusty Burger',
+          latitude: -34.77584884737912,
+          longitude: -58.29228960479398,
+          direccion: 'Calle 881 5003, San Francisco Solano, Partido de Quilmes, Buenos Aires',
           seleccionadaPorUsuario: false,
         };
         setUbicacionGuardada(ubicacionDefault);
@@ -780,9 +780,9 @@ export default function PantallaCarrito(props: any) {
         return;
       }
       const ubicacionDefault: UbicacionGuardada = {
-        latitude: -34.776484410467525,
-        longitude: -58.29220250409459,
-        direccion: 'Local Krusty Burger',
+        latitude: -34.77584884737912,
+        longitude: -58.29228960479398,
+        direccion: 'Calle 881 5003, San Francisco Solano, Partido de Quilmes, Buenos Aires',
         seleccionadaPorUsuario: false,
       };
       setUbicacionGuardada(ubicacionDefault);

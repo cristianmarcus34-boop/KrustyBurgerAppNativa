@@ -102,7 +102,7 @@ export default function MapaSelector({
     titulo = 'Selecciona tu ubicación',
 }: Props) {
     const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState(
-        ubicacionInicial || { latitude: -34.776484410467525, longitude: -58.29220250409459 }
+        ubicacionInicial || { latitude: -34.77584884737912, longitude: -58.29228960479398 }
     );
     const [direccion, setDireccion] = useState(direccionInicial);
     const [buscando, setBuscando] = useState(false);
