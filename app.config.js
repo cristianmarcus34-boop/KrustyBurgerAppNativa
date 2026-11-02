@@ -38,7 +38,7 @@ module.exports = ({ config }) => {
                 backgroundImage: './assets/android-icon-background.png',
                 monochromeImage: './assets/android-icon-monochrome.png',
             },
-            versionCode: 24,
+            versionCode: 25,
             predictiveBackGestureEnabled: false,
             googleServicesFile: './google-services.json',
             package: 'com.agenciapowa.KrustyBurger',

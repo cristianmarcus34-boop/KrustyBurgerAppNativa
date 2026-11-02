@@ -7,6 +7,16 @@ import { supabase } from '../lib/supabase';
 const getKeyPermisosVistos = (userId: string) =>
     `@krusty_permisos_onboarding_v1_${userId}`;
 
+export async function marcarModalPermisosVisto(userId: string): Promise<void> {
+    if (!userId) return;
+    try {
+        await AsyncStorage.setItem(getKeyPermisosVistos(userId), 'true');
+    } catch (error) {
+        console.error('❌ [permisosHelper] Error guardando marcarModalPermisosVisto:', error);
+        throw error;
+    }
+}
+
 export async function yaVioModalPermisos(userId: string): Promise<boolean> {
     if (!userId) return false;
     try {

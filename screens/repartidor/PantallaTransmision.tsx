@@ -153,6 +153,7 @@ export default function PantallaTransmision(props: any) {
 
   const [mostrarModalUbicacion, setMostrarModalUbicacion] = useState(false);
   const [pedidoPendienteTransmision, setPedidoPendienteTransmision] = useState<Pedido | null>(null);
+  const [reanudarPendienteTransmision, setReanudarPendienteTransmision] = useState(false);
 
   const [mostrarModalContacto, setMostrarModalContacto] = useState(false);
 
@@ -727,7 +728,11 @@ export default function PantallaTransmision(props: any) {
   // ============================================================
   // TRANSMISIÓN - V6 (Google Play compliant: sin BACKGROUND_LOCATION)
   // ============================================================
-  const iniciarTransmision = async (pedido: Pedido, reanudar = false) => {
+  const iniciarTransmision = async (
+    pedido: Pedido,
+    reanudar = false,
+    divulgacionConfirmada = false
+  ) => {
     if (procesandoEntrega || watchRef.current) return;
     if (!perfil?.id) {
       Alert.alert('Sesión requerida', 'Volvé a iniciar sesión para comenzar la entrega.');
@@ -735,6 +740,13 @@ export default function PantallaTransmision(props: any) {
     }
     if (pedido.estado === 'en_camino' && pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
       Alert.alert('Entrega asignada', 'Este pedido ya está asignado a otro repartidor.');
+      return;
+    }
+
+    if (!divulgacionConfirmada) {
+      setPedidoPendienteTransmision(pedido);
+      setReanudarPendienteTransmision(reanudar);
+      setMostrarModalUbicacion(true);
       return;
     }
 
@@ -749,6 +761,7 @@ export default function PantallaTransmision(props: any) {
 
       if (foregroundStatus.status !== 'granted') {
         setPedidoPendienteTransmision(pedido);
+        setReanudarPendienteTransmision(reanudar);
         setMostrarModalUbicacion(true);
         return;
       }
@@ -908,13 +921,15 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // ✅ V6: Solo pide FOREGROUND. El background está bloqueado en el manifest.
-  const confirmarUbicacionBackground = async () => {
+  // La divulgación se confirma antes de solicitar el permiso o iniciar el servicio.
+  const confirmarDivulgacionUbicacion = async () => {
     if (!pedidoPendienteTransmision) return;
 
     setMostrarModalUbicacion(false);
     const pedido = pedidoPendienteTransmision;
+    const reanudar = reanudarPendienteTransmision;
     setPedidoPendienteTransmision(null);
+    setReanudarPendienteTransmision(false);
 
     try {
       // 1. FOREGROUND (mientras la app está abierta)
@@ -930,17 +945,17 @@ export default function PantallaTransmision(props: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       toast.exito('✅ Ubicación activada');
 
-      // Reintentar iniciar transmisión (ahora sí tiene foreground)
-      await iniciarTransmision(pedido);
+      await iniciarTransmision(pedido, reanudar, true);
     } catch (error) {
       console.error('❌ Error solicitando permiso de ubicación:', error);
       toast.error('No se pudo solicitar el permiso');
     }
   };
 
-  const cancelarUbicacionBackground = () => {
+  const cancelarDivulgacionUbicacion = () => {
     setMostrarModalUbicacion(false);
     setPedidoPendienteTransmision(null);
+    setReanudarPendienteTransmision(false);
   };
 
   const confirmarEntrega = (pedido: Pedido) => {
@@ -1906,8 +1921,8 @@ export default function PantallaTransmision(props: any) {
 
       {/* ============================================================
           MODAL DIVULGACIÓN UBICACIÓN - GOOGLE PLAY COMPLIANT
-          V6: Solo pide FOREGROUND. El background está bloqueado en el manifest.
-          El foreground service mantiene el GPS activo con notificación visible.
+          Se muestra antes de iniciar cada seguimiento, incluso si el permiso
+          de ubicación ya fue concedido.
           ============================================================ */}
       <Modal
         visible={mostrarModalUbicacion}
@@ -1925,25 +1940,22 @@ export default function PantallaTransmision(props: any) {
                 <Ionicons name="location" size={22} color="#FFF" />
               </View>
               <Text style={estilos.modalUbicacionTitulo} allowFontScaling={false}>
-                Ubicación durante la entrega
+                Uso de ubicación en segundo plano
               </Text>
             </View>
 
             <View style={estilos.modalUbicacionBody}>
               <Text style={[estilos.modalUbicacionPregunta, { color: colores.text }]} allowFontScaling={false}>
-                📍 Krusty Burger necesita acceder a tu ubicación
+                📍 Tu ubicación se recopila durante la entrega
               </Text>
 
               <Text style={[estilos.modalUbicacionExplicacion, { color: colores.textSecondary }]} allowFontScaling={false}>
-                Para que el cliente pueda ver el recorrido de su pedido en tiempo real, Krusty Burger{' '}
+                Durante una entrega activa, Krusty Burger recopila tu ubicación incluso cuando la app está en segundo plano
+                (minimizada) o la pantalla está bloqueada. La ubicación se envía al sistema de seguimiento para que el{' '}
                 <Text style={{ fontWeight: '700', color: colores.text }}>
-                  recopila, usa y comparte tu ubicación con el cliente del pedido
+                  cliente de ese pedido vea tu recorrido en tiempo real
                 </Text>{' '}
-                mientras la entrega está activa. El seguimiento se muestra con una{' '}
-                <Text style={{ fontWeight: '700', color: colores.text }}>
-                  notificación visible en tu teléfono
-                </Text>{' '}
-                y se detiene al confirmar la entrega del pedido.
+                y se detiene al finalizar o cancelar la entrega.
               </Text>
 
               <View style={[estilos.modalUbicacionLista, { backgroundColor: colores.surfaceHover }]}>
@@ -1978,8 +1990,8 @@ export default function PantallaTransmision(props: any) {
               </View>
 
               <Text style={[estilos.modalUbicacionAviso, { color: colores.textTertiary }]} allowFontScaling={false}>
-                Al tocar "Permitir ubicación", el sistema te va a pedir permitir el acceso mientras la app está en uso.
-                El seguimiento continuará con una notificación visible aunque bloquees la pantalla.
+                Al continuar, Android te pedirá permiso para acceder a la ubicación mientras la app está en uso si aún no lo concediste.
+                El seguimiento en segundo plano se mantiene con una notificación visible mientras la entrega está activa.
               </Text>
             </View>
 
@@ -1989,7 +2001,7 @@ export default function PantallaTransmision(props: any) {
                   estilos.modalUbicacionBotonCancelar,
                   { backgroundColor: colores.surfaceHover, borderColor: colores.border },
                 ]}
-                onPress={cancelarUbicacionBackground}
+                onPress={cancelarDivulgacionUbicacion}
                 activeOpacity={0.85}
               >
                 <Text style={[estilos.modalUbicacionBotonCancelarTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
@@ -1999,13 +2011,13 @@ export default function PantallaTransmision(props: any) {
 
               <TouchableOpacity
                 style={estilos.modalUbicacionBotonContinuar}
-                onPress={confirmarUbicacionBackground}
+                onPress={confirmarDivulgacionUbicacion}
                 activeOpacity={0.85}
               >
                 <View style={[estilos.modalUbicacionBotonContinuarGradient, { backgroundColor: colores.accent }]}>
                   <Ionicons name="checkmark-circle" size={18} color="#FFF" />
                   <Text style={estilos.modalUbicacionBotonContinuarTexto} allowFontScaling={false}>
-                    Permitir ubicación
+                    Aceptar y continuar
                   </Text>
                 </View>
               </TouchableOpacity>
