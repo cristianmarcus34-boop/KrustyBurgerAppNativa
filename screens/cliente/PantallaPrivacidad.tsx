@@ -248,8 +248,10 @@ export default function PantallaPrivacidad({ navigation }: any) {
 • Podemos solicitar verificación de edad
 
 📍 8. Ubicación
-• Solo solicitamos ubicación para calcular distancias de envío
-• Puedes desactivar el acceso en cualquier momento desde el menú de perfil
+• Para calcular un envío o mostrar el recorrido de tu pedido, la app puede usar tu ubicación mientras la utilizas
+• Durante una entrega activa, recopilamos la ubicación precisa del repartidor incluso si la app está minimizada o la pantalla bloqueada, y la compartimos con el cliente de ese pedido para mostrar el recorrido en tiempo real
+• El seguimiento del repartidor se detiene al completar o cancelar el pedido, o al pausarlo desde la pantalla de entrega; se mantiene una notificación visible mientras está activo
+• Puedes rechazar el permiso de ubicación; en ese caso, las funciones que lo necesitan no estarán disponibles
 
 📱 9. Notificaciones push
 • Enviamos notificaciones sobre tu pedido
@@ -460,8 +462,10 @@ Si tenés preguntas sobre tu privacidad, contactanos en:
                         📍 8. Ubicación
                     </Text>
                     <Text style={[styles.text, { fontSize: isTablet ? 14 : 13 }]}>
-                        • Solo solicitamos ubicación para calcular distancias de envío y enviar la ubicación en tiempo real de tu pedido{'\n'}
-                        • Puedes desactivar el acceso en cualquier momento desde el menú de perfil
+                        • Para calcular un envío o mostrar el recorrido de tu pedido, la app puede usar tu ubicación mientras la utilizas{'\n'}
+                        • Durante una entrega activa, recopilamos la ubicación precisa del repartidor incluso si la app está minimizada o la pantalla bloqueada, y la compartimos con el cliente de ese pedido para mostrar el recorrido en tiempo real{'\n'}
+                        • El seguimiento del repartidor se detiene al completar o cancelar el pedido, o al pausarlo desde la pantalla de entrega; se mantiene una notificación visible mientras está activo{'\n'}
+                        • Puedes rechazar el permiso de ubicación; en ese caso, las funciones que lo necesitan no estarán disponibles
                     </Text>
 
                     {/* ============================================== */}

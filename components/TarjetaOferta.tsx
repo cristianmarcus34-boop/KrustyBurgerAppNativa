@@ -6,11 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  Image,
   Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -142,7 +142,8 @@ export default function TarjetaOferta({
                 borderRadius: esFeatured ? 16 : esCompact ? 8 : 12,
               }
             ]}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
             onError={handleImageError}
             onLoad={handleImageLoad}
           />

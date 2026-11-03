@@ -298,21 +298,17 @@ export const notificacionService = {
 
             const plataforma = Platform.OS;
 
-            const { error: errorDispositivo } = await supabase
-                .from('dispositivos_push')
-                .upsert(
-                    {
-                        expo_push_token: token.data,
-                        usuario_actual_id: usuarioId,
-                        plataforma,
-                        activo: true,
-                        ultima_actividad: new Date().toISOString(),
-                    },
-                    { onConflict: 'expo_push_token' },
-                );
+            const { error: errorDispositivo } = await supabase.rpc(
+                'registrar_dispositivo_push',
+                {
+                    p_expo_push_token: token.data,
+                    p_plataforma: plataforma,
+                },
+            );
 
             if (errorDispositivo) {
                 console.error('❌ Error en dispositivos_push:', errorDispositivo);
+                return false;
             }
 
             const { error: errorPerfil } = await supabase
@@ -395,19 +391,12 @@ export const notificacionService = {
             const token = await this.obtenerTokenActual();
             if (!token) return false;
 
-            const update: any = {
-                ultima_actividad: new Date().toISOString(),
-                activo: true,
-            };
+            if (!usuarioId) return false;
 
-            if (usuarioId) {
-                update.usuario_actual_id = usuarioId;
-            }
-
-            const { error } = await supabase
-                .from('dispositivos_push')
-                .update(update)
-                .eq('expo_push_token', token);
+            const { error } = await supabase.rpc('registrar_dispositivo_push', {
+                p_expo_push_token: token,
+                p_plataforma: Platform.OS,
+            });
 
             if (error) {
                 console.warn('⚠️ Error actualizando actividad:', error);

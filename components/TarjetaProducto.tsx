@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { Producto } from '../lib/tipos';
 import { Colores, getTematica } from '../lib/colores';
 import { tiendaFavoritos } from '../stores/tiendaFavoritos';
@@ -229,7 +229,8 @@ export default function TarjetaProducto({ producto, onAgregar, onDetalle, modoGr
             <Image
               source={{ uri: producto.imagen }}
               style={[estilos.imagen, { borderRadius: isTablet ? 12 : isSmallPhone ? 10 : 11 }]}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           ) : (
             <View style={estilos.emojiContainer}>

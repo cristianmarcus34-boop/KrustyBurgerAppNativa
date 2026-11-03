@@ -781,7 +781,12 @@ export default function PantallaTransmision(props: any) {
           error && typeof error === 'object' && 'codigo' in error
             ? error.codigo
             : undefined;
-        if (codigoErrorUbicacion !== 'GPS_DESACTIVADO') {
+        const errorUbicacionEsperado = [
+          'GPS_DESACTIVADO',
+          'GPS_SIN_SENAL',
+          'TIMEOUT',
+        ].includes(String(codigoErrorUbicacion));
+        if (!errorUbicacionEsperado) {
           console.error('❌ No se pudo obtener la ubicación inicial:', error);
         }
         const infoUbicacion = mensajeErrorUbicacion(error);
@@ -794,7 +799,9 @@ export default function PantallaTransmision(props: any) {
         const mensajeErrorTecnico = error instanceof Error ? error.message : '';
         const puedeActivarProveedorAndroid =
           Platform.OS === 'android' &&
-          (infoUbicacion.tipoAjustes === 'gps' || mensajeErrorTecnico === 'GPS_SIN_SENAL');
+          (infoUbicacion.tipoAjustes === 'gps' ||
+            mensajeErrorTecnico === 'GPS_SIN_SENAL' ||
+            infoUbicacion.esTimeout);
 
         if (puedeActivarProveedorAndroid) {
           botones.push({
@@ -859,34 +866,8 @@ export default function PantallaTransmision(props: any) {
         throw new Error('El dispositivo devolvió coordenadas inválidas.');
       }
 
-      let actualizarPedido;
-      if (reanudar) {
-        actualizarPedido = supabase
-          .from('pedidos')
-          .update({
-            lat_repartidor: latitude,
-            repartidor_de_lng: longitude,
-          })
-          .eq('id', pedido.id)
-          .in('estado', ['en_camino', 'en camino'])
-          .eq('repartidor_id', perfil.id);
-      } else {
-        actualizarPedido = supabase
-          .from('pedidos')
-          .update({
-            estado: 'en_camino',
-            repartidor_id: perfil.id,
-            encabezado_repartidor: perfil.nombre_cliente || 'Repartidor Krusty',
-            telefono_repartidor: perfil.telefono || null,
-            lat_repartidor: latitude,
-            repartidor_de_lng: longitude,
-          })
-          .eq('id', pedido.id)
-          .eq('estado', 'listo');
-
-        if (pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
-          throw new Error('Este pedido está asignado a otro repartidor.');
-        }
+      if (!reanudar && pedido.repartidor_id && pedido.repartidor_id !== perfil.id) {
+        throw new Error('Este pedido está asignado a otro repartidor.');
       }
 
       // ✅ Este servicio debe usar foreground service (notificación visible),
@@ -900,18 +881,29 @@ export default function PantallaTransmision(props: any) {
         tipoEntrega: pedido.tipo_entrega,
       });
 
-      const { data: pedidoActualizado, error } = await actualizarPedido.select('id').maybeSingle();
+      const { data: pedidoActualizado, error } = await supabase.rpc(
+        'actualizar_pedido_repartidor',
+        {
+          p_pedido_id: pedido.id,
+          p_latitud: latitude,
+          p_longitud: longitude,
+          p_reanudar: reanudar,
+        }
+      );
 
       if (error) throw error;
       if (!pedidoActualizado) {
-        const { data: pedidoActual } = await supabase
+        const { data: pedidoActual, error: errorLecturaPedido } = await supabase
           .from('pedidos')
           .select('estado, repartidor_id')
           .eq('id', pedido.id)
           .maybeSingle();
 
+        if (errorLecturaPedido) throw errorLecturaPedido;
         if (!pedidoActual) {
-          throw new Error('El pedido ya no existe. Puede haber sido eliminado.');
+          throw new Error(
+            'No pudimos confirmar que el pedido siga disponible. Actualizá la lista e intentá nuevamente.'
+          );
         }
         if (pedidoActual.estado === 'entregado') {
           throw new Error('Este pedido ya fue entregado.');
@@ -922,7 +914,11 @@ export default function PantallaTransmision(props: any) {
         if (pedidoActual.repartidor_id && pedidoActual.repartidor_id !== perfil.id) {
           throw new Error('Otro repartidor tomó este pedido.');
         }
-        throw new Error('El estado del pedido cambió. Actualizá la lista e intentá nuevamente.');
+        throw new Error(
+          reanudar
+            ? 'El seguimiento ya no está activo para tu cuenta. Actualizá la lista e intentá nuevamente.'
+            : 'Este pedido ya no está disponible para iniciar. Actualizá la lista e intentá nuevamente.'
+        );
       }
       pedidoYaActualizado = true;
 
@@ -970,7 +966,21 @@ export default function PantallaTransmision(props: any) {
         }
       );
     } catch (error) {
-      console.error('❌ No se pudo iniciar o reanudar el seguimiento:', error);
+      const mensajeError =
+        error instanceof Error ? error.message : 'Error desconocido';
+      const esCambioEsperadoPedido = [
+        'No pudimos confirmar que el pedido siga disponible.',
+        'Este pedido ya no está disponible para iniciar.',
+        'El seguimiento ya no está activo para tu cuenta.',
+        'Otro repartidor tomó este pedido.',
+        'Este pedido ya fue entregado.',
+        'Este pedido fue cancelado.',
+      ].some((mensaje) => mensajeError.startsWith(mensaje));
+      if (esCambioEsperadoPedido) {
+        console.info('El pedido cambió antes de iniciar el seguimiento:', mensajeError);
+      } else {
+        console.error('❌ No se pudo iniciar o reanudar el seguimiento:', error);
+      }
       if (seguimientoNuevo && !pedidoYaActualizado) {
         try {
           await detenerSeguimientoUbicacionEnSegundoPlano(pedido.id);
@@ -988,7 +998,7 @@ export default function PantallaTransmision(props: any) {
         );
         return;
       }
-      const mensajeTecnico = error instanceof Error ? error.message.toLowerCase() : '';
+      const mensajeTecnico = mensajeError.toLowerCase();
       const esErrorUbicacion =
         Boolean(error && typeof error === 'object' && 'codigo' in error) ||
         ['location', 'permission', 'gps', 'provider'].some((termino) =>
@@ -1101,16 +1111,17 @@ export default function PantallaTransmision(props: any) {
             if (procesandoEntrega) return;
             setProcesandoEntrega(true);
             try {
-              const { data, error } = await supabase
-                .from('pedidos')
-                .update({ estado: 'entregado' })
-                .eq('id', pedido.id)
-                .in('estado', ['en_camino', 'en camino'])
-                .select('id')
-                .maybeSingle();
+              const { data, error } = await supabase.rpc(
+                'confirmar_entrega_repartidor',
+                { p_pedido_id: pedido.id }
+              );
 
               if (error) throw error;
-              if (!data) throw new Error('El pedido ya no está en camino. Actualizá la lista.');
+              if (!data) {
+                throw new Error(
+                  'No se pudo confirmar: el pedido ya no está en camino o no está asignado a tu cuenta. Actualizá la lista.'
+                );
+              }
 
               watchRef.current?.remove();
               watchRef.current = null;
@@ -1156,17 +1167,30 @@ export default function PantallaTransmision(props: any) {
     );
   };
 
-  const detenerTransmision = () => {
+  const detenerTransmision = async () => {
+    if (procesandoEntrega) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-    if (watchRef.current) {
-      watchRef.current.remove();
-      watchRef.current = null;
+    setProcesandoEntrega(true);
+    try {
+      await detenerSeguimientoUbicacionEnSegundoPlano();
+      if (watchRef.current) {
+        watchRef.current.remove();
+        watchRef.current = null;
+      }
+      setTransmitiendo(false);
+      setPedidoSeleccionado(null);
+      rutaCargadaRef.current = null;
+      mapaCentradoRef.current = null;
+      toast.info('⏸️ Seguimiento pausado; la ubicación dejó de compartirse');
+    } catch (error) {
+      console.error('No se pudo pausar el servicio de ubicación:', error);
+      Alert.alert(
+        'No se pudo pausar el seguimiento',
+        'La ubicación podría seguir compartiéndose mientras la entrega esté activa. Mantené la app abierta e intentá pausar nuevamente.'
+      );
+    } finally {
+      setProcesandoEntrega(false);
     }
-    setTransmitiendo(false);
-    setPedidoSeleccionado(null);
-    rutaCargadaRef.current = null;
-    mapaCentradoRef.current = null;
-    toast.info('⏸️ GPS pausado');
   };
 
   const confirmarCerrarSesion = async () => {
@@ -1751,6 +1775,7 @@ export default function PantallaTransmision(props: any) {
             <TouchableOpacity
               style={estilos.botonDetenerMapa}
               onPress={detenerTransmision}
+              disabled={procesandoEntrega}
               activeOpacity={0.85}
             >
               <LinearGradient
@@ -2085,7 +2110,7 @@ export default function PantallaTransmision(props: any) {
                 <Text style={{ fontWeight: '700', color: colores.text }}>
                   cliente de ese pedido vea tu recorrido en tiempo real
                 </Text>{' '}
-                y se detiene al finalizar o cancelar la entrega.
+                y se detiene al finalizar o cancelar la entrega, o cuando pausás el seguimiento.
               </Text>
 
               <View style={[estilos.modalUbicacionLista, { backgroundColor: colores.surfaceHover }]}>
@@ -2094,7 +2119,7 @@ export default function PantallaTransmision(props: any) {
                     <Ionicons name="eye-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Solo la ve el{' '}
+                    La ve el{' '}
                     <Text style={{ fontWeight: '700', color: colores.text }}>cliente del pedido</Text>
                   </Text>
                 </View>
@@ -2114,7 +2139,7 @@ export default function PantallaTransmision(props: any) {
                     <Ionicons name="stop-circle-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Se <Text style={{ fontWeight: '700', color: colores.text }}>detiene al confirmar</Text> la entrega
+                    Se detiene al confirmar, cancelar o pausar el seguimiento
                   </Text>
                 </View>
               </View>

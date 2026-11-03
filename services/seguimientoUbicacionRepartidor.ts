@@ -14,6 +14,7 @@ const CLAVE_ULTIMO_PUNTO_GUARDADO = 'krustyburger:ultimo-punto-seguimiento';
 export interface SeguimientoEntregaActivo {
   pedidoId: number;
   repartidorId: string;
+  iniciadoEn?: number;
   clienteId: string | null;
   latCliente: number | null;
   lngCliente: number | null;
@@ -68,6 +69,7 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
   seguimiento: SeguimientoEntregaActivo
 ): Promise<boolean> => {
   let tareaIniciadaAhora = false;
+  const seguimientoPersistido = { ...seguimiento, iniciadoEn: Date.now() };
   try {
     const disponible = await TaskManager.isAvailableAsync();
     if (!disponible) {
@@ -92,12 +94,12 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
           `Detenela antes de iniciar otra.`
         );
       } else {
-        await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
+        await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimientoPersistido));
         return false;
       }
     }
 
-    await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimiento));
+    await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimientoPersistido));
     await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
 
     // ✅ Configuración para FOREGROUND SERVICE (sin ACCESS_BACKGROUND_LOCATION)
@@ -194,7 +196,27 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
         .maybeSingle();
 
       if (errorUbicacion) throw errorUbicacion;
-      if (!pedidoActualizado) return;
+      if (!pedidoActualizado) {
+        if (Date.now() - (seguimiento.iniciadoEn ?? 0) < 30_000) return;
+
+        const { data: pedidoActual, error: errorEstado } = await supabase
+          .from('pedidos')
+          .select('estado, repartidor_id')
+          .eq('id', seguimiento.pedidoId)
+          .maybeSingle();
+
+        if (errorEstado) throw errorEstado;
+        const pedidoSigueActivo =
+          pedidoActual?.repartidor_id === seguimiento.repartidorId &&
+          typeof pedidoActual.estado === 'string' &&
+          ['en_camino', 'en camino'].includes(pedidoActual.estado);
+
+        if (!pedidoSigueActivo) {
+          console.info('La entrega ya no está activa o asignada a este repartidor; se detiene el seguimiento.');
+          await detenerSeguimientoUbicacionEnSegundoPlano(seguimiento.pedidoId);
+        }
+        return;
+      }
 
       const timestamp = ultimaUbicacion.timestamp;
       const ultimoPuntoGuardado = await AsyncStorage.getItem(CLAVE_ULTIMO_PUNTO_GUARDADO);

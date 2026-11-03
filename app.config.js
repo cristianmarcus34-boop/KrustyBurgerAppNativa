@@ -13,7 +13,7 @@ module.exports = ({ config }) => {
         slug: 'KrustyBurger',
         version: '1.0.4',
         scheme: 'krustyburger',
-        orientation: 'portrait',
+        orientation: 'default',
         icon: './assets/icon.png',
         userInterfaceStyle: 'automatic',
         ios: {
@@ -24,6 +24,8 @@ module.exports = ({ config }) => {
                 NSPhotoLibraryUsageDescription: 'KrustyBurger necesita acceso a tus fotos para subir imágenes.',
                 NSLocationWhenInUseUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
                 NSLocationAlwaysUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
+                'UISupportedInterfaceOrientations~ipad': ['UIInterfaceOrientationPortrait'],
                 UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
             },
             config: {
@@ -51,6 +53,7 @@ module.exports = ({ config }) => {
                 'android.permission.WRITE_EXTERNAL_STORAGE',
                 'android.permission.RECORD_AUDIO',
                 'android.permission.ACCESS_BACKGROUND_LOCATION', // ✅ Bloqueado: Google Play no debe verlo
+                'android.permission.SYSTEM_ALERT_WINDOW',
             ],
             permissions: [
                 'android.permission.ACCESS_FINE_LOCATION',
@@ -87,6 +90,7 @@ module.exports = ({ config }) => {
         plugins: [
             'expo-secure-store',
             'expo-router',
+            './plugins/withAndroidManifest.js',
             'expo-status-bar',
             'expo-font',
             'expo-updates',
@@ -151,7 +155,6 @@ module.exports = ({ config }) => {
                     },
                 },
             ],
-            './plugins/withAndroidManifest.js',
             './plugins/withForegroundServiceLocation.js',
             'expo-web-browser',
             '@react-native-community/datetimepicker',

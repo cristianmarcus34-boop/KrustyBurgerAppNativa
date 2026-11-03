@@ -1,10 +1,23 @@
 // plugins/withAndroidManifest.js
-const { withAndroidManifest } = require('@expo/config-plugins');
+const {
+    withAndroidManifest,
+    withAndroidStyles,
+    withAppBuildGradle,
+    withGradleProperties,
+} = require('@expo/config-plugins');
 
 module.exports = function withAndroidManifestPlugin(config) {
-    return withAndroidManifest(config, async (config) => {
+    config = withAndroidManifest(config, async (config) => {
         const androidManifest = config.modResults;
         const application = androidManifest.manifest.application[0];
+        application.$['android:resizeableActivity'] = 'true';
+
+        const mainActivity = application.activity?.find(
+            (item) => item.$['android:name'] === '.MainActivity'
+        );
+        if (mainActivity) {
+            delete mainActivity.$['android:screenOrientation'];
+        }
 
         // ✅ Asegurar que meta-data existe
         if (!application['meta-data']) {
@@ -37,6 +50,64 @@ module.exports = function withAndroidManifestPlugin(config) {
         }
 
         console.log('📱 AndroidManifest.xml de Google Maps actualizado correctamente');
+
+        return config;
+    });
+
+    config = withAndroidStyles(config, (config) => {
+        const appTheme = config.modResults.resources.style?.find(
+            (style) => style.$?.name === 'AppTheme'
+        );
+        if (!appTheme) {
+            throw new Error('[withAndroidManifest] No se encontró el estilo AppTheme.');
+        }
+
+        appTheme.item = (appTheme.item || []).filter(
+            (item) =>
+                item.$?.name !== 'android:statusBarColor' &&
+                item.$?.name !== 'android:navigationBarColor'
+        );
+
+        return config;
+    });
+
+    config = withAppBuildGradle(config, (config) => {
+        const contents = config.modResults.contents;
+        const legacyR8Config = /getDefaultProguardFile\((['"])proguard-android\.txt\1\)/;
+
+        if (legacyR8Config.test(contents)) {
+            config.modResults.contents = contents.replace(
+                legacyR8Config,
+                'getDefaultProguardFile("proguard-android-optimize.txt")'
+            );
+        } else if (!contents.includes('proguard-android-optimize.txt')) {
+            throw new Error(
+                '[withAndroidManifest] No se encontró la configuración ProGuard de Release para optimizar R8.'
+            );
+        }
+
+        return config;
+    });
+
+    return withGradleProperties(config, (config) => {
+        const properties = config.modResults;
+        const enabledOptimizations = new Map([
+            ['android.enablePngCrunchInReleaseBuilds', 'true'],
+            ['android.enableMinifyInReleaseBuilds', 'true'],
+            ['android.enableShrinkResourcesInReleaseBuilds', 'true'],
+            ['android.r8.optimizedResourceShrinking', 'true'],
+        ]);
+
+        for (const [key, value] of enabledOptimizations) {
+            const existing = properties.find(
+                (property) => property.type === 'property' && property.key === key
+            );
+            if (existing) {
+                existing.value = value;
+            } else {
+                properties.push({ type: 'property', key, value });
+            }
+        }
 
         return config;
     });
