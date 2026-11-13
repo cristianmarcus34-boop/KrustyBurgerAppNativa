@@ -143,9 +143,9 @@ module.exports = ({ config }) => {
                 'expo-build-properties',
                 {
                     android: {
-                        compileSdkVersion: 36,
+                        compileSdkVersion: 37,
                         targetSdkVersion: 36,
-                        buildToolsVersion: '36.0.0',
+                        buildToolsVersion: '37.0.0',
                         enableMinifyInReleaseBuilds: true,
                         enableShrinkResourcesInReleaseBuilds: true,
                         extraProguardRules: '-keep class expo.modules.notifications.** { *; } -dontwarn com.stripe.android.pushProvisioning.** -dontwarn com.reactnativestripesdk.pushprovisioning.**'
@@ -167,6 +167,12 @@ module.exports = ({ config }) => {
                     url: 'https://sentry.io/',
                     project: 'react-native',
                     organization: 'powa-b6',
+                },
+            ],
+            [
+                '@stripe/stripe-react-native',
+                {
+                    merchantIdentifier: 'merchant.com.agenciapowa.KrustyBurger',
                 },
             ],
         ],
