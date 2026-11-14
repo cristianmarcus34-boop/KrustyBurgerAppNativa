@@ -12,7 +12,8 @@
         "buildType": "apk"
       },
       "env": {
-        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a",
+        "GRADLE_OPTS": "-Xmx6g -XX:MaxMetaspaceSize=2g"
       }
     },
     "preview": {
@@ -22,7 +23,8 @@
         "buildType": "apk"
       },
       "env": {
-        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a",
+        "GRADLE_OPTS": "-Xmx6g -XX:MaxMetaspaceSize=2g"
       }
     },
     "preview-dev": {
@@ -33,7 +35,8 @@
         "buildType": "apk"
       },
       "env": {
-        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a",
+        "GRADLE_OPTS": "-Xmx6g -XX:MaxMetaspaceSize=2g"
       }
     },
     "production": {
@@ -43,7 +46,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "SENTRY_ALLOW_FAILURE": "true"
+        "SENTRY_ALLOW_FAILURE": "true",
+        "GRADLE_OPTS": "-Xmx6g -XX:MaxMetaspaceSize=2g"
       }
     },
     "development-simulator": {
