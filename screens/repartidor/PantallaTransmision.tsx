@@ -1,4 +1,4 @@
-// screens/repartidor/PantallaTransmision.tsx - V6 (Google Play compliant, sin BACKGROUND_LOCATION)
+// screens/repartidor/PantallaTransmision.tsx - Versión Completa con Divulgación de Ubicación en Segundo Plano (Play Store Compliant)
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
@@ -285,7 +285,7 @@ export default function PantallaTransmision(props: any) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' || !watchRef.current) return;
-      console.log('📱 App en background — el foreground service sigue activo');
+      console.log('📱 App en background — el servicio de ubicación y notificaciones sigue activo');
     });
     return () => subscription.remove();
   }, []);
@@ -732,7 +732,7 @@ export default function PantallaTransmision(props: any) {
   };
 
   // ============================================================
-  // TRANSMISIÓN - V6 (Google Play compliant: sin BACKGROUND_LOCATION)
+  // TRANSMISIÓN - Flujo con permisos de ubicación en segundo plano (Google Play Policy Compliant)
   // ============================================================
   const iniciarTransmision = async (
     pedido: Pedido,
@@ -749,6 +749,7 @@ export default function PantallaTransmision(props: any) {
       return;
     }
 
+    // ⚠️ Requisito estricto de Google Play: Mostrar divulgación destacada antes de solicitar permisos de ubicación en segundo plano
     if (!divulgacionConfirmada) {
       setPedidoPendienteTransmision(pedido);
       setReanudarPendienteTransmision(reanudar);
@@ -762,10 +763,9 @@ export default function PantallaTransmision(props: any) {
     let pedidoYaActualizado = false;
 
     try {
-      // ✅ Solo verificamos FOREGROUND. El background está bloqueado en el manifest.
-      const foregroundStatus = await Location.getForegroundPermissionsAsync();
+      const backgroundStatus = await Location.getBackgroundPermissionsAsync();
 
-      if (foregroundStatus.status !== 'granted') {
+      if (backgroundStatus.status !== 'granted') {
         setPedidoPendienteTransmision(pedido);
         setReanudarPendienteTransmision(reanudar);
         setMostrarModalUbicacion(true);
@@ -870,8 +870,6 @@ export default function PantallaTransmision(props: any) {
         throw new Error('Este pedido está asignado a otro repartidor.');
       }
 
-      // ✅ Este servicio debe usar foreground service (notificación visible),
-      //    NO requestBackgroundPermissionsAsync.
       seguimientoNuevo = await iniciarSeguimientoUbicacionEnSegundoPlano({
         pedidoId: pedido.id,
         repartidorId: perfil.id,
@@ -1037,7 +1035,6 @@ export default function PantallaTransmision(props: any) {
     }
   };
 
-  // La divulgación se confirma antes de solicitar el permiso o iniciar el servicio.
   const confirmarDivulgacionUbicacion = async () => {
     if (!pedidoPendienteTransmision) return;
 
@@ -1048,12 +1045,11 @@ export default function PantallaTransmision(props: any) {
     setReanudarPendienteTransmision(false);
 
     try {
-      // 1. FOREGROUND (mientras la app está abierta)
       const foregroundStatus = await Location.requestForegroundPermissionsAsync();
       if (foregroundStatus.status !== 'granted') {
         Alert.alert(
           'Permiso de ubicación necesario',
-          'Para iniciar el seguimiento, Krusty Burger necesita permiso para acceder a tu ubicación mientras la app está en uso. Podés habilitarlo en los ajustes de la aplicación.',
+          'Para iniciar el seguimiento, Krusty Burger necesita permiso para acceder a tu ubicación. Podés habilitarlo en los ajustes de la aplicación.',
           [
             { text: 'Ahora no', style: 'cancel' },
             {
@@ -1067,17 +1063,32 @@ export default function PantallaTransmision(props: any) {
         return;
       }
 
-      // ⚠️ NO se pide BACKGROUND. El foreground service mantiene el GPS
-      //    activo con una notificación visible mientras la app está en background.
+      const backgroundStatus = await Location.requestBackgroundPermissionsAsync();
+      if (backgroundStatus.status !== 'granted') {
+        Alert.alert(
+          'Permiso en segundo plano requerido',
+          'Para que el cliente pueda ver tu recorrido en tiempo real incluso si salís de la app, es necesario seleccionar "Permitir todo el tiempo" en los ajustes de ubicación.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Abrir ajustes',
+              onPress: () => {
+                void abrirAjustesApp();
+              },
+            },
+          ]
+        );
+        return;
+      }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-      toast.exito('✅ Ubicación activada');
+      toast.exito('✅ Permisos de ubicación concedidos');
 
       await iniciarTransmision(pedido, reanudar, true);
     } catch (error) {
-      console.error('❌ Error solicitando permiso de ubicación:', error);
+      console.error('❌ Error solicitando permisos de ubicación:', error);
       Alert.alert(
-        'No pudimos solicitar el permiso',
+        'No pudimos solicitar los permisos',
         'No se pudo abrir la solicitud de ubicación. Revisá los permisos de Krusty Burger en los ajustes del dispositivo e intentá nuevamente.',
         [
           { text: 'Ahora no', style: 'cancel' },
@@ -2075,18 +2086,14 @@ export default function PantallaTransmision(props: any) {
       />
 
       {/* ============================================================
-          MODAL DIVULGACIÓN UBICACIÓN - GOOGLE PLAY COMPLIANT
-          Se muestra antes de iniciar cada seguimiento, incluso si el permiso
-          de ubicación ya fue concedido.
+          MODAL DIVULGACIÓN UBICACIÓN - REQUISITO DE GOOGLE PLAY
           ============================================================ */}
       <Modal
         visible={mostrarModalUbicacion}
         transparent
         animationType="fade"
         statusBarTranslucent={true}
-        onRequestClose={() => {
-          // ⚠️ INTENCIONALMENTE VACÍO: el usuario DEBE tocar un botón.
-        }}
+        onRequestClose={() => { }}
       >
         <View style={estilos.modalFondo}>
           <View style={[estilos.modalUbicacionContainer, { backgroundColor: colores.surface }]}>
@@ -2105,12 +2112,11 @@ export default function PantallaTransmision(props: any) {
               </Text>
 
               <Text style={[estilos.modalUbicacionExplicacion, { color: colores.textSecondary }]} allowFontScaling={false}>
-                Durante una entrega activa, Krusty Burger recopila tu ubicación incluso cuando la app está en segundo plano
-                (minimizada) o la pantalla está bloqueada. La ubicación se envía al sistema de seguimiento para que el{' '}
+                Krusty Burger recopila datos de ubicación para permitir el{' '}
                 <Text style={{ fontWeight: '700', color: colores.text }}>
-                  cliente de ese pedido vea tu recorrido en tiempo real
+                  seguimiento de pedidos en tiempo real por parte del cliente
                 </Text>{' '}
-                y se detiene al finalizar o cancelar la entrega, o cuando pausás el seguimiento.
+                mientras estás realizando una entrega, incluso cuando la aplicación está cerrada o en segundo plano.
               </Text>
 
               <View style={[estilos.modalUbicacionLista, { backgroundColor: colores.surfaceHover }]}>
@@ -2119,8 +2125,8 @@ export default function PantallaTransmision(props: any) {
                     <Ionicons name="eye-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    La ve el{' '}
-                    <Text style={{ fontWeight: '700', color: colores.text }}>cliente del pedido</Text>
+                    Visible exclusivamente para el{' '}
+                    <Text style={{ fontWeight: '700', color: colores.text }}>cliente del pedido activo</Text>
                   </Text>
                 </View>
 
@@ -2129,8 +2135,8 @@ export default function PantallaTransmision(props: any) {
                     <Ionicons name="time-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Solo durante la{' '}
-                    <Text style={{ fontWeight: '700', color: colores.text }}>entrega activa</Text>
+                    Se utiliza únicamente durante la{' '}
+                    <Text style={{ fontWeight: '700', color: colores.text }}>fase de reparto</Text>
                   </Text>
                 </View>
 
@@ -2139,14 +2145,13 @@ export default function PantallaTransmision(props: any) {
                     <Ionicons name="stop-circle-outline" size={16} color={colores.success} />
                   </View>
                   <Text style={[estilos.modalUbicacionItemTexto, { color: colores.textSecondary }]} allowFontScaling={false}>
-                    Se detiene al confirmar, cancelar o pausar el seguimiento
+                    Se detiene por completo al confirmar la entrega o pausar el seguimiento
                   </Text>
                 </View>
               </View>
 
               <Text style={[estilos.modalUbicacionAviso, { color: colores.textTertiary }]} allowFontScaling={false}>
-                Al continuar, Android te pedirá permiso para acceder a la ubicación mientras la app está en uso si aún no lo concediste.
-                El seguimiento en segundo plano se mantiene con una notificación visible mientras la entrega está activa.
+                Al continuar, Android te solicitará permiso de ubicación "Permitir todo el tiempo".
               </Text>
             </View>
 
@@ -3374,10 +3379,6 @@ const crearEstilos = (colores: PaletaTema) =>
       lineHeight: 20,
       includeFontPadding: false,
     },
-    modalUbicacionDestacado: {
-      fontFamily: FUENTES.display,
-      fontWeight: '700',
-    },
     modalUbicacionLista: {
       gap: 12,
       borderRadius: 12,
@@ -3401,10 +3402,6 @@ const crearEstilos = (colores: PaletaTema) =>
       fontSize: 13,
       lineHeight: 18,
       includeFontPadding: false,
-    },
-    modalUbicacionItemDestacado: {
-      fontFamily: FUENTES.display,
-      fontWeight: '700',
     },
     modalUbicacionAviso: {
       fontFamily: FUENTES.regular,

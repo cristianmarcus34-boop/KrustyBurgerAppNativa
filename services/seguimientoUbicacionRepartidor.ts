@@ -1,4 +1,4 @@
-// services/seguimientoUbicacionRepartidor.ts - V2 (Google Play compliant, foreground service)
+// services/seguimientoUbicacionRepartidor.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -42,9 +42,6 @@ export const obtenerSeguimientoEntregaActivo = async (): Promise<SeguimientoEntr
   return datos ? JSON.parse(datos) as SeguimientoEntregaActivo : null;
 };
 
-/**
- * Limpia cualquier tarea de ubicación que haya quedado huérfana.
- */
 export const limpiarSeguimientoHuerfano = async (): Promise<void> => {
   try {
     const tareaActiva = await Location.hasStartedLocationUpdatesAsync(TAREA_UBICACION_REPARTIDOR);
@@ -102,9 +99,7 @@ export const iniciarSeguimientoUbicacionEnSegundoPlano = async (
     await AsyncStorage.setItem(CLAVE_SEGUIMIENTO_ACTIVO, JSON.stringify(seguimientoPersistido));
     await AsyncStorage.removeItem(CLAVE_ULTIMO_PUNTO_GUARDADO);
 
-    // ✅ Configuración para FOREGROUND SERVICE (sin ACCESS_BACKGROUND_LOCATION)
-    // En Android, el foreground service mantiene el GPS activo con una notificación
-    // visible. En iOS, usamos allowsBackgroundLocationUpdates vía showsBackgroundLocationIndicator.
+    // ✅ CONFIGURACIÓN CON BACKGROUND LOCATION
     const opciones: Location.LocationTaskOptions = {
       accuracy: Location.Accuracy.High,
       timeInterval: 5000,

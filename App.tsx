@@ -146,18 +146,6 @@ import PantallaCrearCupon from './screens/admin/PantallaCrearCupon';
 // 📦 PANTALLAS - REPARTIDOR
 // ============================================================
 import PantallaTransmision from './screens/repartidor/PantallaTransmision';
-import * as Sentry from '@sentry/react-native';
-
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-
-  sendDefaultPii: true,
-  enableLogs: true,
-
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
-});
 
 // ============================================================
 // ⏱️ CONSTANTES DE TIMING DEL SPLASH
@@ -805,16 +793,15 @@ function AppInterna() {
 // ============================================================
 // 🚀 EXPORT PRINCIPAL
 // ============================================================
-export default Sentry.wrap(function App() {
+export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-
         <AppInterna />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
-});
+}
 
 // ============================================================
 // 🎨 ESTILOS

@@ -1,3 +1,4 @@
+// app.config.js
 module.exports = ({ config }) => {
     const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
 
@@ -23,7 +24,7 @@ module.exports = ({ config }) => {
                 NSCameraUsageDescription: 'KrustyBurger necesita acceso a la cámara para escanear códigos QR y cupones.',
                 NSPhotoLibraryUsageDescription: 'KrustyBurger necesita acceso a tus fotos para subir imágenes.',
                 NSLocationWhenInUseUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
-                NSLocationAlwaysUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                NSLocationAlwaysUsageDescription: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos en tiempo real.',
                 UISupportedInterfaceOrientations: ['UIInterfaceOrientationPortrait'],
                 'UISupportedInterfaceOrientations~ipad': ['UIInterfaceOrientationPortrait'],
                 UIBackgroundModes: ['location', 'fetch', 'remote-notification'],
@@ -52,12 +53,12 @@ module.exports = ({ config }) => {
                 'android.permission.READ_EXTERNAL_STORAGE',
                 'android.permission.WRITE_EXTERNAL_STORAGE',
                 'android.permission.RECORD_AUDIO',
-                'android.permission.ACCESS_BACKGROUND_LOCATION', // ✅ Bloqueado: Google Play no debe verlo
                 'android.permission.SYSTEM_ALERT_WINDOW',
             ],
             permissions: [
                 'android.permission.ACCESS_FINE_LOCATION',
                 'android.permission.ACCESS_COARSE_LOCATION',
+                'android.permission.ACCESS_BACKGROUND_LOCATION', // ✅ Requerido para delivery en tiempo real
                 'android.permission.CAMERA',
                 'android.permission.RECEIVE_BOOT_COMPLETED',
                 'android.permission.VIBRATE',
@@ -66,8 +67,8 @@ module.exports = ({ config }) => {
                 'android.permission.ACCESS_NETWORK_STATE',
                 'android.permission.ACCESS_WIFI_STATE',
                 'android.permission.POST_NOTIFICATIONS',
-                'android.permission.FOREGROUND_SERVICE',            // ✅ Para foreground service de ubicación
-                'android.permission.FOREGROUND_SERVICE_LOCATION',   // ✅ Para foreground service de ubicación
+                'android.permission.FOREGROUND_SERVICE',
+                'android.permission.FOREGROUND_SERVICE_LOCATION', // ✅ Requerido para Android 14+ / Servicios en primer plano
             ],
             intentFilters: [
                 {
@@ -120,10 +121,10 @@ module.exports = ({ config }) => {
                 'expo-location',
                 {
                     isIosBackgroundLocationEnabled: true,
-                    isAndroidBackgroundLocationEnabled: false, // ✅ Desactivado en Android
-                    isAndroidForegroundServiceEnabled: true,   // ✅ Foreground service activado
-                    locationAlwaysAndWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
-                    locationAlwaysPermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
+                    isAndroidBackgroundLocationEnabled: true, // ✅ Habilitado para app de repartidor/delivery
+                    isAndroidForegroundServiceEnabled: true,
+                    locationAlwaysAndWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos en tiempo real.',
+                    locationAlwaysPermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos en tiempo real.',
                     locationWhenInUsePermission: 'KrustyBurger necesita tu ubicación para el seguimiento de pedidos.',
                 },
             ],
@@ -146,6 +147,7 @@ module.exports = ({ config }) => {
                         compileSdkVersion: 37,
                         targetSdkVersion: 36,
                         buildToolsVersion: '37.0.0',
+                        agpVersion: '9.0.0', // ✅ Soluciona la advertencia de Gradle 9.0 en Google Play Console
                         enableMinifyInReleaseBuilds: true,
                         enableShrinkResourcesInReleaseBuilds: true,
                         extraProguardRules: '-keep class expo.modules.notifications.** { *; }'
@@ -162,13 +164,11 @@ module.exports = ({ config }) => {
                     maxMetaspace: '1g',
                 },
             ],
-            './plugins/withForegroundServiceLocation.js',
+            './plugins/withForegroundServiceLocation.js', // ✅ Plugin nativo para asegurar el foregroundServiceType="location"
             'expo-web-browser',
             '@react-native-community/datetimepicker',
             'expo-sharing',
             'expo-image',
-
-
         ],
         updates: {
             enabled: true,
