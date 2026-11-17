@@ -45,7 +45,6 @@
     "production": {
       "autoIncrement": false,
       "channel": "production",
-      "resourceClass": "large",
       "android": {
         "buildType": "app-bundle"
       },
