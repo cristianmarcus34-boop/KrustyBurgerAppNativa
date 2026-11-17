@@ -158,8 +158,8 @@ module.exports = ({ config }) => {
             [
                 'expo-gradle-jvmargs',
                 {
-                    xmx: '6g',
-                    maxMetaspace: '2g',
+                    xmx: '4g',
+                    maxMetaspace: '1g',
                 },
             ],
             './plugins/withForegroundServiceLocation.js',

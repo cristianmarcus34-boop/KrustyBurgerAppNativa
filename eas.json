@@ -47,7 +47,7 @@
       },
       "env": {
         "SENTRY_ALLOW_FAILURE": "true",
-        "GRADLE_OPTS": "-Xmx6g -XX:MaxMetaspaceSize=2g"
+        "GRADLE_OPTS": "-Xmx4g -XX:MaxMetaspaceSize=1g"
       }
     },
     "development-simulator": {
