@@ -148,7 +148,7 @@ module.exports = ({ config }) => {
                         buildToolsVersion: '37.0.0',
                         enableMinifyInReleaseBuilds: true,
                         enableShrinkResourcesInReleaseBuilds: true,
-                        extraProguardRules: '-keep class expo.modules.notifications.** { *; } -dontwarn com.stripe.android.pushProvisioning.** -dontwarn com.reactnativestripesdk.pushprovisioning.**'
+                        extraProguardRules: '-keep class expo.modules.notifications.** { *; }'
                     },
                     ios: {
                         deploymentTarget: '16.4',
@@ -167,21 +167,8 @@ module.exports = ({ config }) => {
             '@react-native-community/datetimepicker',
             'expo-sharing',
             'expo-image',
-            '@sentry/react-native',
-            [
-                '@sentry/react-native/expo',
-                {
-                    url: 'https://sentry.io/',
-                    project: 'react-native',
-                    organization: 'powa-b6',
-                },
-            ],
-            [
-                '@stripe/stripe-react-native',
-                {
-                    merchantIdentifier: 'merchant.com.agenciapowa.KrustyBurger',
-                },
-            ],
+
+
         ],
         updates: {
             enabled: true,
