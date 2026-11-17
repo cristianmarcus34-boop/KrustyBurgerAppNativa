@@ -155,6 +155,13 @@ module.exports = ({ config }) => {
                     },
                 },
             ],
+            [
+                'expo-gradle-jvmargs',
+                {
+                    xmx: '6g',
+                    maxMetaspace: '2g',
+                },
+            ],
             './plugins/withForegroundServiceLocation.js',
             'expo-web-browser',
             '@react-native-community/datetimepicker',
