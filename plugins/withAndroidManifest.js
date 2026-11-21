@@ -29,6 +29,32 @@ module.exports = function withAndroidManifestPlugin(config) {
             });
         }
 
+        // ✅ Marcar funciones de hardware no esenciales como opcionales para evitar restricciones de dispositivos
+        if (!manifest['uses-feature']) {
+            manifest['uses-feature'] = [];
+        }
+
+        const optionalFeatures = [
+            'android.hardware.screen.portrait',
+            'android.hardware.wifi',
+        ];
+
+        for (const featureName of optionalFeatures) {
+            const existingFeature = manifest['uses-feature'].find(
+                (item) => item.$ && item.$['android:name'] === featureName
+            );
+            if (existingFeature) {
+                existingFeature.$['android:required'] = 'false';
+            } else {
+                manifest['uses-feature'].push({
+                    $: {
+                        'android:name': featureName,
+                        'android:required': 'false',
+                    },
+                });
+            }
+        }
+
         const mainActivity = application.activity?.find(
             (item) => item.$['android:name'] === '.MainActivity'
         );
@@ -58,8 +84,8 @@ module.exports = function withAndroidManifestPlugin(config) {
             application['meta-data'].push({
                 $: {
                     'android:name': 'com.google.android.geo.API_KEY',
-                    'android:value': API_KEY
-                }
+                    'android:value': API_KEY,
+                },
             });
             console.log('✅ API Key de Google Maps agregada a AndroidManifest.xml');
         }
