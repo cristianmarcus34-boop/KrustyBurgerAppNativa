@@ -1,4 +1,4 @@
-// components/ModalPermisosEntrada.tsx - Versión Mejorada con copy claro
+// components/ModalPermisosEntrada.tsx
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,28 +21,23 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={styles.scrollContainer}
                     >
-                        {/* Icono Principal con Contenedor Decorativo */}
                         <View style={styles.iconContainer}>
                             <LinearGradient
                                 colors={[DISENO.colors.accent + '20', DISENO.colors.accent + '05']}
                                 style={styles.iconBackground}
                             >
                                 <Ionicons name="notifications" size={40} color={DISENO.colors.accent} />
-                                <View style={styles.miniBadge}>
-                                    <Ionicons name="location" size={14} color="#FFF" />
-                                </View>
                             </LinearGradient>
                         </View>
 
                         <Text style={styles.titulo} allowFontScaling={false}>
-                            ¡Activá la experiencia Krusty! 🍔
+                            ¡Activá las notificaciones! 🍔
                         </Text>
 
                         <Text style={styles.subtitulo} allowFontScaling={false}>
-                            Al activar todo vas a recibir:
+                            Al activarlas vas a recibir:
                         </Text>
 
-                        {/* Beneficios detallados visualmente */}
                         <View style={styles.beneficiosContainer}>
                             <View style={styles.beneficioItem}>
                                 <View style={styles.bulletIcon}>
@@ -61,15 +56,6 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                                     <Text style={styles.beneficioTextoNegrita}>Ofertas y promos:</Text> descuentos y novedades exclusivas
                                 </Text>
                             </View>
-
-                            <View style={styles.beneficioItem}>
-                                <View style={styles.bulletIcon}>
-                                    <Ionicons name="navigate" size={16} color={DISENO.colors.accent} />
-                                </View>
-                                <Text style={styles.beneficioTexto} allowFontScaling={false}>
-                                    <Text style={styles.beneficioTextoNegrita}>Seguimiento:</Text> mirá dónde está tu pedido en tiempo real
-                                </Text>
-                            </View>
                         </View>
 
                         <TouchableOpacity
@@ -84,7 +70,7 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                                 end={{ x: 1, y: 0 }}
                             >
                                 <Text style={styles.textoBotonAceptar} allowFontScaling={false}>
-                                    ¡Dale, activar todo! 🚀
+                                    Activar notificaciones 🔔
                                 </Text>
                             </LinearGradient>
                         </TouchableOpacity>
@@ -99,7 +85,6 @@ export default function ModalPermisosEntrada({ visible, onAceptar, onOmitir }: P
                             </Text>
                         </TouchableOpacity>
 
-                        {/* ✅ NUEVO: Texto legal */}
                         <Text style={styles.legalText} allowFontScaling={false}>
                             Podés cambiar estas preferencias cuando quieras desde tu perfil
                         </Text>
@@ -145,19 +130,6 @@ const styles = StyleSheet.create({
         position: 'relative',
         borderWidth: 1,
         borderColor: DISENO.colors.accent + '30',
-    },
-    miniBadge: {
-        position: 'absolute',
-        bottom: 2,
-        right: 2,
-        backgroundColor: DISENO.colors.accent,
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: DISENO.colors.surface,
     },
     titulo: {
         fontFamily: FUENTES.display,

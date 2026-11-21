@@ -9,8 +9,25 @@ const {
 module.exports = function withAndroidManifestPlugin(config) {
     config = withAndroidManifest(config, async (config) => {
         const androidManifest = config.modResults;
-        const application = androidManifest.manifest.application[0];
+        const manifest = androidManifest.manifest;
+        const application = manifest.application[0];
         application.$['android:resizeableActivity'] = 'true';
+
+        // ✅ Asegurar que ACCESS_BACKGROUND_LOCATION esté presente y SIN tools:node="remove"
+        if (!manifest['uses-permission']) {
+            manifest['uses-permission'] = [];
+        }
+        const bgPermName = 'android.permission.ACCESS_BACKGROUND_LOCATION';
+        const existingBgPerm = manifest['uses-permission'].find(
+            (item) => item.$ && item.$['android:name'] === bgPermName
+        );
+        if (existingBgPerm) {
+            delete existingBgPerm.$['tools:node'];
+        } else {
+            manifest['uses-permission'].push({
+                $: { 'android:name': bgPermName },
+            });
+        }
 
         const mainActivity = application.activity?.find(
             (item) => item.$['android:name'] === '.MainActivity'
@@ -35,11 +52,9 @@ module.exports = function withAndroidManifestPlugin(config) {
         }
 
         if (existingMetaData) {
-            // ✅ Si existe, actualizar el valor
             existingMetaData.$['android:value'] = API_KEY;
             console.log('✅ API Key de Google Maps actualizada en AndroidManifest.xml');
         } else {
-            // ✅ Si no existe, agregarla
             application['meta-data'].push({
                 $: {
                     'android:name': 'com.google.android.geo.API_KEY',
@@ -49,7 +64,7 @@ module.exports = function withAndroidManifestPlugin(config) {
             console.log('✅ API Key de Google Maps agregada a AndroidManifest.xml');
         }
 
-        console.log('📱 AndroidManifest.xml de Google Maps actualizado correctamente');
+        console.log('📱 AndroidManifest.xml actualizado correctamente');
 
         return config;
     });
